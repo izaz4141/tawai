@@ -1,0 +1,17 @@
+.git
+.gitignore
+.dart_tool
+.idea
+.github
+build
+target
+android
+ios
+linux
+macos
+windows
+test
+tawai.iml
+*.md
+Dockerfile
+docker-compose.yml

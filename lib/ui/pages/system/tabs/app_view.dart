@@ -1,0 +1,313 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+
+import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/app_snackbar.dart';
+import 'package:tawai/ui/pages/logs/logs_page.dart';
+import 'package:tawai/ui/pages/licenses/licenses_page.dart';
+import 'package:tawai/ui/pages/system/modal/app_update.dart';
+import 'package:tawai/ui/widgets/dialog/tag_editor.dart';
+import 'package:tawai/utils/settings.dart';
+import 'package:tawai/utils/updater.dart';
+import 'package:tawai/utils/system_service.dart';
+import 'package:tawai/utils/platform_service.dart';
+import 'package:tawai/utils/api_service.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+class SystemApp extends StatefulWidget {
+  const SystemApp({super.key});
+
+  @override
+  State<SystemApp> createState() => _SystemAppState();
+}
+
+class _SystemAppState extends State<SystemApp> {
+  final PackageInfo _packageInfo = SystemService().packageInfo;
+
+  VersionInfo? _latestVersion;
+  bool _checkingUpdates = true;
+  bool _isUpdating = false;
+  double _updateProgress = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkForUpdates();
+    if (PlatformService().isRemote) {
+      SystemService().getServerVersion();
+    }
+    SettingsManager.checkNightly.addListener(_checkForUpdates);
+  }
+
+  @override
+  void dispose() {
+    SettingsManager.checkNightly.removeListener(_checkForUpdates);
+    super.dispose();
+  }
+
+  Future<void> _checkForUpdates() async {
+    final versionInfo = await checkForUpdate(
+      checkNightly: SettingsManager.checkNightly.value,
+    );
+    if (!mounted) return;
+    setState(() {
+      _latestVersion = versionInfo;
+      _checkingUpdates = false;
+    });
+  }
+
+  Future<void> _performUpdate() async {
+    if (kIsWeb || !PlatformService.isDesktop || _latestVersion == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AppUpdateDialog(versionInfo: _latestVersion!),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _isUpdating = true;
+      _updateProgress = 0.0;
+    });
+
+    bool success = false;
+
+    if (PlatformService.isLinux) {
+      success = await downloadAndReplaceAppImage(
+        _latestVersion!,
+        onProgress: (progress) {
+          if (!mounted) return;
+          setState(() {
+            _updateProgress = progress;
+          });
+        },
+      );
+    } else if (PlatformService.isWindows) {
+      success = await downloadAndReplaceWindows(
+        _latestVersion!,
+        onProgress: (progress) {
+          if (!mounted) return;
+          setState(() {
+            _updateProgress = progress;
+          });
+        },
+      );
+    }
+
+    if (!mounted) return;
+
+    if (!success) {
+      setState(() {
+        _isUpdating = false;
+      });
+
+      if (!mounted) return;
+      AppSnackBar.show(
+        context,
+        'Failed to update. Please try again.',
+        type: SnackType.error,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
+    return Center(
+      child: Column(
+        children: [
+          SizedBox(
+            height: AppTheme.iconXXL * 2 * AppTheme.iconScale(context),
+            child: SvgPicture.asset('assets/icons/tawai-filled.svg'),
+          ),
+          SizedBox(height: AppTheme.spaceLG),
+          Text('Tawai', style: textTheme.titleLarge),
+          SizedBox(height: AppTheme.spaceSM),
+          _buildVersionInfo(context, textTheme),
+          if (PlatformService().isRemote) ...[
+            SizedBox(height: AppTheme.spaceSM),
+            Text(
+              'Remote Version: ${APIService.serverVersion.value ?? "Unknown"}',
+              style: textTheme.bodyMedium,
+            ),
+          ],
+          SizedBox(height: AppTheme.spaceSM),
+          Text('Author: Glicole', style: textTheme.bodyMedium),
+          SizedBox(height: AppTheme.spaceSM),
+          TextButton(
+            onPressed: () =>
+                launchUrl(Uri.parse('https://github.com/izaz4141/tawai')),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                vertical: AppTheme.spaceMD * AppTheme.spaceScale(context),
+              ),
+              child: Column(
+                children: [
+                  FaIcon(
+                    FontAwesomeIcons.github,
+                    size: AppTheme.iconLG * AppTheme.iconScale(context),
+                  ),
+                  Text('GitHub', style: textTheme.bodyMedium),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(height: AppTheme.spaceSM),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            spacing: AppTheme.spaceMD * AppTheme.spaceScale(context),
+            children: [
+              _buildActionButton(
+                context,
+                icon: Icons.article_outlined,
+                label: 'Logs',
+                tooltip: 'View application logs',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LogsPage()),
+                ),
+              ),
+              _buildActionButton(
+                context,
+                icon: Icons.description_outlined,
+                label: 'Licenses',
+                tooltip: 'View dependencies licenses',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LicensesPage()),
+                ),
+              ),
+              if (!kIsWeb)
+                _buildActionButton(
+                  context,
+                  icon: Icons.edit_note,
+                  label: 'Tag Editor',
+                  tooltip: 'Edit audio file tags',
+                  onPressed: () => showTagEditorDialog(context),
+                ),
+            ],
+          ),
+          SizedBox(height: AppTheme.spaceSM),
+          Padding(
+            padding: EdgeInsets.symmetric(
+              vertical: AppTheme.spaceSM * AppTheme.spaceScale(context),
+            ),
+            child: _buildActionButton(
+              context,
+              icon: Icons.api,
+              label: 'Docs',
+              tooltip: 'Open API documentation',
+              onPressed: () => launchUrl(
+                Uri.parse('${APIService.instance.baseUrl}/api/docs'),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+    String? tooltip,
+  }) {
+    final button = ElevatedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: AppTheme.iconMD * AppTheme.iconScale(context)),
+      label: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+    );
+
+    if (tooltip != null) {
+      return Tooltip(message: tooltip, child: button);
+    }
+    return button;
+  }
+
+  Widget _buildVersionInfo(BuildContext context, TextTheme textTheme) {
+    if (_checkingUpdates) {
+      return Text(
+        'Version: ${_packageInfo.version}+${_packageInfo.buildNumber}',
+        style: textTheme.bodyMedium,
+      );
+    }
+
+    bool hasUpdate = _latestVersion != null;
+
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Version: ${_packageInfo.version}+${_packageInfo.buildNumber}',
+              style: textTheme.bodyMedium,
+            ),
+            if (hasUpdate) ...[
+              SizedBox(width: AppTheme.spaceSM),
+              Tooltip(
+                message: 'Latest version: ${_latestVersion!.version}',
+                child: InkWell(
+                  onTap: !kIsWeb && PlatformService.isDesktop && !_isUpdating
+                      ? _performUpdate
+                      : null,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppTheme.spaceSM,
+                      vertical: AppTheme.spaceXS,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_isUpdating)
+                          SizedBox(
+                            width:
+                                AppTheme.iconSM * AppTheme.iconScale(context),
+                            height:
+                                AppTheme.iconSM * AppTheme.iconScale(context),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              value: _updateProgress > 0
+                                  ? _updateProgress
+                                  : null,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          )
+                        else
+                          Icon(
+                            Icons.info_outline,
+                            size: AppTheme.iconSM * AppTheme.iconScale(context),
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        SizedBox(width: AppTheme.spaceXS),
+                        Text(
+                          _isUpdating ? 'Updating...' : 'Update Available',
+                          style: textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}

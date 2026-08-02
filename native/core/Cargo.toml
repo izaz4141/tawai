@@ -1,0 +1,43 @@
+[package]
+name = "tawai-core"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1.0.219", features = ["derive"] }
+tokio = { version = "1.50.0", features = ["full"] }
+reqwest = { version = "0.12.23", features = ["json", "stream", "gzip", "brotli", "deflate", "http2", "rustls-tls", "blocking", "cookies"] }
+uuid = { version = "1.18.0", features = ["v4"] }
+time = { version = "0.3.41", features = ["macros", "formatting", "parsing", "local-offset"] }
+futures = "0.3.31"
+anyhow = "1.0.99"
+openssl = { version = "0.10.74", features = ["vendored"] }
+indexmap = { version = "2.2.6", features = ["serde"] }
+serde_json = "1.0"
+utoipa = { version = "5.4.0", features = ["macros"] }
+sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio", "postgres", "migrate"] }
+hex = "0.4.3"
+percent-encoding = "2.3.2"
+argon2 = { version = "0.5.3", features = ["alloc", "password-hash", "rand"] }
+semver = "1.0.27"
+aes-gcm-siv = "0.11.1"
+lofty = "0.24.0"
+image = "0.25.10"
+symphonia = { version = "0.6.0", features = ["all"] }
+walkdir = "2.5.0"
+chromaprint-next = "0.1.0"
+aes = "0.8.4"
+fpe = "0.6.1"
+sha2 = "0.11.0"
+tempfile = "3.27.0"
+tokio-util = { version = "0.7.18", features = ["io-util"] }
+uroman = "0.6.6"
+wana_kana = "5.0.0"
+lindera = { version = "4.0.1", features = ["embed-ipadic"] }
+whatlang = "0.18.0"
+
+[package.metadata.cargo-machete]
+ignored = ["openssl"]

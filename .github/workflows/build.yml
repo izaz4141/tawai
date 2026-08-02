@@ -1,0 +1,445 @@
+name: Build Tawai
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  ARTIFACT_NAME: tawai
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      flutter_version: ${{ steps.out.outputs.flutter_version }}
+      version_name: ${{ steps.version.outputs.version_name }}
+      should_skip: ${{ steps.check_skip.outputs.should_skip }}
+      is_nightly: ${{ steps.check_type.outputs.is_nightly }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check build type
+        id: check_type
+        run: |
+          if [[ "${{ github.event_name }}" == "schedule" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "is_nightly=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_nightly=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for changes (Nightly only)
+        id: check_skip
+        if: steps.check_type.outputs.is_nightly == 'true'
+        run: |
+          # Check if the nightly tag exists
+          if git rev-parse -q --verify "refs/tags/nightly" >/dev/null; then
+            # Check if HEAD is the same as nightly tag
+            if [ "$(git rev-parse HEAD)" == "$(git rev-parse nightly)" ]; then
+              echo "No changes since last nightly. Skipping."
+              echo "should_skip=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          fi
+          echo "should_skip=false" >> $GITHUB_OUTPUT
+
+      - name: Determine Flutter version
+        if: steps.check_skip.outputs.should_skip != 'true'
+        id: out
+        run: |
+          if [ -f ".fvmrc" ]; then
+            FLUTTER_VERSION=$(jq -r '.flutter' .fvmrc)
+          else
+            FLUTTER_VERSION="stable"
+          fi
+          echo "flutter_version=${FLUTTER_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Update pubspec.yaml version
+        if: steps.check_skip.outputs.should_skip != 'true'
+        id: version
+        run: |
+          BUILD_NUM=${GITHUB_RUN_NUMBER}
+
+          if [[ "${{ steps.check_type.outputs.is_nightly }}" == "true" ]]; then
+            # Nightly build
+            LATEST_TAG=$(git describe --tags --match "v*" --abbrev=0 2>/dev/null || echo "v0.0.0")
+            VERSION_BASE="${LATEST_TAG#v}"
+            DATE_STR=$(date +%Y%m%d)
+            # SemVer compatible: 1.2.3-nightly.20231205+123
+            NEW_VERSION="${VERSION_BASE}-nightly.${DATE_STR}+${BUILD_NUM}"
+            VERSION_NAME="${VERSION_BASE}-nightly.${DATE_STR}"
+          else
+            # Stable release
+            VERSION_TAG="${GITHUB_REF_NAME#v}"
+            NEW_VERSION="${VERSION_TAG}+${BUILD_NUM}"
+            VERSION_NAME="${VERSION_TAG}"
+          fi
+
+          echo "Setting pubspec.yaml version: ${NEW_VERSION}"
+
+          if grep -q '^version:' pubspec.yaml; then
+            sed -i "s/^version:.*/version: ${NEW_VERSION}/" pubspec.yaml
+          else
+            echo "version: ${NEW_VERSION}" >> pubspec.yaml
+          fi
+
+          grep version pubspec.yaml
+          echo "version_name=${VERSION_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Upload updated pubspec.yaml
+        if: steps.check_skip.outputs.should_skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pubspec
+          path: pubspec.yaml
+
+  build-template:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    needs: setup
+    if: needs.setup.outputs.should_skip != 'true'
+    strategy:
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-latest
+            target: linux-x64
+            build_cmd: flutter build linux --release --target-platform linux-x64
+            artifact_path: tawai-linux-x64.AppImage
+          - name: Windows
+            os: windows-latest
+            target: windows
+            build_cmd: flutter build windows --release
+            artifact_path: tawai-windows-x64.zip
+          - name: Android
+            os: ubuntu-latest
+            target: android-arm64
+            build_cmd: flutter build apk --release --target-platform android-arm64
+            artifact_path: tawai-android-arm64.apk
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download updated pubspec.yaml
+        uses: actions/download-artifact@v4
+        with:
+          name: pubspec
+          path: .
+
+      - name: Copy pubspec to assets directory (for version)
+        shell: bash
+        run: |
+          mkdir -p ./assets/docs
+          cp ./pubspec.yaml ./assets/docs/pubspec.yaml
+
+      - name: Cache Linux System Dependencies (APT)
+        if: matrix.target == 'linux-x64'
+        id: apt-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.apt-cache
+            /usr/lib/x86_64-linux-gnu/cmake
+          key: ${{ matrix.target }}-linux-deps-v1
+
+      - name: Install system deps (Linux only)
+        if: matrix.target == 'linux-x64'
+        run: |
+          mkdir -p ~/.apt-cache
+          sudo apt update
+          sudo apt install -y -o Dir::Cache::Archives="$HOME/.apt-cache" \
+            clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
+            libfuse2 libayatana-appindicator3-dev patchelf curl jq
+
+      - name: Install Java (Android only)
+        if: startsWith(matrix.target, 'android')
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+          cache: gradle
+
+      # - name: Install Python (Android only)
+      #   if: startsWith(matrix.target, 'android')
+      #   uses: actions/setup-python@v5
+      #   with:
+      #     python-version: "3.13"
+
+      - name: Cache Rust dependencies and target directory
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin
+            target
+          # Cache key changes if the target or Cargo.lock file changes
+          key: ${{ matrix.target }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.target }}-cargo-
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ needs.setup.outputs.flutter_version }}
+          channel: stable
+          cache: true
+          cache-key: "flutter-:os:-:channel:-:version:-:arch:-:hash:"
+          cache-path: "${{ runner.tool_cache }}/flutter/:channel:-:version:-:arch:"
+
+      - name: Generate rinf bindings
+        shell: bash
+        run: |
+          if ! command -v rinf &> /dev/null; then
+            cargo install rinf_cli
+          fi
+          rinf gen
+
+      - name: Generate Cargo licenses
+        shell: bash
+        run: |
+          if ! command -v cargo-license &> /dev/null; then
+            cargo install cargo-license
+          fi
+          mkdir -p assets/licenses
+          cargo license --json > assets/licenses/cargo_licenses.json
+
+      - name: Get Flutter packages
+        run: flutter pub get
+
+      - name: Generate launcher icons
+        run: dart run flutter_launcher_icons
+
+      - name: Configure Android Signing
+        if: startsWith(matrix.target, 'android')
+        run: |
+          if [ -n "${{ secrets.UPLOAD_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.UPLOAD_KEYSTORE_BASE64 }}" | base64 -d > android/upload-keystore.jks
+            printf "storePassword=${{ secrets.STORE_PASSWORD }}\nkeyPassword=${{ secrets.KEY_PASSWORD }}\nkeyAlias=upload\nstoreFile=upload-keystore.jks\n" > android/key.properties
+          else
+            echo "Warning: UPLOAD_KEYSTORE_BASE64 secret not found. Skipping signing configuration."
+          fi
+
+      - name: Build APP
+        run: ${{ matrix.build_cmd }}
+
+      - name: Fix RPATH (Linux only)
+        if: matrix.target == 'linux-x64'
+        run: |
+          APP_PATH="build/linux/x64/release/bundle/${{ env.ARTIFACT_NAME }}"
+          LIB_PATH="build/linux/x64/release/bundle/lib"
+          for lib in "$LIB_PATH"/*.so; do
+            [[ -f "$lib" ]] && patchelf --set-rpath '$ORIGIN' "$lib"
+          done
+          patchelf --set-rpath '$ORIGIN/lib' "$APP_PATH"
+
+      - name: Build AppImage
+        if: matrix.target == 'linux-x64'
+        run: |
+          echo "Building AppImage using go-appimage appimagetool..."
+
+          # Download appimagetool (go-appimage)
+          wget -O appimagetool https://github.com/$(wget -q https://github.com/probonopd/go-appimage/releases/expanded_assets/continuous -O - | grep "appimagetool-.*-x86_64.AppImage" | head -n 1 | cut -d '"' -f 2)
+          chmod +x appimagetool
+
+          # Prepare AppDir
+          mkdir -p AppDir/usr/bin
+          cp -r build/linux/x64/release/bundle/* AppDir/usr/bin/
+
+          # Copy icon and desktop file to root of AppDir
+          cp assets/icons/tawai-duotone.svg AppDir/tawai.svg
+          cp linux/tawai.desktop AppDir/
+
+          # Create AppRun symlink
+          ln -s usr/bin/tawai AppDir/AppRun
+
+          # Determine Update Info
+          if [[ "${{ needs.setup.outputs.is_nightly }}" == "true" ]]; then
+            export UPDATE_INFORMATION="gh-releases-zsync|izaz4141|tawai|nightly|tawai-linux-x64.AppImage.zsync"
+          else
+            export UPDATE_INFORMATION="gh-releases-zsync|izaz4141|tawai|latest|tawai-linux-x64.AppImage.zsync"
+          fi
+
+          # Generate AppImage
+          VERSION="${{ needs.setup.outputs.version_name }}" ./appimagetool ./AppDir
+
+          # Rename output
+          mv Tawai*.AppImage ${{ matrix.artifact_path }}
+          mv Tawai*.zsync ${{ matrix.artifact_path }}.zsync
+
+      - name: Package Windows build
+        if: matrix.target == 'windows'
+        run: |
+          echo "Creating portable Windows ZIP..."
+          cd build/windows/x64/runner/Release
+          7z a "../../../../../${{ matrix.artifact_path }}" *
+
+      - name: Move Android artifact
+        if: startsWith(matrix.target, 'android')
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk ${{ matrix.artifact_path }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}-${{ matrix.target }}
+          path: ${{ matrix.artifact_path }}*
+
+  docker-build:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.should_skip != 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download updated pubspec.yaml
+        uses: actions/download-artifact@v4
+        with:
+          name: pubspec
+          path: .
+
+      - name: Copy pubspec to assets directory (for version)
+        run: |
+          mkdir -p ./assets/docs
+          cp ./pubspec.yaml ./assets/docs/pubspec.yaml
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable=${{ needs.setup.outputs.is_nightly == 'false' }}
+            type=raw,value=nightly,enable=${{ needs.setup.outputs.is_nightly == 'true' }}
+            type=semver,pattern={{version}}
+            type=sha
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  prune-images:
+    name: Prune Old Docker Images
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: needs.setup.outputs.is_nightly == 'true'
+    permissions:
+      packages: write
+    steps:
+      - name: Delete old nightly images
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ github.event.repository.name }}
+          package-type: "container"
+          min-versions-to-keep: 5
+          delete-only-untagged-versions: "true"
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-template, setup]
+    if: needs.setup.outputs.should_skip != 'true'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Collect artifacts for release
+        run: |
+          mkdir -p uploads
+          find dist -type f -exec cp {} uploads/ \;
+          ls -lh uploads
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          if [[ "${{ needs.setup.outputs.is_nightly }}" == "true" ]]; then
+            # Nightly: Diff from latest stable tag
+            PREV_TAG=$(git describe --tags --match "v*" --abbrev=0 2>/dev/null || echo "")
+            echo "Previous stable tag: $PREV_TAG"
+            TITLE="🌙 Nightly Release"
+            TAG_NAME="nightly"
+            IS_PRERELEASE="true"
+            BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+            BODY="## Nightly Build (${{ needs.setup.outputs.version_name }})\n\n**Built:** ${BUILD_TIME}\n\nChanges since $PREV_TAG:\n"
+          else
+            # Stable: Diff from previous tag
+            PREV_TAG=$(git describe --tags --match "v*" --abbrev=0 HEAD^ 2>/dev/null || echo "")
+            echo "Previous tag: $PREV_TAG"
+            TITLE="${{ github.ref_name }}"
+            TAG_NAME="${{ github.ref_name }}"
+            IS_PRERELEASE="false"
+            BODY="## Changelog\n"
+          fi
+
+          if [ -n "$PREV_TAG" ]; then
+            COMMITS=$(git log "$PREV_TAG"..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          else
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          fi
+
+          BODY="${BODY}\n${COMMITS}"
+
+          echo "BODY<<EOF" >> $GITHUB_ENV
+          echo -e "$BODY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "title=${TITLE}" >> $GITHUB_OUTPUT
+          echo "prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
+
+      - name: Delete existing nightly release
+        if: needs.setup.outputs.is_nightly == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete nightly --cleanup-tag -y || true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.notes.outputs.tag_name }}
+          name: ${{ steps.notes.outputs.title }}
+          body: ${{ env.BODY }}
+          files: uploads/*
+          prerelease: ${{ steps.notes.outputs.prerelease == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

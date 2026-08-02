@@ -1,0 +1,40 @@
+[package]
+# Do not change the name of this crate.
+name = "hub"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+# `lib` is required for non-library targets,
+# such as tests and benchmarks.
+# `cdylib` is for Linux, Android, Windows, and web.
+# `staticlib` is for iOS and macOS.
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+wildcard_imports = "deny"
+
+[dependencies]
+tawai-core = { path = "../core" }
+tawai-server = { path = "../server" }
+openssl = { version = "0.10.74", features = ["vendored"] }
+rinf = "8.7.2"
+serde = { version = "1.0.219", features = ["derive"] }
+tokio = { version = "1.50.0", features = ["full"] }
+reqwest = { version = "0.12.23", features = ["json", "stream", "gzip", "brotli", "deflate", "http2", "rustls-tls", "blocking", "cookies"] }
+uuid = { version = "1.18.0", features = ["v4"] }
+async-trait = "0.1.87"
+messages = "0.3.1"
+axum = "0.8.8"
+tower_governor = { version = "0.8.0", features = ["axum"] }
+hex = "0.4.3"
+serde_json = "1.0.150"
+
+# Uncomment below to target the web.
+# tokio_with_wasm = { version = "0.8.5", features = ["rt", "macros", "time"] }
+# wasm-bindgen = "0.2.100"
+
+[package.metadata.cargo-machete]
+ignored = ["openssl"]

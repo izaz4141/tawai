@@ -1,0 +1,10 @@
+{
+  "retreat_to_tray": true,
+  "server_host": "127.0.0.1",
+  "server_port": 8080,
+  "theme_mode": 0,
+  "use_dynamic_color": true,
+  "custom_color": 4294934657,
+  "check_nightly": false,
+  "desired_audio_quality": "best"
+}

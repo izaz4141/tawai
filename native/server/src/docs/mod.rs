@@ -1,0 +1,141 @@
+pub mod security;
+
+use axum::Router;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
+
+use crate::server::SharedState;
+
+use security::SecurityModifier;
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        crate::tawai::tools::stats::handle_get_library_stats,
+        crate::tawai::tools::missing::handle_find_missing_metadata,
+        crate::tawai::tools::rename::handle_batch_rename_preview,
+        crate::tawai::tools::rename::handle_batch_rename_apply,
+        crate::tawai::tools::rename::handle_check_naming_convention,
+        crate::tawai::tools::lyrics::handle_romajize_lyrics,
+        crate::tawai::tools::lyrics::handle_write_track_lyrics,
+        crate::tawai::tools::duplicates::handle_find_duplicates,
+        crate::tawai::auth::login::handle_login,
+        crate::tawai::auth::hash::handle_hashing_password,
+        crate::tawai::auth::salt::handle_generate_salt,
+        crate::tawai::auth::api::handle_generate_api,
+        crate::tawai::account::create::handle_create_account,
+        crate::tawai::account::update::handle_update_account,
+        crate::tawai::account::delete::handle_delete_account,
+        crate::tawai::auth::verify_password::handle_verify_password,
+        crate::tawai::system::status::handle_status,
+        crate::tawai::system::restart::handle_restart,
+        crate::tawai::discovery::lb::report::handle_report_playback,
+        crate::tawai::playback::history::handle_get_history,
+        crate::tawai::playback::stream::handle_stream_track,
+        crate::tawai::library::tracks::detail::handle_get_track,
+        crate::tawai::library::tracks::source::handle_list_tracks_by_source,
+        crate::tawai::library::tracks::mbid::handle_get_album_mbid,
+        crate::tawai::settings::global::handle_get_global_settings,
+        crate::tawai::settings::global::handle_update_global_settings,
+        crate::tawai::settings::user::handle_get_user_setting,
+        crate::tawai::settings::user::handle_set_user_setting,
+        crate::tawai::utils::img::handle_proxy_image,
+        crate::tawai::version::latest::handle_version_latest,
+        crate::tawai::version::current::handle_version_current,
+        crate::tawai::version::compare::handle_compare_versions,
+        crate::tawai::download::list::handle_list_downloads,
+        crate::tawai::download::client_list::handle_client_list,
+        crate::tawai::download::create::handle_create,
+        crate::tawai::download::pause::handle_pause,
+        crate::tawai::download::resume::handle_resume,
+        crate::tawai::download::cancel::handle_cancel,
+        crate::tawai::download::delete::handle_delete,
+        crate::tawai::download::sync::handle_sync,
+        crate::tawai::download::search::handle_search,
+        crate::tawai::download::test_connection::handle_test_connection,
+        crate::tawai::download::get_info::handle_get_info,
+    ),
+    components(
+        schemas(
+            tawai_core::signals::tools::GetLibraryStatsRequest,
+            tawai_core::signals::tools::GetLibraryStatsResponse,
+            tawai_core::signals::tools::LibraryStats,
+            tawai_core::signals::tools::FormatEntry,
+            tawai_core::signals::tools::DecadeEntry,
+            tawai_core::signals::tools::FindMissingMetadataRequest,
+            tawai_core::signals::tools::FindMissingMetadataResponse,
+            tawai_core::signals::tools::MissingMetadataEntry,
+            tawai_core::signals::tools::MissingMetadataCheck,
+            tawai_core::signals::tools::BatchRenameRequest,
+            tawai_core::signals::tools::BatchRenameResponse,
+            tawai_core::signals::tools::RenamePreview,
+            tawai_core::signals::tools::CheckConventionRequest,
+            tawai_core::signals::tools::CheckConventionResponse,
+            tawai_core::signals::tools::NamingViolation,
+            tawai_core::signals::tools::RomajizeLyricsRequest,
+            tawai_core::signals::tools::RomajizeLyricsResponse,
+            tawai_core::signals::tools::WriteTrackLyricsRequest,
+            tawai_core::signals::tools::WriteTrackLyricsResponse,
+            tawai_core::signals::tools::WriteLyricsResult,
+            tawai_core::signals::tools::FindDuplicatesRequest,
+            tawai_core::signals::tools::FindDuplicatesResponse,
+            tawai_core::signals::tools::DuplicateGroup,
+            tawai_core::signals::tools::DuplicateTrackEntry,
+            crate::tawai::auth::hash::HashRequest,
+            crate::tawai::auth::api::ApiKeyResponse,
+            crate::tawai::account::create::CreateAccountRequest,
+            crate::tawai::account::update::UpdateAccountRequest,
+            crate::tawai::account::delete::DeleteAccountRequest,
+            crate::tawai::system::status::StatusResponse,
+            crate::tawai::settings::global::GlobalSettingsResponse,
+            crate::tawai::settings::user::UserSettingResponse,
+            crate::tawai::settings::user::SetUserSettingPayload,
+            crate::tawai::playback::history::HistoryResponse,
+            crate::tawai::discovery::lb::report::ReportPlaybackPayload,
+            tawai_core::signals::library::TrackInfo,
+            crate::tawai::library::tracks::list::TracksResponse,
+            crate::tawai::library::tracks::mbid::MbidResponse,
+            crate::tawai::library::identify::UnidentifiedQuery,
+            crate::tawai::version::current::VersionCurrentResponse,
+            crate::tawai::version::compare::CompareVersionsRequest,
+            crate::tawai::version::compare::CompareVersionsResponse,
+            tawai_core::signals::download::DlGlance,
+            tawai_core::signals::download::DlListResponse,
+            tawai_core::signals::download::DlSearchResult,
+            tawai_core::signals::download::DlSearchResponse,
+            tawai_core::signals::download::DownloadCreateRequest,
+            tawai_core::signals::download::DownloadCreateResponse,
+            tawai_core::signals::download::DownloadPauseRequest,
+            tawai_core::signals::download::DownloadPauseResponse,
+            tawai_core::signals::download::DownloadResumeRequest,
+            tawai_core::signals::download::DownloadResumeResponse,
+            tawai_core::signals::download::DownloadCancelRequest,
+            tawai_core::signals::download::DownloadCancelResponse,
+            tawai_core::signals::download::DownloadDeleteRequest,
+            tawai_core::signals::download::DownloadDeleteResponse,
+            tawai_core::signals::download::DownloadClientListRequest,
+            tawai_core::signals::download::DownloadClientListResponse,
+            tawai_core::signals::download::DownloadSyncRequest,
+            tawai_core::signals::download::DownloadSyncResponse,
+            tawai_core::signals::download::DownloadSearchRequest,
+            tawai_core::signals::download::DownloadSearchResponse,
+            tawai_core::signals::download::DownloadGetInfoRequest,
+            tawai_core::signals::download::DownloadGetInfoResponse,
+            tawai_core::signals::DownloadRecord,
+            tawai_core::signals::ListDownloadsResponse,
+        )
+    ),
+    modifiers(&SecurityModifier),
+    security(
+        ("BasicAuth" = []),
+        ("ApiKeyAuth" = []),
+        ("SIDCookie" = [])
+    )
+)]
+pub struct ApiDoc;
+
+pub fn create_docs_router(_state: SharedState) -> Router<SharedState> {
+    let api = ApiDoc::openapi();
+
+    Router::new().merge(SwaggerUi::new("/api/docs").url("/api/openapi.json", api.clone()))
+}

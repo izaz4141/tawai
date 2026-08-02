@@ -1,0 +1,45 @@
+import 'package:flutter/material.dart';
+import 'package:tawai/src/bindings/bindings.dart';
+import 'package:tawai/ui/widgets/components/track_list_tile.dart';
+import 'package:tawai/ui/widgets/components/alphabet_index_scroller.dart';
+
+class LibraryTracksTab extends StatelessWidget {
+  const LibraryTracksTab({
+    super.key,
+    required this.tracks,
+    required this.scrollController,
+  });
+
+  final List<TrackInfo> tracks;
+  final ScrollController scrollController;
+
+  @override
+  Widget build(BuildContext context) {
+    if (tracks.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 120),
+          Center(child: Text('No tracks in library')),
+        ],
+      );
+    }
+    return Theme(
+      data: Theme.of(context).copyWith(
+        scrollbarTheme: const ScrollbarThemeData(
+          thumbVisibility: WidgetStatePropertyAll(false),
+          thickness: WidgetStatePropertyAll(0.0),
+        ),
+      ),
+      child: ListView.builder(
+        padding: EdgeInsets.only(right: AlphabetIndexScroller.kStripWidth),
+        controller: scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: tracks.length,
+        itemBuilder: (context, index) {
+          return TrackListTile(track: tracks[index], index: index);
+        },
+      ),
+    );
+  }
+}

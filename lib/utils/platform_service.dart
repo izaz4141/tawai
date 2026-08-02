@@ -1,0 +1,107 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:ui';
+import 'package:flutter/foundation.dart';
+import 'package:window_manager/window_manager.dart';
+import 'package:tawai/utils/logger.dart';
+
+import 'package:tawai/utils/settings.dart';
+
+class PlatformService {
+  static final PlatformService _instance = PlatformService._internal();
+  factory PlatformService() => _instance;
+  PlatformService._internal();
+
+  Future<void> focusWindow() async {
+    if (kIsWeb ||
+        (!Platform.isLinux && !Platform.isWindows && !Platform.isMacOS)) {
+      return;
+    }
+
+    try {
+      await windowManager.show();
+      await windowManager.restore();
+      await windowManager.focus();
+      await windowManager.setAlwaysOnTop(true);
+      await windowManager.setAlwaysOnTop(false);
+    } catch (e) {
+      log('Failed to focus window: $e', isError: true);
+    }
+  }
+
+  Future<void> initWindow({
+    required WindowListener listener,
+    required VoidCallback onReady,
+  }) async {
+    if (kIsWeb || !isDesktop) return;
+
+    await windowManager.ensureInitialized();
+    await windowManager.setPreventClose(true);
+    const windowOptions = WindowOptions(
+      size: Size(975, 570),
+      center: true,
+      titleBarStyle: TitleBarStyle.hidden,
+      windowButtonVisibility: false,
+    );
+
+    windowManager.addListener(listener);
+    windowManager.waitUntilReadyToShow(windowOptions, onReady);
+  }
+
+  Future<void> startDragging() async {
+    if (kIsWeb || !isDesktop) return;
+    await windowManager.startDragging();
+  }
+
+  Future<bool> isMaximized() async {
+    if (kIsWeb || !isDesktop) return false;
+    return await windowManager.isMaximized();
+  }
+
+  Future<void> maximize() async {
+    if (kIsWeb || !isDesktop) return;
+    await windowManager.maximize();
+  }
+
+  Future<void> unmaximize() async {
+    if (kIsWeb || !isDesktop) return;
+    await windowManager.unmaximize();
+  }
+
+  Future<void> hideWindow() async {
+    if (kIsWeb || !isDesktop) return;
+    await windowManager.hide();
+  }
+
+  static bool get isDesktop =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.linux ||
+          defaultTargetPlatform == TargetPlatform.macOS);
+  static bool get isMobile =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+  static bool get isLinux =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
+  static bool get isWindows =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+  static bool get isMacOS =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+  static bool get isAndroid =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  static bool get isIOS =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+  bool get isRemote {
+    if (kIsWeb) return true;
+    final host = SettingsManager.serverHost.value;
+    String hostname = host;
+    if (host.contains('://')) {
+      try {
+        hostname = Uri.parse(host).host;
+      } catch (_) {}
+    }
+    return hostname != '127.0.0.1' && hostname != 'localhost';
+  }
+}
