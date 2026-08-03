@@ -5,9 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:rinf/rinf.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 
 import 'package:tawai/services/playback_service.dart';
+import 'package:tawai/services/audio_handler.dart';
 import 'package:tawai/models/account.dart';
 import 'package:tawai/models/user.dart';
 import 'package:tawai/ui/app.dart';
@@ -77,6 +79,8 @@ Future<void> main() async {
                   username: u.username,
                   displayName: u.displayName,
                   label: '${u.username}@localhost',
+                  role: u.role,
+                  apiKey: u.apiKey,
                 ),
               )
               .toList();
@@ -117,6 +121,19 @@ Future<void> main() async {
       }
 
       PlaybackService.instance.init();
+
+      if (kIsWeb || PlatformService.isAndroid) {
+        PlaybackService.instance.audioHandler = await AudioService.init(
+          builder: () => TawaiAudioHandler(),
+          config: const AudioServiceConfig(
+            androidNotificationChannelId: 'com.example.tawai.channel.audio',
+            androidNotificationChannelName: 'Playback',
+            androidNotificationOngoing: true,
+            androidStopForegroundOnPause: true,
+          ),
+        );
+      }
+
       runApp(const Tawai());
     },
     (error, stack) {

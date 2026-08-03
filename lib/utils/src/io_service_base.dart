@@ -25,4 +25,8 @@ abstract class IOService {
   Future<void> setPermissions(String path, String mode);
   String? getCookie(String name);
   Future<PickFileResult?> pickFile({List<String>? allowedExtensions});
+
+  /// App-scoped temporary cache directory. Contents may be cleared by the
+  /// system at any time. Not supported on web/wasm.
+  Future<String> getTempDir();
 }

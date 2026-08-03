@@ -109,6 +109,12 @@ class NativeIOService implements IOService {
   }
 
   @override
+  Future<String> getTempDir() async {
+    final temp = await getTemporaryDirectory();
+    return temp.path;
+  }
+
+  @override
   String? getCookie(String name) {
     throw UnsupportedError('Theres no cookie in native app.');
   }

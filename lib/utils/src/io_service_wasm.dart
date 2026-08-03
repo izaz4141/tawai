@@ -78,6 +78,11 @@ class WasmIOService implements IOService {
   Future<void> setPermissions(String path, String mode) async {}
 
   @override
+  Future<String> getTempDir() async {
+    throw UnsupportedError('Filesystem access is not supported in WASM.');
+  }
+
+  @override
   Future<PickFileResult?> pickFile({List<String>? allowedExtensions}) async {
     final completer = Completer<PickFileResult?>();
     final input = html.HTMLInputElement();

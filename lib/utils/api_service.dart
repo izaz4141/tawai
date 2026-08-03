@@ -577,7 +577,7 @@ class APIService {
       } else {
         if (error != null) {
           log(
-            "Error fetching preview for track ${track.title}: ${error}",
+            "Error fetching preview for track ${track.title}: $error",
             isError: true,
           );
         }
@@ -1488,8 +1488,9 @@ class APIService {
       };
       if (artistMbid != null) body['artist_mbid'] = artistMbid;
       if (albumMbid != null) body['album_mbid'] = albumMbid;
-      if (albumDisambiguation != null)
+      if (albumDisambiguation != null) {
         body['album_disambiguation'] = albumDisambiguation;
+      }
       if (releaseDate != null) body['release_date'] = releaseDate;
       if (trackNum != null) body['track_num'] = trackNum;
       if (discNum != null) body['disc_num'] = discNum;
@@ -1788,6 +1789,7 @@ class APIService {
                 username: (u['username'] as String?) ?? '',
                 displayName: (u['display_name'] as String?) ?? '',
                 role: (u['role'] as String?) ?? 'user',
+                apiKey: (u['api_key'] as String?) ?? '',
               ),
             )
             .toList();
@@ -2508,11 +2510,7 @@ class APIService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/tools/romajize-lyrics'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({
-          'lyrics': lyrics,
-          'synced': synced,
-          if (lang != null) 'lang': lang,
-        }),
+        body: jsonEncode({'lyrics': lyrics, 'synced': synced, 'lang': ?lang}),
       );
       if (response.statusCode != 200) return null;
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -2549,8 +2547,8 @@ class APIService {
           'check_mbid': checkMbid,
           'check_file_size_duration': checkFileSizeDuration,
           'check_title_artist': checkTitleArtist,
-          if (minConfidence != null) 'min_confidence': minConfidence,
-          if (sourceId != null) 'source_id': sourceId,
+          'min_confidence': ?minConfidence,
+          'source_id': ?sourceId,
         }),
       );
       if (response.statusCode != 200) return null;

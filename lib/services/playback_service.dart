@@ -11,6 +11,8 @@ import 'package:tawai/utils/settings.dart' show SettingsManager;
 import 'package:tawai/utils/helper.dart';
 import 'package:tawai/utils/logger.dart';
 
+import 'audio_handler.dart';
+
 class QueueItem {
   final TrackInfo track;
   final SourceCache? source;
@@ -51,6 +53,9 @@ class PlaybackService {
   final loopMode = ValueNotifier<LoopMode>(LoopMode.off);
 
   TrackInfo? get currentTrack => queue.value.currentTrack;
+
+  /// The `audio_service` handler attached by the app entry point on platforms
+  TawaiAudioHandler? audioHandler;
 
   final Lock _actionLock = Lock();
   final Map<String, Future<SourceCache?>> _inflight = {};
@@ -376,6 +381,18 @@ class PlaybackService {
     } else {
       await _player.play();
     }
+  }
+
+  Future<void> resume() async {
+    await _player.play();
+  }
+
+  Future<void> pause() async {
+    await _player.pause();
+  }
+
+  Future<void> setLoopMode(LoopMode mode) async {
+    loopMode.value = mode;
   }
 
   Future<void> seek(Duration pos) async {
