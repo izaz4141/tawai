@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
@@ -49,6 +50,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
   String? _error;
   ReadFileTagsResponse? _tags;
   Uint8List? _selectedCover;
+  String? _coverUrl;
 
   late final TextEditingController _titleCtrl;
   late final TextEditingController _artistCtrl;
@@ -109,7 +111,19 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
     );
     final bytes = result?.bytes;
     if (bytes == null) return;
-    setState(() => _selectedCover = bytes);
+    setState(() {
+      _selectedCover = bytes;
+      _coverUrl = null;
+    });
+  }
+
+  Future<void> _pickCoverFromUrl() async {
+    final url = await showCoverUrlDialog(context);
+    if (url == null || !mounted) return;
+    setState(() {
+      _coverUrl = url;
+      _selectedCover = null;
+    });
   }
 
   Future<void> _fetchFromMusicBrainz() async {
@@ -130,6 +144,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
       _yearCtrl.text = result.releaseDate ?? '';
       if (result.coverBytes != null) {
         _selectedCover = result.coverBytes;
+        _coverUrl = null;
       }
     });
     AppSnackBar.show(
@@ -165,6 +180,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
       setState(() {
         _tags = response;
         _selectedCover = null;
+        _coverUrl = null;
         _loading = false;
       });
       _titleCtrl.text = response.title;
@@ -193,6 +209,26 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
     if (_path == null || _tags == null) return;
     setState(() => _applying = true);
     try {
+      var cover = _selectedCover;
+      if (_coverUrl != null && cover == null) {
+        try {
+          final resp = await http.get(Uri.parse(_coverUrl!));
+          if (resp.statusCode == 200) {
+            cover = resp.bodyBytes;
+          } else {
+            throw 'Failed to download cover (HTTP ${resp.statusCode}).';
+          }
+        } catch (e) {
+          if (!mounted) return;
+          setState(() => _applying = false);
+          AppSnackBar.show(
+            context,
+            'Could not download cover from URL: $e',
+            type: SnackType.error,
+          );
+          return;
+        }
+      }
       final result = await BridgeService.instance.writeFileTags(
         path: _path!,
         title: _titleCtrl.text,
@@ -208,7 +244,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
         discNumber: int.tryParse(_discCtrl.text) ?? 0,
         releaseDate: _yearCtrl.text.isNotEmpty ? _yearCtrl.text : null,
         lyrics: _lyricsCtrl.text.isNotEmpty ? _lyricsCtrl.text : null,
-        cover: _selectedCover,
+        cover: cover,
       );
       if (!mounted) return;
       if (result == null) {
@@ -431,9 +467,14 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
                 (_tags?.cover != null
                     ? Uint8List.fromList(_tags!.cover!)
                     : null),
-            replaced: _selectedCover != null,
+            coverUrl: _coverUrl,
+            replaced: _selectedCover != null || _coverUrl != null,
             onPickCover: _pickCover,
-            onRevertCover: () => setState(() => _selectedCover = null),
+            onRevertCover: () => setState(() {
+              _selectedCover = null;
+              _coverUrl = null;
+            }),
+            onPickCoverFromUrl: _pickCoverFromUrl,
           ),
           _buildField('Title', _titleCtrl),
           _buildField('Artist', _artistCtrl),

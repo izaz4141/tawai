@@ -29,6 +29,7 @@ class ToolsPage extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final colors = Theme.of(context).colorScheme;
     final isDesktop = AppTheme.isDesktop(context);
+    final spaceScale = AppTheme.spaceScale(context);
 
     final tools = [
       _ToolEntry(
@@ -87,17 +88,17 @@ class ToolsPage extends StatelessWidget {
     return AppShell(
       title: 'Tools',
       body: isDesktop
-          ? GridView.extent(
-              padding: EdgeInsets.all(
-                AppTheme.spaceLG * AppTheme.spaceScale(context),
+          ? GridView.builder(
+              padding: EdgeInsets.all(AppTheme.spaceLG * spaceScale),
+              gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 340,
+                crossAxisSpacing: AppTheme.spaceMD * spaceScale,
+                mainAxisSpacing: AppTheme.spaceMD * spaceScale,
+                mainAxisExtent: 220 * AppTheme.heightScale(context),
               ),
-              maxCrossAxisExtent: 260,
-              crossAxisSpacing: AppTheme.spaceMD,
-              mainAxisSpacing: AppTheme.spaceMD,
-              childAspectRatio: 1.1,
-              children: tools
-                  .map((t) => _buildCard(t, colors, textTheme))
-                  .toList(),
+              itemCount: tools.length,
+              itemBuilder: (context, index) =>
+                  _buildCard(context, tools[index], colors, textTheme),
             )
           : ListView.separated(
               padding: EdgeInsets.all(
@@ -106,37 +107,62 @@ class ToolsPage extends StatelessWidget {
               itemCount: tools.length,
               separatorBuilder: (_, _) => SizedBox(height: AppTheme.spaceSM),
               itemBuilder: (context, index) =>
-                  _buildListTile(tools[index], colors, textTheme),
+                  _buildListTile(context, tools[index], colors, textTheme),
             ),
     );
   }
 
-  Widget _buildCard(_ToolEntry tool, ColorScheme colors, TextTheme textTheme) {
+  Widget _buildCard(
+    BuildContext context,
+    _ToolEntry tool,
+    ColorScheme colors,
+    TextTheme textTheme,
+  ) {
+    final scale = AppTheme.spaceScale(context);
+    final titleHeight = (textTheme.titleMedium?.fontSize ?? 20) * 1.3;
+    final descHeight = (textTheme.bodySmall?.fontSize ?? 12) * 1.3 * 2;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: tool.onTap,
         child: Padding(
-          padding: const EdgeInsets.all(AppTheme.spaceLG),
+          padding: EdgeInsets.symmetric(
+            horizontal: AppTheme.spaceMD * scale,
+            vertical: AppTheme.spaceLG * scale,
+          ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(tool.icon, size: 48, color: colors.primary),
-              SizedBox(height: AppTheme.spaceSM),
-              Text(
-                tool.label,
-                style: textTheme.titleMedium,
-                textAlign: TextAlign.center,
+              Icon(
+                tool.icon,
+                size: AppTheme.iconXL * AppTheme.iconScale(context),
+                color: colors.primary,
               ),
-              SizedBox(height: AppTheme.spaceXS),
-              Text(
-                tool.description,
-                style: textTheme.bodySmall?.copyWith(
-                  color: colors.onSurfaceVariant,
+              SizedBox(height: AppTheme.spaceSM * scale),
+              SizedBox(
+                height: titleHeight,
+                child: Text(
+                  tool.label,
+                  style: textTheme.titleMedium?.copyWith(height: 1.3),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              ),
+              SizedBox(height: AppTheme.spaceXS * scale),
+              SizedBox(
+                height: descHeight,
+                child: Text(
+                  tool.description,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                    height: 1.3,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
@@ -146,13 +172,18 @@ class ToolsPage extends StatelessWidget {
   }
 
   Widget _buildListTile(
+    BuildContext context,
     _ToolEntry tool,
     ColorScheme colors,
     TextTheme textTheme,
   ) {
     return Card(
       child: ListTile(
-        leading: Icon(tool.icon, color: colors.primary, size: 32),
+        leading: Icon(
+          tool.icon,
+          color: colors.primary,
+          size: AppTheme.iconLG * AppTheme.iconScale(context),
+        ),
         title: Text(tool.label),
         subtitle: Text(tool.description, style: textTheme.bodySmall),
         trailing: const Icon(Icons.chevron_right),

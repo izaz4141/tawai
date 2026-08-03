@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/pages/identify/controller/identify_controller.dart';
 import 'package:tawai/ui/pages/identify/models/identify_result.dart';
@@ -106,6 +107,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
 
   Uint8List? _coverBytes;
   Uint8List? _localCoverBytes;
+  String? _coverUrl;
   bool _downloadingCover = false;
   bool _applying = false;
   bool _lyricsLoading = false;
@@ -253,14 +255,45 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
       setState(() {
         _downloadingCover = false;
         _coverBytes = bytes;
+        _coverUrl = null;
       });
     }
+  }
+
+  Future<void> _pickCoverFromUrl() async {
+    final url = await showCoverUrlDialog(context);
+    if (url == null || !mounted) return;
+    setState(() {
+      _coverUrl = url;
+      _coverBytes = null;
+    });
   }
 
   Future<void> _apply() async {
     setState(() => _applying = true);
     try {
       final st = widget.currentTrack;
+
+      var coverBytes = _coverBytes;
+      if (_coverUrl != null && coverBytes == null) {
+        try {
+          final resp = await http.get(Uri.parse(_coverUrl!));
+          if (resp.statusCode == 200) {
+            coverBytes = resp.bodyBytes;
+          } else {
+            throw 'Failed to download cover (HTTP ${resp.statusCode}).';
+          }
+        } catch (e) {
+          if (!mounted) return;
+          setState(() => _applying = false);
+          AppSnackBar.show(
+            context,
+            'Could not download cover from URL: $e',
+            type: SnackType.error,
+          );
+          return;
+        }
+      }
 
       final result = await widget.controller.applyIdentification(
         trackId: st.id,
@@ -279,7 +312,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
             : null,
         mbidRecording: _appliedRemoteRecId,
         lyrics: _lyricsCtrl.text.isNotEmpty ? _lyricsCtrl.text : null,
-        coverBytes: _coverBytes,
+        coverBytes: coverBytes,
       );
       if (!mounted) return;
       if (result.success) {
@@ -300,7 +333,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
             mbidAlbum: _appliedRemoteAlbumId,
             mbidArtist: _appliedRemoteArtistId,
             lyrics: _lyricsCtrl.text.isNotEmpty ? _lyricsCtrl.text : null,
-            coverBytes: _coverBytes,
+            coverBytes: coverBytes,
           ),
         );
       } else {
@@ -531,11 +564,16 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
             children: [
               EditableCover(
                 coverBytes: _coverBytes ?? _localCoverBytes,
-                replaced: _coverBytes != null,
+                coverUrl: _coverUrl,
+                replaced: _coverBytes != null || _coverUrl != null,
                 onPickCover: _downloadCover,
-                onRevertCover: _coverBytes != null
-                    ? () => setState(() => _coverBytes = null)
+                onRevertCover: _coverBytes != null || _coverUrl != null
+                    ? () => setState(() {
+                        _coverBytes = null;
+                        _coverUrl = null;
+                      })
                     : null,
+                onPickCoverFromUrl: _pickCoverFromUrl,
                 width: 120,
                 height: 120,
               ),
@@ -551,8 +589,11 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
         IconButton(
           onPressed: _downloadingCover
               ? null
-              : (_coverBytes != null
-                    ? () => setState(() => _coverBytes = null)
+              : (_coverBytes != null || _coverUrl != null
+                    ? () => setState(() {
+                        _coverBytes = null;
+                        _coverUrl = null;
+                      })
                     : _downloadCover),
           icon: _downloadingCover
               ? const SizedBox(
@@ -561,10 +602,14 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : Icon(
-                  _coverBytes != null ? Icons.undo : Icons.arrow_back,
-                  color: _coverBytes != null ? colors.tertiary : colors.primary,
+                  _coverBytes != null || _coverUrl != null
+                      ? Icons.undo
+                      : Icons.arrow_back,
+                  color: _coverBytes != null || _coverUrl != null
+                      ? colors.tertiary
+                      : colors.primary,
                 ),
-          tooltip: _coverBytes != null
+          tooltip: _coverBytes != null || _coverUrl != null
               ? 'Revert cover'
               : 'Apply MusicBrainz cover',
         ),
