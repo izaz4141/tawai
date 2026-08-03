@@ -14,6 +14,8 @@ pub struct ReleaseInfo {
     pub disambiguation: Option<String>,
     #[serde(default)]
     pub total_discs: Option<i32>,
+    #[serde(default)]
+    pub total_tracks: Option<i32>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]

@@ -155,7 +155,7 @@ class PlayerPage extends StatelessWidget {
                             MaterialPageRoute(builder: (_) => const LyricsPage()),
                           ),
                         ),
-                        if (RecommendationSource.isRecommendationSource(
+                        if (RecommendationSource.isDownloadable(
                           track.sourceType,
                         )) ...[
                           const SizedBox(width: AppTheme.spaceXXL),

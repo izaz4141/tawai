@@ -59,6 +59,11 @@ class RecommendationSource {
 
   static bool isRecommendationSource(String key) => key.startsWith('recommendation:');
 
+  /// Whether a track's source type supports downloading (recommendations and
+  /// live previews from discovery).
+  static bool isDownloadable(String sourceType) =>
+      isRecommendationSource(sourceType) || sourceType == 'preview';
+
   static String? findKeyByDisplayName(String displayName) {
     for (final s in all) {
       if (s.displayName == displayName) return s.key;

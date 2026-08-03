@@ -79,7 +79,6 @@ Prerequisites: Flutter 3.38.5 (FVM-managed), Rust toolchain, and FVM. See [DEVEL
     ```sh
     export TAWAI_SERVER_MASTER_KEY=$(openssl rand -hex 32) # required (64 hex chars)
     export TAWAI_DATABASE_URL=postgresql://user:pass@localhost/tawai # optional; defaults to SQLite
-    export TAWAI_ACOUSTID_API_KEY=your_key_here # optional
     ```
 
 4.  **Build for your platform:**
@@ -136,7 +135,6 @@ native/
 | `TAWAI_SERVER_HOST` | No | API bind address; default `127.0.0.1` (`0.0.0.0` in Docker) |
 | `TAWAI_SERVER_PORT` | No | API port; default `8080` |
 | `TAWAI_DATABASE_URL` | No | `postgresql://`/`postgres://` → PostgreSQL, else SQLite at `{TAWAI_HOME}/data/tawai.db` |
-| `TAWAI_ACOUSTID_API_KEY` | No | AcoustID API access (fingerprint identification) |
 | `TAWAI_SLSKD_URL` | No | slskd server URL (e.g. `http://slskd:5030`) |
 | `TAWAI_SLSKD_API_KEY` | No | slskd API key |
 | `TAWAI_NADEKODON_URL` | No | Nadeko~don server URL (e.g. `http://nadekodon:8080`) |

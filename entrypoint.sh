@@ -6,12 +6,10 @@ export TAWAI_SERVER_HOST=${TAWAI_SERVER_HOST:-0.0.0.0}
 export TAWAI_SERVER_PORT=${TAWAI_SERVER_PORT:-8080}
 export TAWAI_SERVER_MASTER_KEY=${TAWAI_SERVER_MASTER_KEY:-}
 export TAWAI_DATABASE_URL=${TAWAI_DATABASE_URL:-}
-export TAWAI_ACOUSTID_API_KEY=${TAWAI_ACOUSTID_API_KEY:-}
 
 # Rust treats an empty (but set) env var as a value, so unset these so the
 # server falls back to its defaults (SQLite DB path, optional AcoustID).
 [ -z "$TAWAI_DATABASE_URL" ] && unset TAWAI_DATABASE_URL || true
-[ -z "$TAWAI_ACOUSTID_API_KEY" ] && unset TAWAI_ACOUSTID_API_KEY || true
 
 CURRENT_UID=$(id -u)
 CURRENT_GID=$(id -g)

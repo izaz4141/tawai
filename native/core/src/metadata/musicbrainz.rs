@@ -3,13 +3,47 @@ use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use reqwest::header;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
-use std::time::Duration;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
 
 use crate::signals::metadata::{MBSearchInfo, RecordingInfo, ReleaseInfo, ReleaseTrackInfo};
 
 static MB_UA: &str = "Tawai/0.0.1 ( https://github.com/izaz4141/tawai )";
 
+const ACOUSTID_CLIENT_KEY: &str = "1WElrdlcln";
+
 const MB_MAX_RETRIES: u32 = 3;
+
+/// AcoustID usage guidelines require at most 3 requests per second.
+/// Space each AcoustID call by this interval (~3/s).
+const ACOUSTID_REQUEST_INTERVAL: Duration = Duration::from_millis(334);
+
+struct AcoustIdRateLimiter {
+    interval: Duration,
+    next_slot: Instant,
+}
+
+static ACOUSTID_LIMITER: OnceLock<Mutex<AcoustIdRateLimiter>> = OnceLock::new();
+
+async fn acoustid_throttle() {
+    let limiter = ACOUSTID_LIMITER.get_or_init(|| {
+        Mutex::new(AcoustIdRateLimiter {
+            interval: ACOUSTID_REQUEST_INTERVAL,
+            next_slot: Instant::now(),
+        })
+    });
+
+    let mut guard = limiter.lock().await;
+    let now = Instant::now();
+    let interval = guard.interval;
+    if now < guard.next_slot {
+        tokio::time::sleep(guard.next_slot - now).await;
+        guard.next_slot += interval;
+    } else {
+        guard.next_slot = now + interval;
+    }
+}
 
 async fn mb_get_json<T: DeserializeOwned>(client: &reqwest::Client, url: &str) -> Result<T> {
     let mut last_err = None;
@@ -152,22 +186,34 @@ async fn find_cover_url(client: &reqwest::Client, releases: &[ReleaseInfo]) -> O
     None
 }
 
+/// Format an AcoustID release date as `YYYY-MM-DD`, `YYYY-MM`, or `YYYY`,
+/// matching the date convention used elsewhere (see audio::tags).
+fn format_acoustid_date(date: AcoustIdDate) -> Option<String> {
+    match (date.year, date.month, date.day) {
+        (Some(y), Some(m), Some(d)) => Some(format!("{:04}-{:02}-{:02}", y, m, d)),
+        (Some(y), Some(m), None) => Some(format!("{:04}-{:02}", y, m)),
+        (Some(y), None, None) => Some(format!("{:04}", y)),
+        _ => None,
+    }
+}
+
 /// Look up a Chromaprint fingerprint via the AcoustID API.
 /// Returns a RecordingInfo with the top recording, its artist, and releases.
 pub async fn lookup_by_fingerprint(
     client: &reqwest::Client,
     fingerprint: &str,
     duration_secs: f64,
-    api_key: &str,
 ) -> Result<RecordingInfo> {
-    let meta = "recordings+releasegroups+releases+compress";
-    let duration_str = duration_secs.to_string();
+    let meta = "recordings releasegroups releases compress";
+    let duration_str = (duration_secs.round() as i64).to_string();
+
+    acoustid_throttle().await;
 
     let body: AcoustIdResponse = mb_post_form_json(
         client,
         "https://api.acoustid.org/v2/lookup",
         &[
-            ("client", api_key),
+            ("client", ACOUSTID_CLIENT_KEY),
             ("fingerprint", fingerprint),
             ("duration", &duration_str),
             ("meta", meta),
@@ -223,17 +269,23 @@ pub async fn lookup_by_fingerprint(
         .unwrap_or_default()
         .into_iter()
         .flat_map(|rg| {
+            let releasegroup_title = rg.title.clone();
+            let artist = artist.clone();
+            let artist_id = artist_id.clone();
             let releases = rg.releases.unwrap_or_default();
-            releases.into_iter().map(|r| ReleaseInfo {
+            releases.into_iter().map(move |r| ReleaseInfo {
                 id: r.id.unwrap_or_default(),
-                title: r.title.unwrap_or_default(),
-                date: r.date.and_then(|d| d.year.map(|y| format!("{:04}", y))),
-                country: None,
+                title: r
+                    .title
+                    .unwrap_or_else(|| releasegroup_title.clone().unwrap_or_default()),
+                date: r.date.and_then(format_acoustid_date),
+                country: r.country,
                 artist: artist.clone(),
                 artist_id: artist_id.clone(),
                 tracks: Vec::new(),
                 disambiguation: None,
-                total_discs: None,
+                total_discs: r.medium_count,
+                total_tracks: r.track_count,
             })
         })
         .collect();
@@ -297,6 +349,7 @@ pub async fn lookup_by_query(client: &reqwest::Client, query: &str) -> Result<MB
                 tracks: Vec::new(),
                 disambiguation: r.disambiguation,
                 total_discs: None,
+                total_tracks: None,
             })
             .collect();
 
@@ -348,6 +401,15 @@ pub async fn fetch_release(client: &reqwest::Client, release_id: &str) -> Result
         .and_then(|m| m.iter().filter_map(|med| med.position).max())
         .unwrap_or(0);
 
+    let total_tracks: Option<i32> = release.media.as_ref().and_then(|m| {
+        let counts: Vec<i32> = m.iter().filter_map(|med| med.track_count).collect();
+        if counts.is_empty() {
+            None
+        } else {
+            Some(counts.iter().sum())
+        }
+    });
+
     let tracks = release
         .media
         .unwrap_or_default()
@@ -381,6 +443,7 @@ pub async fn fetch_release(client: &reqwest::Client, release_id: &str) -> Result
         tracks,
         disambiguation: release.disambiguation,
         total_discs: Some(total_discs),
+        total_tracks,
     })
 }
 
@@ -420,6 +483,7 @@ pub async fn fetch_recording(client: &reqwest::Client, mbid: &str) -> Result<Rec
             tracks: Vec::new(),
             disambiguation: r.disambiguation,
             total_discs: None,
+            total_tracks: None,
         })
         .collect();
 
@@ -484,10 +548,15 @@ pub struct AcoustIdRelease {
     pub id: Option<String>,
     pub title: Option<String>,
     pub date: Option<AcoustIdDate>,
+    pub country: Option<String>,
+    pub medium_count: Option<i32>,
+    pub track_count: Option<i32>,
 }
 
 #[derive(Deserialize)]
 pub struct AcoustIdDate {
+    pub day: Option<i32>,
+    pub month: Option<i32>,
     pub year: Option<i32>,
 }
 
@@ -554,6 +623,8 @@ pub struct MusicBrainzReleaseResponse {
 #[derive(Deserialize)]
 pub struct MusicBrainzMedia {
     pub position: Option<i32>,
+    #[serde(rename = "track-count")]
+    pub track_count: Option<i32>,
     pub tracks: Option<Vec<MusicBrainzTrack>>,
 }
 

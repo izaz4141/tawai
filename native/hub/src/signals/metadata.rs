@@ -12,6 +12,7 @@ pub struct ReleaseInfo {
     pub tracks: Vec<ReleaseTrackInfo>,
     pub disambiguation: Option<String>,
     pub total_discs: Option<i32>,
+    pub total_tracks: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]
@@ -88,6 +89,7 @@ impl From<tawai_core::signals::metadata::ReleaseInfo> for ReleaseInfo {
             tracks: r.tracks.into_iter().map(Into::into).collect(),
             disambiguation: r.disambiguation,
             total_discs: r.total_discs,
+            total_tracks: r.total_tracks,
         }
     }
 }

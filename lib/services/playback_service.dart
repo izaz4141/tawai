@@ -143,38 +143,7 @@ class PlaybackService {
         playing: playerState.value.playing,
       );
 
-      final syntheticTrack = TrackInfo(
-        id: rec.id,
-        title: rec.title,
-        albumId: '',
-        albumTitle: rec.albumTitle ?? '',
-        artistsString: rec.artist,
-        artists: [
-          ArtistInfo(
-            id: rec.artistId ?? rec.artist,
-            name: rec.artist,
-            sortName: null,
-            mbid: rec.artistId,
-            thumbnailUrl: null,
-            albumCount: 0,
-            trackCount: 0,
-          ),
-        ],
-        trackNum: null,
-        discNum: null,
-        durationSecs: rec.durationSecs,
-        filePath: '',
-        fileSize: null,
-        bitrate: null,
-        mbidRecording: rec.id,
-        artistMbid: rec.artistId,
-        albumMbid: null,
-        lyrics: null,
-        releaseDate: null,
-        source: 'preview',
-        sourceType: 'preview',
-        genres: [],
-      );
+      final syntheticTrack = trackFromRecording(rec);
 
       playerState.value = PlayerState(false, ProcessingState.loading);
       await _player.stop();
@@ -202,6 +171,43 @@ class PlaybackService {
       _beginTrack(syntheticTrack);
       await _player.play();
     });
+  }
+
+  /// Builds a synthetic [TrackInfo] from a discovery recording, used for
+  /// previewing and for the download flow.
+  static TrackInfo trackFromRecording(DiscoveryRecording rec) {
+    return TrackInfo(
+      id: rec.id,
+      title: rec.title,
+      albumId: '',
+      albumTitle: rec.albumTitle ?? '',
+      artistsString: rec.artist,
+      artists: [
+        ArtistInfo(
+          id: rec.artistId ?? rec.artist,
+          name: rec.artist,
+          sortName: null,
+          mbid: rec.artistId,
+          thumbnailUrl: null,
+          albumCount: 0,
+          trackCount: 0,
+        ),
+      ],
+      trackNum: null,
+      discNum: null,
+      durationSecs: rec.durationSecs,
+      filePath: '',
+      fileSize: null,
+      bitrate: null,
+      mbidRecording: rec.id,
+      artistMbid: rec.artistId,
+      albumMbid: null,
+      lyrics: null,
+      releaseDate: null,
+      source: 'preview',
+      sourceType: 'preview',
+      genres: [],
+    );
   }
 
   Future<void> playNext() async {

@@ -40,6 +40,7 @@ pub async fn handle_get_release_tracks(
                     tracks: vec![],
                     disambiguation: None,
                     total_discs: None,
+                    total_tracks: None,
                 }),
             )
                 .into_response()

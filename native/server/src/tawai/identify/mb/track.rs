@@ -44,15 +44,13 @@ pub async fn handle_identify_track(
         }
     };
 
-    if let Ok(Some((fingerprint, duration))) =
-        library::lookup_fingerprint_by_id(db.pool(), &id).await
-    {
-        if let Ok(api_key) = std::env::var("TAWAI_ACOUSTID_API_KEY") {
+        if let Ok(Some((fingerprint, duration))) =
+            library::lookup_fingerprint_by_id(db.pool(), &id).await
+        {
             match musicbrainz::lookup_by_fingerprint(
                 state.context.client(),
                 &fingerprint,
                 duration,
-                &api_key,
             )
             .await
             {
@@ -77,7 +75,6 @@ pub async fn handle_identify_track(
                 Err(e) => tawai_core::utils::logger::debug(&format!("AcoustID lookup failed: {e}")),
             }
         }
-    }
 
     let path = std::path::Path::new(&track.file_path);
     if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
@@ -121,16 +118,10 @@ pub async fn handle_fingerprint_track(
         _ => return Json(None::<tawai_core::signals::metadata::RecordingInfo>).into_response(),
     };
 
-    let api_key = match std::env::var("TAWAI_ACOUSTID_API_KEY") {
-        Ok(k) => k,
-        _ => return Json(None::<tawai_core::signals::metadata::RecordingInfo>).into_response(),
-    };
-
     let info = match musicbrainz::lookup_by_fingerprint(
         state.context.client(),
         &fingerprint,
         duration,
-        &api_key,
     )
     .await
     {

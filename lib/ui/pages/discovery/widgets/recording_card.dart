@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/components/preview_button.dart';
+import 'package:tawai/ui/pages/discovery/widgets/recording_action_sheet.dart';
+import 'package:tawai/ui/pages/discovery/widgets/recording_thumb.dart';
 
 class RecordingCard extends StatelessWidget {
   final DiscoveryRecording recording;
@@ -16,33 +18,31 @@ class RecordingCard extends StatelessWidget {
     final isDesktop = AppTheme.isDesktop(context);
     final cardWidth = isDesktop ? 160.0 : 140.0;
 
-    return Card(
-      margin: EdgeInsets.symmetric(
-        horizontal: AppTheme.spaceXS * scale,
-        vertical: AppTheme.spaceXS * scale,
-      ),
-      child: SizedBox(
-        width: cardWidth,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(AppTheme.radiusMD * AppTheme.radiusScale(context)),
-                ),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    recording.cover != null
-                        ? Image.network(
-                            recording.cover!,
-                            width: cardWidth,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => _buildFallback(colors),
-                          )
-                        : _buildFallback(colors),
+    return GestureDetector(
+      onLongPress: () => showRecordingActionSheet(context, recording),
+      onSecondaryTap: AppTheme.isDesktop(context)
+          ? () => showRecordingActionSheet(context, recording)
+          : null,
+      child: Card(
+        margin: EdgeInsets.symmetric(
+          horizontal: AppTheme.spaceXS * scale,
+          vertical: AppTheme.spaceXS * scale,
+        ),
+        child: SizedBox(
+          width: cardWidth,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(AppTheme.radiusMD * AppTheme.radiusScale(context)),
+                  ),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      RecordingThumb(recording: recording),
                     if (recording.isOwned)
                       Positioned(
                         top: 6,
@@ -109,18 +109,8 @@ class RecordingCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildFallback(ColorScheme colors) {
-    return Container(
-      width: double.infinity,
-      color: colors.surfaceContainerHighest,
-      child: Icon(
-        Icons.music_note,
-        size: AppTheme.iconMD,
-        color: colors.onSurfaceVariant,
       ),
     );
   }
 }
+

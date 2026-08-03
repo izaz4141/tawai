@@ -964,11 +964,13 @@ pub async fn lookup_fingerprint_by_id(
     pool: &PgPool,
     track_id: &str,
 ) -> Result<Option<(String, f64)>> {
-    let row: Option<(String, f64)> =
-        sqlx::query_as("SELECT fingerprint, duration FROM fingerprints WHERE track_id = $1")
-            .bind(track_id)
-            .fetch_optional(pool)
-            .await?;
+    let row: Option<(String, f64)> = sqlx::query_as(
+        "SELECT f.fingerprint, t.duration_secs AS duration FROM fingerprints f \
+         JOIN tracks t ON t.id = f.track_id WHERE f.track_id = $1",
+    )
+    .bind(track_id)
+    .fetch_optional(pool)
+    .await?;
     Ok(row)
 }
 

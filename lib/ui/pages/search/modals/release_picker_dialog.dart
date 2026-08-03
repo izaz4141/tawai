@@ -74,6 +74,39 @@ class ReleasePickerDialog extends StatelessWidget {
                               .bodySmall
                               ?.copyWith(color: colors.onSurfaceVariant),
                         ),
+                      if (release.totalTracks != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppTheme.spaceXS),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppTheme.spaceXS,
+                              vertical: AppTheme.spaceXS / 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colors.surfaceContainerHighest,
+                              borderRadius:
+                                  BorderRadius.circular(AppTheme.radiusSM),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.music_note,
+                                  size: AppTheme.iconXS,
+                                  color: colors.onSurfaceVariant,
+                                ),
+                                const SizedBox(width: AppTheme.spaceXS / 2),
+                                Text(
+                                  '${release.totalTracks} tracks',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(color: colors.onSurfaceVariant),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),

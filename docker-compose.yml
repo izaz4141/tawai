@@ -18,7 +18,6 @@ services:
       - TAWAI_SERVER_PORT=8080 # Internal API server port (inside container)
       - TAWAI_SERVER_MASTER_KEY=${TAWAI_SERVER_MASTER_KEY:?set in .env - generate with `openssl rand -hex 32`} # 64-character hex-encoded master key (required)
       - TAWAI_DATABASE_URL= # Leave empty for SQLite at {TAWAI_HOME}/data/tawai.db. Use postgresql://user:pass@postgres/tawai for PostgreSQL
-      - TAWAI_ACOUSTID_API_KEY= # AcoustID API key (optional, enables fingerprint identification)
       - TAWAI_SLSKD_URL= # slskd server URL e.g. http://slskd:5030
       - TAWAI_SLSKD_API_KEY= # slskd API key
       - TAWAI_NADEKODON_URL= # Nadeko~don server URL e.g. http://nadekodon:8080
