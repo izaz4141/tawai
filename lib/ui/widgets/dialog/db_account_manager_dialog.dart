@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:tawai/models/account.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/ui/widgets/dialog/add_account_dialog.dart';
@@ -83,8 +84,10 @@ class _DbAccountManagerDialogState extends State<DbAccountManagerDialog> {
     if (result.success) {
       _load();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to delete ${user.username}")),
+      AppSnackBar.show(
+        context,
+        "Failed to delete ${user.username}",
+        type: SnackType.error,
       );
     }
   }

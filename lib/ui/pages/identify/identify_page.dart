@@ -6,6 +6,7 @@ import 'package:tawai/ui/pages/identify/widgets/left_panel.dart';
 import 'package:tawai/ui/pages/identify/widgets/release_picker_dialog.dart';
 import 'package:tawai/ui/pages/identify/widgets/right_panel.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/widgets/dialog/identify_dialog.dart';
 
 class IdentifyPage extends StatefulWidget {
@@ -41,10 +42,10 @@ class _IdentifyPageState extends State<IdentifyPage> {
       final rec = await _controller.fingerprintTrack(track);
       if (!mounted) return;
       if (rec == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Fingerprint lookup returned no results'),
-          ),
+        AppSnackBar.show(
+          context,
+          'Fingerprint lookup returned no results',
+          type: SnackType.error,
         );
         return;
       }
@@ -62,8 +63,10 @@ class _IdentifyPageState extends State<IdentifyPage> {
       final results = await _controller.lookupTrack(track);
       if (!mounted) return;
       if (results.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Lookup returned no results')),
+        AppSnackBar.show(
+          context,
+          'Lookup returned no results',
+          type: SnackType.error,
         );
       } else if (results.length == 1) {
         _showReleasePickerForSession(track, results.first);

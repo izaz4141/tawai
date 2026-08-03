@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/widgets/dialog/language_picker_dialog.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/logger.dart';
@@ -307,9 +308,11 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
       if (response?.error == null && response?.romajized != null) {
         setState(() => _lyricsController.text = response!.romajized);
         if (context.mounted) {
-          ScaffoldMessenger.of(
+          AppSnackBar.show(
             context,
-          ).showSnackBar(const SnackBar(content: Text('Lyrics romajized')));
+            'Lyrics romajized',
+            type: SnackType.success,
+          );
         }
       }
     } catch (e) {
@@ -329,9 +332,11 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
       if (!mounted) return;
       if (response?.success == true) {
         if (context.mounted) {
-          ScaffoldMessenger.of(
+          AppSnackBar.show(
             context,
-          ).showSnackBar(const SnackBar(content: Text('Lyrics saved')));
+            'Lyrics saved',
+            type: SnackType.success,
+          );
         }
       }
     } catch (e) {
@@ -357,9 +362,11 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
       if (!mounted) return;
       if (response?.success == true) {
         if (context.mounted) {
-          ScaffoldMessenger.of(
+          AppSnackBar.show(
             context,
-          ).showSnackBar(const SnackBar(content: Text('Lyrics cleared')));
+            'Lyrics cleared',
+            type: SnackType.success,
+          );
         }
       }
     } catch (e) {

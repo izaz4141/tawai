@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/settings.dart';
 
@@ -128,8 +129,10 @@ class _RenamerPageState extends State<RenamerPage> {
         pattern: _patternController.text,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Renamed ${selectedPaths.length} file(s)')),
+      AppSnackBar.show(
+        context,
+        'Renamed ${selectedPaths.length} file(s)',
+        type: SnackType.success,
       );
       setState(() {
         _previews = [];
@@ -139,9 +142,11 @@ class _RenamerPageState extends State<RenamerPage> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      AppSnackBar.show(
         context,
-      ).showSnackBar(SnackBar(content: Text(e.toString())));
+        e.toString(),
+        type: SnackType.error,
+      );
       setState(() => _phase = _Phase.result);
     }
   }

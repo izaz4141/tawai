@@ -5,6 +5,7 @@ import 'package:tawai/ui/pages/identify/controller/identify_controller.dart';
 import 'package:tawai/ui/pages/identify/models/identify_result.dart';
 import 'package:tawai/ui/pages/identify/widgets/comparison_row.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/widgets/components/editable_cover.dart';
 import 'package:tawai/ui/widgets/components/sheet.dart';
 import 'package:tawai/ui/widgets/components/shimmer.dart';
@@ -248,11 +249,12 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     if (albumMbid == null) return;
     setState(() => _downloadingCover = true);
     final bytes = await widget.controller.downloadCover(albumMbid);
-    if (mounted)
+    if (mounted) {
       setState(() {
         _downloadingCover = false;
         _coverBytes = bytes;
       });
+    }
   }
 
   Future<void> _apply() async {
@@ -302,11 +304,10 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
           ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed: ${result.error ?? "Unknown error"}'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+        AppSnackBar.show(
+          context,
+          'Failed: ${result.error ?? "Unknown error"}',
+          type: SnackType.error,
         );
       }
     } finally {

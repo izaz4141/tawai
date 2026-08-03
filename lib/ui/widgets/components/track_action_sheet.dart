@@ -9,6 +9,7 @@ import 'package:tawai/ui/pages/library/subpages/artist/artist_detail_page.dart';
 import 'package:tawai/ui/widgets/components/sheet.dart';
 import 'package:tawai/ui/widgets/components/cover_image.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/widgets/components/download_track_sheet.dart';
 import 'package:tawai/ui/widgets/dialog/tag_editor.dart';
 import 'package:tawai/models/recommendation_source.dart';
@@ -195,7 +196,9 @@ Future<void> _showAddToPlaylistDialog(
   );
   if (!context.mounted) return;
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(ok ? 'Added to playlist' : 'Failed to add')),
+  AppSnackBar.show(
+    context,
+    ok ? 'Added to playlist' : 'Failed to add',
+    type: ok ? SnackType.success : SnackType.error,
   );
 }

@@ -4,6 +4,7 @@ import 'package:tawai/utils/api_service.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/widgets/dialog/auth_confirm_dialog.dart';
 import 'package:tawai/utils/helper.dart';
 
@@ -511,8 +512,6 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
   }
 
   void _showError(BuildContext context, String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    AppSnackBar.show(context, message, type: SnackType.error);
   }
 }

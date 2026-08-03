@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/ui/widgets/app_shell.dart';
@@ -113,9 +114,11 @@ class _SearchPageState extends State<SearchPage> {
     if (results.isEmpty) {
       if (mounted) {
         setState(() => _autoDownloading = false);
-        ScaffoldMessenger.of(
+        AppSnackBar.show(
           context,
-        ).showSnackBar(SnackBar(content: Text('No results for "$query"')));
+          'No results for "$query"',
+          type: SnackType.error,
+        );
       }
       return;
     }
@@ -127,10 +130,10 @@ class _SearchPageState extends State<SearchPage> {
       if (best == null) {
         if (mounted) {
           setState(() => _autoDownloading = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('No results match quality "$quality" for "$query"'),
-            ),
+          AppSnackBar.show(
+            context,
+            'No results match quality "$quality" for "$query"',
+            type: SnackType.error,
           );
         }
         return;
@@ -147,10 +150,10 @@ class _SearchPageState extends State<SearchPage> {
 
       if (mounted) {
         setState(() => _autoDownloading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Auto-downloading: ${best.filename.split('/').last}'),
-          ),
+        AppSnackBar.show(
+          context,
+          'Auto-downloading: ${best.filename.split('/').last}',
+          type: SnackType.success,
         );
       }
     } else {
@@ -158,9 +161,11 @@ class _SearchPageState extends State<SearchPage> {
       if (first == null) {
         if (mounted) {
           setState(() => _autoDownloading = false);
-          ScaffoldMessenger.of(
+          AppSnackBar.show(
             context,
-          ).showSnackBar(SnackBar(content: Text('No results for "$query"')));
+            'No results for "$query"',
+            type: SnackType.error,
+          );
         }
         return;
       }
@@ -179,9 +184,11 @@ class _SearchPageState extends State<SearchPage> {
       extra: '{"username": "${entry.username}"}',
     );
     if (mounted) {
-      ScaffoldMessenger.of(
+      AppSnackBar.show(
         context,
-      ).showSnackBar(SnackBar(content: Text('Downloading: ${entry.filename}')));
+        'Downloading: ${entry.filename}',
+        type: SnackType.success,
+      );
     }
   }
 
@@ -195,12 +202,10 @@ class _SearchPageState extends State<SearchPage> {
       if (!mounted) return;
 
       if (infoJson == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to get info for ${entry.title ?? entry.filename}',
-            ),
-          ),
+        AppSnackBar.show(
+          context,
+          'Failed to get info for ${entry.title ?? entry.filename}',
+          type: SnackType.error,
         );
         return;
       }
@@ -222,12 +227,10 @@ class _SearchPageState extends State<SearchPage> {
         final quality = SettingsManager.desiredAudioQuality.value;
         formatId = pickNadekodonFormat(audioFormats, quality);
         if (formatId == null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'No formats match quality "$quality" for ${entry.title ?? entry.filename}',
-              ),
-            ),
+          AppSnackBar.show(
+            context,
+            'No formats match quality "$quality" for ${entry.title ?? entry.filename}',
+            type: SnackType.error,
           );
         }
       } else {
@@ -239,12 +242,10 @@ class _SearchPageState extends State<SearchPage> {
 
       if (formatId == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'No formats available for ${entry.title ?? entry.filename}',
-              ),
-            ),
+          AppSnackBar.show(
+            context,
+            'No formats available for ${entry.title ?? entry.filename}',
+            type: SnackType.error,
           );
         }
         return;
@@ -259,10 +260,10 @@ class _SearchPageState extends State<SearchPage> {
         extra: '{"audio_format": "$formatId"}',
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Downloading: ${entry.title ?? entry.filename}'),
-          ),
+        AppSnackBar.show(
+          context,
+          'Downloading: ${entry.title ?? entry.filename}',
+          type: SnackType.success,
         );
       }
     } finally {

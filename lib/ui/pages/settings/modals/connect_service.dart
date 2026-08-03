@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/app_snackbar.dart';
 
 class ConnectServiceDialog extends StatefulWidget {
   /// Input tuple order: (label, helperText, obscureText, initialValue?)
@@ -160,9 +161,11 @@ class _ConnectServiceDialogState extends State<ConnectServiceDialog> {
               if (mounted) Navigator.of(context).pop();
             } catch (e) {
               if (!mounted) return;
-              ScaffoldMessenger.of(
+              AppSnackBar.show(
                 context,
-              ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+                'Failed to save: $e',
+                type: SnackType.error,
+              );
             }
           },
           child: Text('Confirm', style: textTheme.bodyMedium),

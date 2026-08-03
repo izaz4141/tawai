@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/widgets/components/editable_cover.dart';
 import 'package:tawai/ui/widgets/dialog/identify_dialog.dart';
 import 'package:tawai/utils/bridge_service.dart';
@@ -131,8 +132,10 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
         _selectedCover = result.coverBytes;
       }
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Metadata fetched from MusicBrainz.')),
+    AppSnackBar.show(
+      context,
+      'Metadata fetched from MusicBrainz.',
+      type: SnackType.success,
     );
   }
 
@@ -209,22 +212,23 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
       );
       if (!mounted) return;
       if (result == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Tag editor is not available on this platform.'),
-          ),
+        AppSnackBar.show(
+          context,
+          'Tag editor is not available on this platform.',
+          type: SnackType.error,
         );
       } else if (result.success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Tags applied successfully.')),
+        AppSnackBar.show(
+          context,
+          'Tags applied successfully.',
+          type: SnackType.success,
         );
         Navigator.of(context).pop();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.error ?? 'Failed to apply tags.'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+        AppSnackBar.show(
+          context,
+          result.error ?? 'Failed to apply tags.',
+          type: SnackType.error,
         );
       }
     } finally {

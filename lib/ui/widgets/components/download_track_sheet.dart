@@ -4,6 +4,7 @@ import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/widgets/components/sheet.dart';
 import 'package:tawai/ui/widgets/components/cover_image.dart';
 import 'package:tawai/ui/pages/search/search_types.dart';
@@ -82,14 +83,12 @@ class _DownloadTrackSheetState extends State<_DownloadTrackSheet> {
     );
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            result.success
-                ? 'Downloading: ${entry.filename.split('/').last}'
-                : result.error ?? 'Download failed',
-          ),
-        ),
+      AppSnackBar.show(
+        context,
+        result.success
+            ? 'Downloading: ${entry.filename.split('/').last}'
+            : result.error ?? 'Download failed',
+        type: result.success ? SnackType.success : SnackType.error,
       );
     }
   }
@@ -132,14 +131,12 @@ class _DownloadTrackSheetState extends State<_DownloadTrackSheet> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              result.success
-                  ? 'Downloading: ${entry.title ?? entry.filename}'
-                  : result.error ?? 'Download failed',
-            ),
-          ),
+        AppSnackBar.show(
+          context,
+          result.success
+              ? 'Downloading: ${entry.title ?? entry.filename}'
+              : result.error ?? 'Download failed',
+          type: result.success ? SnackType.success : SnackType.error,
         );
       }
     } finally {
@@ -149,9 +146,7 @@ class _DownloadTrackSheetState extends State<_DownloadTrackSheet> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    AppSnackBar.show(context, message, type: SnackType.error);
   }
 
   @override
