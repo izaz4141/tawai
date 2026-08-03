@@ -258,7 +258,7 @@ jobs:
           cp -r build/linux/x64/release/bundle/* AppDir/usr/bin/
 
           # Copy icon and desktop file to root of AppDir
-          cp assets/icons/tawai-duotone.svg AppDir/tawai.svg
+          cp assets/icons/tawai-filled-512.png AppDir/tawai.png
           cp linux/tawai.desktop AppDir/
 
           # Create AppRun symlink

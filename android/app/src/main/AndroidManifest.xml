@@ -19,7 +19,7 @@
         android:label="tawai"
         android:description="@string/app_description"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/launcher_icon"
         android:requestLegacyExternalStorage="true">
 
         <provider

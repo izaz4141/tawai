@@ -97,6 +97,24 @@ Future<void> main() async {
         await RinfService.instance.startPeriodicScan();
       }
 
+      PlaybackService.instance.init();
+
+      if (PlatformService.isAndroid) {
+        SharedIntentService.instance.init();
+      }
+
+      if (kIsWeb || PlatformService.isAndroid) {
+        PlaybackService.instance.audioHandler = await AudioService.init(
+          builder: () => TawaiAudioHandler(),
+          config: const AudioServiceConfig(
+            androidNotificationChannelId: 'id.glicole.tawai.channel.audio',
+            androidNotificationChannelName: 'Playback',
+            androidNotificationOngoing: true,
+            androidStopForegroundOnPause: true,
+          ),
+        );
+      }
+
       if (PlatformService.isDesktop) {
         await SingleInstance.init(() async {
           await PlatformService().focusWindow();
@@ -119,24 +137,6 @@ Future<void> main() async {
             await removeTray();
           }
         });
-      }
-
-      PlaybackService.instance.init();
-
-      if (PlatformService.isAndroid) {
-        SharedIntentService.instance.init();
-      }
-
-      if (kIsWeb || PlatformService.isAndroid) {
-        PlaybackService.instance.audioHandler = await AudioService.init(
-          builder: () => TawaiAudioHandler(),
-          config: const AudioServiceConfig(
-            androidNotificationChannelId: 'id.glicole.tawai.channel.audio',
-            androidNotificationChannelName: 'Playback',
-            androidNotificationOngoing: true,
-            androidStopForegroundOnPause: true,
-          ),
-        );
       }
 
       runApp(const Tawai());

@@ -70,6 +70,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -113,17 +114,17 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 
 flutter_launcher_icons:
-  image_path: "assets/icons/tawai-1024.png"
+  image_path: "assets/icons/tawai-filled.png"
   android: "launcher_icon"
   min_sdk_android: 21 # android min sdk min:16, default 21
-  adaptive_icon_background: "#FFE5B4"
-  adaptive_icon_foreground: "assets/icons/tawai-sm-1024.png"
-  adaptive_icon_monochrome: "assets/icons/tawai-filled-sm.png"
+  adaptive_icon_background: "#131e40"
+  adaptive_icon_foreground: "assets/icons/tawai-filled.png"
+  adaptive_icon_monochrome: "assets/icons/tawai-duotone.png"
   ios: false
   web:
     generate: true
-    background_color: "#FFE5B4"
-    theme_color: "#FC0FC0"
+    background_color: "#131e40"
+    theme_color: "#ca735e"
   windows:
     generate: true
     icon_size: 48 # min:48, max:256, default: 48
