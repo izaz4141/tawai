@@ -1,7 +1,7 @@
 {
   "retreat_to_tray": true,
   "server_host": "127.0.0.1",
-  "server_port": 8080,
+  "server_port": 8181,
   "theme_mode": 0,
   "use_dynamic_color": true,
   "custom_color": 4294934657,

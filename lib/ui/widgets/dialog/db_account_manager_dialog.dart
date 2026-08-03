@@ -57,7 +57,7 @@ class _DbAccountManagerDialogState extends State<DbAccountManagerDialog> {
         initialAccount: Account(
           id: user.id,
           host: '',
-          port: 8080,
+          port: 8181,
           username: user.username,
           displayName: user.displayName,
           role: user.role,

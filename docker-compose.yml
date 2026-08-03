@@ -8,19 +8,19 @@ services:
     # user: 0:0 # For root or using PUID & PGID directive
     ports:
       - "3000:3000" # Web UI (HTTP) - Also serves API via reverse proxy
-      # - "8080:8080" # Direct API access (bypasses web UI)
+      # - "8181:8181" # Direct API access (bypasses web UI)
     environment:
       # - PUID=1000 # Specify custom user id
       # - PGID=1000 # Specify custom group id
       - TZ=Asia/Jakarta # Container timezone - https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
       - TAWAI_HOME=/home/tawai # Base data folder for config, downloads and data
       - TAWAI_SERVER_HOST=0.0.0.0 # Internal API bind address (inside container)
-      - TAWAI_SERVER_PORT=8080 # Internal API server port (inside container)
+      - TAWAI_SERVER_PORT=8181 # Internal API server port (inside container)
       - TAWAI_SERVER_MASTER_KEY=${TAWAI_SERVER_MASTER_KEY:?set in .env - generate with `openssl rand -hex 32`} # 64-character hex-encoded master key (required)
       - TAWAI_DATABASE_URL= # Leave empty for SQLite at {TAWAI_HOME}/data/tawai.db. Use postgresql://user:pass@postgres/tawai for PostgreSQL
       - TAWAI_SLSKD_URL= # slskd server URL e.g. http://slskd:5030
       - TAWAI_SLSKD_API_KEY= # slskd API key
-      - TAWAI_NADEKODON_URL= # Nadeko~don server URL e.g. http://nadekodon:8080
+      - TAWAI_NADEKODON_URL= # Nadeko~don server URL
       - TAWAI_NADEKODON_API_KEY= # Nadeko~don API key
     volumes:
       - ./data/downloads:/home/tawai/downloads # Downloaded files storage
@@ -28,51 +28,3 @@ services:
       - ./data/logs:/home/tawai/logs # Server logs
       - ./data/db:/home/tawai/data # SQLite database (when TAWAI_DATABASE_URL is empty)
     restart: unless-stopped
-
-  # Optional: PostgreSQL database (enable + uncomment TAWAI_DATABASE_URL above)
-  # postgres:
-  #   image: postgres:16-alpine
-  #   container_name: tawai-postgres
-  #   environment:
-  #     - POSTGRES_USER=tawai
-  #     - POSTGRES_PASSWORD=tawai
-  #     - POSTGRES_DB=tawai
-  #   volumes:
-  #     - ./data/postgres:/var/lib/postgresql/data
-  #   healthcheck:
-  #     test: ["CMD-SHELL", "pg_isready -U tawai"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #   restart: unless-stopped
-
-  # Optional: slskd (Soulseek) companion - set TAWAI_SLSKD_URL=http://slskd:5030 and TAWAI_SLSKD_API_KEY above
-  # slskd:
-  #   image: ghcr.io/ansible-slskd/slskd:latest
-  #   container_name: slskd
-  #   environment:
-  #     - SLSKD_REMOTE_CONFIGURATION=true
-  #     - SLSKD_SLSK_LISTEN_IP=0.0.0.0
-  #   volumes:
-  #     - ./data/slskd:/app
-  #   ports:
-  #     - "5030:5030"
-  #     - "2234:2234" # Soulseek listen port
-  #   restart: unless-stopped
-
-  # Optional: Nadeko~don (download manager) companion - set TAWAI_NADEKODON_URL=http://nadekodon:8080 and TAWAI_NADEKODON_API_KEY above
-  # nadekodon:
-  #   image: ghcr.io/izaz4141/nadekodon-rs:latest
-  #   container_name: nadekodon
-  #   environment:
-  #     - NADEKO_HOME=/home/nadeko
-  #     - NADEKO_SERVER_PORT=8080
-  #     - NADEKO_SERVER_API_KEY=nadeko_api_key # CHANGE IN PRODUCTION
-  #     - NADEKO_SERVER_MASTER_KEY=nadeko_master_key # 64 hex chars - `openssl rand -hex 32`
-  #     - NADEKO_USERNAME=admin
-  #     - NADEKO_PASSWORD=admin # CHANGE IN PRODUCTION
-  #   volumes:
-  #     - ./data/nadekodon/downloads:/home/nadeko/downloads
-  #     - ./data/nadekodon/config:/home/nadeko/config
-  #     - ./data/nadekodon/logs:/home/nadeko/logs
-  #   restart: unless-stopped

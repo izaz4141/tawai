@@ -26,7 +26,7 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
   final _formKey = GlobalKey<FormState>();
   String _protocol = 'http://';
   final _hostCtrl = TextEditingController();
-  final _portCtrl = TextEditingController(text: '8080');
+  final _portCtrl = TextEditingController(text: '8181');
   final _usernameCtrl = TextEditingController();
   final _displayNameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();

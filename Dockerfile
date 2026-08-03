@@ -72,9 +72,9 @@ COPY --chown=tawai:tawai entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f -s http://localhost:8080/api/tawai/system/status || exit 1
+    CMD curl -f -s http://localhost:8181/api/tawai/system/status || exit 1
 
-EXPOSE 3000 8080
+    EXPOSE 3000 8181
 
 USER tawai
 ENTRYPOINT ["/entrypoint.sh"]

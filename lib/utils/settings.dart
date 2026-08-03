@@ -26,7 +26,7 @@ class SettingsManager {
   static final retreatToTray = ValueNotifier<bool>(true);
   static final downloadFolder = ValueNotifier<String>('');
   static final serverHost = ValueNotifier<String>('127.0.0.1');
-  static final serverPort = ValueNotifier<int>(8080);
+  static final serverPort = ValueNotifier<int>(8181);
   static final currentUser = ValueNotifier<User?>(null);
 
   static final accounts = ValueNotifier<List<Account>>([]);
@@ -127,7 +127,7 @@ class SettingsManager {
       serverHost.value =
           data['server_host'] ?? (defaults['server_host'] ?? '127.0.0.1');
       serverPort.value =
-          data['server_port'] ?? (defaults['server_port'] ?? 8080);
+          data['server_port'] ?? (defaults['server_port'] ?? 8181);
       await _applyFromJson(data);
     }
 
@@ -225,7 +225,7 @@ class SettingsManager {
       serverHost.value =
           data['server_host'] ?? (defaults['server_host'] ?? '127.0.0.1');
       serverPort.value =
-          data['server_port'] ?? (defaults['server_port'] ?? 8080);
+          data['server_port'] ?? (defaults['server_port'] ?? 8181);
       await _applyFromJson(data);
     }
   }
@@ -293,7 +293,7 @@ class SettingsManager {
     retreatToTray.value = defaults['retreat_to_tray'] ?? true;
     // downloadFolder is usually not reset to default from asset as it's environment dependent
     serverHost.value = defaults['server_host'] ?? '127.0.0.1';
-    serverPort.value = defaults['server_port'] ?? 8080;
+    serverPort.value = defaults['server_port'] ?? 8181;
 
     if (defaults['theme_mode'] != null) {
       themeMode.value = ThemeMode.values[defaults['theme_mode']];

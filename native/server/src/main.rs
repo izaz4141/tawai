@@ -43,9 +43,9 @@ async fn main() {
     }
 
     let port: u16 = std::env::var("TAWAI_SERVER_PORT")
-        .unwrap_or_else(|_| "8080".to_string())
+        .unwrap_or_else(|_| "8181".to_string())
         .parse()
-        .unwrap_or(8080);
+        .unwrap_or(8181);
 
     // Set server_port in config
     let mut config_value = context.cfg().await.value.clone();

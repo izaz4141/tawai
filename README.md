@@ -133,11 +133,11 @@ native/
 | `TAWAI_SERVER_MASTER_KEY` | Yes (server) | 64-hex master key; encrypts API keys + signs JWTs |
 | `TAWAI_HOME` | No | Base data folder (`config/`, `data/`, `logs/`); default `/home/tawai` |
 | `TAWAI_SERVER_HOST` | No | API bind address; default `127.0.0.1` (`0.0.0.0` in Docker) |
-| `TAWAI_SERVER_PORT` | No | API port; default `8080` |
+| `TAWAI_SERVER_PORT` | No | API port; default `8181` |
 | `TAWAI_DATABASE_URL` | No | `postgresql://`/`postgres://` → PostgreSQL, else SQLite at `{TAWAI_HOME}/data/tawai.db` |
 | `TAWAI_SLSKD_URL` | No | slskd server URL (e.g. `http://slskd:5030`) |
 | `TAWAI_SLSKD_API_KEY` | No | slskd API key |
-| `TAWAI_NADEKODON_URL` | No | Nadeko~don server URL (e.g. `http://nadekodon:8080`) |
+| `TAWAI_NADEKODON_URL` | No | Nadeko~don server URL |
 | `TAWAI_NADEKODON_API_KEY` | No | Nadeko~don API key |
 
 env vars override the values stored in `config.json` on every startup. ListenBrainz tokens are stored per-user in the database and are not read from the environment.

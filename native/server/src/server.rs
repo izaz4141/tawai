@@ -183,7 +183,7 @@ pub async fn run_server_loop(state: SharedState) {
 
         let port = {
             let app_cfg = state.context.cfg().await;
-            app_cfg.value["server_port"].as_u64().unwrap_or(8080) as u16
+            app_cfg.value["server_port"].as_u64().unwrap_or(8181) as u16
         };
         let restart_signal = state.restart_signal.clone();
         let shutdown_signal = state.shutdown_signal.clone();

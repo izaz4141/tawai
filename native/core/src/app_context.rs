@@ -166,7 +166,7 @@ impl AppContext {
             .as_str()
             .unwrap_or("127.0.0.1")
             .to_string();
-        let server_port = cfg["server_port"].as_u64().unwrap_or(8080);
+        let server_port = cfg["server_port"].as_u64().unwrap_or(8181);
 
         let mut accounts: Vec<serde_json::Value> = cfg
             .get("accounts")
