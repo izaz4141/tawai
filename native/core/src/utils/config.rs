@@ -57,6 +57,19 @@ pub async fn load_config(path: String, master_key: String) -> Result<Arc<AppConf
         }
     }
 
+    if let Some(accounts) = config_val
+        .get_mut("accounts")
+        .and_then(|v| v.as_array_mut())
+    {
+        for acc in accounts.iter_mut() {
+            if let Some(eapi) = acc.get("api_key").and_then(|v| v.as_str()) {
+                if let Ok(dapi) = decrypt(eapi, master_key.as_str()) {
+                    acc["api_key"] = serde_json::Value::String(dapi);
+                }
+            }
+        }
+    }
+
     let config_metadata = tokio::fs::metadata(&config_path).await?;
     let config_modified = config_metadata.modified()?;
     let config_mtime = config_modified.duration_since(UNIX_EPOCH)?.as_secs();

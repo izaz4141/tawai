@@ -23,11 +23,6 @@ async fn main() {
 
     let context = AppContext::new(shutdown_signal, client);
 
-    // Initialize config
-    if let Err(e) = context.init_config(config_path).await {
-        logger::error(&format!("Failed to load config: {:?}", e));
-    }
-
     // Initialize database
     let db_done_signal = Arc::new(tokio::sync::Notify::new());
     let db_url = std::env::var("TAWAI_DATABASE_URL")
@@ -40,6 +35,11 @@ async fn main() {
         }
         let loop_ctx = Arc::clone(&context);
         tokio::spawn(async move { loop_ctx.run_database_loop().await });
+    }
+
+    // Initialize config
+    if let Err(e) = context.init_config(config_path).await {
+        logger::error(&format!("Failed to load config: {:?}", e));
     }
 
     let port: u16 = std::env::var("TAWAI_SERVER_PORT")

@@ -265,6 +265,28 @@ pub async fn get_all_users(pool: &PgPool) -> Result<Vec<UserListItem>> {
             username,
             display_name,
             role,
+            api_key: String::new(),
+        })
+        .collect())
+}
+
+pub async fn get_all_users_with_keys(
+    pool: &PgPool,
+    master_key: &str,
+) -> Result<Vec<UserListItem>> {
+    let rows: Vec<(String, String, String, String, String)> = sqlx::query_as(
+        "SELECT id, username, display_name, role, api_key FROM users ORDER BY username",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|(id, username, display_name, role, api_key)| UserListItem {
+            id,
+            username,
+            display_name,
+            role,
+            api_key: encryption::decrypt(&api_key, master_key).unwrap_or(api_key),
         })
         .collect())
 }

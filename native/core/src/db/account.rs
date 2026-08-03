@@ -195,3 +195,13 @@ pub async fn get_all_users(pool: &DatabasePool) -> anyhow::Result<Vec<UserListIt
         DatabasePool::Postgres(p) => super::account_pg::get_all_users(p).await,
     }
 }
+
+pub async fn get_all_users_with_keys(
+    pool: &DatabasePool,
+    master_key: &str,
+) -> anyhow::Result<Vec<UserListItem>> {
+    match pool {
+        DatabasePool::Sqlite(p) => super::account_sq::get_all_users_with_keys(p, master_key).await,
+        DatabasePool::Postgres(p) => super::account_pg::get_all_users_with_keys(p, master_key).await,
+    }
+}

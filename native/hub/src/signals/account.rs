@@ -39,6 +39,7 @@ pub struct UserListItem {
     pub username: String,
     pub display_name: String,
     pub role: String,
+    pub api_key: String,
 }
 
 impl From<tawai_core::signals::account::UserListItem> for UserListItem {
@@ -48,6 +49,7 @@ impl From<tawai_core::signals::account::UserListItem> for UserListItem {
             username: u.username,
             display_name: u.display_name,
             role: u.role,
+            api_key: u.api_key,
         }
     }
 }

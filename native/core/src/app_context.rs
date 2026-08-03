@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -13,7 +14,8 @@ use crate::db::{account, database::DatabaseManager, history, library_source, use
 use crate::discovery::sync::{SyncRecsParams, sync_recs};
 use crate::signals::library::ScanProgress;
 use crate::utils::config::{
-    AppConfig, PRIVATE_CONFIG_KEYS, load_config, load_default_config, normalize_secret, strip_keys,
+    AppConfig, PRIVATE_CONFIG_KEYS, is_local_host, load_config, load_default_config,
+    normalize_secret, strip_keys,
 };
 use crate::utils::{encryption::encrypt, encryption::valid_encryption_format, logger};
 
@@ -135,7 +137,84 @@ impl AppContext {
                 }
             };
         *self.config.write().await = Some(app_config);
+        if let Err(e) = self.sync_accounts_from_db().await {
+            logger::warn(&format!("Failed to sync accounts from db: {}", e));
+        }
         Ok(is_first_run)
+    }
+
+    /// Syncs localhost accounts in config.json with the users table in the DB.
+    /// The DB is the source of truth: localhost accounts whose `id` no longer
+    /// exists in the DB are removed, and DB users without a matching localhost
+    /// account are added. Existing localhost accounts get their username,
+    /// display name, role and api key refreshed from the DB while preserving
+    /// their host, port and label. Non-localhost accounts are left untouched.
+    pub async fn sync_accounts_from_db(&self) -> Result<()> {
+        let db = match self.db.read().await.as_ref() {
+            Some(db) => db.clone(),
+            None => {
+                logger::warn("Database not initialized; skipping account sync");
+                return Ok(());
+            }
+        };
+
+        let master_key = self.master_key.read().await.clone();
+        let users = account::get_all_users_with_keys(db.pool(), &master_key).await?;
+        let mut cfg = self.cfg().await.value.clone();
+
+        let server_host = cfg["server_host"]
+            .as_str()
+            .unwrap_or("127.0.0.1")
+            .to_string();
+        let server_port = cfg["server_port"].as_u64().unwrap_or(8080);
+
+        let mut accounts: Vec<serde_json::Value> = cfg
+            .get("accounts")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        let db_ids: HashSet<&str> = users.iter().map(|u| u.id.as_str()).collect();
+        accounts.retain(|acc| {
+            let host = acc["host"].as_str().unwrap_or("");
+            if !is_local_host(host) {
+                return true;
+            }
+            match acc["id"].as_str() {
+                Some(id) => db_ids.contains(id),
+                None => false,
+            }
+        });
+
+        for user in &users {
+            let mut found = None;
+            for acc in accounts.iter_mut() {
+                let host = acc["host"].as_str().unwrap_or("");
+                if is_local_host(host) && acc["id"].as_str() == Some(user.id.as_str()) {
+                    acc["username"] = serde_json::Value::from(user.username.clone());
+                    acc["display_name"] = serde_json::Value::from(user.display_name.clone());
+                    acc["role"] = serde_json::Value::from(user.role.clone());
+                    acc["api_key"] = serde_json::Value::from(user.api_key.clone());
+                    found = Some(());
+                    break;
+                }
+            }
+            if found.is_none() {
+                accounts.push(serde_json::json!({
+                    "id": user.id,
+                    "host": server_host,
+                    "port": server_port,
+                    "username": user.username,
+                    "display_name": user.display_name,
+                    "label": format!("{}@localhost", user.username),
+                    "role": user.role,
+                    "api_key": user.api_key,
+                }));
+            }
+        }
+
+        cfg["accounts"] = serde_json::Value::Array(accounts);
+        self.save_config(&cfg).await
     }
 
     /// Returns the current config with private keys stripped, suitable for
@@ -227,6 +306,7 @@ impl AppContext {
             .ok_or_else(|| anyhow::anyhow!("Config not initialized"))?;
 
         let mut new_settings = settings.clone();
+        let master_key = self.master_key.read().await.clone();
         let api_keys = vec!["slskd_api_key", "nadekodon_api_key"];
         for key in api_keys {
             let dapi = normalize_secret(&settings[key].to_string().as_str()).to_string();
@@ -234,9 +314,25 @@ impl AppContext {
                 new_settings[key] = serde_json::Value::String(dapi);
                 continue;
             }
-            if let Ok(eapi) = encrypt(dapi.as_str(), self.master_key.read().await.clone().as_str())
-            {
+            if let Ok(eapi) = encrypt(dapi.as_str(), master_key.as_str()) {
                 new_settings[key] = serde_json::Value::String(eapi);
+            }
+        }
+
+        if let Some(accounts) = new_settings
+            .get_mut("accounts")
+            .and_then(|v| v.as_array_mut())
+        {
+            for acc in accounts.iter_mut() {
+                if let Some(api_key) = acc.get("api_key").and_then(|v| v.as_str()) {
+                    let dapi = normalize_secret(api_key).to_string();
+                    if dapi.is_empty() || valid_encryption_format(&dapi) {
+                        continue;
+                    }
+                    if let Ok(eapi) = encrypt(dapi.as_str(), master_key.as_str()) {
+                        acc["api_key"] = serde_json::Value::String(eapi);
+                    }
+                }
             }
         }
 

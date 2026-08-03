@@ -6,4 +6,5 @@ pub struct UserListItem {
     pub username: String,
     pub display_name: String,
     pub role: String,
+    pub api_key: String,
 }

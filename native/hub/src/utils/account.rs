@@ -51,8 +51,9 @@ pub async fn handle_list_users(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
+        let mk = context.master_key.read().await.clone();
 
-        let core_users = tawai_core::db::account::get_all_users(db.pool())
+        let core_users = tawai_core::db::account::get_all_users_with_keys(db.pool(), &mk)
             .await
             .unwrap_or_default();
 
