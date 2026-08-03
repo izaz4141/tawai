@@ -1,10 +1,19 @@
 {
+  "accounts": [],
+  "check_nightly": false,
+  "current_user": "",
+  "custom_color": 4294934657,
+  "default_download_source": "slskd",
+  "desired_audio_quality": "best",
+  "nadekodon_api_key": "",
+  "nadekodon_url": "",
+  "playback_volume": 1.0,
+  "require_login": false,
   "retreat_to_tray": true,
   "server_host": "127.0.0.1",
   "server_port": 8181,
+  "slskd_api_key": "",
+  "slskd_url": "",
   "theme_mode": 0,
-  "use_dynamic_color": true,
-  "custom_color": 4294934657,
-  "check_nightly": false,
-  "desired_audio_quality": "best"
+  "use_dynamic_color": true
 }
