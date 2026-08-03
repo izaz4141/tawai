@@ -270,10 +270,7 @@ pub async fn get_all_users(pool: &PgPool) -> Result<Vec<UserListItem>> {
         .collect())
 }
 
-pub async fn get_all_users_with_keys(
-    pool: &PgPool,
-    master_key: &str,
-) -> Result<Vec<UserListItem>> {
+pub async fn get_all_users_with_keys(pool: &PgPool, master_key: &str) -> Result<Vec<UserListItem>> {
     let rows: Vec<(String, String, String, String, String)> = sqlx::query_as(
         "SELECT id, username, display_name, role, api_key FROM users ORDER BY username",
     )

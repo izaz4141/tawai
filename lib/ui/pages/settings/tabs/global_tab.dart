@@ -13,6 +13,7 @@ import 'package:tawai/ui/widgets/components/list_switch.dart';
 import 'package:tawai/ui/widgets/components/list_text_field.dart';
 import 'package:tawai/ui/widgets/components/spin_box.dart';
 import 'package:tawai/ui/widgets/dialog/db_account_manager_dialog.dart';
+import 'package:tawai/ui/widgets/dialog/permission_dialog.dart';
 import 'package:tawai/utils/io_service.dart';
 import 'package:tawai/utils/platform_service.dart';
 
@@ -156,6 +157,25 @@ class SettingsGlobalTab extends StatelessWidget {
           ],
         ),
         SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
+        if (PlatformService.isAndroid) ...[
+          ListButton(
+            title: 'App Permissions',
+            subtitle: 'Storage, notification and background access',
+            leading: Icon(Icons.shield_outlined),
+            onPressed: () => showDialog(
+              context: context,
+              builder: (ctx) => const PermissionDialog(),
+            ),
+            trailing: OutlinedButton(
+              onPressed: () => showDialog(
+                context: context,
+                builder: (ctx) => const PermissionDialog(),
+              ),
+              child: const Text('Manage'),
+            ),
+          ),
+          SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
+        ],
         ListenableBuilder(
           listenable: SystemService().slskdVersion,
           builder: (context, _) {

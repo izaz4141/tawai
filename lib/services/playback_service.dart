@@ -215,6 +215,86 @@ class PlaybackService {
     );
   }
 
+  /// Plays an audio file received from outside the app (e.g. shared from
+  /// another Android app) directly from its local path, without touching the
+  /// library or triggering scrobbling/now-playing updates.
+  Future<bool> playExternalFile(String path) async {
+    final track = await _buildExternalTrack(path);
+    if (track == null) return false;
+    final cache = SourceCache(path, null);
+    return _actionLock.synchronized(() async {
+      await _reset();
+      playerState.value = PlayerState(false, ProcessingState.loading);
+      _orderedItems = [QueueItem(track: track, source: cache)];
+      queue.value = QueueState(
+        items: [QueueItem(track: track, source: cache)],
+        currentIndex: 0,
+      );
+      _loadedTrackId = track.id;
+      _sourceGeneration++;
+      await _player.setAudioSource(_buildSource(track, cache));
+      await _applyEffectiveVolume();
+      await _player.play();
+      return true;
+    });
+  }
+
+  /// Builds a synthetic [TrackInfo] for an external audio file, preferring
+  /// embedded tags. Falls back to the file name when the format is unsupported
+  /// by the tag reader (missing/empty tags or zero duration).
+  Future<TrackInfo?> _buildExternalTrack(String path) async {
+    ReadFileTagsResponse? tags;
+    try {
+      tags = await BridgeService.instance.readFileTags(path);
+    } catch (e) {
+      log('readFileTags failed for $path: $e', isError: true);
+    }
+    final fallback =
+        tags == null || tags.error != null || tags.durationSecs <= 0;
+
+    final filename = path.split('/').last;
+    final withoutExt = filename.contains('.')
+        ? filename.substring(0, filename.lastIndexOf('.'))
+        : filename;
+    final title = !fallback && tags!.title.isNotEmpty ? tags.title : withoutExt;
+    final artist = fallback ? '' : tags.artist;
+
+    return TrackInfo(
+      id: 'external_${DateTime.now().microsecondsSinceEpoch}',
+      title: title,
+      albumId: '',
+      albumTitle: fallback ? '' : tags.album,
+      artistsString: artist,
+      artists: artist.isEmpty
+          ? []
+          : [
+              ArtistInfo(
+                id: artist,
+                name: artist,
+                sortName: null,
+                mbid: null,
+                thumbnailUrl: null,
+                albumCount: 0,
+                trackCount: 0,
+              ),
+            ],
+      trackNum: fallback || tags.trackNumber <= 0 ? null : tags.trackNumber,
+      discNum: fallback || tags.discNumber <= 0 ? null : tags.discNumber,
+      durationSecs: fallback ? null : tags.durationSecs,
+      filePath: path,
+      fileSize: null,
+      bitrate: null,
+      mbidRecording: null,
+      artistMbid: null,
+      albumMbid: null,
+      lyrics: fallback ? null : tags.lyrics,
+      releaseDate: fallback ? null : tags.releaseDate,
+      source: 'external',
+      sourceType: 'external',
+      genres: fallback ? [] : tags.genres,
+    );
+  }
+
   Future<void> playNext() async {
     await _actionLock.synchronized(() async {
       final q = queue.value;
@@ -583,6 +663,7 @@ class PlaybackService {
   }
 
   void _updateNowPlaying(TrackInfo track) {
+    if (track.source == 'preview' || track.source == 'external') return;
     final userId = SettingsManager.currentUser.value?.id ?? '';
     if (userId.isEmpty) return;
     BridgeService.instance.updateNowPlaying(userId, track.id);
@@ -598,6 +679,7 @@ class PlaybackService {
 
   void _scrobbleIfNeeded(TrackInfo? track) {
     if (track == null) return;
+    if (track.source == 'preview' || track.source == 'external') return;
     if (!_hasReachedThreshold(track)) return;
     final userId = SettingsManager.currentUser.value?.id ?? '';
     if (userId.isEmpty) return;

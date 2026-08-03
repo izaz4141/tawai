@@ -332,11 +332,7 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
       if (!mounted) return;
       if (response?.success == true) {
         if (context.mounted) {
-          AppSnackBar.show(
-            context,
-            'Lyrics saved',
-            type: SnackType.success,
-          );
+          AppSnackBar.show(context, 'Lyrics saved', type: SnackType.success);
         }
       }
     } catch (e) {
@@ -362,11 +358,7 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
       if (!mounted) return;
       if (response?.success == true) {
         if (context.mounted) {
-          AppSnackBar.show(
-            context,
-            'Lyrics cleared',
-            type: SnackType.success,
-          );
+          AppSnackBar.show(context, 'Lyrics cleared', type: SnackType.success);
         }
       }
     } catch (e) {

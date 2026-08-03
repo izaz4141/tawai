@@ -10,6 +10,7 @@ import 'package:tawai/src/bindings/bindings.dart';
 
 import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/services/audio_handler.dart';
+import 'package:tawai/services/shared_intent_service.dart';
 import 'package:tawai/models/account.dart';
 import 'package:tawai/models/user.dart';
 import 'package:tawai/ui/app.dart';
@@ -122,11 +123,15 @@ Future<void> main() async {
 
       PlaybackService.instance.init();
 
+      if (PlatformService.isAndroid) {
+        SharedIntentService.instance.init();
+      }
+
       if (kIsWeb || PlatformService.isAndroid) {
         PlaybackService.instance.audioHandler = await AudioService.init(
           builder: () => TawaiAudioHandler(),
           config: const AudioServiceConfig(
-            androidNotificationChannelId: 'com.example.tawai.channel.audio',
+            androidNotificationChannelId: 'id.glicole.tawai.channel.audio',
             androidNotificationChannelName: 'Playback',
             androidNotificationOngoing: true,
             androidStopForegroundOnPause: true,

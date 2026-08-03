@@ -142,11 +142,7 @@ class _RenamerPageState extends State<RenamerPage> {
       });
     } catch (e) {
       if (!mounted) return;
-      AppSnackBar.show(
-        context,
-        e.toString(),
-        type: SnackType.error,
-      );
+      AppSnackBar.show(context, e.toString(), type: SnackType.error);
       setState(() => _phase = _Phase.result);
     }
   }
