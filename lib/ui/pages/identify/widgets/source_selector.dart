@@ -37,22 +37,32 @@ class SourceSelector extends StatelessWidget {
             value: const UnidentifiedSource(),
             child: Row(
               children: [
-                Icon(Icons.help_outline, size: AppTheme.iconMD, color: colors.error),
+                Icon(
+                  Icons.help_outline,
+                  size: AppTheme.iconMD,
+                  color: colors.error,
+                ),
                 const SizedBox(width: AppTheme.spaceSM),
                 const Text('Unidentified'),
               ],
             ),
           ),
-          ...librarySources.map((src) => DropdownMenuItem(
-                value: LibrarySource(src),
-                child: Row(
-                  children: [
-                    Icon(Icons.folder, size: AppTheme.iconMD, color: colors.primary),
-                    const SizedBox(width: AppTheme.spaceSM),
-                    Text(src.name),
-                  ],
-                ),
-              )),
+          ...librarySources.map(
+            (src) => DropdownMenuItem(
+              value: LibrarySource(src),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.folder,
+                    size: AppTheme.iconMD,
+                    color: colors.primary,
+                  ),
+                  const SizedBox(width: AppTheme.spaceSM),
+                  Text(src.name),
+                ],
+              ),
+            ),
+          ),
         ],
         onChanged: (v) {
           if (v != null) onChanged(v);

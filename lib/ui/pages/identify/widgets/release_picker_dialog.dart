@@ -33,7 +33,9 @@ void showReleasePickerDialog({
                     errorBuilder: (_, _, _) => Container(
                       width: 48,
                       height: 48,
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
                       child: Icon(
                         Icons.album,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -50,23 +52,21 @@ void showReleasePickerDialog({
                         release.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyLarge
-                            ?.copyWith(fontWeight: FontWeight.w600),
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       if (release.date != null || release.country != null)
                         Text(
-                          [release.country, release.date]
-                              .whereType<String>()
-                              .join(' · '),
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
+                          [
+                            release.country,
+                            release.date,
+                          ].whereType<String>().join(' · '),
+                          style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
                         ),
                     ],

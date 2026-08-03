@@ -45,14 +45,8 @@ class LibraryPlaylistsTab extends StatelessWidget {
           if (index == 0) return _buildHeader(context);
           final p = playlists[index - 1];
           return ListTile(
-            leading: Icon(p.isSmart
-                ? Icons.auto_awesome
-                : Icons.playlist_play),
-            title: Text(
-              p.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            leading: Icon(p.isSmart ? Icons.auto_awesome : Icons.playlist_play),
+            title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
             subtitle: Text(
               '${p.trackCount} tracks${p.isSmart ? " · Smart" : ""}',
             ),
@@ -63,8 +57,7 @@ class LibraryPlaylistsTab extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) =>
-                    PlaylistDetailPage(playlist: p),
+                builder: (_) => PlaylistDetailPage(playlist: p),
               ),
             ),
           );
@@ -79,8 +72,10 @@ class LibraryPlaylistsTab extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text('${playlists.length} playlists',
-                style: Theme.of(context).textTheme.bodyMedium),
+            child: Text(
+              '${playlists.length} playlists',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
           ),
           FilledButton.icon(
             onPressed: onCreatePlaylist,

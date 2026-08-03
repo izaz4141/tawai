@@ -51,7 +51,12 @@ class _DownloadsSheetState extends State<_DownloadsSheet> {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final active = _downloads
-        .where((d) => d.state == 'queued' || d.state == 'active' || d.state == 'downloading')
+        .where(
+          (d) =>
+              d.state == 'queued' ||
+              d.state == 'active' ||
+              d.state == 'downloading',
+        )
         .toList();
     final completed = _downloads
         .where((d) => d.state == 'completed' || d.state == 'finished')
@@ -94,10 +99,12 @@ class _DownloadsSheetState extends State<_DownloadsSheet> {
                   style: textTheme.titleSmall,
                 ),
               ),
-              ...active.map((dl) => DownloadTile(
-                    download: dl,
-                    onCancel: () => _cancelDownload(dl),
-                  )),
+              ...active.map(
+                (dl) => DownloadTile(
+                  download: dl,
+                  onCancel: () => _cancelDownload(dl),
+                ),
+              ),
             ],
             if (completed.isNotEmpty) ...[
               Padding(

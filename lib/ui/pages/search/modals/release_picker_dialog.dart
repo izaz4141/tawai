@@ -58,10 +58,9 @@ class ReleasePickerDialog extends StatelessWidget {
                         release.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyLarge
-                            ?.copyWith(fontWeight: FontWeight.w600),
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       if (release.date != null || release.country != null)
                         Text(
@@ -69,9 +68,7 @@ class ReleasePickerDialog extends StatelessWidget {
                             if (release.country != null) release.country!,
                             if (release.date != null) release.date!,
                           ].join(' · '),
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
+                          style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(color: colors.onSurfaceVariant),
                         ),
                       if (release.totalTracks != null)
@@ -84,8 +81,9 @@ class ReleasePickerDialog extends StatelessWidget {
                             ),
                             decoration: BoxDecoration(
                               color: colors.surfaceContainerHighest,
-                              borderRadius:
-                                  BorderRadius.circular(AppTheme.radiusSM),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusSM,
+                              ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -98,10 +96,10 @@ class ReleasePickerDialog extends StatelessWidget {
                                 const SizedBox(width: AppTheme.spaceXS / 2),
                                 Text(
                                   '${release.totalTracks} tracks',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelSmall
-                                      ?.copyWith(color: colors.onSurfaceVariant),
+                                  style: Theme.of(context).textTheme.labelSmall
+                                      ?.copyWith(
+                                        color: colors.onSurfaceVariant,
+                                      ),
                                 ),
                               ],
                             ),

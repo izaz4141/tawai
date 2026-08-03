@@ -17,8 +17,8 @@ class User {
     this.role = 'user',
     String? createdAt,
     String? updatedAt,
-  })  : createdAt = createdAt ?? DateTime.now().toUtc().toIso8601String(),
-        updatedAt = updatedAt ?? DateTime.now().toUtc().toIso8601String();
+  }) : createdAt = createdAt ?? DateTime.now().toUtc().toIso8601String(),
+       updatedAt = updatedAt ?? DateTime.now().toUtc().toIso8601String();
 
   static User fromJson(Map<String, dynamic> json) {
     return User(

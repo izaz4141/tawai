@@ -69,15 +69,20 @@ class LanguagePickerDialog extends StatelessWidget {
             final lang = languages[index];
             return ListTile(
               dense: true,
-              title: Text(lang.label,
-                  style: textTheme.bodyMedium),
-              subtitle: Text(lang.nativeName,
-                  style: textTheme.bodySmall
-                      ?.copyWith(color: colors.onSurfaceVariant)),
-              trailing: Text(lang.code,
-                  style: textTheme.bodySmall?.copyWith(
-                      fontFamily: 'monospace',
-                      color: colors.onSurfaceVariant)),
+              title: Text(lang.label, style: textTheme.bodyMedium),
+              subtitle: Text(
+                lang.nativeName,
+                style: textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+              trailing: Text(
+                lang.code,
+                style: textTheme.bodySmall?.copyWith(
+                  fontFamily: 'monospace',
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
               onTap: () => onSelected(lang.code),
             );
           },

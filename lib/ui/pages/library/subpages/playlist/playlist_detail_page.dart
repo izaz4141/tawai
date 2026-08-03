@@ -25,8 +25,9 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   }
 
   Future<void> _load() async {
-    final tracks =
-        await BridgeService.instance.getPlaylistTracks(widget.playlist.id);
+    final tracks = await BridgeService.instance.getPlaylistTracks(
+      widget.playlist.id,
+    );
     if (!mounted) return;
     setState(() {
       _tracks = tracks;
@@ -37,9 +38,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.playlist.name),
-      ),
+      appBar: AppBar(title: Text(widget.playlist.name)),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(

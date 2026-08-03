@@ -7,12 +7,7 @@ import 'package:tawai/ui/widgets/components/track_action_sheet.dart';
 import 'package:tawai/utils/helper.dart';
 
 class TrackListTile extends StatelessWidget {
-  const TrackListTile({
-    super.key,
-    required this.track,
-    this.index,
-    this.onTap,
-  });
+  const TrackListTile({super.key, required this.track, this.index, this.onTap});
 
   final TrackInfo track;
   final int? index;
@@ -34,11 +29,7 @@ class TrackListTile extends StatelessWidget {
             child: CoverImage(trackId: track.id, iconSize: 20),
           ),
         ),
-        title: Text(
-          track.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(
           '${track.artistsString} · ${track.albumTitle}${track.durationSecs != null ? " · ${formatDuration(track.durationSecs)}" : ""}',
           maxLines: 1,

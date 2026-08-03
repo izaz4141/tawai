@@ -44,7 +44,10 @@ pub async fn handle_downloads_poll(
         Some("admin") => req.user_id,
         _ => {
             if auth_user_id != req.user_id {
-                return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Forbidden" })))
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(serde_json::json!({ "error": "Forbidden" })),
+                )
                     .into_response();
             }
             auth_user_id

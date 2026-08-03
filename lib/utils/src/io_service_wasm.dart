@@ -93,20 +93,22 @@ class WasmIOService implements IOService {
         return;
       }
       final reader = html.FileReader();
-      reader.addEventListener('load', ((html.Event event) {
-        final dataUrl = reader.result.dartify() as String?;
-        if (dataUrl == null) {
-          completer.complete(null);
-        } else {
-          final comma = dataUrl.indexOf(',');
-          final base64 = comma >= 0 ? dataUrl.substring(comma + 1) : dataUrl;
-          completer.complete(PickFileResult(
-            bytes: base64Decode(base64),
-            name: file.name,
-          ));
-        }
-        input.remove();
-      }).toJS);
+      reader.addEventListener(
+        'load',
+        ((html.Event event) {
+          final dataUrl = reader.result.dartify() as String?;
+          if (dataUrl == null) {
+            completer.complete(null);
+          } else {
+            final comma = dataUrl.indexOf(',');
+            final base64 = comma >= 0 ? dataUrl.substring(comma + 1) : dataUrl;
+            completer.complete(
+              PickFileResult(bytes: base64Decode(base64), name: file.name),
+            );
+          }
+          input.remove();
+        }).toJS,
+      );
       reader.readAsDataURL(file);
     });
     input.click();

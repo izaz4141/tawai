@@ -50,8 +50,9 @@ class LibraryFilterDialog extends StatelessWidget {
               title: Text(
                 'All',
                 style: textTheme.bodyMedium?.copyWith(
-                  fontWeight:
-                      selectedSource == null ? FontWeight.w600 : FontWeight.normal,
+                  fontWeight: selectedSource == null
+                      ? FontWeight.w600
+                      : FontWeight.normal,
                 ),
               ),
               onTap: () => Navigator.of(context).pop(null),
@@ -66,13 +67,14 @@ class LibraryFilterDialog extends StatelessWidget {
                       ? Icons.radio_button_checked
                       : Icons.radio_button_unchecked,
                   size: 20,
-                  color:
-                      isSelected ? colors.primary : colors.onSurfaceVariant,
+                  color: isSelected ? colors.primary : colors.onSurfaceVariant,
                 ),
                 title: Text(
                   source,
                   style: textTheme.bodyMedium?.copyWith(
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                   ),
                 ),
                 onTap: () => Navigator.of(context).pop(source),

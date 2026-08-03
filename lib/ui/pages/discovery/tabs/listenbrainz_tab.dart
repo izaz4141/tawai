@@ -17,7 +17,11 @@ class _ExplorationData extends _SectionData {
 }
 
 class ListenBrainzTab extends StatefulWidget {
-  final Map<String, ({List<DiscoveryRecording> recordings, String? title, int count})> lbPlaylistCache;
+  final Map<
+    String,
+    ({List<DiscoveryRecording> recordings, String? title, int count})
+  >
+  lbPlaylistCache;
   final Map<int, String> lbExplorationIndexMap;
 
   const ListenBrainzTab({
@@ -120,9 +124,7 @@ class _ListenBrainzTabState extends State<ListenBrainzTab> {
     final scale = AppTheme.spaceScale(context);
 
     return SingleChildScrollView(
-      padding: EdgeInsets.symmetric(
-        vertical: AppTheme.spaceSM * scale,
-      ),
+      padding: EdgeInsets.symmetric(vertical: AppTheme.spaceSM * scale),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

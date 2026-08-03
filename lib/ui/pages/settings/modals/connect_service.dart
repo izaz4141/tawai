@@ -24,13 +24,11 @@ class _ConnectServiceDialogState extends State<ConnectServiceDialog> {
   String? _testResult;
   bool _testSuccess = false;
 
-@override
+  @override
   void initState() {
     super.initState();
     for (var i = 0; i < widget.inputs.length; i++) {
-      _controllers.add(
-        TextEditingController(text: widget.inputs[i].$4 ?? ''),
-      );
+      _controllers.add(TextEditingController(text: widget.inputs[i].$4 ?? ''));
     }
   }
 
@@ -162,9 +160,9 @@ class _ConnectServiceDialogState extends State<ConnectServiceDialog> {
               if (mounted) Navigator.of(context).pop();
             } catch (e) {
               if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Failed to save: $e')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
             }
           },
           child: Text('Confirm', style: textTheme.bodyMedium),

@@ -138,8 +138,7 @@ pub async fn handle_list_editable_sources(context: Arc<AppContext>) {
                 continue;
             }
         };
-        let result =
-            core_libsrc::list_editable_sources(db.pool(), &msg.user_id, &role).await;
+        let result = core_libsrc::list_editable_sources(db.pool(), &msg.user_id, &role).await;
 
         match result {
             Ok(sources) => {

@@ -103,25 +103,26 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Duplicate Finder',
-            style: isDesktop ? textTheme.titleLarge : null),
+        title: Text(
+          'Duplicate Finder',
+          style: isDesktop ? textTheme.titleLarge : null,
+        ),
       ),
       body: Column(
         children: [
           _buildOptionsPanel(colors, textTheme, isDesktop),
           const Divider(height: 1),
           if (_scanning)
-            const Expanded(
-              child: Center(child: CircularProgressIndicator()),
-            )
+            const Expanded(child: Center(child: CircularProgressIndicator()))
           else if (_error != null)
             Expanded(
               child: Center(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text(_error!,
-                      style: textTheme.bodyMedium
-                          ?.copyWith(color: colors.error)),
+                  child: Text(
+                    _error!,
+                    style: textTheme.bodyMedium?.copyWith(color: colors.error),
+                  ),
                 ),
               ),
             )
@@ -131,12 +132,18 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.copy_all,
-                        size: 64, color: colors.onSurfaceVariant),
+                    Icon(
+                      Icons.copy_all,
+                      size: 64,
+                      color: colors.onSurfaceVariant,
+                    ),
                     const SizedBox(height: 16),
-                    Text('Configure options above and tap Scan',
-                        style: textTheme.bodyLarge
-                            ?.copyWith(color: colors.onSurfaceVariant)),
+                    Text(
+                      'Configure options above and tap Scan',
+                      style: textTheme.bodyLarge?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -147,11 +154,9 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.check_circle,
-                        size: 64, color: colors.primary),
+                    Icon(Icons.check_circle, size: 64, color: colors.primary),
                     const SizedBox(height: 16),
-                    Text('No duplicates found!',
-                        style: textTheme.titleMedium),
+                    Text('No duplicates found!', style: textTheme.titleMedium),
                   ],
                 ),
               ),
@@ -173,7 +178,10 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
   }
 
   Widget _buildOptionsPanel(
-      ColorScheme colors, TextTheme textTheme, bool isDesktop) {
+    ColorScheme colors,
+    TextTheme textTheme,
+    bool isDesktop,
+  ) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Column(
@@ -190,7 +198,8 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
                     FilterChip(
                       label: const Text('File Size + Duration'),
                       selected: _checkFileSizeDuration,
-                      onSelected: (v) => setState(() => _checkFileSizeDuration = v),
+                      onSelected: (v) =>
+                          setState(() => _checkFileSizeDuration = v),
                     ),
                     FilterChip(
                       label: const Text('Audio Fingerprint'),
@@ -216,7 +225,8 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2))
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Icon(Icons.search, size: 18),
                 label: Text(_scanning ? 'Scanning...' : 'Scan'),
               ),
@@ -227,8 +237,9 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
               padding: const EdgeInsets.only(top: 4),
               child: Text(
                 '${_groups.fold<int>(0, (s, g) => s + g.tracks.length)} duplicates in ${_groups.length} groups',
-                style: textTheme.bodySmall
-                    ?.copyWith(color: colors.onSurfaceVariant),
+                style: textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
               ),
             ),
         ],
@@ -237,7 +248,10 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
   }
 
   Widget _buildGroupCard(
-      DuplicateGroup group, ColorScheme colors, TextTheme textTheme) {
+    DuplicateGroup group,
+    ColorScheme colors,
+    TextTheme textTheme,
+  ) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ExpansionTile(
@@ -248,9 +262,11 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
         ),
         subtitle: Row(
           children: [
-            Icon(Icons.circle,
-                size: 10,
-                color: _confidenceColor(group.confidence)),
+            Icon(
+              Icons.circle,
+              size: 10,
+              color: _confidenceColor(group.confidence),
+            ),
             const SizedBox(width: 4),
             Text(
               '${(group.confidence * 100).toInt()}% confidence',
@@ -261,10 +277,16 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
         children: group.tracks.map((track) {
           return ListTile(
             dense: true,
-            leading: Icon(Icons.audiotrack,
-                size: 20, color: colors.onSurfaceVariant),
-            title: Text(track.title,
-                maxLines: 1, overflow: TextOverflow.ellipsis),
+            leading: Icon(
+              Icons.audiotrack,
+              size: 20,
+              color: colors.onSurfaceVariant,
+            ),
+            title: Text(
+              track.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             subtitle: Text(
               '${track.artist} • ${track.album}',
               maxLines: 1,

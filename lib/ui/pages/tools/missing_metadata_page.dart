@@ -64,19 +64,21 @@ class _MissingMetadataPageState extends State<MissingMetadataPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Missing Metadata',
-            style: isDesktop ? textTheme.titleLarge : null),
+        title: Text(
+          'Missing Metadata',
+          style: isDesktop ? textTheme.titleLarge : null,
+        ),
       ),
       body: Column(
         children: [
           Container(
             padding: EdgeInsets.all(
-                AppTheme.spaceMD * AppTheme.spaceScale(context)),
+              AppTheme.spaceMD * AppTheme.spaceScale(context),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Check for tracks missing:',
-                    style: textTheme.titleSmall),
+                Text('Check for tracks missing:', style: textTheme.titleSmall),
                 SizedBox(height: AppTheme.spaceSM),
                 Wrap(
                   spacing: AppTheme.spaceSM,
@@ -114,12 +116,12 @@ class _MissingMetadataPageState extends State<MissingMetadataPage> {
                         ? SizedBox(
                             width: 16,
                             height: 16,
-                            child:
-                                CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.search),
                     label: Text(
-                        _scanning ? 'Scanning...' : 'Find Missing Metadata'),
+                      _scanning ? 'Scanning...' : 'Find Missing Metadata',
+                    ),
                   ),
                 ),
               ],
@@ -129,8 +131,10 @@ class _MissingMetadataPageState extends State<MissingMetadataPage> {
           if (_error != null)
             Padding(
               padding: EdgeInsets.all(AppTheme.spaceMD),
-              child: Text(_error!,
-                  style: textTheme.bodySmall?.copyWith(color: colors.error)),
+              child: Text(
+                _error!,
+                style: textTheme.bodySmall?.copyWith(color: colors.error),
+              ),
             ),
           Expanded(
             child: _results.isEmpty
@@ -150,8 +154,10 @@ class _MissingMetadataPageState extends State<MissingMetadataPage> {
                           vertical: AppTheme.spaceXS,
                         ),
                         child: ListTile(
-                          leading: Icon(Icons.warning_amber_rounded,
-                              color: colors.error),
+                          leading: Icon(
+                            Icons.warning_amber_rounded,
+                            color: colors.error,
+                          ),
                           title: Text(
                             entry.filePath.split('/').last,
                             style: textTheme.bodyMedium,
@@ -160,31 +166,35 @@ class _MissingMetadataPageState extends State<MissingMetadataPage> {
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(entry.filePath,
-                                  style: textTheme.bodySmall,
-                                  overflow: TextOverflow.ellipsis),
+                              Text(
+                                entry.filePath,
+                                style: textTheme.bodySmall,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                               SizedBox(height: AppTheme.spaceXS),
                               Wrap(
                                 spacing: AppTheme.spaceXS,
                                 children: entry.missingFields
-                                    .map((f) => Container(
-                                          padding: EdgeInsets.symmetric(
-                                            horizontal: 6,
-                                            vertical: 1,
+                                    .map(
+                                      (f) => Container(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 1,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: colors.errorContainer,
+                                          borderRadius: BorderRadius.circular(
+                                            4,
                                           ),
-                                          decoration: BoxDecoration(
-                                            color: colors.errorContainer,
-                                            borderRadius:
-                                                BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          f,
+                                          style: textTheme.labelSmall?.copyWith(
+                                            color: colors.onErrorContainer,
                                           ),
-                                          child: Text(
-                                            f,
-                                            style: textTheme.labelSmall
-                                                ?.copyWith(
-                                              color: colors.onErrorContainer,
-                                            ),
-                                          ),
-                                        ))
+                                        ),
+                                      ),
+                                    )
                                     .toList(),
                               ),
                             ],
@@ -208,7 +218,10 @@ class _MissingMetadataPageState extends State<MissingMetadataPage> {
   }
 
   Widget _buildCheckChip(
-      String label, bool selected, ValueChanged<bool> onChanged) {
+    String label,
+    bool selected,
+    ValueChanged<bool> onChanged,
+  ) {
     return FilterChip(
       label: Text(label, style: const TextStyle(fontSize: 12)),
       selected: selected,

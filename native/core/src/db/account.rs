@@ -74,11 +74,7 @@ pub async fn change_username(
     }
 }
 
-pub async fn change_role(
-    pool: &DatabasePool,
-    user_id: &str,
-    role: &str,
-) -> anyhow::Result<()> {
+pub async fn change_role(pool: &DatabasePool, user_id: &str, role: &str) -> anyhow::Result<()> {
     match pool {
         DatabasePool::Sqlite(p) => super::account_sq::change_role(p, user_id, role).await,
         DatabasePool::Postgres(p) => super::account_pg::change_role(p, user_id, role).await,

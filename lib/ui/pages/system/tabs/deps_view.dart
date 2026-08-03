@@ -74,7 +74,9 @@ class SystemDeps extends StatelessWidget {
               ),
               title: Text('slskd', style: textTheme.bodyMedium),
               subtitle: Text(
-                available ? '$local (Latest: ${latest ?? "..."})' : 'Not configured or unreachable',
+                available
+                    ? '$local (Latest: ${latest ?? "..."})'
+                    : 'Not configured or unreachable',
                 style: textTheme.bodySmall?.copyWith(
                   color: !available ? colors.error : null,
                 ),
@@ -106,7 +108,9 @@ class SystemDeps extends StatelessWidget {
               ),
               title: Text('nadekodon', style: textTheme.bodyMedium),
               subtitle: Text(
-                available ? '$local (Latest: ${latest ?? "..."})' : 'Not configured or unreachable',
+                available
+                    ? '$local (Latest: ${latest ?? "..."})'
+                    : 'Not configured or unreachable',
                 style: textTheme.bodySmall?.copyWith(
                   color: !available ? colors.error : null,
                 ),
@@ -115,8 +119,9 @@ class SystemDeps extends StatelessWidget {
                 icon: const Icon(Icons.open_in_new),
                 iconSize: AppTheme.iconMD * AppTheme.iconScale(context),
                 tooltip: "Visit",
-                onPressed: () =>
-                    launchUrl(Uri.parse('https://github.com/izaz4141/nadekodon-rs')),
+                onPressed: () => launchUrl(
+                  Uri.parse('https://github.com/izaz4141/nadekodon-rs'),
+                ),
               ),
             );
           },

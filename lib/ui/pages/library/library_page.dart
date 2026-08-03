@@ -55,20 +55,19 @@ class _LibraryPageState extends State<LibraryPage>
 
     _tracksFilterable = FilterableList<TrackInfo>(
       matchesSearch: (t, q) =>
-        t.title.toLowerCase().contains(q) ||
-        t.artistsString.toLowerCase().contains(q) ||
-        t.albumTitle.toLowerCase().contains(q),
+          t.title.toLowerCase().contains(q) ||
+          t.artistsString.toLowerCase().contains(q) ||
+          t.albumTitle.toLowerCase().contains(q),
       matchesSource: (t, s) => t.source == s,
       compare: (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
     );
 
     _albumsFilterable = FilterableList<AlbumInfo>(
       matchesSearch: (a, q) =>
-        a.title.toLowerCase().contains(q) ||
-        a.artistsString.toLowerCase().contains(q),
-      matchesSource: (a, s) => _tracksFilterable.all.any(
-        (t) => t.source == s && t.albumId == a.id,
-      ),
+          a.title.toLowerCase().contains(q) ||
+          a.artistsString.toLowerCase().contains(q),
+      matchesSource: (a, s) =>
+          _tracksFilterable.all.any((t) => t.source == s && t.albumId == a.id),
       compare: (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
     );
 
@@ -87,9 +86,9 @@ class _LibraryPageState extends State<LibraryPage>
 
     _historyFilterable = FilterableList<PlaybackRecord>(
       matchesSearch: (r, q) =>
-        r.trackTitle.toLowerCase().contains(q) ||
-        r.artistName.toLowerCase().contains(q) ||
-        r.albumTitle.toLowerCase().contains(q),
+          r.trackTitle.toLowerCase().contains(q) ||
+          r.artistName.toLowerCase().contains(q) ||
+          r.albumTitle.toLowerCase().contains(q),
     );
 
     _loadAll();
@@ -278,10 +277,22 @@ class _LibraryPageState extends State<LibraryPage>
     final colors = Theme.of(context).colorScheme;
     final isDesktop = AppTheme.isDesktop(context);
 
-    final filteredTracks = _tracksFilterable.filtered(_searchQuery, _selectedSource);
-    final filteredAlbums = _albumsFilterable.filtered(_searchQuery, _selectedSource);
-    final filteredArtists = _artistsFilterable.filtered(_searchQuery, _selectedSource);
-    final filteredPlaylists = _playlistsFilterable.filtered(_searchQuery, _selectedSource);
+    final filteredTracks = _tracksFilterable.filtered(
+      _searchQuery,
+      _selectedSource,
+    );
+    final filteredAlbums = _albumsFilterable.filtered(
+      _searchQuery,
+      _selectedSource,
+    );
+    final filteredArtists = _artistsFilterable.filtered(
+      _searchQuery,
+      _selectedSource,
+    );
+    final filteredPlaylists = _playlistsFilterable.filtered(
+      _searchQuery,
+      _selectedSource,
+    );
     final filteredHistory = _historyFilterable.filtered(_searchQuery, null);
 
     const labels = ['Songs', 'Albums', 'Artists', 'Playlists', 'History'];
@@ -300,9 +311,12 @@ class _LibraryPageState extends State<LibraryPage>
     return AppShell(
       title: 'Library',
       bottom: tabBar,
-      floatingActionButton: _tabController.index == 0 && filteredTracks.isNotEmpty
+      floatingActionButton:
+          _tabController.index == 0 && filteredTracks.isNotEmpty
           ? Padding(
-              padding: EdgeInsets.only(right: AlphabetIndexScroller.kStripWidth),
+              padding: EdgeInsets.only(
+                right: AlphabetIndexScroller.kStripWidth,
+              ),
               child: FloatingActionButton(
                 heroTag: 'shuffle_tracks',
                 onPressed: () {
@@ -311,10 +325,7 @@ class _LibraryPageState extends State<LibraryPage>
                     playback.toggleShuffle(force: true);
                   }
                   final randomIndex = Random().nextInt(filteredTracks.length);
-                  playback.play(
-                    filteredTracks,
-                    startIndex: randomIndex,
-                  );
+                  playback.play(filteredTracks, startIndex: randomIndex);
                 },
                 child: const Icon(Icons.shuffle),
               ),
@@ -369,10 +380,15 @@ class _LibraryPageState extends State<LibraryPage>
                       ),
                     ),
                     RefreshIndicator(
-                      onRefresh: () => _loadTabData(_historyFilterable, () async {
-                        final userId = SettingsManager.currentUser.value?.id ?? '';
-                        return BridgeService.instance.getHistory(userId, limit: 50);
-                      }),
+                      onRefresh: () =>
+                          _loadTabData(_historyFilterable, () async {
+                            final userId =
+                                SettingsManager.currentUser.value?.id ?? '';
+                            return BridgeService.instance.getHistory(
+                              userId,
+                              limit: 50,
+                            );
+                          }),
                       child: LibraryHistoryTab(
                         history: filteredHistory,
                         onPlayRecord: _playHistoryEntry,
@@ -389,8 +405,11 @@ class _LibraryPageState extends State<LibraryPage>
             bottom: 0,
             width: AlphabetIndexScroller.kStripWidth,
             child: _buildScroller(
-              context, filteredTracks, filteredAlbums,
-              filteredArtists, filteredPlaylists,
+              context,
+              filteredTracks,
+              filteredAlbums,
+              filteredArtists,
+              filteredPlaylists,
             ),
           ),
         ],

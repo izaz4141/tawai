@@ -44,8 +44,7 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
 
   bool get _isEdit => widget.initialAccount != null;
 
-  bool get _isLocalHost =>
-      widget.manageUsers || isLocalHost(_hostCtrl.text);
+  bool get _isLocalHost => widget.manageUsers || isLocalHost(_hostCtrl.text);
 
   bool get _isAdmin => SettingsManager.currentUser.value?.role == 'admin';
 
@@ -303,7 +302,9 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
           child: Text("Cancel", style: textTheme.bodyMedium),
         ),
         FilledButton(
-          onPressed: (!_isLocalHost && !_connectionSuccess) ? null : _saveAccount,
+          onPressed: (!_isLocalHost && !_connectionSuccess)
+              ? null
+              : _saveAccount,
           child: Text("Save", style: textTheme.bodyMedium),
         ),
       ],
@@ -373,8 +374,8 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
       displayName = displayName.isNotEmpty
           ? displayName
           : _displayNameCtrl.text.isEmpty
-              ? widget.initialAccount!.displayName
-              : _displayNameCtrl.text;
+          ? widget.initialAccount!.displayName
+          : _displayNameCtrl.text;
       role = _role;
       id = widget.initialAccount!.id;
     }
@@ -395,7 +396,9 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
         id: _capturedId.isEmpty ? account.username : _capturedId,
         host: account.host,
         port: account.port,
-        username: _capturedUsername.isEmpty ? account.username : _capturedUsername,
+        username: _capturedUsername.isEmpty
+            ? account.username
+            : _capturedUsername,
         displayName: _capturedDisplayName,
         label: account.label,
         role: _capturedRole,
@@ -410,9 +413,7 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
     if (_isLocalHost && !_isEdit && !widget.manageUsers) {
       final users = await BridgeService.instance.listUsers();
       if (!mounted) return;
-      final index = users.indexWhere(
-        (u) => u.username == _usernameCtrl.text,
-      );
+      final index = users.indexWhere((u) => u.username == _usernameCtrl.text);
       if (index != -1) {
         final existing = users[index];
         final valid = await BridgeService.instance.verifyCurrentPassword(
@@ -424,15 +425,17 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
           _showError(context, "User exists but password is wrong");
           return;
         }
-        SettingsManager.addAccount(Account(
-          id: existing.id,
-          host: account.host,
-          port: account.port,
-          username: existing.username,
-          displayName: existing.displayName,
-          label: account.label,
-          role: existing.role,
-        ));
+        SettingsManager.addAccount(
+          Account(
+            id: existing.id,
+            host: account.host,
+            port: account.port,
+            username: existing.username,
+            displayName: existing.displayName,
+            label: account.label,
+            role: existing.role,
+          ),
+        );
         Navigator.pop(context);
         return;
       }
@@ -451,7 +454,8 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
       String displayName,
       String role,
       String apiKey,
-    }) result;
+    })
+    result;
     if (_isEdit) {
       result = await BridgeService.instance.updateAccount(
         currentUsername: SettingsManager.currentUser.value?.username ?? '',
@@ -480,7 +484,9 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
         id: result.userId.isNotEmpty ? result.userId : account.id,
         host: account.host,
         port: account.port,
-        username: result.username.isNotEmpty ? result.username : account.username,
+        username: result.username.isNotEmpty
+            ? result.username
+            : account.username,
         displayName: result.displayName.isNotEmpty
             ? result.displayName
             : account.displayName,
@@ -497,7 +503,9 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
         context,
         widget.manageUsers
             ? (_isEdit ? "Failed to update user" : "Failed to create user")
-            : (_isEdit ? "Failed to update account" : "Failed to create account"),
+            : (_isEdit
+                  ? "Failed to update account"
+                  : "Failed to create account"),
       );
     }
   }

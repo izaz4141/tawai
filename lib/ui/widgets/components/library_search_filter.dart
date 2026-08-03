@@ -111,9 +111,7 @@ class _LibrarySearchFilterState extends State<LibrarySearchFilter> {
                       ? Icons.filter_list
                       : Icons.filter_list,
                   size: 20,
-                  color: widget.selectedSource != null
-                      ? colors.primary
-                      : null,
+                  color: widget.selectedSource != null ? colors.primary : null,
                 ),
                 onPressed: _openFilterDialog,
               ),

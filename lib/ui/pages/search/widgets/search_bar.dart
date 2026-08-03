@@ -33,9 +33,7 @@ class SearchInputBar extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppTheme.radiusSM),
-        side: BorderSide(
-          color: Theme.of(context).colorScheme.outlineVariant,
-        ),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: AppTheme.spaceSM),
@@ -78,8 +76,7 @@ class SearchInputBar extends StatelessWidget {
                       child: SizedBox(
                         width: AppTheme.iconSM,
                         height: AppTheme.iconSM,
-                        child:
-                            const CircularProgressIndicator(strokeWidth: 2),
+                        child: const CircularProgressIndicator(strokeWidth: 2),
                       ),
                     )
                   : IconButton(

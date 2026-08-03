@@ -57,7 +57,8 @@ class RecommendationSource {
 
   static String? getRecType(String key) => byKey[key]?.recType;
 
-  static bool isRecommendationSource(String key) => key.startsWith('recommendation:');
+  static bool isRecommendationSource(String key) =>
+      key.startsWith('recommendation:');
 
   /// Whether a track's source type supports downloading (recommendations and
   /// live previews from discovery).

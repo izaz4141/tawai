@@ -62,7 +62,10 @@ class _LyricsPageState extends State<LyricsPage> {
     final viewportHeight = _scrollController.position.viewportDimension;
     final target =
         (itemHeight * index) - (viewportHeight / 2) + (itemHeight / 2);
-    final clamped = target.clamp(0.0, _scrollController.position.maxScrollExtent);
+    final clamped = target.clamp(
+      0.0,
+      _scrollController.position.maxScrollExtent,
+    );
     _scrollController.animateTo(
       clamped,
       duration: const Duration(milliseconds: 300),
@@ -152,10 +155,7 @@ class _LyricsPageState extends State<LyricsPage> {
     final track = _currentTrack;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(track?.title ?? 'Lyrics'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: Text(track?.title ?? 'Lyrics'), centerTitle: true),
       body: ValueListenableBuilder(
         valueListenable: PlaybackService.instance.queue,
         builder: (context, q, _) {
@@ -193,7 +193,11 @@ class _LyricsPageState extends State<LyricsPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.lyrics_outlined, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          Icon(
+            Icons.lyrics_outlined,
+            size: 48,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
           const SizedBox(height: 16),
           Text(message, style: Theme.of(context).textTheme.bodyLarge),
         ],
@@ -208,9 +212,17 @@ class _LyricsPageState extends State<LyricsPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
+            Icon(
+              Icons.error_outline,
+              size: 48,
+              color: Theme.of(context).colorScheme.error,
+            ),
             const SizedBox(height: 16),
-            Text(_error!, style: textTheme.bodyMedium, textAlign: TextAlign.center),
+            Text(
+              _error!,
+              style: textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 16),
             FilledButton.tonalIcon(
               onPressed: _loadLyrics,
@@ -243,18 +255,19 @@ class _LyricsPageState extends State<LyricsPage> {
           child: AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 200),
             style: TextStyle(
-              fontSize: isCurrent ? 20 : isPast ? 14 : 16,
+              fontSize: isCurrent
+                  ? 20
+                  : isPast
+                  ? 14
+                  : 16,
               fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
               color: isCurrent
                   ? colors.primary
                   : isPast
-                      ? colors.onSurface.withValues(alpha: 0.35)
-                      : colors.onSurface,
+                  ? colors.onSurface.withValues(alpha: 0.35)
+                  : colors.onSurface,
             ),
-            child: Text(
-              parsed.lines[index].text,
-              textAlign: TextAlign.center,
-            ),
+            child: Text(parsed.lines[index].text, textAlign: TextAlign.center),
           ),
         );
       },

@@ -28,8 +28,9 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
   }
 
   Future<void> _loadTracks() async {
-    final tracks = await BridgeService.instance
-        .getTracks(albumId: widget.album.id);
+    final tracks = await BridgeService.instance.getTracks(
+      albumId: widget.album.id,
+    );
     if (mounted) {
       setState(() {
         _tracks = tracks;
@@ -63,9 +64,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.album.title),
-      ),
+      appBar: AppBar(title: Text(widget.album.title)),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -85,13 +84,14 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
                       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         child: Row(
                           children: [
                             Expanded(
                               child: TextButton.icon(
-                                onPressed:
-                                    _isPlayingAll ? null : _playAll,
+                                onPressed: _isPlayingAll ? null : _playAll,
                                 icon: _isPlayingAll
                                     ? SizedBox(
                                         width: 18,
@@ -107,8 +107,7 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
                             ),
                             Expanded(
                               child: TextButton.icon(
-                                onPressed:
-                                    _isPlayingAll ? null : _shufflePlay,
+                                onPressed: _isPlayingAll ? null : _shufflePlay,
                                 icon: const Icon(Icons.shuffle),
                                 label: const Text('Shuffle'),
                               ),
@@ -122,8 +121,10 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
                   return TrackListTile(
                     track: track,
                     index: index - 2,
-                    onTap: () => PlaybackService.instance
-                        .play(_tracks, startIndex: index - 2),
+                    onTap: () => PlaybackService.instance.play(
+                      _tracks,
+                      startIndex: index - 2,
+                    ),
                   );
                 },
               ),

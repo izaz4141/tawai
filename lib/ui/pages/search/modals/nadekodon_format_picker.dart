@@ -25,19 +25,15 @@ Future<String?> showNadekodonFormatPicker(
       }
     }
   }
-  formats.sort((a, b) => ((b['abr'] as num?) ?? 0).compareTo(
-    (a['abr'] as num?) ?? 0,
-  ));
+  formats.sort(
+    (a, b) => ((b['abr'] as num?) ?? 0).compareTo((a['abr'] as num?) ?? 0),
+  );
 
   return showDialog<String>(
     context: context,
     builder: (ctx) {
       return SimpleDialog(
-        title: Text(
-          title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis),
         children: [
           if (channel != null)
             Padding(

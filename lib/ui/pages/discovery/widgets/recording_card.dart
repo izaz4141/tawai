@@ -37,80 +37,83 @@ class RecordingCard extends StatelessWidget {
               Expanded(
                 child: ClipRRect(
                   borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(AppTheme.radiusMD * AppTheme.radiusScale(context)),
+                    top: Radius.circular(
+                      AppTheme.radiusMD * AppTheme.radiusScale(context),
+                    ),
                   ),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
                       RecordingThumb(recording: recording),
-                    if (recording.isOwned)
-                      Positioned(
-                        top: 6,
-                        right: 6,
-                        child: Material(
-                          color: colors.primary,
-                          shape: const CircleBorder(),
-                          child: Padding(
-                            padding: EdgeInsets.all(2),
-                            child: Icon(
-                              Icons.check_circle,
-                              size: 18,
-                              color: colors.onPrimary,
+                      if (recording.isOwned)
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: Material(
+                            color: colors.primary,
+                            shape: const CircleBorder(),
+                            child: Padding(
+                              padding: EdgeInsets.all(2),
+                              child: Icon(
+                                Icons.check_circle,
+                                size: 18,
+                                color: colors.onPrimary,
+                              ),
                             ),
                           ),
                         ),
+                      Positioned(
+                        right: 6,
+                        bottom: 6,
+                        child: PreviewButton(
+                          recording: recording,
+                          iconSize: AppTheme.iconMD,
+                          backgroundColor: colors.primaryContainer.withOpacity(
+                            0.9,
+                          ),
+                          foregroundColor: colors.onPrimaryContainer,
+                        ),
                       ),
-                    Positioned(
-                      right: 6,
-                      bottom: 6,
-                      child: PreviewButton(
-                        recording: recording,
-                        iconSize: AppTheme.iconMD,
-                        backgroundColor: colors.primaryContainer.withOpacity(0.9),
-                        foregroundColor: colors.onPrimaryContainer,
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.all(AppTheme.spaceSM * scale),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Tooltip(
+                      message: recording.title,
+                      child: Text(
+                        recording.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: colors.onSurface,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: AppTheme.spaceXS * scale),
+                    Tooltip(
+                      message: recording.artist,
+                      child: Text(
+                        recording.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-            Padding(
-              padding: EdgeInsets.all(AppTheme.spaceSM * scale),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Tooltip(
-                    message: recording.title,
-                    child: Text(
-                      recording.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: colors.onSurface,
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: AppTheme.spaceXS * scale),
-                  Tooltip(
-                    message: recording.artist,
-                    child: Text(
-                      recording.artist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
 }
-

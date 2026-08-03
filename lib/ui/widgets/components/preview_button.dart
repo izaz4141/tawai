@@ -33,9 +33,8 @@ class PreviewButton extends StatelessWidget {
             builder: (context, state, _) {
               final isLoading =
                   state.processingState == ProcessingState.loading ||
-                      state.processingState == ProcessingState.buffering;
-              final isCurrentTrack =
-                  ps.currentTrack?.id == recording.id;
+                  state.processingState == ProcessingState.buffering;
+              final isCurrentTrack = ps.currentTrack?.id == recording.id;
               final isActive = isCurrentTrack && state.playing;
 
               if (isLoading && isCurrentTrack) {

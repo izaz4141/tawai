@@ -164,28 +164,28 @@ class ComparisonReadonlyRow extends StatelessWidget {
               onPressed: hasApply
                   ? onApply
                   : hasRevert
-                      ? onRevert
-                      : null,
+                  ? onRevert
+                  : null,
               icon: Icon(
                 hasApply
                     ? Icons.arrow_back
                     : hasRevert
-                        ? Icons.undo
-                        : Icons.arrow_back,
+                    ? Icons.undo
+                    : Icons.arrow_back,
                 size: 18,
                 color: hasApply
                     ? colors.primary
                     : hasRevert
-                        ? colors.tertiary
-                        : colors.outline.withAlpha(80),
+                    ? colors.tertiary
+                    : colors.outline.withAlpha(80),
               ),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               tooltip: hasApply
                   ? 'Use remote value'
                   : hasRevert
-                      ? 'Revert'
-                      : '',
+                  ? 'Revert'
+                  : '',
             ),
           ),
           Expanded(

@@ -70,7 +70,9 @@ async fn main() {
     spawn(utils::account::handle_update_account(context.clone()));
     spawn(utils::account::handle_create_account(context.clone()));
     spawn(utils::account::handle_delete_account(context.clone()));
-    spawn(utils::account::handle_verify_current_password(context.clone()));
+    spawn(utils::account::handle_verify_current_password(
+        context.clone(),
+    ));
 
     // Library source handlers
     spawn(utils::library_source::handle_add_library_source(

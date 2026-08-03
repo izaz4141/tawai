@@ -7,18 +7,16 @@ class DownloadTile extends StatelessWidget {
   final DownloadRecord download;
   final VoidCallback? onCancel;
 
-  const DownloadTile({
-    super.key,
-    required this.download,
-    this.onCancel,
-  });
+  const DownloadTile({super.key, required this.download, this.onCancel});
 
   @override
   Widget build(BuildContext context) {
     final totalSize = download.totalSize;
     final downloaded = download.downloaded;
     final progress = totalSize > 0 ? downloaded / totalSize : 0.0;
-    final filename = download.filename.isNotEmpty ? download.filename : download.id;
+    final filename = download.filename.isNotEmpty
+        ? download.filename
+        : download.id;
     final state = download.state;
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -46,7 +44,9 @@ class DownloadTile extends StatelessWidget {
               SizedBox(height: AppTheme.spaceXS / 2),
               Text(
                 '${formatFileSize(downloaded)} / ${formatFileSize(totalSize)}',
-                style: textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+                style: textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
               ),
             ],
           ],
@@ -65,13 +65,13 @@ class DownloadTile extends StatelessWidget {
     final label = source == 'nadekodon'
         ? 'YouTube'
         : source == 'slskd'
-            ? 'Soulseek'
-            : source;
+        ? 'Soulseek'
+        : source;
     final color = source == 'nadekodon'
         ? Colors.red.shade300
         : source == 'slskd'
-            ? Colors.blue.shade300
-            : Colors.grey;
+        ? Colors.blue.shade300
+        : Colors.grey;
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: AppTheme.spaceSM - 2,
@@ -83,10 +83,7 @@ class DownloadTile extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(
-          fontSize: AppTheme.textXS,
-          color: color,
-        ),
+        style: TextStyle(fontSize: AppTheme.textXS, color: color),
       ),
     );
   }

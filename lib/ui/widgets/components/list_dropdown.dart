@@ -124,8 +124,7 @@ class _ListDropdownState extends State<ListDropdown> {
                     icon: const Icon(Icons.arrow_drop_down),
                     tooltip: 'Presets',
                     onSelected: _handleChange,
-                    itemBuilder: (_) =>
-                        widget.items.map((e) {
+                    itemBuilder: (_) => widget.items.map((e) {
                       final disabled = widget.disabledValues.contains(e.value);
                       return PopupMenuItem<String>(
                         value: e.value,
@@ -142,9 +141,9 @@ class _ListDropdownState extends State<ListDropdown> {
                                   '(unavailable)',
                                   style: TextStyle(
                                     fontSize: 10,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                             ],
@@ -169,7 +168,8 @@ class _ListDropdownState extends State<ListDropdown> {
   }
 
   Widget _buildDropdown(String value, TextTheme textTheme, ColorScheme colors) {
-    final isDisabled = (String? v) => v != null && widget.disabledValues.contains(v);
+    final isDisabled = (String? v) =>
+        v != null && widget.disabledValues.contains(v);
     return DropdownButtonFormField<String>(
       value: widget.disabledValues.contains(value) ? null : value,
       style: textTheme.bodyMedium,

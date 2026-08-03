@@ -67,7 +67,9 @@ class _SearchLyricsDialogState extends State<SearchLyricsDialog> {
                       hintText: 'Search query...',
                       isDense: true,
                       contentPadding: EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 10),
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                     ),
                     onSubmitted: (_) => _doSearch(),
                   ),
@@ -79,7 +81,8 @@ class _SearchLyricsDialogState extends State<SearchLyricsDialog> {
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2))
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Icon(Icons.search),
                 ),
               ],
@@ -88,9 +91,12 @@ class _SearchLyricsDialogState extends State<SearchLyricsDialog> {
             if (_results.isEmpty && !_loading)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Text('No results found',
-                    style: textTheme.bodyMedium
-                        ?.copyWith(color: colors.onSurfaceVariant)),
+                child: Text(
+                  'No results found',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
               )
             else
               Flexible(
@@ -104,22 +110,30 @@ class _SearchLyricsDialogState extends State<SearchLyricsDialog> {
                         : r.lyrics;
                     return ListTile(
                       dense: true,
-                      title: Text('${r.title} — ${r.artist}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
+                      title: Text(
+                        '${r.title} — ${r.artist}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(r.album,
-                              style: textTheme.bodySmall?.copyWith(
-                                  color: colors.onSurfaceVariant),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
+                          Text(
+                            r.album,
+                            style: textTheme.bodySmall?.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           const SizedBox(height: 2),
-                          Text(preview,
-                              style: textTheme.bodySmall?.copyWith(
-                                  fontStyle: FontStyle.italic,
-                                  color: colors.onSurfaceVariant)),
+                          Text(
+                            preview,
+                            style: textTheme.bodySmall?.copyWith(
+                              fontStyle: FontStyle.italic,
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
                         ],
                       ),
                       trailing: Chip(
@@ -127,8 +141,10 @@ class _SearchLyricsDialogState extends State<SearchLyricsDialog> {
                           r.synced ? Icons.timer : Icons.text_fields,
                           size: 14,
                         ),
-                        label: Text(r.synced ? 'Synced' : 'Plain',
-                            style: const TextStyle(fontSize: 11)),
+                        label: Text(
+                          r.synced ? 'Synced' : 'Plain',
+                          style: const TextStyle(fontSize: 11),
+                        ),
                         visualDensity: VisualDensity.compact,
                       ),
                       onTap: () {

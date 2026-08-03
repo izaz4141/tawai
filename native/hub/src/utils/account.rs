@@ -165,12 +165,13 @@ pub async fn handle_update_account(context: Arc<AppContext>) {
                                             &target.password_hash,
                                         ) {
                                             Ok(hashed) => {
-                                                if let Err(e) = tawai_core::db::account::change_password(
-                                                    db.pool(),
-                                                    &target.id,
-                                                    &hashed,
-                                                )
-                                                .await
+                                                if let Err(e) =
+                                                    tawai_core::db::account::change_password(
+                                                        db.pool(),
+                                                        &target.id,
+                                                        &hashed,
+                                                    )
+                                                    .await
                                                 {
                                                     logger::error(&format!(
                                                         "Failed to change password: {}",
@@ -203,12 +204,13 @@ pub async fn handle_update_account(context: Arc<AppContext>) {
                                 }
                                 if let Some(display_name) = &msg.display_name {
                                     if !display_name.is_empty() {
-                                        if let Err(e) = tawai_core::db::account::change_display_name(
-                                            db.pool(),
-                                            &target.id,
-                                            display_name,
-                                        )
-                                        .await
+                                        if let Err(e) =
+                                            tawai_core::db::account::change_display_name(
+                                                db.pool(),
+                                                &target.id,
+                                                display_name,
+                                            )
+                                            .await
                                         {
                                             logger::error(&format!(
                                                 "Failed to change display name: {}",
@@ -263,10 +265,20 @@ pub async fn handle_create_account(context: Arc<AppContext>) {
         let db = context.db().await;
         let mk = context.master_key.read().await.clone();
 
-        let (success, user_id, username, display_name, role, api_key) =
-            if msg.username.trim().is_empty() {
-                (false, String::new(), msg.username.clone(), String::new(), String::new(), String::new())
-            } else {
+        let (success, user_id, username, display_name, role, api_key) = if msg
+            .username
+            .trim()
+            .is_empty()
+        {
+            (
+                false,
+                String::new(),
+                msg.username.clone(),
+                String::new(),
+                String::new(),
+                String::new(),
+            )
+        } else {
             let admin =
                 tawai_core::db::account::get_user_by_username(db.pool(), &msg.admin_username, &mk)
                     .await
@@ -282,7 +294,14 @@ pub async fn handle_create_account(context: Arc<AppContext>) {
             };
 
             if !is_admin {
-                (false, String::new(), msg.username.clone(), String::new(), String::new(), String::new())
+                (
+                    false,
+                    String::new(),
+                    msg.username.clone(),
+                    String::new(),
+                    String::new(),
+                    String::new(),
+                )
             } else {
                 let taken =
                     tawai_core::db::account::get_user_by_username(db.pool(), &msg.username, &mk)
@@ -290,14 +309,21 @@ pub async fn handle_create_account(context: Arc<AppContext>) {
                         .unwrap_or(None)
                         .is_some();
                 if taken {
-                    (false, String::new(), msg.username.clone(), String::new(), String::new(), String::new())
+                    (
+                        false,
+                        String::new(),
+                        msg.username.clone(),
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                    )
                 } else {
                     let salt = security::generate_salt();
                     match security::hash_password(&msg.password, &salt) {
                         Ok(hash) => {
                             let api_key = uuid::Uuid::new_v4().to_string();
-                            let encrypted =
-                                encryption::encrypt(&api_key, &mk).unwrap_or_else(|_| api_key.clone());
+                            let encrypted = encryption::encrypt(&api_key, &mk)
+                                .unwrap_or_else(|_| api_key.clone());
                             let api_key_hash = helper::sha256_hex(&api_key);
                             let display_name = msg.display_name.clone().unwrap_or_default();
                             let role = sanitize_role(msg.role.as_deref());
@@ -312,16 +338,37 @@ pub async fn handle_create_account(context: Arc<AppContext>) {
                             )
                             .await
                             {
-                                Ok(uid) => (true, uid, msg.username.clone(), display_name, role.to_string(), api_key.clone()),
+                                Ok(uid) => (
+                                    true,
+                                    uid,
+                                    msg.username.clone(),
+                                    display_name,
+                                    role.to_string(),
+                                    api_key.clone(),
+                                ),
                                 Err(e) => {
                                     logger::error(&format!("Failed to create user: {}", e));
-                                    (false, String::new(), msg.username.clone(), String::new(), String::new(), String::new())
+                                    (
+                                        false,
+                                        String::new(),
+                                        msg.username.clone(),
+                                        String::new(),
+                                        String::new(),
+                                        String::new(),
+                                    )
                                 }
                             }
                         }
                         Err(e) => {
                             logger::error(&format!("Failed to hash password: {}", e));
-                            (false, String::new(), msg.username.clone(), String::new(), String::new(), String::new())
+                            (
+                                false,
+                                String::new(),
+                                msg.username.clone(),
+                                String::new(),
+                                String::new(),
+                                String::new(),
+                            )
                         }
                     }
                 }
@@ -349,13 +396,10 @@ pub async fn handle_delete_account(context: Arc<AppContext>) {
         let db = context.db().await;
         let mk = context.master_key.read().await.clone();
 
-        let admin = tawai_core::db::account::get_user_by_username(
-            db.pool(),
-            &msg.admin_username,
-            &mk,
-        )
-        .await
-        .unwrap_or(None);
+        let admin =
+            tawai_core::db::account::get_user_by_username(db.pool(), &msg.admin_username, &mk)
+                .await
+                .unwrap_or(None);
 
         let is_admin = match &admin {
             Some(u) => {
@@ -368,19 +412,17 @@ pub async fn handle_delete_account(context: Arc<AppContext>) {
 
         let mut success = false;
         if is_admin {
-            let target = tawai_core::db::account::get_user_by_username(
-                db.pool(),
-                &msg.target_username,
-                &mk,
-            )
-            .await
-            .unwrap_or(None);
+            let target =
+                tawai_core::db::account::get_user_by_username(db.pool(), &msg.target_username, &mk)
+                    .await
+                    .unwrap_or(None);
 
             if let Some(target) = target {
                 let mut allow = true;
                 if target.role == "admin" {
-                    let users =
-                        tawai_core::db::account::get_all_users(db.pool()).await.unwrap_or_default();
+                    let users = tawai_core::db::account::get_all_users(db.pool())
+                        .await
+                        .unwrap_or_default();
                     let admin_count = users.iter().filter(|u| u.role == "admin").count();
                     allow = admin_count > 1;
                 }

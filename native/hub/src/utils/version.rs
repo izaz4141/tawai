@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use rinf::{DartSignal, RustSignal};
+use std::sync::Arc;
 
 use tawai_core::app_context::AppContext;
 use tawai_core::utils::version::{get_latest_version, get_local_version};

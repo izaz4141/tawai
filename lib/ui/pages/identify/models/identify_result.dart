@@ -64,7 +64,8 @@ class IdentifyAlbumResult {
 
   static String albumKey(String? albumId) => 'album_${albumId ?? ''}';
 
-  int get unsavedCount => userTracks.where((t) => t.isSession && !t.applied).length;
+  int get unsavedCount =>
+      userTracks.where((t) => t.isSession && !t.applied).length;
   bool get hasSession => userTracks.any((t) => t.isSession);
   bool get allIdentified => userTracks.every((t) => !t.isSession);
 }

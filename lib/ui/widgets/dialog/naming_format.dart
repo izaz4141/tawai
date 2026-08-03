@@ -225,38 +225,52 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
               },
               itemBuilder: (_) => [
                 PopupMenuItem(
-                  value: const MapEntry('Picard-style',
-                      '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}'),
+                  value: const MapEntry(
+                    'Picard-style',
+                    '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}',
+                  ),
                   child: const Text('Picard-style'),
                 ),
                 PopupMenuItem(
-                  value: const MapEntry('Album/DirPrefix_TrackNo_Title',
-                      '{album}{album_disambiguation? (|)}/{album_artist?|_}{album?|_}{disc_prefix}{track_padded}_{title}'),
+                  value: const MapEntry(
+                    'Album/DirPrefix_TrackNo_Title',
+                    '{album}{album_disambiguation? (|)}/{album_artist?|_}{album?|_}{disc_prefix}{track_padded}_{title}',
+                  ),
                   child: const Text('Album/DirPrefix_TrackNo_Title'),
                 ),
                 PopupMenuItem(
-                  value: const MapEntry('Artist/Album/## - Title',
-                      '{artist}/{album}/{track_padded} - {title}'),
+                  value: const MapEntry(
+                    'Artist/Album/## - Title',
+                    '{artist}/{album}/{track_padded} - {title}',
+                  ),
                   child: const Text('Artist/Album/## - Title'),
                 ),
                 PopupMenuItem(
-                  value: const MapEntry('Artist/Album/## Title',
-                      '{artist}/{album}/{track_padded} {title}'),
+                  value: const MapEntry(
+                    'Artist/Album/## Title',
+                    '{artist}/{album}/{track_padded} {title}',
+                  ),
                   child: const Text('Artist/Album/## Title'),
                 ),
                 PopupMenuItem(
-                  value: const MapEntry('Artist - ## - Title',
-                      '{artist} - {track_padded} - {title}'),
+                  value: const MapEntry(
+                    'Artist - ## - Title',
+                    '{artist} - {track_padded} - {title}',
+                  ),
                   child: const Text('Artist - ## - Title'),
                 ),
                 PopupMenuItem(
-                  value: const MapEntry('## - Title',
-                      '{track_padded} - {title}'),
+                  value: const MapEntry(
+                    '## - Title',
+                    '{track_padded} - {title}',
+                  ),
                   child: const Text('## - Title'),
                 ),
                 PopupMenuItem(
-                  value: const MapEntry('Artist - Album/## - Title',
-                      '{artist} - {album}/{track_padded} - {title}'),
+                  value: const MapEntry(
+                    'Artist - Album/## - Title',
+                    '{artist} - {album}/{track_padded} - {title}',
+                  ),
                   child: const Text('Artist - Album/## - Title'),
                 ),
               ],
@@ -322,8 +336,9 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
                 return ListTile(
                   dense: true,
                   selected: isSelected,
-                  selectedTileColor: colorScheme.primaryContainer
-                      .withValues(alpha: 0.4),
+                  selectedTileColor: colorScheme.primaryContainer.withValues(
+                    alpha: 0.4,
+                  ),
                   title: Text(
                     t.title,
                     style: textTheme.bodySmall,
@@ -461,7 +476,10 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
             ),
           ],
           SizedBox(height: 8),
-          Divider(height: 1, color: colorScheme.tertiary.withValues(alpha: 0.3)),
+          Divider(
+            height: 1,
+            color: colorScheme.tertiary.withValues(alpha: 0.3),
+          ),
           SizedBox(height: 8),
           Row(
             children: [
@@ -524,10 +542,7 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
           child: Column(
             children: vars.map((v) {
               return Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 6,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
@@ -548,12 +563,7 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
                         ),
                       ),
                     ),
-                    Expanded(
-                      child: Text(
-                        v.$2,
-                        style: textTheme.bodySmall,
-                      ),
-                    ),
+                    Expanded(child: Text(v.$2, style: textTheme.bodySmall)),
                     SizedBox(
                       width: 100,
                       child: Text(
@@ -589,12 +599,7 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
           ),
         ),
         const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            desc,
-            style: textTheme.bodySmall,
-          ),
-        ),
+        Expanded(child: Text(desc, style: textTheme.bodySmall)),
       ],
     );
   }
@@ -619,19 +624,31 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              _syntaxRow(textTheme, '{var?expr|suffix}',
-                  'If var truthy: evaluate expr, append suffix. '
-                  'If expr empty, use value directly. '
-                  'If expr has {...}, it is a sub-pattern.'),
+              _syntaxRow(
+                textTheme,
+                '{var?expr|suffix}',
+                'If var truthy: evaluate expr, append suffix. '
+                    'If expr empty, use value directly. '
+                    'If expr has {...}, it is a sub-pattern.',
+              ),
               SizedBox(height: 4),
-              _syntaxRow(textTheme, '{var?prefix|suffix}',
-                  'Wrapping: prefix + value + suffix (no braces in expr).'),
+              _syntaxRow(
+                textTheme,
+                '{var?prefix|suffix}',
+                'Wrapping: prefix + value + suffix (no braces in expr).',
+              ),
               SizedBox(height: 4),
-              _syntaxRow(textTheme, '{var??fallback|suffix}',
-                  'Use var if non-empty (+ suffix), else evaluate fallback.'),
+              _syntaxRow(
+                textTheme,
+                '{var??fallback|suffix}',
+                'Use var if non-empty (+ suffix), else evaluate fallback.',
+              ),
               SizedBox(height: 4),
-              _syntaxRow(textTheme, '{var>N?expr|suffix}',
-                  'Numeric comparison: truthy if value > N.'),
+              _syntaxRow(
+                textTheme,
+                '{var>N?expr|suffix}',
+                'Numeric comparison: truthy if value > N.',
+              ),
             ],
           ),
         ),
@@ -642,7 +659,9 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
             return Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                color: colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.5,
+                ),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Column(
@@ -658,7 +677,9 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
                   SizedBox(height: 4),
                   Text(
                     pattern,
-                    style: textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+                    style: textTheme.bodySmall?.copyWith(
+                      fontFamily: 'monospace',
+                    ),
                   ),
                 ],
               ),

@@ -123,8 +123,7 @@ pub async fn handle_identify_single_track(context: Arc<AppContext>) {
         if let Ok(Some((fingerprint, duration))) =
             library::lookup_fingerprint_by_id(db.pool(), &msg.track_id).await
         {
-            match musicbrainz::lookup_by_fingerprint(context.client(), &fingerprint, duration)
-                .await
+            match musicbrainz::lookup_by_fingerprint(context.client(), &fingerprint, duration).await
             {
                 Ok(info) => {
                     if !info.title.is_empty() {

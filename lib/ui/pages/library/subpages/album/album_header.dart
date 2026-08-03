@@ -3,11 +3,7 @@ import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/widgets/components/cover_image.dart';
 
 class AlbumHeader extends StatelessWidget {
-  const AlbumHeader({
-    super.key,
-    required this.album,
-    this.trackCount,
-  });
+  const AlbumHeader({super.key, required this.album, this.trackCount});
 
   final AlbumInfo album;
   final int? trackCount;
@@ -23,14 +19,14 @@ class AlbumHeader extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  width: 120,
-                  height: 120,
-                  child: CoverImage(albumId: album.id),
-                ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: 120,
+                height: 120,
+                child: CoverImage(albumId: album.id),
               ),
+            ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
@@ -70,5 +66,4 @@ class AlbumHeader extends StatelessWidget {
       ),
     );
   }
-
 }

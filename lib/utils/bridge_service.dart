@@ -89,14 +89,16 @@ class BridgeService {
   }
 
   Future<
-      ({
-        bool success,
-        String userId,
-        String username,
-        String displayName,
-        String role,
-        String apiKey,
-      })> updateAccount({
+    ({
+      bool success,
+      String userId,
+      String username,
+      String displayName,
+      String role,
+      String apiKey,
+    })
+  >
+  updateAccount({
     required String currentUsername,
     required String currentPassword,
     required String targetUsername,
@@ -127,14 +129,16 @@ class BridgeService {
   }
 
   Future<
-      ({
-        bool success,
-        String userId,
-        String username,
-        String displayName,
-        String role,
-        String apiKey,
-      })> createAccount({
+    ({
+      bool success,
+      String userId,
+      String username,
+      String displayName,
+      String role,
+      String apiKey,
+    })
+  >
+  createAccount({
     required String adminUsername,
     required String adminPassword,
     required String username,
@@ -366,9 +370,21 @@ class BridgeService {
     String? extra,
   }) async {
     if (_isRemote) {
-      return APIService.instance.create(sourceType, url, dest, userId, extra: extra);
+      return APIService.instance.create(
+        sourceType,
+        url,
+        dest,
+        userId,
+        extra: extra,
+      );
     }
-    return RinfService.instance.create(sourceType, url, dest, userId, extra: extra);
+    return RinfService.instance.create(
+      sourceType,
+      url,
+      dest,
+      userId,
+      extra: extra,
+    );
   }
 
   Future<({bool success, String? error})> cancel(
@@ -398,7 +414,16 @@ class BridgeService {
     return RinfService.instance.getCurrentVersion(app);
   }
 
-  Future<({String? version, String? tagName, String? releaseNotes, String? publishedAt, String? error})> getLatestVersion(
+  Future<
+    ({
+      String? version,
+      String? tagName,
+      String? releaseNotes,
+      String? publishedAt,
+      String? error,
+    })
+  >
+  getLatestVersion(
     String owner,
     String repo, {
     bool nightly = false,
@@ -406,7 +431,10 @@ class BridgeService {
   }) async {
     if (_isRemote) {
       final info = await APIService.instance.getLatestVersion(
-        owner, repo, nightly: nightly, atomic: atomic,
+        owner,
+        repo,
+        nightly: nightly,
+        atomic: atomic,
       );
       return (
         version: info?.version,
@@ -417,7 +445,10 @@ class BridgeService {
       );
     }
     return RinfService.instance.getLatestVersion(
-      owner, repo, nightly: nightly, atomic: atomic,
+      owner,
+      repo,
+      nightly: nightly,
+      atomic: atomic,
     );
   }
 
@@ -1036,7 +1067,15 @@ class BridgeService {
   // ListenBrainz: Get Recommendations
   // ---------------------------------------------------------------------------
 
-  Future<({List<DiscoveryRecording> recordings, String? playlistTitle, String? playlistId, int? playlistCount})> getLBRecommendations({
+  Future<
+    ({
+      List<DiscoveryRecording> recordings,
+      String? playlistTitle,
+      String? playlistId,
+      int? playlistCount,
+    })
+  >
+  getLBRecommendations({
     required String recType,
     int? count,
     int? offset,
@@ -1052,7 +1091,12 @@ class BridgeService {
     }
     final userId = SettingsManager.currentUserId.value ?? '';
     if (userId.isEmpty) {
-      return (recordings: <DiscoveryRecording>[], playlistTitle: null, playlistId: null, playlistCount: null);
+      return (
+        recordings: <DiscoveryRecording>[],
+        playlistTitle: null,
+        playlistId: null,
+        playlistCount: null,
+      );
     }
     final response = await RinfService.instance.getLBRecommendations(
       userId,
@@ -1062,7 +1106,12 @@ class BridgeService {
       index: index,
     );
     if (response == null) {
-      return (recordings: <DiscoveryRecording>[], playlistTitle: null, playlistId: null, playlistCount: null);
+      return (
+        recordings: <DiscoveryRecording>[],
+        playlistTitle: null,
+        playlistId: null,
+        playlistCount: null,
+      );
     }
     return (
       recordings: response.recommendations,
@@ -1094,16 +1143,30 @@ class BridgeService {
   // ListenBrainz: Sync Recommendation Tracks (consolidated)
   // ---------------------------------------------------------------------------
 
-  Future<({bool success, List<String> addedSources, List<String> removedSources, int tracksAdded, int tracksRemoved, String? error})>
-  syncRecs({
-    required String includedKeys,
-  }) async {
+  Future<
+    ({
+      bool success,
+      List<String> addedSources,
+      List<String> removedSources,
+      int tracksAdded,
+      int tracksRemoved,
+      String? error,
+    })
+  >
+  syncRecs({required String includedKeys}) async {
     if (_isRemote) {
       return APIService.instance.syncRecs(includedKeys: includedKeys);
     }
     final userId = SettingsManager.currentUserId.value ?? '';
     if (userId.isEmpty) {
-      return (success: false, addedSources: <String>[], removedSources: <String>[], tracksAdded: 0, tracksRemoved: 0, error: 'Not logged in' as String?);
+      return (
+        success: false,
+        addedSources: <String>[],
+        removedSources: <String>[],
+        tracksAdded: 0,
+        tracksRemoved: 0,
+        error: 'Not logged in' as String?,
+      );
     }
     final response = await RinfService.instance.syncRecs(
       userId: userId,
@@ -1111,8 +1174,12 @@ class BridgeService {
     );
     return (
       success: response?.success ?? false,
-      addedSources: response != null ? List<String>.from(response.addedSources) : <String>[],
-      removedSources: response != null ? List<String>.from(response.removedSources) : <String>[],
+      addedSources: response != null
+          ? List<String>.from(response.addedSources)
+          : <String>[],
+      removedSources: response != null
+          ? List<String>.from(response.removedSources)
+          : <String>[],
       tracksAdded: response?.tracksAdded ?? 0,
       tracksRemoved: response?.tracksRemoved ?? 0,
       error: response?.error,

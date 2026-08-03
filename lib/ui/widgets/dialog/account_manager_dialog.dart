@@ -20,8 +20,7 @@ class AccountManagerDialog extends StatelessWidget {
         child: ValueListenableBuilder<List<Account>>(
           valueListenable: SettingsManager.accounts,
           builder: (context, accounts, _) {
-            final isAdmin =
-                SettingsManager.currentUser.value?.role == 'admin';
+            final isAdmin = SettingsManager.currentUser.value?.role == 'admin';
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: kIsWeb
@@ -57,30 +56,32 @@ class AccountManagerDialog extends StatelessWidget {
                             final account = accounts[index];
                             final isCurrent =
                                 account.username ==
-                                        SettingsManager.currentUser.value
-                                            ?.username &&
-                                    account.host ==
-                                        SettingsManager.serverHost.value &&
-                                    account.port ==
-                                        SettingsManager.serverPort.value;
+                                    SettingsManager
+                                        .currentUser
+                                        .value
+                                        ?.username &&
+                                account.host ==
+                                    SettingsManager.serverHost.value &&
+                                account.port ==
+                                    SettingsManager.serverPort.value;
 
                             return ListTile(
                               leading: Icon(
                                 Icons.dns,
                                 size:
-                                    AppTheme.iconMD * AppTheme.iconScale(context),
+                                    AppTheme.iconMD *
+                                    AppTheme.iconScale(context),
                               ),
                               title: Text(account.label),
-                              subtitle: Text(
-                                "${account.host}:${account.port}",
-                              ),
+                              subtitle: Text("${account.host}:${account.port}"),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   if (isCurrent)
                                     Icon(
                                       Icons.check,
-                                      size: AppTheme.iconMD *
+                                      size:
+                                          AppTheme.iconMD *
                                           AppTheme.iconScale(context),
                                       color: Colors.green,
                                     ),
@@ -88,17 +89,22 @@ class AccountManagerDialog extends StatelessWidget {
                                     IconButton(
                                       icon: Icon(
                                         Icons.edit,
-                                        size: AppTheme.iconMD *
+                                        size:
+                                            AppTheme.iconMD *
                                             AppTheme.iconScale(context),
                                       ),
                                       onPressed: () {
-                                        _showEditAccountDialog(context, account);
+                                        _showEditAccountDialog(
+                                          context,
+                                          account,
+                                        );
                                       },
                                     ),
                                   IconButton(
                                     icon: Icon(
                                       Icons.delete,
-                                      size: AppTheme.iconMD *
+                                      size:
+                                          AppTheme.iconMD *
                                           AppTheme.iconScale(context),
                                     ),
                                     onPressed: () {

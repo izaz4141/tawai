@@ -85,7 +85,11 @@ class _EditableCoverState extends State<EditableCover> {
                       onTap: widget.onRevertCover,
                       child: Padding(
                         padding: const EdgeInsets.all(2),
-                        child: Icon(Icons.undo, size: 16, color: colors.onSurfaceVariant),
+                        child: Icon(
+                          Icons.undo,
+                          size: 16,
+                          color: colors.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ),

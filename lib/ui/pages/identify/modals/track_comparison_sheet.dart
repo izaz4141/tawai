@@ -248,10 +248,11 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     if (albumMbid == null) return;
     setState(() => _downloadingCover = true);
     final bytes = await widget.controller.downloadCover(albumMbid);
-    if (mounted) setState(() {
-      _downloadingCover = false;
-      _coverBytes = bytes;
-    });
+    if (mounted)
+      setState(() {
+        _downloadingCover = false;
+        _coverBytes = bytes;
+      });
   }
 
   Future<void> _apply() async {
@@ -280,24 +281,26 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
       );
       if (!mounted) return;
       if (result.success) {
-        Navigator.of(context).pop(ComparisonSheetResult(
-          applied: true,
-          title: _titleCtrl.text,
-          artist: _artistCtrl.text,
-          album: _albumCtrl.text,
-          discNum: _discNumCtrl.text.isNotEmpty
-              ? int.tryParse(_discNumCtrl.text)
-              : null,
-          trackNum: _trackNumCtrl.text.isNotEmpty
-              ? int.tryParse(_trackNumCtrl.text)
-              : null,
-          releaseDate: _yearCtrl.text.isNotEmpty ? _yearCtrl.text : null,
-          mbidRecording: _appliedRemoteRecId,
-          mbidAlbum: _appliedRemoteAlbumId,
-          mbidArtist: _appliedRemoteArtistId,
-          lyrics: _lyricsCtrl.text.isNotEmpty ? _lyricsCtrl.text : null,
-          coverBytes: _coverBytes,
-        ));
+        Navigator.of(context).pop(
+          ComparisonSheetResult(
+            applied: true,
+            title: _titleCtrl.text,
+            artist: _artistCtrl.text,
+            album: _albumCtrl.text,
+            discNum: _discNumCtrl.text.isNotEmpty
+                ? int.tryParse(_discNumCtrl.text)
+                : null,
+            trackNum: _trackNumCtrl.text.isNotEmpty
+                ? int.tryParse(_trackNumCtrl.text)
+                : null,
+            releaseDate: _yearCtrl.text.isNotEmpty ? _yearCtrl.text : null,
+            mbidRecording: _appliedRemoteRecId,
+            mbidAlbum: _appliedRemoteAlbumId,
+            mbidArtist: _appliedRemoteArtistId,
+            lyrics: _lyricsCtrl.text.isNotEmpty ? _lyricsCtrl.text : null,
+            coverBytes: _coverBytes,
+          ),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -456,7 +459,8 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
                       onApply: () => setState(
                         () => _appliedRemoteRecId = widget.correctTrack.id,
                       ),
-                      onRevert: () => setState(() => _appliedRemoteRecId = null),
+                      onRevert: () =>
+                          setState(() => _appliedRemoteRecId = null),
                       textTheme: textTheme,
                       colors: colors,
                     ),
@@ -468,7 +472,8 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
                       onApply: () => setState(
                         () => _appliedRemoteAlbumId = widget.album.albumMbid,
                       ),
-                      onRevert: () => setState(() => _appliedRemoteAlbumId = null),
+                      onRevert: () =>
+                          setState(() => _appliedRemoteAlbumId = null),
                       textTheme: textTheme,
                       colors: colors,
                     ),
@@ -478,10 +483,11 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
                       remote: widget.album.releaseArtistMbid ?? '',
                       applied: _appliedRemoteArtistId != null,
                       onApply: () => setState(
-                        () =>
-                            _appliedRemoteArtistId = widget.album.releaseArtistMbid,
+                        () => _appliedRemoteArtistId =
+                            widget.album.releaseArtistMbid,
                       ),
-                      onRevert: () => setState(() => _appliedRemoteArtistId = null),
+                      onRevert: () =>
+                          setState(() => _appliedRemoteArtistId = null),
                       textTheme: textTheme,
                       colors: colors,
                     ),
@@ -726,7 +732,10 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
                   ? ShimmerWidget(height: 68, controller: _shimmerController)
                   : SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
-                      child: Text(_remoteLyricsDisplay, style: textTheme.bodySmall),
+                      child: Text(
+                        _remoteLyricsDisplay,
+                        style: textTheme.bodySmall,
+                      ),
                     ),
             ),
           ),

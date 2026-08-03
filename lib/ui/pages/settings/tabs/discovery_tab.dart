@@ -114,8 +114,13 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
 
   int _stageIndex(String stage) {
     const stages = [
-      'enumerating', 'comparing', 'diffing',
-      'scanning', 'cleaning', 'cover_update', 'done',
+      'enumerating',
+      'comparing',
+      'diffing',
+      'scanning',
+      'cleaning',
+      'cover_update',
+      'done',
     ];
     return stages.indexOf(stage);
   }
@@ -129,11 +134,13 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
         return '${src}Phase 2/6 — Comparing with database...';
       case 'diffing':
         return '${src}Phase 3/6 — Computing differences...';
-      case 'scanning': {
-        final sub =
-            p.totalFiles > 0 ? ' (${p.filesScanned}/${p.totalFiles})' : '';
-        return '${src}Phase 4/6 — Scanning files$sub...';
-      }
+      case 'scanning':
+        {
+          final sub = p.totalFiles > 0
+              ? ' (${p.filesScanned}/${p.totalFiles})'
+              : '';
+          return '${src}Phase 4/6 — Scanning files$sub...';
+        }
       case 'cleaning':
         return '${src}Phase 5/6 — Cleaning removed files...';
       case 'cover_update':
@@ -287,9 +294,7 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                 if (scanning && p != null) ...[
                   Padding(
                     padding: EdgeInsets.only(top: 8),
-                    child: LinearProgressIndicator(
-                      value: _progressValue(p),
-                    ),
+                    child: LinearProgressIndicator(value: _progressValue(p)),
                   ),
                   Padding(
                     padding: EdgeInsets.only(top: 4),
@@ -306,8 +311,9 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                       child: Text(
                         p.currentFile,
                         style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant
-                              .withValues(alpha: 0.6),
+                          color: colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.6,
+                          ),
                         ),
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
@@ -347,7 +353,7 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                       ],
                     ),
                   ],
-                ]
+                ],
               ],
             );
           },
@@ -364,27 +370,25 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
         SizedBox(height: AppTheme.spaceXL * AppTheme.spaceScale(context)),
 
         // Metadata section
-        const SectionHeader(
-          title: 'Metadata',
-          leading: Icon(Icons.tag),
-        ),
+        const SectionHeader(title: 'Metadata', leading: Icon(Icons.tag)),
         SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
         ValueListenableBuilder<String>(
           valueListenable: SettingsManager.namingPattern,
           builder: (context, value, _) {
-            final isAdmin =
-                SettingsManager.currentUser.value?.role == 'admin';
+            final isAdmin = SettingsManager.currentUser.value?.role == 'admin';
             return ListDropdown(
               title: 'Naming Format',
               subtitle: 'Pattern for organizing files.',
               valueListenable: SettingsManager.namingPattern,
               items: const [
                 DropdownMenuItem(
-                  value: '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}',
+                  value:
+                      '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}',
                   child: Text('Picard-style'),
                 ),
                 DropdownMenuItem(
-                  value: '{album}{album_disambiguation? (|)}/{album_artist?|_}{album?|_}{disc_prefix}{track_padded}_{title}',
+                  value:
+                      '{album}{album_disambiguation? (|)}/{album_artist?|_}{album?|_}{disc_prefix}{track_padded}_{title}',
                   child: Text('Album/DirPrefix_TrackNo_Title'),
                 ),
                 DropdownMenuItem(
@@ -427,9 +431,14 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
         SizedBox(height: AppTheme.spaceLG * AppTheme.spaceScale(context)),
         ListSwitch(
           title: 'Prefer synced lyrics',
-          subtitle: 'When available, prefer synced (timed) lyrics over plain text',
+          subtitle:
+              'When available, prefer synced (timed) lyrics over plain text',
           valueListenable: SettingsManager.lyricsPrefersync,
-          onChanged: (v) => SettingsManager.saveUserSetting(SettingsManager.lyricsPrefersync, 'lyrics_prefersync', v),
+          onChanged: (v) => SettingsManager.saveUserSetting(
+            SettingsManager.lyricsPrefersync,
+            'lyrics_prefersync',
+            v,
+          ),
         ),
         SizedBox(height: AppTheme.spaceLG * AppTheme.spaceScale(context)),
         Text(
@@ -443,17 +452,18 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
         SizedBox(height: AppTheme.spaceXL * AppTheme.spaceScale(context)),
 
         // Discovery section
-        const SectionHeader(
-          title: 'Discovery',
-          leading: Icon(Icons.explore),
-        ),
+        const SectionHeader(title: 'Discovery', leading: Icon(Icons.explore)),
         SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
         ListTextField(
           title: 'ListenBrainz Token',
           subtitle: 'Required for scrobbling and music discovery',
           valueListenable: SettingsManager.listenbrainzToken,
           isObscured: true,
-          onConfirm: (value) => SettingsManager.saveUserSetting(SettingsManager.listenbrainzToken, 'listenbrainz_token', value),
+          onConfirm: (value) => SettingsManager.saveUserSetting(
+            SettingsManager.listenbrainzToken,
+            'listenbrainz_token',
+            value,
+          ),
         ),
         SizedBox(height: AppTheme.spaceLG * AppTheme.spaceScale(context)),
 

@@ -66,8 +66,9 @@ class _AlbumActionSheet extends StatelessWidget {
             label: 'Play All',
             onTap: () async {
               Navigator.pop(context);
-              final tracks = await BridgeService.instance
-                  .getTracks(albumId: album.id);
+              final tracks = await BridgeService.instance.getTracks(
+                albumId: album.id,
+              );
               if (tracks.isNotEmpty) {
                 await PlaybackService.instance.play(tracks);
               }
@@ -78,8 +79,9 @@ class _AlbumActionSheet extends StatelessWidget {
             label: 'Shuffle Play',
             onTap: () async {
               Navigator.pop(context);
-              final tracks = await BridgeService.instance
-                  .getTracks(albumId: album.id);
+              final tracks = await BridgeService.instance.getTracks(
+                albumId: album.id,
+              );
               if (tracks.isNotEmpty) {
                 tracks.shuffle(Random());
                 await PlaybackService.instance.play(tracks);
@@ -91,8 +93,9 @@ class _AlbumActionSheet extends StatelessWidget {
             label: 'Add to Queue',
             onTap: () async {
               Navigator.pop(context);
-              final tracks = await BridgeService.instance
-                  .getTracks(albumId: album.id);
+              final tracks = await BridgeService.instance.getTracks(
+                albumId: album.id,
+              );
               for (final track in tracks) {
                 PlaybackService.instance.queueLast(track);
               }

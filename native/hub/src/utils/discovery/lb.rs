@@ -56,72 +56,69 @@ pub async fn handle_get_lb_recommendations(context: Arc<AppContext>) {
 
         let source = tawai_core::libsources::RecommendationSource::from_api_rec_type(&msg.rec_type);
 
-        let (mut hub_recs, playlist_title, playlist_id, playlist_count, error) =
-            match source {
-                Some(src) => match src.api_type {
-                    tawai_core::libsources::ApiType::Recommendations => {
-                        match listenbrainz::fetch_recommendations(
-                            context.client(),
-                            &token,
-                            &user_name,
-                            &msg.rec_type,
-                            msg.count,
-                            msg.offset,
-                        )
-                        .await
-                        {
-                            Ok(recs) => {
-                                let core: Vec<
-                                    tawai_core::signals::discovery::DiscoveryRecording,
-                                > = recs.into_iter().map(Into::into).collect();
-                                let hub: Vec<DiscoveryRecording> =
-                                    core.into_iter().map(Into::into).collect();
-                                (hub, None, None, None, None)
-                            }
-                            Err(e) => (vec![], None, None, None, Some(e.to_string())),
-                        }
-                    }
-                    tawai_core::libsources::ApiType::CreatedFor => {
-                        let filter = src.created_for_filter();
-                        let idx = msg.index.unwrap_or(0);
-                        match listenbrainz::fetch_createdfor(
-                            context.client(),
-                            &token,
-                            &user_name,
-                            filter,
-                            idx,
-                        )
-                        .await
-                        {
-                            Ok(cr) => {
-                                let core: Vec<
-                                    tawai_core::signals::discovery::DiscoveryRecording,
-                                > = cr.recordings.into_iter().map(Into::into).collect();
-                                let hub: Vec<DiscoveryRecording> =
-                                    core.into_iter().map(Into::into).collect();
-                                (
-                                    hub,
-                                    Some(cr.playlist_title),
-                                    Some(cr.playlist_id),
-                                    Some(cr.playlist_count),
-                                    None,
-                                )
-                            }
-                            Err(e) => (vec![], None, None, None, Some(e.to_string())),
-                        }
-                    }
-                },
-                None => {
-                    logger::error(&format!("unknown recommendation type: {}", msg.rec_type));
-                    (
-                        vec![],
-                        None,
-                        None,
-                        None,
-                        Some(format!("unknown recommendation type: {}", msg.rec_type)),
+        let (mut hub_recs, playlist_title, playlist_id, playlist_count, error) = match source {
+            Some(src) => match src.api_type {
+                tawai_core::libsources::ApiType::Recommendations => {
+                    match listenbrainz::fetch_recommendations(
+                        context.client(),
+                        &token,
+                        &user_name,
+                        &msg.rec_type,
+                        msg.count,
+                        msg.offset,
                     )
+                    .await
+                    {
+                        Ok(recs) => {
+                            let core: Vec<tawai_core::signals::discovery::DiscoveryRecording> =
+                                recs.into_iter().map(Into::into).collect();
+                            let hub: Vec<DiscoveryRecording> =
+                                core.into_iter().map(Into::into).collect();
+                            (hub, None, None, None, None)
+                        }
+                        Err(e) => (vec![], None, None, None, Some(e.to_string())),
+                    }
                 }
-            };
+                tawai_core::libsources::ApiType::CreatedFor => {
+                    let filter = src.created_for_filter();
+                    let idx = msg.index.unwrap_or(0);
+                    match listenbrainz::fetch_createdfor(
+                        context.client(),
+                        &token,
+                        &user_name,
+                        filter,
+                        idx,
+                    )
+                    .await
+                    {
+                        Ok(cr) => {
+                            let core: Vec<tawai_core::signals::discovery::DiscoveryRecording> =
+                                cr.recordings.into_iter().map(Into::into).collect();
+                            let hub: Vec<DiscoveryRecording> =
+                                core.into_iter().map(Into::into).collect();
+                            (
+                                hub,
+                                Some(cr.playlist_title),
+                                Some(cr.playlist_id),
+                                Some(cr.playlist_count),
+                                None,
+                            )
+                        }
+                        Err(e) => (vec![], None, None, None, Some(e.to_string())),
+                    }
+                }
+            },
+            None => {
+                logger::error(&format!("unknown recommendation type: {}", msg.rec_type));
+                (
+                    vec![],
+                    None,
+                    None,
+                    None,
+                    Some(format!("unknown recommendation type: {}", msg.rec_type)),
+                )
+            }
+        };
 
         if error.is_none() {
             let pool = db.pool();

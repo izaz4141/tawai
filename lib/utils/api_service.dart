@@ -187,14 +187,16 @@ class APIService {
   }
 
   Future<
-      ({
-        bool success,
-        String id,
-        String apiKey,
-        String username,
-        String displayName,
-        String role,
-      })> testLogin({
+    ({
+      bool success,
+      String id,
+      String apiKey,
+      String username,
+      String displayName,
+      String role,
+    })
+  >
+  testLogin({
     required String host,
     required int port,
     required String username,
@@ -711,8 +713,8 @@ class APIService {
             filePath: m['file_path'] as String? ?? '',
             fileSize: m['file_size'] as int?,
             bitrate: m['bitrate'] as int?,
-          trackGain: (m['track_gain'] as num?)?.toDouble(),
-          trackPeak: (m['track_peak'] as num?)?.toDouble(),
+            trackGain: (m['track_gain'] as num?)?.toDouble(),
+            trackPeak: (m['track_peak'] as num?)?.toDouble(),
             mbidRecording: m['mbid_recording'] as String?,
             source: m['source'] as String? ?? 'remote',
             sourceType: m['source_type'] as String? ?? '',
@@ -872,8 +874,8 @@ class APIService {
             filePath: m['file_path'] as String? ?? '',
             fileSize: m['file_size'] as int?,
             bitrate: m['bitrate'] as int?,
-          trackGain: (m['track_gain'] as num?)?.toDouble(),
-          trackPeak: (m['track_peak'] as num?)?.toDouble(),
+            trackGain: (m['track_gain'] as num?)?.toDouble(),
+            trackPeak: (m['track_peak'] as num?)?.toDouble(),
             mbidRecording: m['mbid_recording'] as String?,
             source: m['source'] as String? ?? 'remote',
             sourceType: m['source_type'] as String? ?? '',
@@ -1044,14 +1046,14 @@ class APIService {
             extension: m['extension'] as String?,
           );
         }).toList();
-        return (
-          results: results,
-          success: true,
-          error: null,
-        );
+        return (results: results, success: true, error: null);
       }
       final body = jsonDecode(response.body);
-      return (results: <DlSearchItem>[], success: false, error: body['error'] as String? ?? 'HTTP ${response.statusCode}');
+      return (
+        results: <DlSearchItem>[],
+        success: false,
+        error: body['error'] as String? ?? 'HTTP ${response.statusCode}',
+      );
     } catch (e) {
       log('search error: $e', isError: true);
       return (results: <DlSearchItem>[], success: false, error: e.toString());
@@ -1151,10 +1153,7 @@ class APIService {
     }
   }
 
-  Future<String?> getInfo(
-    String sourceType,
-    String url,
-  ) async {
+  Future<String?> getInfo(String sourceType, String url) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/download/get-info'),
@@ -1201,8 +1200,8 @@ class APIService {
             filePath: m['file_path'] as String? ?? '',
             fileSize: m['file_size'] as int?,
             bitrate: m['bitrate'] as int?,
-          trackGain: (m['track_gain'] as num?)?.toDouble(),
-          trackPeak: (m['track_peak'] as num?)?.toDouble(),
+            trackGain: (m['track_gain'] as num?)?.toDouble(),
+            trackPeak: (m['track_peak'] as num?)?.toDouble(),
             mbidRecording: m['mbid_recording'] as String?,
             artistMbid: m['artist_mbid'] as String?,
             albumMbid: m['album_mbid'] as String?,
@@ -1246,8 +1245,8 @@ class APIService {
             filePath: m['file_path'] as String? ?? '',
             fileSize: m['file_size'] as int?,
             bitrate: m['bitrate'] as int?,
-          trackGain: (m['track_gain'] as num?)?.toDouble(),
-          trackPeak: (m['track_peak'] as num?)?.toDouble(),
+            trackGain: (m['track_gain'] as num?)?.toDouble(),
+            trackPeak: (m['track_peak'] as num?)?.toDouble(),
             mbidRecording: m['mbid_recording'] as String?,
             artistMbid: m['artist_mbid'] as String?,
             albumMbid: m['album_mbid'] as String?,
@@ -1644,14 +1643,16 @@ class APIService {
   // ---------------------------------------------------------------------------
 
   Future<
-      ({
-        bool success,
-        String userId,
-        String username,
-        String displayName,
-        String role,
-        String apiKey,
-      })> updateAccount({
+    ({
+      bool success,
+      String userId,
+      String username,
+      String displayName,
+      String role,
+      String apiKey,
+    })
+  >
+  updateAccount({
     required String currentPassword,
     required String targetUsername,
     String? newUsername,
@@ -1684,7 +1685,8 @@ class APIService {
         return (
           success: true,
           userId: data['user_id'] as String? ?? '',
-          username: data['username'] as String? ?? newUsername ?? targetUsername,
+          username:
+              data['username'] as String? ?? newUsername ?? targetUsername,
           displayName: data['display_name'] as String? ?? '',
           role: data['role'] as String? ?? 'user',
           apiKey: data['api_key'] as String? ?? '',
@@ -1708,14 +1710,16 @@ class APIService {
   }
 
   Future<
-      ({
-        bool success,
-        String userId,
-        String username,
-        String displayName,
-        String role,
-        String apiKey,
-      })> createAccount({
+    ({
+      bool success,
+      String userId,
+      String username,
+      String displayName,
+      String role,
+      String apiKey,
+    })
+  >
+  createAccount({
     required String adminUsername,
     required String adminPassword,
     required String username,
@@ -2610,7 +2614,15 @@ class APIService {
   // ListenBrainz: Get Recommendations
   // ---------------------------------------------------------------------------
 
-  Future<({List<DiscoveryRecording> recordings, String? playlistTitle, String? playlistId, int? playlistCount})> getLBRecommendations({
+  Future<
+    ({
+      List<DiscoveryRecording> recordings,
+      String? playlistTitle,
+      String? playlistId,
+      int? playlistCount,
+    })
+  >
+  getLBRecommendations({
     required String recType,
     int? count,
     int? offset,
@@ -2656,7 +2668,12 @@ class APIService {
     } catch (e) {
       log('getLBRecommendations error: $e', isError: true);
     }
-    return (recordings: <DiscoveryRecording>[], playlistTitle: null, playlistId: null, playlistCount: null);
+    return (
+      recordings: <DiscoveryRecording>[],
+      playlistTitle: null,
+      playlistId: null,
+      playlistCount: null,
+    );
   }
 
   List<DiscoveryRecording> _parseDiscoveryList(List<dynamic> list) {
@@ -2707,19 +2724,23 @@ class APIService {
   // ListenBrainz: Sync Recommendation Tracks (consolidated)
   // ---------------------------------------------------------------------------
 
-  Future<({bool success, List<String> addedSources, List<String> removedSources, int tracksAdded, int tracksRemoved, String? error})>
-  syncRecs({
-    required String includedKeys,
-  }) async {
+  Future<
+    ({
+      bool success,
+      List<String> addedSources,
+      List<String> removedSources,
+      int tracksAdded,
+      int tracksRemoved,
+      String? error,
+    })
+  >
+  syncRecs({required String includedKeys}) async {
     try {
       final userId = SettingsManager.currentUserId.value ?? '';
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/discovery/sync-recs'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({
-          'user_id': userId,
-          'included_keys': includedKeys,
-        }),
+        body: jsonEncode({'user_id': userId, 'included_keys': includedKeys}),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -2735,7 +2756,14 @@ class APIService {
     } catch (e) {
       log('syncRecs error: $e', isError: true);
     }
-    return (success: false, addedSources: <String>[], removedSources: <String>[], tracksAdded: 0, tracksRemoved: 0, error: 'Request failed' as String?);
+    return (
+      success: false,
+      addedSources: <String>[],
+      removedSources: <String>[],
+      tracksAdded: 0,
+      tracksRemoved: 0,
+      error: 'Request failed' as String?,
+    );
   }
 
   void clearAuth() {

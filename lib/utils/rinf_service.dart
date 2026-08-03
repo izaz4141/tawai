@@ -473,10 +473,7 @@ class RinfService {
       extra: extra,
     ).sendSignalToRust();
     final signal = await stream.first;
-    return (
-      success: signal.message.success,
-      error: signal.message.error,
-    );
+    return (success: signal.message.success, error: signal.message.error);
   }
 
   Future<({bool success, String? version, String? error})> testConnection(
@@ -503,15 +500,21 @@ class RinfService {
     final stream = GetCurrentVersionResponse.rustSignalStream.where(
       (s) => s.message.id == id,
     );
-    GetCurrentVersionRequest(
-      id: id,
-      app: app,
-    ).sendSignalToRust();
+    GetCurrentVersionRequest(id: id, app: app).sendSignalToRust();
     final signal = await stream.first;
     return signal.message.version;
   }
 
-  Future<({String? version, String? tagName, String? releaseNotes, String? publishedAt, String? error})> getLatestVersion(
+  Future<
+    ({
+      String? version,
+      String? tagName,
+      String? releaseNotes,
+      String? publishedAt,
+      String? error,
+    })
+  >
+  getLatestVersion(
     String owner,
     String repo, {
     bool nightly = false,
@@ -564,10 +567,7 @@ class RinfService {
     final stream = DownloadsPollResponse.rustSignalStream.where(
       (s) => s.message.id == id,
     );
-    DownloadsPollRequest(
-      id: id,
-      userId: userId,
-    ).sendSignalToRust();
+    DownloadsPollRequest(id: id, userId: userId).sendSignalToRust();
     final signal = await stream.first;
     return signal.message.downloads;
   }
@@ -950,14 +950,16 @@ class RinfService {
   }
 
   Future<
-      ({
-        bool success,
-        String userId,
-        String username,
-        String displayName,
-        String role,
-        String apiKey,
-      })> updateAccount({
+    ({
+      bool success,
+      String userId,
+      String username,
+      String displayName,
+      String role,
+      String apiKey,
+    })
+  >
+  updateAccount({
     required String currentUsername,
     required String currentPassword,
     required String targetUsername,
@@ -992,14 +994,16 @@ class RinfService {
   }
 
   Future<
-      ({
-        bool success,
-        String userId,
-        String username,
-        String displayName,
-        String role,
-        String apiKey,
-      })> createAccount({
+    ({
+      bool success,
+      String userId,
+      String username,
+      String displayName,
+      String role,
+      String apiKey,
+    })
+  >
+  createAccount({
     required String adminUsername,
     required String adminPassword,
     required String username,
@@ -1047,16 +1051,10 @@ class RinfService {
       targetUsername: targetUsername,
     ).sendSignalToRust();
     final signal = await stream.first;
-    return (
-      success: signal.message.success,
-      username: signal.message.username,
-    );
+    return (success: signal.message.success, username: signal.message.username);
   }
 
-  Future<bool> verifyCurrentPassword(
-    String username,
-    String password,
-  ) async {
+  Future<bool> verifyCurrentPassword(String username, String password) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = VerifyCurrentPasswordResponse.rustSignalStream.where(
       (s) => s.message.id == id,
@@ -1097,12 +1095,14 @@ class RinfService {
   }
 
   Future<
-      ({
-        bool success,
-        String? error,
-        Map<String, dynamic>? settings,
-        bool isFirstRun,
-      })> initConfig(String path) async {
+    ({
+      bool success,
+      String? error,
+      Map<String, dynamic>? settings,
+      bool isFirstRun,
+    })
+  >
+  initConfig(String path) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = InitConfigResponse.rustSignalStream.where(
       (s) => s.message.id == id,

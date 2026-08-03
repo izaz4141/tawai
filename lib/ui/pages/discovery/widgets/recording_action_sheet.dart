@@ -49,7 +49,10 @@ class _RecordingActionSheet extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(recording.title, style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    recording.title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   Text(
                     recording.artist,
                     style: Theme.of(context).textTheme.bodySmall,

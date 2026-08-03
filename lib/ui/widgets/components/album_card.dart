@@ -28,8 +28,9 @@ class _AlbumCardState extends State<AlbumCard> {
     if (_isLoading) return;
     setState(() => _isLoading = true);
     try {
-      final tracks = await BridgeService.instance
-          .getTracks(albumId: widget.album.id);
+      final tracks = await BridgeService.instance.getTracks(
+        albumId: widget.album.id,
+      );
       if (mounted) {
         await PlaybackService.instance.play(tracks);
       }
@@ -43,97 +44,96 @@ class _AlbumCardState extends State<AlbumCard> {
     final theme = Theme.of(context);
     return Card(
       child: GestureDetector(
-        onSecondaryTap: AppTheme.isDesktop(context)
-            ? widget.onLongPress
-            : null,
+        onSecondaryTap: AppTheme.isDesktop(context) ? widget.onLongPress : null,
         child: InkWell(
           onTap: widget.onTap,
           onLongPress: widget.onLongPress,
           child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(12)),
-                ),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(12)),
-                      child: CoverImage(
-                        albumId: widget.album.id,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                      ),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(12),
                     ),
-                    Positioned(
-                      right: 8,
-                      bottom: 8,
-                      child: Material(
-                        type: MaterialType.transparency,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
-                          onTap: _playAlbum,
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: _isLoading
-                                  ? SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color:
-                                            theme.colorScheme.onPrimary,
+                  ),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(12),
+                        ),
+                        child: CoverImage(
+                          albumId: widget.album.id,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                        ),
+                      ),
+                      Positioned(
+                        right: 8,
+                        bottom: 8,
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: _playAlbum,
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: _isLoading
+                                    ? SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: theme.colorScheme.onPrimary,
+                                        ),
+                                      )
+                                    : Icon(
+                                        Icons.play_arrow_rounded,
+                                        color: theme.colorScheme.onPrimary,
+                                        size: 24,
                                       ),
-                                    )
-                                  : Icon(
-                                      Icons.play_arrow_rounded,
-                                      color: theme.colorScheme.onPrimary,
-                                      size: 24,
-                                    ),
+                              ),
                             ),
                           ),
                         ),
                       ),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.album.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    Text(
+                      widget.album.artistsString,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall,
                     ),
                   ],
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.album.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall,
-                  ),
-                  Text(
-                    widget.album.artistsString,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
       ),
     );
   }

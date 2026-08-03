@@ -52,10 +52,7 @@ class ListButton extends StatelessWidget {
         width: 250 * AppTheme.spaceScale(context),
         child: Opacity(
           opacity: enabled ? 1.0 : 0.4,
-          child: AbsorbPointer(
-            absorbing: !enabled,
-            child: trailing,
-          ),
+          child: AbsorbPointer(absorbing: !enabled, child: trailing),
         ),
       ),
     );

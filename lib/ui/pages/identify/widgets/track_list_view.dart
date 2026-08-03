@@ -67,7 +67,11 @@ class TrackListView extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             trailing: selected
-                ? Icon(Icons.chevron_right, color: colors.primary, size: AppTheme.iconMD)
+                ? Icon(
+                    Icons.chevron_right,
+                    color: colors.primary,
+                    size: AppTheme.iconMD,
+                  )
                 : null,
             onTap: () => onSelect(t),
           );

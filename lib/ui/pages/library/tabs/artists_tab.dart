@@ -46,9 +46,7 @@ class LibraryArtistsTab extends StatelessWidget {
             subtitle: Text('${a.albumCount} albums · ${a.trackCount} tracks'),
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => ArtistDetailPage(artist: a),
-              ),
+              MaterialPageRoute(builder: (_) => ArtistDetailPage(artist: a)),
             ),
           );
         },

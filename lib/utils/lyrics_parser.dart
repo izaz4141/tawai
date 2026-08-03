@@ -33,13 +33,16 @@ class ParsedLyrics {
         .split('\n')
         .map((line) => LyricsLine(text: line.trimRight()))
         .toList();
-    return ParsedLyrics(lines: lines, synced: false, instrumental: instrumental);
+    return ParsedLyrics(
+      lines: lines,
+      synced: false,
+      instrumental: instrumental,
+    );
   }
 
   static ParsedLyrics _parseLrc(String raw, {bool instrumental = false}) {
     final lines = <LyricsLine>[];
-    final lineRegex =
-        RegExp(r'\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\](.*)');
+    final lineRegex = RegExp(r'\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\](.*)');
     final metaRegex = RegExp(r'^\[(ti|ar|al|by|offset|re|ve):.*\]$');
 
     for (final line in raw.split('\n')) {
@@ -62,16 +65,20 @@ class ParsedLyrics {
         double ms = 0;
         if (m.group(3) != null) {
           final frac = m.group(3)!;
-          ms = frac.length == 2 ? int.parse(frac) * 10.0 : int.parse(frac).toDouble();
+          ms = frac.length == 2
+              ? int.parse(frac) * 10.0
+              : int.parse(frac).toDouble();
         }
-        lines.add(LyricsLine(
-          timestamp: Duration(
-            minutes: minutes,
-            seconds: seconds,
-            milliseconds: ms.round(),
+        lines.add(
+          LyricsLine(
+            timestamp: Duration(
+              minutes: minutes,
+              seconds: seconds,
+              milliseconds: ms.round(),
+            ),
+            text: text,
           ),
-          text: text,
-        ));
+        );
       }
     }
 

@@ -17,8 +17,8 @@ class Account {
     String? label,
     this.role = 'user',
     this.apiKey = '',
-  })  : id = id ?? username,
-        label = label ?? host;
+  }) : id = id ?? username,
+       label = label ?? host;
 
   static Account fromJson(Map<String, dynamic> json) {
     return Account(

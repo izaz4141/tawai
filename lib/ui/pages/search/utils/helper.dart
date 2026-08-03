@@ -26,8 +26,7 @@ String? pickNadekodonFormat(
   switch (quality) {
     case 'low':
       candidates.sort(
-        (a, b) =>
-            ((a['abr'] as num?) ?? 0).compareTo((b['abr'] as num?) ?? 0),
+        (a, b) => ((a['abr'] as num?) ?? 0).compareTo((b['abr'] as num?) ?? 0),
       );
       return candidates.first['format_id'] as String?;
     case 'high':
@@ -57,8 +56,7 @@ String? pickNadekodonFormat(
   }
 
   candidates.sort(
-    (a, b) =>
-        ((b['abr'] as num?) ?? 0).compareTo((a['abr'] as num?) ?? 0),
+    (a, b) => ((b['abr'] as num?) ?? 0).compareTo((a['abr'] as num?) ?? 0),
   );
   return candidates.first['format_id'] as String?;
 }
@@ -67,9 +65,7 @@ SearchResultItem? pickBestMatch(
   List<SearchResultItem> entries,
   String quality,
 ) {
-  final slskdEntries = entries
-      .where((e) => e.sourceType == 'slskd')
-      .toList();
+  final slskdEntries = entries.where((e) => e.sourceType == 'slskd').toList();
   if (slskdEntries.isEmpty) return null;
 
   var candidates = List<SearchResultItem>.from(slskdEntries);
@@ -80,9 +76,7 @@ SearchResultItem? pickBestMatch(
           .where((e) => isLossless(e.filename, e.bitrate ?? 0))
           .toList();
       if (candidates.isEmpty) return null;
-      candidates.sort(
-        (a, b) => b.size.compareTo(a.size),
-      );
+      candidates.sort((a, b) => b.size.compareTo(a.size));
       return candidates.first;
     case 'high':
       candidates = candidates

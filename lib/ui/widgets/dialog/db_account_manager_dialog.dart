@@ -169,10 +169,7 @@ class _DbAccountManagerDialogState extends State<DbAccountManagerDialog> {
                     const SizedBox(height: AppTheme.spaceMD),
                     ElevatedButton.icon(
                       onPressed: _addUser,
-                      icon: Icon(
-                        Icons.add,
-                        size: AppTheme.iconMD * iconScale,
-                      ),
+                      icon: Icon(Icons.add, size: AppTheme.iconMD * iconScale),
                       label: Text("Add User", style: textTheme.bodyMedium),
                     ),
                   ],

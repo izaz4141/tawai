@@ -141,7 +141,11 @@ class SettingsSystemTab extends StatelessWidget {
             DropdownMenuItem(value: '192', child: Text('192 kbps')),
             DropdownMenuItem(value: '128', child: Text('128 kbps')),
           ],
-          onChange: (v) => SettingsManager.saveUserSetting(SettingsManager.preferredBitrate, 'preferred_bitrate', v),
+          onChange: (v) => SettingsManager.saveUserSetting(
+            SettingsManager.preferredBitrate,
+            'preferred_bitrate',
+            v,
+          ),
         ),
       ],
     );

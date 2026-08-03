@@ -127,7 +127,10 @@ class _SearchSettingsSheetState extends State<_SearchSettingsSheet> {
             },
           ),
           SwitchListTile(
-            title: Text('Auto-download best match', style: textTheme.bodyMedium),
+            title: Text(
+              'Auto-download best match',
+              style: textTheme.bodyMedium,
+            ),
             subtitle: Text(
               'Show quick-download bolt button',
               style: textTheme.bodySmall,
@@ -139,7 +142,10 @@ class _SearchSettingsSheetState extends State<_SearchSettingsSheet> {
             },
           ),
           SwitchListTile(
-            title: Text('Enhanced search by default', style: textTheme.bodyMedium),
+            title: Text(
+              'Enhanced search by default',
+              style: textTheme.bodyMedium,
+            ),
             subtitle: Text(
               'Start in MusicBrainz discovery mode',
               style: textTheme.bodySmall,

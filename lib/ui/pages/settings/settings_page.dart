@@ -56,14 +56,8 @@ class _SettingsPageState extends State<SettingsPage>
       tabs.add(const Tab(text: 'Global'));
       tabViews.add(const SettingsGlobalTab());
     }
-    tabs.addAll([
-      const Tab(text: 'System'),
-      const Tab(text: 'Discovery'),
-    ]);
-    tabViews.addAll([
-      const SettingsSystemTab(),
-      const SettingsDiscoveryTab(),
-    ]);
+    tabs.addAll([const Tab(text: 'System'), const Tab(text: 'Discovery')]);
+    tabViews.addAll([const SettingsSystemTab(), const SettingsDiscoveryTab()]);
 
     final tabBar = TabBar(
       isScrollable: true,
@@ -82,10 +76,7 @@ class _SettingsPageState extends State<SettingsPage>
       body: Column(
         children: [
           Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: tabViews,
-            ),
+            child: TabBarView(controller: _tabController, children: tabViews),
           ),
         ],
       ),

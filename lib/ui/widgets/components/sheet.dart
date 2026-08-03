@@ -12,10 +12,9 @@ class GesturePill extends StatelessWidget {
           width: 32,
           height: 4,
           decoration: BoxDecoration(
-            color: Theme.of(context)
-                .colorScheme
-                .onSurface
-                .withValues(alpha: 0.3),
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(2),
           ),
         ),
@@ -38,11 +37,7 @@ class SheetActionItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(label),
-      onTap: onTap,
-    );
+    return ListTile(leading: Icon(icon), title: Text(label), onTap: onTap);
   }
 }
 
@@ -113,9 +108,9 @@ class Sheet extends StatelessWidget {
           if (body != null)
             Expanded(
               child: ScrollConfiguration(
-                behavior: ScrollConfiguration.of(context).copyWith(
-                  scrollbars: false,
-                ),
+                behavior: ScrollConfiguration.of(
+                  context,
+                ).copyWith(scrollbars: false),
                 child: SingleChildScrollView(child: body!),
               ),
             ),

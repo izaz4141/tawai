@@ -143,10 +143,14 @@ class _VolumePopupContentState extends State<_VolumePopupContent> {
             ),
           ),
           Positioned(
-            left: math.min(math.max(popupLeft, 0),
-                MediaQuery.of(context).size.width - widget.width),
-            top: math.min(math.max(popupTop, 0),
-                MediaQuery.of(context).size.height - widget.height),
+            left: math.min(
+              math.max(popupLeft, 0),
+              MediaQuery.of(context).size.width - widget.width,
+            ),
+            top: math.min(
+              math.max(popupTop, 0),
+              MediaQuery.of(context).size.height - widget.height,
+            ),
             child: Material(
               color: Colors.transparent,
               child: StatefulBuilder(
@@ -178,7 +182,8 @@ class _VolumePopupContentState extends State<_VolumePopupContent> {
                       child: Stack(
                         children: [
                           Positioned(
-                            left: trackX, top: _trackPadTop,
+                            left: trackX,
+                            top: _trackPadTop,
                             bottom: _trackPadBottom,
                             child: Container(
                               width: _trackW,
@@ -190,7 +195,8 @@ class _VolumePopupContentState extends State<_VolumePopupContent> {
                           ),
                           if (value > 0)
                             Positioned(
-                              left: trackX, bottom: _trackPadBottom,
+                              left: trackX,
+                              bottom: _trackPadBottom,
                               height: value * trackH,
                               child: Container(
                                 width: _trackW,
@@ -205,7 +211,8 @@ class _VolumePopupContentState extends State<_VolumePopupContent> {
                               left: thumbCenterX - 2.5,
                               top: _trackPadTop + (1 - tv) * trackH - 2.5,
                               child: Container(
-                                width: 5, height: 5,
+                                width: 5,
+                                height: 5,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: value >= tv
@@ -218,7 +225,8 @@ class _VolumePopupContentState extends State<_VolumePopupContent> {
                             left: thumbCenterX - _thumbR,
                             top: thumbY,
                             child: Container(
-                              width: _thumbR * 2, height: _thumbR * 2,
+                              width: _thumbR * 2,
+                              height: _thumbR * 2,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: colors.primary,
@@ -232,7 +240,9 @@ class _VolumePopupContentState extends State<_VolumePopupContent> {
                             ),
                           ),
                           Positioned(
-                            left: 0, right: 0, top: textY,
+                            left: 0,
+                            right: 0,
+                            top: textY,
                             child: Text(
                               '$percent%',
                               textAlign: TextAlign.center,
@@ -244,7 +254,9 @@ class _VolumePopupContentState extends State<_VolumePopupContent> {
                             ),
                           ),
                           Positioned(
-                            left: 0, right: 0, top: _trackPadTop,
+                            left: 0,
+                            right: 0,
+                            top: _trackPadTop,
                             height: trackH,
                             child: GestureDetector(
                               behavior: HitTestBehavior.opaque,

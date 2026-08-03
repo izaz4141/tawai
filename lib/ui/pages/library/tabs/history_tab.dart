@@ -29,58 +29,56 @@ class LibraryHistoryTab extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       itemCount: history.length,
       itemBuilder: (context, index) {
-          final r = history[index];
-          final isJellyfin = r.source == 'jellyfin';
-          return ListTile(
-            leading: CircleAvatar(
-              child: Text(
-                r.trackTitle.isNotEmpty
-                    ? r.trackTitle[0].toUpperCase()
-                    : '?',
-              ),
+        final r = history[index];
+        final isJellyfin = r.source == 'jellyfin';
+        return ListTile(
+          leading: CircleAvatar(
+            child: Text(
+              r.trackTitle.isNotEmpty ? r.trackTitle[0].toUpperCase() : '?',
             ),
-            title: Text(
-              r.trackTitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              '${r.artistName} · ${r.albumTitle} · ${formatTimestamp(r.playedAt)}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (isJellyfin)
-                  Tooltip(
-                    message: 'From Jellyfin',
-                    child: Icon(
-                      Icons.cloud,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  )
-                else if (r.scrobbled)
-                  Tooltip(
-                    message: 'Scrobbled to ListenBrainz',
-                    child: Icon(
-                      Icons.check_circle_outline,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+          ),
+          title: Text(
+            r.trackTitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(
+            '${r.artistName} · ${r.albumTitle} · ${formatTimestamp(r.playedAt)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isJellyfin)
+                Tooltip(
+                  message: 'From Jellyfin',
+                  child: Icon(
+                    Icons.cloud,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
-                const SizedBox(width: 8),
-                Text(
-                  formatDuration(r.durationSecs),
-                  style: Theme.of(context).textTheme.bodySmall,
+                )
+              else if (r.scrobbled)
+                Tooltip(
+                  message: 'Scrobbled to ListenBrainz',
+                  child: Icon(
+                    Icons.check_circle_outline,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
-              ],
-            ),
-            onTap: () => onPlayRecord(r),
-            onLongPress: () => _showActionSheetForRecord(context, r),
-          );
-        },
+              const SizedBox(width: 8),
+              Text(
+                formatDuration(r.durationSecs),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+          onTap: () => onPlayRecord(r),
+          onLongPress: () => _showActionSheetForRecord(context, r),
+        );
+      },
     );
   }
 

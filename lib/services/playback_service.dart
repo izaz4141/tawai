@@ -406,8 +406,7 @@ class PlaybackService {
   }
 
   /// Linear volume factor derived from the current track's gain.
-  double get _gainFactor =>
-      math.pow(10, _gainDb(currentTrack) / 20).toDouble();
+  double get _gainFactor => math.pow(10, _gainDb(currentTrack) / 20).toDouble();
 
   /// Apply the user volume multiplied by the ReplayGain factor.
   Future<void> _applyEffectiveVolume() async {

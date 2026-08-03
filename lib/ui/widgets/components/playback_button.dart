@@ -21,7 +21,8 @@ class PlaybackButton extends StatelessWidget {
     return ValueListenableBuilder<PlayerState>(
       valueListenable: PlaybackService.instance.playerState,
       builder: (context, state, _) {
-        final isLoading = state.processingState == ProcessingState.loading ||
+        final isLoading =
+            state.processingState == ProcessingState.loading ||
             state.processingState == ProcessingState.buffering;
         final touchTarget = iconSize < 48 ? 48.0 : iconSize;
 

@@ -63,7 +63,9 @@ class SettingsManager {
   static final includedRecommendations = ValueNotifier<String>('');
 
   // Naming Pattern
-  static final namingPattern = ValueNotifier<String>('{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}');
+  static final namingPattern = ValueNotifier<String>(
+    '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}',
+  );
 
   // Per-user metadata preferences
   static final lyricsPrefersync = ValueNotifier<bool>(true);
@@ -164,8 +166,7 @@ class SettingsManager {
         json['use_dynamic_color'] ?? defaults['use_dynamic_color'];
     customColor.value = json['custom_color'] ?? defaults['custom_color'];
     if (!fromBackend) {
-      checkNightly.value =
-          json['check_nightly'] ?? defaults['check_nightly'];
+      checkNightly.value = json['check_nightly'] ?? defaults['check_nightly'];
       if (json.containsKey('require_login')) {
         requireLogin.value = json['require_login'] ?? false;
       }
@@ -176,14 +177,14 @@ class SettingsManager {
     nadekodonUrl.value = json['nadekodon_url'] ?? '';
     desiredAudioQuality.value = json['desired_audio_quality'] ?? 'best';
     defaultDownloadSource.value = json['default_download_source'] ?? 'slskd';
-    if (defaultDownloadSource.value == 'ytdlp') defaultDownloadSource.value = 'slskd';
+    if (defaultDownloadSource.value == 'ytdlp')
+      defaultDownloadSource.value = 'slskd';
 
     if (!fromBackend) {
       if (json['playback_volume'] is num) {
         playbackVolume.value = (json['playback_volume'] as num).toDouble();
       } else if (defaults['playback_volume'] is num) {
-        playbackVolume.value =
-            (defaults['playback_volume'] as num).toDouble();
+        playbackVolume.value = (defaults['playback_volume'] as num).toDouble();
       }
 
       if (json['accounts'] != null) {
@@ -300,18 +301,22 @@ class SettingsManager {
     useDynamicColor.value = defaults['use_dynamic_color'] ?? true;
     customColor.value = defaults['custom_color'] ?? 0xFFFF4081;
     checkNightly.value = defaults['check_nightly'] ?? false;
-    namingPattern.value = defaults['naming_pattern'] ?? '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}';
+    namingPattern.value =
+        defaults['naming_pattern'] ??
+        '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}';
   }
 
   static void syncNamingPatternToRust(String pattern) {
     if (PlatformService().isRemote) return;
     final userId = currentUserId.value ?? '';
     if (userId.isEmpty) return;
-    unawaited(BridgeService.instance.setUserSetting(
-      userId,
-      'identify_naming_pattern',
-      pattern,
-    ));
+    unawaited(
+      BridgeService.instance.setUserSetting(
+        userId,
+        'identify_naming_pattern',
+        pattern,
+      ),
+    );
   }
 
   static Future<void> loadAllUserSettings() async {

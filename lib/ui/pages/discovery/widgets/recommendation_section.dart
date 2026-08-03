@@ -59,28 +59,39 @@ class RecommendationSection extends StatelessWidget {
                                     height: 14,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
-                                      color: colors.onPrimaryContainer.withValues(alpha: 0.7),
+                                      color: colors.onPrimaryContainer
+                                          .withValues(alpha: 0.7),
                                     ),
                                   ),
-                                  SizedBox(width: AppTheme.spaceSM * scale * 0.5),
+                                  SizedBox(
+                                    width: AppTheme.spaceSM * scale * 0.5,
+                                  ),
                                   Text(
                                     subtitle!,
-                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                      color: colors.onPrimaryContainer.withValues(alpha: 0.7),
-                                    ),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          color: colors.onPrimaryContainer
+                                              .withValues(alpha: 0.7),
+                                        ),
                                   ),
                                 ],
                               )
                             : Text(
                                 subtitle!,
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                  color: colors.onPrimaryContainer.withValues(alpha: 0.7),
-                                ),
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(
+                                      color: colors.onPrimaryContainer
+                                          .withValues(alpha: 0.7),
+                                    ),
                               ),
                       ),
                     IconButton(
                       icon: const Icon(Icons.chevron_left),
-                      onPressed: canGoPrevious && !navigating ? onPrevious : null,
+                      onPressed: canGoPrevious && !navigating
+                          ? onPrevious
+                          : null,
                       visualDensity: VisualDensity.compact,
                       tooltip: 'Previous',
                     ),
@@ -108,7 +119,9 @@ class RecommendationSection extends StatelessWidget {
     if (loading) {
       return Center(
         child: Padding(
-          padding: EdgeInsets.all(AppTheme.spaceLG * AppTheme.spaceScale(context)),
+          padding: EdgeInsets.all(
+            AppTheme.spaceLG * AppTheme.spaceScale(context),
+          ),
           child: CircularProgressIndicator(color: colors.primary),
         ),
       );
@@ -121,9 +134,7 @@ class RecommendationSection extends StatelessWidget {
         ),
         child: Text(
           'No recommendations available yet.',
-          style: textTheme.bodyMedium?.copyWith(
-            color: colors.onSurfaceVariant,
-          ),
+          style: textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
         ),
       );
     }
@@ -138,9 +149,7 @@ class RecommendationSection extends StatelessWidget {
         itemCount: recordings!.length,
         itemBuilder: (context, index) {
           final rec = recordings![index];
-          return RecordingCard(
-            recording: rec,
-          );
+          return RecordingCard(recording: rec);
         },
       ),
     );

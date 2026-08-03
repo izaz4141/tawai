@@ -61,7 +61,10 @@ class _EnhancedSearchViewState extends State<EnhancedSearchView> {
     );
   }
 
-  Future<void> _onReleaseSelected(RecordingInfo rec, ReleaseInfo release) async {
+  Future<void> _onReleaseSelected(
+    RecordingInfo rec,
+    ReleaseInfo release,
+  ) async {
     setState(() => _searchingSource = true);
     final data = await BridgeService.instance.getReleaseTracks(release.id);
     if (!mounted) return;
@@ -112,8 +115,11 @@ class _EnhancedSearchViewState extends State<EnhancedSearchView> {
             width: AppTheme.iconXL,
             height: AppTheme.iconXL,
             color: colors.surfaceContainerHighest,
-            child: Icon(Icons.music_note,
-                size: AppTheme.iconMD, color: colors.onSurfaceVariant),
+            child: Icon(
+              Icons.music_note,
+              size: AppTheme.iconMD,
+              color: colors.onSurfaceVariant,
+            ),
           ),
         ),
       );
@@ -173,16 +179,19 @@ class _EnhancedSearchViewState extends State<EnhancedSearchView> {
                     if (rec.durationSecs != null)
                       Text(
                         formatDuration(rec.durationSecs),
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: colors.outline),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: colors.outline),
                       ),
                   ],
                 ),
               ),
               const SizedBox(width: AppTheme.spaceSM),
-              Icon(Icons.arrow_forward_ios, size: AppTheme.iconSM, color: colors.outline),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: AppTheme.iconSM,
+                color: colors.outline,
+              ),
             ],
           ),
         ),
@@ -209,16 +218,16 @@ class _EnhancedSearchViewState extends State<EnhancedSearchView> {
 
   @override
   Widget build(BuildContext context) {
-    final sourceLabel =
-        widget.downloadSource == 'slskd' ? 'Soulseek' : 'YouTube';
+    final sourceLabel = widget.downloadSource == 'slskd'
+        ? 'Soulseek'
+        : 'YouTube';
     final textTheme = Theme.of(context).textTheme;
 
     if (_step == _EnhancedStep.viewingResults) {
       return Column(
         children: [
           Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: AppTheme.spaceMD),
+            padding: const EdgeInsets.symmetric(horizontal: AppTheme.spaceMD),
             child: Row(
               children: [
                 IconButton(
@@ -257,22 +266,22 @@ class _EnhancedSearchViewState extends State<EnhancedSearchView> {
           child: widget.searching
               ? const Center(child: CircularProgressIndicator())
               : widget.recordings.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Search MusicBrainz to discover music.',
-                        style: textTheme.bodyMedium,
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: AppTheme.spaceMD),
-                      itemCount: widget.recordings.length,
-                      itemBuilder: (_, i) => Padding(
-                        padding:
-                            const EdgeInsets.only(bottom: AppTheme.spaceXS),
-                        child: _buildRecordingCard(widget.recordings[i]),
-                      ),
-                    ),
+              ? Center(
+                  child: Text(
+                    'Search MusicBrainz to discover music.',
+                    style: textTheme.bodyMedium,
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppTheme.spaceMD,
+                  ),
+                  itemCount: widget.recordings.length,
+                  itemBuilder: (_, i) => Padding(
+                    padding: const EdgeInsets.only(bottom: AppTheme.spaceXS),
+                    child: _buildRecordingCard(widget.recordings[i]),
+                  ),
+                ),
         ),
       ],
     );

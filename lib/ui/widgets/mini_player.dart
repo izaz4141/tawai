@@ -77,7 +77,10 @@ class _MiniPlayerState extends State<MiniPlayer> {
               if (isLoading) {
                 return Container(
                   height: 80,
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(16),
@@ -94,74 +97,77 @@ class _MiniPlayerState extends State<MiniPlayer> {
               return const SizedBox.shrink();
             }
 
-              return AnimatedSlide(
-                offset: Offset(hFrac, vFrac),
-                duration: (_hDrag == 0 && _vDrag == 0)
-                    ? const Duration(milliseconds: 200)
-                    : Duration.zero,
-                curve: Curves.easeOut,
-                child: Opacity(
-                  opacity:
-                      (1 - vFrac.abs()).clamp(0.4, 1.0) *
-                      (1 - hFrac.abs()).clamp(0.6, 1.0),
-                  child: GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const PlayerPage()),
+            return AnimatedSlide(
+              offset: Offset(hFrac, vFrac),
+              duration: (_hDrag == 0 && _vDrag == 0)
+                  ? const Duration(milliseconds: 200)
+                  : Duration.zero,
+              curve: Curves.easeOut,
+              child: Opacity(
+                opacity:
+                    (1 - vFrac.abs()).clamp(0.4, 1.0) *
+                    (1 - hFrac.abs()).clamp(0.6, 1.0),
+                child: GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PlayerPage()),
+                  ),
+                  onHorizontalDragUpdate: _onHorizontalDragUpdate,
+                  onHorizontalDragEnd: _onHorizontalDragEnd,
+                  onVerticalDragUpdate: _onVerticalDragUpdate,
+                  onVerticalDragEnd: _onVerticalDragEnd,
+                  child: Container(
+                    height: 80,
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
                     ),
-                    onHorizontalDragUpdate: _onHorizontalDragUpdate,
-                    onHorizontalDragEnd: _onHorizontalDragEnd,
-                    onVerticalDragUpdate: _onVerticalDragUpdate,
-                    onVerticalDragEnd: _onVerticalDragEnd,
-                    child: Container(
-                      height: 80,
-                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: colors.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: colors.shadow.withAlpha(60),
-                            blurRadius: 12,
-                            offset: const Offset(0, -2),
-                          ),
-                        ],
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _CoverWithPlayPause(track: track),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  _TopRow(track: track),
-                                  const SizedBox(height: 2),
-                                  Row(
-                                    children: [
-                                      Expanded(child: _SeekRow()),
-                                      _DurationLabel(),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                    decoration: BoxDecoration(
+                      color: colors.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colors.shadow.withAlpha(60),
+                          blurRadius: 12,
+                          offset: const Offset(0, -2),
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _CoverWithPlayPause(track: track),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _TopRow(track: track),
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    Expanded(child: _SeekRow()),
+                                    _DurationLabel(),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              );
-            },
-          );
-        },
-      );
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }
 

@@ -200,14 +200,10 @@ impl AppContext {
                     .get("server_host")
                     .and_then(|v| v.as_str())
                     .map(str::to_string)
-                    .unwrap_or_else(|| {
-                        current["server_host"].as_str().unwrap_or("").to_string()
-                    });
+                    .unwrap_or_else(|| current["server_host"].as_str().unwrap_or("").to_string());
                 let old_port = current["server_port"].as_u64().unwrap_or(0);
                 if crate::utils::config::is_local_host(&host) && new_port != old_port {
-                    if let Some(accounts) =
-                        cfg.get_mut("accounts").and_then(|v| v.as_array_mut())
-                    {
+                    if let Some(accounts) = cfg.get_mut("accounts").and_then(|v| v.as_array_mut()) {
                         for acc in accounts.iter_mut() {
                             if let Some(acc_host) = acc["host"].as_str() {
                                 if crate::utils::config::is_local_host(acc_host) {

@@ -32,8 +32,7 @@ class AlphabetIndexScroller<T> extends StatefulWidget {
       _AlphabetIndexScrollerState<T>();
 }
 
-class _AlphabetIndexScrollerState<T>
-    extends State<AlphabetIndexScroller<T>> {
+class _AlphabetIndexScrollerState<T> extends State<AlphabetIndexScroller<T>> {
   final _scrollerKey = GlobalKey();
   final _tooltipNotifier = ValueNotifier<_TooltipData?>(null);
   OverlayEntry? _overlayEntry;
@@ -65,11 +64,12 @@ class _AlphabetIndexScrollerState<T>
       final char = label[0].toUpperCase();
       set.add(RegExp(r'^[A-Z]$').hasMatch(char) ? char : '#');
     }
-    final letters = set.toList()..sort((a, b) {
-      if (a == '#') return 1;
-      if (b == '#') return -1;
-      return a.compareTo(b);
-    });
+    final letters = set.toList()
+      ..sort((a, b) {
+        if (a == '#') return 1;
+        if (b == '#') return -1;
+        return a.compareTo(b);
+      });
     return letters;
   }
 
@@ -200,7 +200,9 @@ class _AlphabetIndexScrollerState<T>
     }
     final label = widget.labelSelector(widget.items[index]);
     final char = label.isEmpty ? null : label[0].toUpperCase();
-    final letter = char != null && RegExp(r'^[A-Z]$').hasMatch(char) ? char : '#';
+    final letter = char != null && RegExp(r'^[A-Z]$').hasMatch(char)
+        ? char
+        : '#';
     _updateCurrentLetter(letter);
   }
 
@@ -263,7 +265,8 @@ class _AlphabetIndexScrollerState<T>
               color: colors.surfaceContainerHighest.withValues(alpha: 0.9),
               child: Column(
                 children: List.generate(letters.length, (i) {
-                  final hilite = (i == activeIndex && _isDragging) || i == currentIndex;
+                  final hilite =
+                      (i == activeIndex && _isDragging) || i == currentIndex;
                   return Expanded(
                     child: Center(
                       child: Text(

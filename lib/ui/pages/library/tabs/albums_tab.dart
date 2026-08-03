@@ -41,7 +41,12 @@ class LibraryAlbumsTab extends StatelessWidget {
       child: GridView.builder(
         controller: scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(8, 8, 8 + AlphabetIndexScroller.kStripWidth, 8),
+        padding: EdgeInsets.fromLTRB(
+          8,
+          8,
+          8 + AlphabetIndexScroller.kStripWidth,
+          8,
+        ),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: crossAxisCount,
           childAspectRatio: 0.85,
@@ -55,9 +60,7 @@ class LibraryAlbumsTab extends StatelessWidget {
             album: a,
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => AlbumDetailPage(album: a),
-              ),
+              MaterialPageRoute(builder: (_) => AlbumDetailPage(album: a)),
             ),
             onLongPress: () => showAlbumActionSheet(context, a),
           );

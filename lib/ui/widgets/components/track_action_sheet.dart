@@ -53,7 +53,8 @@ class _TrackActionSheet extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(track.title, style: theme.textTheme.titleMedium),
-                  if (track.artistsString.isNotEmpty || track.albumTitle.isNotEmpty)
+                  if (track.artistsString.isNotEmpty ||
+                      track.albumTitle.isNotEmpty)
                     Text(
                       '${track.artistsString}${track.albumTitle.isNotEmpty ? ' · ${track.albumTitle}' : ''}',
                       style: theme.textTheme.bodySmall,
@@ -188,12 +189,13 @@ Future<void> _showAddToPlaylistDialog(
 
   if (selected == null || !context.mounted) return;
 
-  final ok = await BridgeService.instance.addTrackToPlaylist(selected, track.id);
+  final ok = await BridgeService.instance.addTrackToPlaylist(
+    selected,
+    track.id,
+  );
   if (!context.mounted) return;
 
   ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(ok ? 'Added to playlist' : 'Failed to add'),
-    ),
+    SnackBar(content: Text(ok ? 'Added to playlist' : 'Failed to add')),
   );
 }

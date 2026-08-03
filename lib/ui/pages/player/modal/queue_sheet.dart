@@ -24,10 +24,9 @@ class QueueSheet extends StatelessWidget {
               children: [
                 Text(
                   'Queue',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -59,10 +58,9 @@ class QueueSheet extends StatelessWidget {
                   key: ValueKey('${track.id}-$index'),
                   decoration: isCurrent
                       ? BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withValues(alpha: 0.08),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.08),
                           border: Border(
                             left: BorderSide(
                               color: Theme.of(context).colorScheme.primary,
@@ -84,8 +82,9 @@ class QueueSheet extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontWeight:
-                              isCurrent ? FontWeight.w600 : FontWeight.normal,
+                          fontWeight: isCurrent
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                         ),
                       ),
                       subtitle: Text(
@@ -93,8 +92,7 @@ class QueueSheet extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      onTap: () =>
-                          PlaybackService.instance.playTrackAt(index),
+                      onTap: () => PlaybackService.instance.playTrackAt(index),
                     ),
                   ),
                 );

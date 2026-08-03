@@ -65,8 +65,9 @@ class SystemService {
     try {
       if (SettingsManager.slskdUrl.value.isNotEmpty) {
         final result = await BridgeService.instance.testConnection('slskd');
-        slskdVersion.value =
-            result.success ? result.version?.replaceAll('"', '') : null;
+        slskdVersion.value = result.success
+            ? result.version?.replaceAll('"', '')
+            : null;
       } else {
         slskdVersion.value = null;
       }
@@ -76,8 +77,7 @@ class SystemService {
 
     try {
       if (SettingsManager.nadekodonUrl.value.isNotEmpty) {
-        final result =
-            await BridgeService.instance.testConnection('nadekodon');
+        final result = await BridgeService.instance.testConnection('nadekodon');
         nadekodonVersion.value = result.success ? result.version : null;
       } else {
         nadekodonVersion.value = null;
@@ -115,8 +115,9 @@ class SystemService {
 
   Future<void> fetchVersions() async {
     // Local tool versions
-    ffmpegVersion.value =
-        await BridgeService.instance.getCurrentVersion('ffmpeg');
+    ffmpegVersion.value = await BridgeService.instance.getCurrentVersion(
+      'ffmpeg',
+    );
 
     // Latest app version
     final latestApp = await BridgeService.instance.getLatestVersion(

@@ -88,18 +88,25 @@ class ToolsPage extends StatelessWidget {
       title: 'Tools',
       body: isDesktop
           ? GridView.extent(
-              padding: EdgeInsets.all(AppTheme.spaceLG * AppTheme.spaceScale(context)),
+              padding: EdgeInsets.all(
+                AppTheme.spaceLG * AppTheme.spaceScale(context),
+              ),
               maxCrossAxisExtent: 260,
               crossAxisSpacing: AppTheme.spaceMD,
               mainAxisSpacing: AppTheme.spaceMD,
               childAspectRatio: 1.1,
-              children: tools.map((t) => _buildCard(t, colors, textTheme)).toList(),
+              children: tools
+                  .map((t) => _buildCard(t, colors, textTheme))
+                  .toList(),
             )
           : ListView.separated(
-              padding: EdgeInsets.all(AppTheme.spaceMD * AppTheme.spaceScale(context)),
+              padding: EdgeInsets.all(
+                AppTheme.spaceMD * AppTheme.spaceScale(context),
+              ),
               itemCount: tools.length,
               separatorBuilder: (_, _) => SizedBox(height: AppTheme.spaceSM),
-              itemBuilder: (context, index) => _buildListTile(tools[index], colors, textTheme),
+              itemBuilder: (context, index) =>
+                  _buildListTile(tools[index], colors, textTheme),
             ),
     );
   }
@@ -116,11 +123,17 @@ class ToolsPage extends StatelessWidget {
             children: [
               Icon(tool.icon, size: 48, color: colors.primary),
               SizedBox(height: AppTheme.spaceSM),
-              Text(tool.label, style: textTheme.titleMedium, textAlign: TextAlign.center),
+              Text(
+                tool.label,
+                style: textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
               SizedBox(height: AppTheme.spaceXS),
               Text(
                 tool.description,
-                style: textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+                style: textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -132,7 +145,11 @@ class ToolsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildListTile(_ToolEntry tool, ColorScheme colors, TextTheme textTheme) {
+  Widget _buildListTile(
+    _ToolEntry tool,
+    ColorScheme colors,
+    TextTheme textTheme,
+  ) {
     return Card(
       child: ListTile(
         leading: Icon(tool.icon, color: colors.primary, size: 32),

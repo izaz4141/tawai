@@ -129,9 +129,7 @@ class _SearchPageState extends State<SearchPage> {
           setState(() => _autoDownloading = false);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                'No results match quality "$quality" for "$query"',
-              ),
+              content: Text('No results match quality "$quality" for "$query"'),
             ),
           );
         }
@@ -151,9 +149,7 @@ class _SearchPageState extends State<SearchPage> {
         setState(() => _autoDownloading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Auto-downloading: ${best.filename.split('/').last}',
-            ),
+            content: Text('Auto-downloading: ${best.filename.split('/').last}'),
           ),
         );
       }
@@ -183,9 +179,9 @@ class _SearchPageState extends State<SearchPage> {
       extra: '{"username": "${entry.username}"}',
     );
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Downloading: ${entry.filename}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Downloading: ${entry.filename}')));
     }
   }
 
@@ -201,7 +197,9 @@ class _SearchPageState extends State<SearchPage> {
       if (infoJson == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to get info for ${entry.title ?? entry.filename}'),
+            content: Text(
+              'Failed to get info for ${entry.title ?? entry.filename}',
+            ),
           ),
         );
         return;
@@ -234,10 +232,7 @@ class _SearchPageState extends State<SearchPage> {
         }
       } else {
         setState(() => _loadingUrls.remove(entry.filename));
-        formatId = await showNadekodonFormatPicker(
-          context,
-          infoJson: infoJson,
-        );
+        formatId = await showNadekodonFormatPicker(context, infoJson: infoJson);
         if (!mounted) return;
         if (formatId == null) return;
       }
@@ -266,9 +261,7 @@ class _SearchPageState extends State<SearchPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Downloading: ${entry.title ?? entry.filename}',
-            ),
+            content: Text('Downloading: ${entry.title ?? entry.filename}'),
           ),
         );
       }

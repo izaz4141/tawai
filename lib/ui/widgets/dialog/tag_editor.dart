@@ -11,14 +11,22 @@ import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/io_service.dart';
 
 const _audioExtensions = [
-  'mp3', 'flac', 'ogg', 'm4a', 'mp4', 'wav',
-  'aiff', 'aac', 'ape', 'mpc', 'wv', 'opus', 'spx',
+  'mp3',
+  'flac',
+  'ogg',
+  'm4a',
+  'mp4',
+  'wav',
+  'aiff',
+  'aac',
+  'ape',
+  'mpc',
+  'wv',
+  'opus',
+  'spx',
 ];
 
-Future<void> showTagEditorDialog(
-  BuildContext context, {
-  String? initialPath,
-}) {
+Future<void> showTagEditorDialog(BuildContext context, {String? initialPath}) {
   return showDialog(
     context: context,
     builder: (_) => _TagEditorDialog(initialPath: initialPath),
@@ -164,8 +172,9 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
       _trackCtrl.text = response.trackNumber > 0
           ? response.trackNumber.toString()
           : '';
-      _discCtrl.text =
-          response.discNumber > 0 ? response.discNumber.toString() : '';
+      _discCtrl.text = response.discNumber > 0
+          ? response.discNumber.toString()
+          : '';
       _yearCtrl.text = response.releaseDate ?? '';
       _lyricsCtrl.text = response.lyrics ?? '';
     } catch (e) {
@@ -201,7 +210,9 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
       if (!mounted) return;
       if (result == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Tag editor is not available on this platform.')),
+          const SnackBar(
+            content: Text('Tag editor is not available on this platform.'),
+          ),
         );
       } else if (result.success) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -247,10 +258,12 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
     );
   }
 
-
-
-  Widget _buildField(String label, TextEditingController controller,
-      {TextInputType? keyboardType, int? maxLines}) {
+  Widget _buildField(
+    String label,
+    TextEditingController controller, {
+    TextInputType? keyboardType,
+    int? maxLines,
+  }) {
     final textTheme = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -315,9 +328,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
       ),
       title: Row(
         children: [
-          Expanded(
-            child: Text(header, style: textTheme.titleMedium),
-          ),
+          Expanded(child: Text(header, style: textTheme.titleMedium)),
           IconButton(
             icon: const Icon(Icons.close),
             onPressed: () => Navigator.of(context).pop(),
@@ -411,7 +422,11 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
         children: [
           _buildFileName(),
           EditableCover(
-            coverBytes: _selectedCover ?? (_tags?.cover != null ? Uint8List.fromList(_tags!.cover!) : null),
+            coverBytes:
+                _selectedCover ??
+                (_tags?.cover != null
+                    ? Uint8List.fromList(_tags!.cover!)
+                    : null),
             replaced: _selectedCover != null,
             onPickCover: _pickCover,
             onRevertCover: () => setState(() => _selectedCover = null),
@@ -421,7 +436,11 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
           _buildField('Album', _albumCtrl),
           _buildField('Album Artist', _albumArtistCtrl),
           _buildField('Genre(s)', _genreCtrl),
-          _buildField('Track #', _trackCtrl, keyboardType: TextInputType.number),
+          _buildField(
+            'Track #',
+            _trackCtrl,
+            keyboardType: TextInputType.number,
+          ),
           _buildField('Disc #', _discCtrl, keyboardType: TextInputType.number),
           _buildField('Year', _yearCtrl),
           _buildField('Lyrics', _lyricsCtrl, maxLines: 5),
@@ -458,5 +477,4 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
       ),
     );
   }
-
 }

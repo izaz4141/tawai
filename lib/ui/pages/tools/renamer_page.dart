@@ -32,7 +32,8 @@ class _RenamerPageState extends State<RenamerPage> {
   void initState() {
     super.initState();
     _patternController.text = SettingsManager.namingPattern.value;
-    _homePath = Platform.environment['HOME'] ??
+    _homePath =
+        Platform.environment['HOME'] ??
         Platform.environment['USERPROFILE'] ??
         '';
     _loadSources();
@@ -117,8 +118,9 @@ class _RenamerPageState extends State<RenamerPage> {
     if (_selectedIndices.isEmpty) return;
     setState(() => _phase = _Phase.loading);
 
-    final selectedPaths =
-        _selectedIndices.map((i) => _previews[i].filePath).toList();
+    final selectedPaths = _selectedIndices
+        .map((i) => _previews[i].filePath)
+        .toList();
 
     try {
       await BridgeService.instance.batchRenameApply(
@@ -137,9 +139,9 @@ class _RenamerPageState extends State<RenamerPage> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
       setState(() => _phase = _Phase.result);
     }
   }
@@ -229,8 +231,11 @@ class _RenamerPageState extends State<RenamerPage> {
           value: null,
           child: Row(
             children: [
-              Icon(Icons.library_music,
-                  size: AppTheme.iconMD, color: colors.primary),
+              Icon(
+                Icons.library_music,
+                size: AppTheme.iconMD,
+                color: colors.primary,
+              ),
               SizedBox(width: AppTheme.spaceSM),
               const Text('All Library'),
             ],
@@ -241,8 +246,11 @@ class _RenamerPageState extends State<RenamerPage> {
             value: src.id,
             child: Row(
               children: [
-                Icon(Icons.folder,
-                    size: AppTheme.iconMD, color: colors.primary),
+                Icon(
+                  Icons.folder,
+                  size: AppTheme.iconMD,
+                  color: colors.primary,
+                ),
                 SizedBox(width: AppTheme.spaceSM),
                 Text(src.name, overflow: TextOverflow.ellipsis),
               ],
@@ -309,15 +317,17 @@ class _RenamerPageState extends State<RenamerPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.drive_file_rename_outline,
-              size: 64, color: colors.onSurfaceVariant),
+          Icon(
+            Icons.drive_file_rename_outline,
+            size: 64,
+            color: colors.onSurfaceVariant,
+          ),
           SizedBox(height: AppTheme.spaceMD),
           Text(
             'Select a source and tap Preview',
-            style: Theme.of(context)
-                .textTheme
-                .bodyLarge
-                ?.copyWith(color: colors.onSurfaceVariant),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
           ),
         ],
       ),
@@ -363,8 +373,11 @@ class _RenamerPageState extends State<RenamerPage> {
           children: [
             Icon(Icons.check_circle, size: 64, color: colors.primary),
             SizedBox(height: AppTheme.spaceMD),
-            Text('All $_conformingCount file(s) already match the pattern',
-                style: textTheme.titleMedium, textAlign: TextAlign.center),
+            Text(
+              'All $_conformingCount file(s) already match the pattern',
+              style: textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       );
@@ -391,8 +404,9 @@ class _RenamerPageState extends State<RenamerPage> {
                   needsRename > 0
                       ? '$needsRename file(s) to rename'
                       : 'No files to rename',
-                  style: textTheme.bodySmall
-                      ?.copyWith(color: colors.onSurfaceVariant),
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
                 ),
               ),
               if (_conformingCount > 0)
@@ -400,8 +414,9 @@ class _RenamerPageState extends State<RenamerPage> {
                   padding: EdgeInsets.only(right: AppTheme.spaceSM),
                   child: Text(
                     '$_conformingCount already match',
-                    style: textTheme.bodySmall
-                        ?.copyWith(color: colors.onSurfaceVariant),
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
                   ),
                 ),
               FilledButton.tonalIcon(
@@ -490,10 +505,7 @@ class _RenamePreviewCard extends StatelessWidget {
           child: Row(
             children: [
               IgnorePointer(
-                child: Checkbox(
-                  value: selected,
-                  onChanged: (_) {},
-                ),
+                child: Checkbox(value: selected, onChanged: (_) {}),
               ),
               SizedBox(width: AppTheme.spaceSM),
               Expanded(
@@ -512,14 +524,18 @@ class _RenamePreviewCard extends StatelessWidget {
                       SizedBox(height: AppTheme.spaceXS),
                       Row(
                         children: [
-                          Icon(Icons.arrow_forward,
-                              size: 14, color: colors.primary),
+                          Icon(
+                            Icons.arrow_forward,
+                            size: 14,
+                            color: colors.primary,
+                          ),
                           SizedBox(width: AppTheme.spaceXS),
                           Expanded(
                             child: Text(
                               newPath,
-                              style: textTheme.bodyMedium
-                                  ?.copyWith(color: colors.primary),
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: colors.primary,
+                              ),
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
                             ),
@@ -530,8 +546,7 @@ class _RenamePreviewCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (isError)
-                Icon(Icons.error, size: 20, color: colors.error),
+              if (isError) Icon(Icons.error, size: 20, color: colors.error),
             ],
           ),
         ),

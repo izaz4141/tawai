@@ -49,19 +49,15 @@ async fn fetch_recording_mbids(
         )
         .await
         .map_err(|e| e.to_string()),
-        ApiType::CreatedFor => listenbrainz::fetch_createdfor(
-            client,
-            token,
-            user_name,
-            source.created_for_filter(),
-            0,
-        )
-        .await
-        .map(|cr| {
-            let _count = cr.recordings.len() as u32;
-            cr.recordings
-        })
-        .map_err(|e| e.to_string()),
+        ApiType::CreatedFor => {
+            listenbrainz::fetch_createdfor(client, token, user_name, source.created_for_filter(), 0)
+                .await
+                .map(|cr| {
+                    let _count = cr.recordings.len() as u32;
+                    cr.recordings
+                })
+                .map_err(|e| e.to_string())
+        }
     }
 }
 

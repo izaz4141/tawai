@@ -142,8 +142,7 @@ pub async fn handle_update_account(
 
     if let Some(display_name) = &payload.display_name {
         if !display_name.is_empty() {
-            if let Err(e) =
-                account::change_display_name(db.pool(), &target.id, display_name).await
+            if let Err(e) = account::change_display_name(db.pool(), &target.id, display_name).await
             {
                 logger::error(&format!("Failed to change display name: {}", e));
                 return (StatusCode::INTERNAL_SERVER_ERROR,).into_response();

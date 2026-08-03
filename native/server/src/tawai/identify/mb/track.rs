@@ -44,37 +44,33 @@ pub async fn handle_identify_track(
         }
     };
 
-        if let Ok(Some((fingerprint, duration))) =
-            library::lookup_fingerprint_by_id(db.pool(), &id).await
-        {
-            match musicbrainz::lookup_by_fingerprint(
-                state.context.client(),
-                &fingerprint,
-                duration,
-            )
+    if let Ok(Some((fingerprint, duration))) =
+        library::lookup_fingerprint_by_id(db.pool(), &id).await
+    {
+        match musicbrainz::lookup_by_fingerprint(state.context.client(), &fingerprint, duration)
             .await
-            {
-                Ok(info) => {
-                    if !info.title.is_empty() {
-                        let first_release = info.releases.first();
-                        let score = if info.acoust_id.is_some() { 0.95 } else { 0.5 };
-                        candidates.push(MatchCandidate {
-                            score,
-                            title: info.title.clone(),
-                            artist: info.artist.clone(),
-                            artist_id: info.artist_id.clone(),
-                            album: first_release.map(|r| r.title.clone()).unwrap_or_default(),
-                            album_id: first_release.map(|r| r.id.clone()),
-                            recording_id: Some(info.id.clone()),
-                            release_date: first_release.and_then(|r| r.date.clone()),
-                            acoust_id: info.acoust_id.clone(),
-                            duration_secs: info.duration_secs,
-                        });
-                    }
+        {
+            Ok(info) => {
+                if !info.title.is_empty() {
+                    let first_release = info.releases.first();
+                    let score = if info.acoust_id.is_some() { 0.95 } else { 0.5 };
+                    candidates.push(MatchCandidate {
+                        score,
+                        title: info.title.clone(),
+                        artist: info.artist.clone(),
+                        artist_id: info.artist_id.clone(),
+                        album: first_release.map(|r| r.title.clone()).unwrap_or_default(),
+                        album_id: first_release.map(|r| r.id.clone()),
+                        recording_id: Some(info.id.clone()),
+                        release_date: first_release.and_then(|r| r.date.clone()),
+                        acoust_id: info.acoust_id.clone(),
+                        duration_secs: info.duration_secs,
+                    });
                 }
-                Err(e) => tawai_core::utils::logger::debug(&format!("AcoustID lookup failed: {e}")),
             }
+            Err(e) => tawai_core::utils::logger::debug(&format!("AcoustID lookup failed: {e}")),
         }
+    }
 
     let path = std::path::Path::new(&track.file_path);
     if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
@@ -118,19 +114,16 @@ pub async fn handle_fingerprint_track(
         _ => return Json(None::<tawai_core::signals::metadata::RecordingInfo>).into_response(),
     };
 
-    let info = match musicbrainz::lookup_by_fingerprint(
-        state.context.client(),
-        &fingerprint,
-        duration,
-    )
-    .await
-    {
-        Ok(info) => info,
-        Err(e) => {
-            tawai_core::utils::logger::debug(&format!("AcoustID lookup failed: {e}"));
-            return Json(None::<tawai_core::signals::metadata::RecordingInfo>).into_response();
-        }
-    };
+    let info =
+        match musicbrainz::lookup_by_fingerprint(state.context.client(), &fingerprint, duration)
+            .await
+        {
+            Ok(info) => info,
+            Err(e) => {
+                tawai_core::utils::logger::debug(&format!("AcoustID lookup failed: {e}"));
+                return Json(None::<tawai_core::signals::metadata::RecordingInfo>).into_response();
+            }
+        };
 
     Json(Some(info)).into_response()
 }

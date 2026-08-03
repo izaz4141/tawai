@@ -92,9 +92,7 @@ class _AuthConfirmDialogState extends State<AuthConfirmDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _isVerifying
-              ? null
-              : () => Navigator.pop(context),
+          onPressed: _isVerifying ? null : () => Navigator.pop(context),
           child: Text("Cancel", style: textTheme.bodyMedium),
         ),
         FilledButton(

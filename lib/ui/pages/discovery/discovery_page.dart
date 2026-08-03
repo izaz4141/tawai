@@ -15,7 +15,11 @@ class _DiscoveryPageState extends State<DiscoveryPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
-  final _lbPlaylistCache = <String, ({List<DiscoveryRecording> recordings, String? title, int count})>{};
+  final _lbPlaylistCache =
+      <
+        String,
+        ({List<DiscoveryRecording> recordings, String? title, int count})
+      >{};
   final _lbExplorationIndexMap = <int, String>{};
 
   @override

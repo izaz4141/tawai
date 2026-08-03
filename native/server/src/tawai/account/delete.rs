@@ -1,9 +1,9 @@
 use crate::server::SharedState;
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::http::header::{HeaderMap, HeaderName};
 use axum::response::IntoResponse;
-use axum::Json;
 use serde::{Deserialize, Serialize};
 use tawai_core::db::account;
 use tawai_core::utils::{logger, security};
@@ -96,10 +96,7 @@ pub async fn handle_delete_account(
 
     if target.role == "admin" {
         let users = account::get_all_users(db.pool()).await.unwrap_or_default();
-        let admin_count = users
-            .iter()
-            .filter(|u| u.role == "admin")
-            .count();
+        let admin_count = users.iter().filter(|u| u.role == "admin").count();
         if admin_count <= 1 {
             return (
                 StatusCode::BAD_REQUEST,

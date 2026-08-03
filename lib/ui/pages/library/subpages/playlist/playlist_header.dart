@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 
 class PlaylistHeader extends StatelessWidget {
-  const PlaylistHeader({
-    super.key,
-    required this.playlist,
-  });
+  const PlaylistHeader({super.key, required this.playlist});
 
   final PlaylistInfo playlist;
 

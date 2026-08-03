@@ -37,7 +37,8 @@ Future<MusicBrainzFetchResult?> showIdentifyDialog(
   String? currentTitle,
   String? currentArtist,
   String? currentAlbum,
-  void Function(RecordingInfo recording, ReleaseInfo release)? onReleaseSelected,
+  void Function(RecordingInfo recording, ReleaseInfo release)?
+  onReleaseSelected,
 }) {
   return showDialog<MusicBrainzFetchResult>(
     context: context,
@@ -56,7 +57,8 @@ class _IdentifyDialog extends StatefulWidget {
   final String? currentTitle;
   final String? currentArtist;
   final String? currentAlbum;
-  final void Function(RecordingInfo recording, ReleaseInfo release)? onReleaseSelected;
+  final void Function(RecordingInfo recording, ReleaseInfo release)?
+  onReleaseSelected;
 
   const _IdentifyDialog({
     this.currentTitle,
@@ -202,18 +204,20 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
       }
     } catch (_) {}
     if (!mounted) return;
-    Navigator.of(context).pop(MusicBrainzFetchResult(
-      title: track.title,
-      artist: rec.artist,
-      artistId: rec.artistId,
-      album: release.title,
-      albumId: release.id,
-      releaseDate: release.date,
-      trackNumber: track.position,
-      discNumber: track.discNumber,
-      mbidRecording: rec.id,
-      coverBytes: coverBytes,
-    ));
+    Navigator.of(context).pop(
+      MusicBrainzFetchResult(
+        title: track.title,
+        artist: rec.artist,
+        artistId: rec.artistId,
+        album: release.title,
+        albumId: release.id,
+        releaseDate: release.date,
+        trackNumber: track.position,
+        discNumber: track.discNumber,
+        mbidRecording: rec.id,
+        coverBytes: coverBytes,
+      ),
+    );
   }
 
   void _goBack() {
@@ -266,9 +270,7 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
               tooltip: 'Back',
               onPressed: _goBack,
             ),
-          Expanded(
-            child: Text(_titleForStage(), style: textTheme.titleMedium),
-          ),
+          Expanded(child: Text(_titleForStage(), style: textTheme.titleMedium)),
           IconButton(
             icon: const Icon(Icons.close),
             onPressed: () => Navigator.of(context).pop(),
@@ -333,28 +335,35 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
           child: _searching
               ? const Center(child: CircularProgressIndicator())
               : _recordings.isEmpty
-                  ? Center(
-                      child: Text(
-                        _hasAutoSearched
-                            ? 'No results found. Try a different query.'
-                            : 'Search for a recording to get started.',
-                        style: textTheme.bodyMedium,
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: _recordings.length,
-                      itemBuilder: (_, i) => Padding(
-                        padding: const EdgeInsets.only(bottom: AppTheme.spaceXS),
-                        child: _buildRecordingCard(_recordings[i], colors, textTheme),
-                      ),
+              ? Center(
+                  child: Text(
+                    _hasAutoSearched
+                        ? 'No results found. Try a different query.'
+                        : 'Search for a recording to get started.',
+                    style: textTheme.bodyMedium,
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: _recordings.length,
+                  itemBuilder: (_, i) => Padding(
+                    padding: const EdgeInsets.only(bottom: AppTheme.spaceXS),
+                    child: _buildRecordingCard(
+                      _recordings[i],
+                      colors,
+                      textTheme,
                     ),
+                  ),
+                ),
         ),
       ],
     );
   }
 
   Widget _buildRecordingCard(
-      RecordingInfo rec, ColorScheme colors, TextTheme textTheme) {
+    RecordingInfo rec,
+    ColorScheme colors,
+    TextTheme textTheme,
+  ) {
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(AppTheme.radiusMD),
@@ -375,9 +384,11 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
                           width: AppTheme.iconXL,
                           height: AppTheme.iconXL,
                           color: colors.surfaceContainerHighest,
-                          child: Icon(Icons.music_note,
-                              size: AppTheme.iconMD,
-                              color: colors.onSurfaceVariant),
+                          child: Icon(
+                            Icons.music_note,
+                            size: AppTheme.iconMD,
+                            color: colors.onSurfaceVariant,
+                          ),
                         ),
                       ),
                     )
@@ -428,8 +439,9 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
                         if (rec.durationSecs != null)
                           Text(
                             _formatDuration(rec.durationSecs),
-                            style: textTheme.bodySmall
-                                ?.copyWith(color: colors.outline),
+                            style: textTheme.bodySmall?.copyWith(
+                              color: colors.outline,
+                            ),
                           ),
                       ],
                     ),
@@ -437,8 +449,11 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
                 ),
               ),
               const SizedBox(width: AppTheme.spaceSM),
-              Icon(Icons.arrow_forward_ios,
-                  size: AppTheme.iconSM, color: colors.outline),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: AppTheme.iconSM,
+                color: colors.outline,
+              ),
             ],
           ),
         ),
@@ -460,8 +475,11 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
           ),
           child: Row(
             children: [
-              Icon(Icons.music_note,
-                  size: AppTheme.iconSM, color: colors.onSurfaceVariant),
+              Icon(
+                Icons.music_note,
+                size: AppTheme.iconSM,
+                color: colors.onSurfaceVariant,
+              ),
               const SizedBox(width: AppTheme.spaceXS),
               Expanded(
                 child: Text(
@@ -490,7 +508,10 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
   }
 
   Widget _buildReleaseCard(
-      ReleaseInfo release, ColorScheme colors, TextTheme textTheme) {
+    ReleaseInfo release,
+    ColorScheme colors,
+    TextTheme textTheme,
+  ) {
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(AppTheme.radiusMD),
@@ -527,8 +548,9 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
                       release.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodyLarge
-                          ?.copyWith(fontWeight: FontWeight.w600),
+                      style: textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     if (release.date != null || release.country != null)
                       Text(
@@ -538,15 +560,19 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
                         ].join(' · '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: textTheme.bodySmall
-                            ?.copyWith(color: colors.onSurfaceVariant),
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
                       ),
                   ],
                 ),
               ),
               const SizedBox(width: AppTheme.spaceSM),
-              Icon(Icons.arrow_forward_ios,
-                  size: AppTheme.iconSM, color: colors.outline),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: AppTheme.iconSM,
+                color: colors.outline,
+              ),
             ],
           ),
         ),
@@ -568,8 +594,11 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
           ),
           child: Row(
             children: [
-              Icon(Icons.album,
-                  size: AppTheme.iconSM, color: colors.onSurfaceVariant),
+              Icon(
+                Icons.album,
+                size: AppTheme.iconSM,
+                color: colors.onSurfaceVariant,
+              ),
               const SizedBox(width: AppTheme.spaceXS),
               Expanded(
                 child: Text(
@@ -588,27 +617,32 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
           child: _loadingTracks
               ? const Center(child: CircularProgressIndicator())
               : _tracks.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No tracks found.',
-                        style: textTheme.bodyMedium,
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: _tracks.length,
-                      itemBuilder: (_, i) => Padding(
-                        padding: const EdgeInsets.only(bottom: AppTheme.spaceXS),
-                        child: _buildTrackRow(
-                          _tracks[i], _tracks[i] == _bestTrack, colors, textTheme),
-                      ),
+              ? Center(
+                  child: Text('No tracks found.', style: textTheme.bodyMedium),
+                )
+              : ListView.builder(
+                  itemCount: _tracks.length,
+                  itemBuilder: (_, i) => Padding(
+                    padding: const EdgeInsets.only(bottom: AppTheme.spaceXS),
+                    child: _buildTrackRow(
+                      _tracks[i],
+                      _tracks[i] == _bestTrack,
+                      colors,
+                      textTheme,
                     ),
+                  ),
+                ),
         ),
       ],
     );
   }
 
   Widget _buildTrackRow(
-      ReleaseTrackInfo track, bool isBestMatch, ColorScheme colors, TextTheme textTheme) {
+    ReleaseTrackInfo track,
+    bool isBestMatch,
+    ColorScheme colors,
+    TextTheme textTheme,
+  ) {
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(AppTheme.radiusMD),

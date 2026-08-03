@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 
 class ArtistHeader extends StatelessWidget {
-  const ArtistHeader({
-    super.key,
-    required this.artist,
-  });
+  const ArtistHeader({super.key, required this.artist});
 
   final ArtistInfo artist;
 

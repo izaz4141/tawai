@@ -40,50 +40,49 @@ class _ColorPickerDialogState extends State<ColorPickerDialog> {
                 border: Border.all(color: colors.outlineVariant),
               ),
             ),
-            SizedBox(
-              height: AppTheme.spaceLG * AppTheme.spaceScale(context),
-            ),
+            SizedBox(height: AppTheme.spaceLG * AppTheme.spaceScale(context)),
             Wrap(
               spacing: AppTheme.spaceSM * AppTheme.spaceScale(context),
               runSpacing: AppTheme.spaceSM * AppTheme.spaceScale(context),
-              children: [
-                Colors.redAccent,
-                Colors.pinkAccent,
-                Colors.purpleAccent,
-                Colors.deepPurpleAccent,
-                Colors.indigoAccent,
-                Colors.blueAccent,
-                Colors.lightBlueAccent,
-                Colors.cyanAccent,
-                Colors.tealAccent,
-                Colors.greenAccent,
-                Colors.lightGreenAccent,
-                Colors.limeAccent,
-                Colors.yellowAccent,
-                Colors.amberAccent,
-                Colors.orangeAccent,
-                Colors.deepOrangeAccent,
-              ].map((color) {
-                return GestureDetector(
-                  onTap: () => setState(() => _selected = color),
-                  child: Container(
-                    width: AppTheme.iconLG * AppTheme.iconScale(context),
-                    height: AppTheme.iconLG * AppTheme.iconScale(context),
-                    decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: BorderRadius.circular(
-                        AppTheme.radiusSM * AppTheme.radiusScale(context),
+              children:
+                  [
+                    Colors.redAccent,
+                    Colors.pinkAccent,
+                    Colors.purpleAccent,
+                    Colors.deepPurpleAccent,
+                    Colors.indigoAccent,
+                    Colors.blueAccent,
+                    Colors.lightBlueAccent,
+                    Colors.cyanAccent,
+                    Colors.tealAccent,
+                    Colors.greenAccent,
+                    Colors.lightGreenAccent,
+                    Colors.limeAccent,
+                    Colors.yellowAccent,
+                    Colors.amberAccent,
+                    Colors.orangeAccent,
+                    Colors.deepOrangeAccent,
+                  ].map((color) {
+                    return GestureDetector(
+                      onTap: () => setState(() => _selected = color),
+                      child: Container(
+                        width: AppTheme.iconLG * AppTheme.iconScale(context),
+                        height: AppTheme.iconLG * AppTheme.iconScale(context),
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusSM * AppTheme.radiusScale(context),
+                          ),
+                          border: _selected == color
+                              ? Border.all(
+                                  color: colors.onSurface,
+                                  width: 2 * AppTheme.spaceScale(context),
+                                )
+                              : null,
+                        ),
                       ),
-                      border: _selected == color
-                          ? Border.all(
-                              color: colors.onSurface,
-                              width: 2 * AppTheme.spaceScale(context),
-                            )
-                          : null,
-                    ),
-                  ),
-                );
-              }).toList(),
+                    );
+                  }).toList(),
             ),
           ],
         ),

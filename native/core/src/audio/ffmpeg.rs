@@ -135,8 +135,7 @@ pub async fn measure_loudness(path: &str) -> anyhow::Result<LoudnessMeasurement>
     Ok(LoudnessMeasurement {
         integrated_lufs: integrated
             .ok_or_else(|| anyhow::anyhow!("could not parse ebur128 loudness for {}", path))?,
-        peak_dbfs: peak.ok_or_else(|| {
-            anyhow::anyhow!("could not parse ebur128 true peak for {}", path)
-        })?,
+        peak_dbfs: peak
+            .ok_or_else(|| anyhow::anyhow!("could not parse ebur128 true peak for {}", path))?,
     })
 }

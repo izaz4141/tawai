@@ -49,63 +49,63 @@ class AlbumTrackRow extends StatelessWidget {
             vertical: AppTheme.spaceSM,
           ),
           child: Row(
-          children: [
-            if (position != null)
-              SizedBox(
-                width: 24,
-                child: Text(
-                  '$position',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: colors.outline),
+            children: [
+              if (position != null)
+                SizedBox(
+                  width: 24,
+                  child: Text(
+                    '$position',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: colors.outline),
+                  ),
                 ),
-              ),
-            const SizedBox(width: AppTheme.spaceSM),
-            Icon(icon, size: AppTheme.iconSM, color: iconColor),
-            const SizedBox(width: AppTheme.spaceSM),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                fontWeight: titleWeight,
-                                color: titleColor,
-                              ),
-                        ),
-                      ),
-                      if (warningIcon)
-                        const Padding(
-                          padding: EdgeInsets.only(left: 4),
-                          child: Icon(
-                            Icons.warning_amber_rounded,
-                            size: 14,
-                            color: Colors.orange,
+              const SizedBox(width: AppTheme.spaceSM),
+              Icon(icon, size: AppTheme.iconSM, color: iconColor),
+              const SizedBox(width: AppTheme.spaceSM),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  fontWeight: titleWeight,
+                                  color: titleColor,
+                                ),
                           ),
                         ),
-                    ],
-                  ),
-                  if (subtitle != null)
-                    Text(
-                      subtitle!,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: subtitleColor ?? colors.outline,
-                      ),
+                        if (warningIcon)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 4),
+                            child: Icon(
+                              Icons.warning_amber_rounded,
+                              size: 14,
+                              color: Colors.orange,
+                            ),
+                          ),
+                      ],
                     ),
-                ],
+                    if (subtitle != null)
+                      Text(
+                        subtitle!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: subtitleColor ?? colors.outline,
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            ?trailing,
-          ],
+              ?trailing,
+            ],
+          ),
         ),
-      ),
       ),
     );
   }

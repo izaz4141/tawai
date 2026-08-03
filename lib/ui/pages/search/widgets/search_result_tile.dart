@@ -78,10 +78,9 @@ class SearchResultTile extends StatelessWidget {
             if (entry.duration != null)
               Text(
                 formatDuration(entry.duration),
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: colors.outline),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.outline),
               ),
           ],
         ),
@@ -89,9 +88,7 @@ class SearchResultTile extends StatelessWidget {
             ? const SizedBox(
                 width: 48,
                 height: 48,
-                child: Center(
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
               )
             : IconButton(
                 icon: const Icon(Icons.download),

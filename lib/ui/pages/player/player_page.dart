@@ -152,7 +152,9 @@ class PlayerPage extends StatelessWidget {
                           label: const Text('Lyrics'),
                           onPressed: () => Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => const LyricsPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const LyricsPage(),
+                            ),
                           ),
                         ),
                         if (RecommendationSource.isDownloadable(
@@ -162,7 +164,8 @@ class PlayerPage extends StatelessWidget {
                           TextButton.icon(
                             icon: const Icon(Icons.download),
                             label: const Text('Download'),
-                            onPressed: () => showTrackDownloadSheet(context, track),
+                            onPressed: () =>
+                                showTrackDownloadSheet(context, track),
                           ),
                         ],
                       ],

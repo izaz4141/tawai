@@ -100,7 +100,9 @@ class _SpinBoxState<T extends num> extends State<SpinBox<T>> {
     final current = widget.valueListenable.value;
     if (current < widget.max) {
       final next = current + _step;
-      widget.valueListenable.value = next > widget.max ? widget.max : _round(next as T);
+      widget.valueListenable.value = next > widget.max
+          ? widget.max
+          : _round(next as T);
     }
   }
 
@@ -108,7 +110,9 @@ class _SpinBoxState<T extends num> extends State<SpinBox<T>> {
     final current = widget.valueListenable.value;
     if (current > widget.min) {
       final next = current - _step;
-      widget.valueListenable.value = next < widget.min ? widget.min : _round(next as T);
+      widget.valueListenable.value = next < widget.min
+          ? widget.min
+          : _round(next as T);
     }
   }
 

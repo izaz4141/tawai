@@ -87,7 +87,11 @@ pub async fn change_role(pool: &SqlitePool, user_id: &str, role: &str) -> Result
     Ok(())
 }
 
-pub async fn change_display_name(pool: &SqlitePool, user_id: &str, display_name: &str) -> Result<()> {
+pub async fn change_display_name(
+    pool: &SqlitePool,
+    user_id: &str,
+    display_name: &str,
+) -> Result<()> {
     sqlx::query("UPDATE users SET display_name = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?")
         .bind(display_name)
         .bind(user_id)

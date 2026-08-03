@@ -95,8 +95,8 @@ class SettingsGlobalTab extends StatelessWidget {
               onPressed: remote
                   ? null
                   : () async {
-                      final p =
-                          await IOServiceFactory.create().getDirectoryPath();
+                      final p = await IOServiceFactory.create()
+                          .getDirectoryPath();
                       if (p != null && context.mounted) {
                         SettingsManager.downloadFolder.value = p;
                       }
@@ -105,8 +105,8 @@ class SettingsGlobalTab extends StatelessWidget {
                 onPressed: remote
                     ? null
                     : () async {
-                        final p =
-                            await IOServiceFactory.create().getDirectoryPath();
+                        final p = await IOServiceFactory.create()
+                            .getDirectoryPath();
                         if (p != null && context.mounted) {
                           SettingsManager.downloadFolder.value = p;
                         }
@@ -167,6 +167,39 @@ class SettingsGlobalTab extends StatelessWidget {
               enabled: available,
               onPressed: available
                   ? () => showConnectServiceDialog(
+                      context: context,
+                      inputs: [
+                        (
+                          'slskd URL',
+                          'Your slskd server URL',
+                          false,
+                          SettingsManager.slskdUrl.value,
+                        ),
+                        (
+                          'slskd API Key',
+                          'Stored encrypted server-side; blank keeps the existing key',
+                          true,
+                          '',
+                        ),
+                      ],
+                      test: (values) async {
+                        final res = await BridgeService.instance.testConnection(
+                          'slskd',
+                        );
+                        return res.success
+                            ? 'Connected! v${res.version ?? '?'}'
+                            : res.error ?? 'Connection failed';
+                      },
+                      onConfirm: (values) async {
+                        SettingsManager.slskdUrl.value = values[0];
+                        await SettingsManager.saveSlskdApiKey(values[1]);
+                        SystemService().checkServiceAvailability();
+                      },
+                    )
+                  : null,
+              trailing: OutlinedButton(
+                onPressed: available
+                    ? () => showConnectServiceDialog(
                         context: context,
                         inputs: [
                           (
@@ -195,38 +228,6 @@ class SettingsGlobalTab extends StatelessWidget {
                           SystemService().checkServiceAvailability();
                         },
                       )
-                  : null,
-              trailing: OutlinedButton(
-                onPressed: available
-                    ? () => showConnectServiceDialog(
-                          context: context,
-                          inputs: [
-                            (
-                              'slskd URL',
-                              'Your slskd server URL',
-                              false,
-                              SettingsManager.slskdUrl.value,
-                            ),
-                            (
-                              'slskd API Key',
-                              'Stored encrypted server-side; blank keeps the existing key',
-                              true,
-                              '',
-                            ),
-                          ],
-                          test: (values) async {
-                            final res = await BridgeService.instance
-                                .testConnection('slskd');
-                            return res.success
-                                ? 'Connected! v${res.version ?? '?'}'
-                                : res.error ?? 'Connection failed';
-                          },
-                          onConfirm: (values) async {
-                            SettingsManager.slskdUrl.value = values[0];
-                            await SettingsManager.saveSlskdApiKey(values[1]);
-                            SystemService().checkServiceAvailability();
-                          },
-                        )
                     : null,
                 child: const Text('Configure'),
               ),
@@ -245,6 +246,39 @@ class SettingsGlobalTab extends StatelessWidget {
               enabled: available,
               onPressed: available
                   ? () => showConnectServiceDialog(
+                      context: context,
+                      inputs: [
+                        (
+                          'Nadekodon URL',
+                          'Your nadekodon server URL',
+                          false,
+                          SettingsManager.nadekodonUrl.value,
+                        ),
+                        (
+                          'Nadekodon API Key',
+                          'Stored encrypted server-side; blank keeps the existing key',
+                          true,
+                          '',
+                        ),
+                      ],
+                      test: (values) async {
+                        final res = await BridgeService.instance.testConnection(
+                          'nadekodon',
+                        );
+                        return res.success
+                            ? 'Connected! v${res.version ?? '?'}'
+                            : res.error ?? 'Connection failed';
+                      },
+                      onConfirm: (values) async {
+                        SettingsManager.nadekodonUrl.value = values[0];
+                        await SettingsManager.saveNadekodonApiKey(values[1]);
+                        SystemService().checkServiceAvailability();
+                      },
+                    )
+                  : null,
+              trailing: OutlinedButton(
+                onPressed: available
+                    ? () => showConnectServiceDialog(
                         context: context,
                         inputs: [
                           (
@@ -273,38 +307,6 @@ class SettingsGlobalTab extends StatelessWidget {
                           SystemService().checkServiceAvailability();
                         },
                       )
-                  : null,
-              trailing: OutlinedButton(
-                onPressed: available
-                    ? () => showConnectServiceDialog(
-                          context: context,
-                          inputs: [
-                            (
-                              'Nadekodon URL',
-                              'Your nadekodon server URL',
-                              false,
-                              SettingsManager.nadekodonUrl.value,
-                            ),
-                            (
-                              'Nadekodon API Key',
-                              'Stored encrypted server-side; blank keeps the existing key',
-                              true,
-                              '',
-                            ),
-                          ],
-                          test: (values) async {
-                            final res = await BridgeService.instance
-                                .testConnection('nadekodon');
-                            return res.success
-                                ? 'Connected! v${res.version ?? '?'}'
-                                : res.error ?? 'Connection failed';
-                          },
-                          onConfirm: (values) async {
-                            SettingsManager.nadekodonUrl.value = values[0];
-                            await SettingsManager.saveNadekodonApiKey(values[1]);
-                            SystemService().checkServiceAvailability();
-                          },
-                        )
                     : null,
                 child: const Text('Configure'),
               ),
