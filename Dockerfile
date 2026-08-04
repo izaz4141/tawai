@@ -16,7 +16,7 @@ COPY web ./web
 COPY assets ./assets
 COPY analysis_options.yaml ./
 
-RUN cargo install rinf_cli --version 8.7.2 && rinf gen
+RUN cargo install rinf_cli --version 8.10.0 && rinf gen
 RUN flutter build web --wasm
 
 # Bake the version into the assets so the status endpoint reports it

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Tawai
+Comment=Music Player
+Exec=tawai
+Icon=tawai
+Type=Application
+Categories=AudioVideo;Audio;Player;Music;
+Terminal=false
