@@ -10,7 +10,7 @@ use anyhow::Result;
 use tokio::sync::{Notify, RwLock, watch};
 
 use crate::audio;
-use crate::db::{account, database::DatabaseManager, history, library_source, user_settings};
+use crate::db::{account, database::DatabaseManager, library_source, user_settings};
 use crate::discovery::sync::{SyncRecsParams, sync_recs};
 use crate::signals::library::ScanProgress;
 use crate::utils::config::{

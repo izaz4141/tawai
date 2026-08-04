@@ -8,7 +8,7 @@ use lofty::tag::Accessor;
 use lofty::tag::ItemKey;
 use lofty::tag::items::Timestamp;
 use std::io::Cursor;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub fn parse_artists(s: &str) -> Vec<String> {
     if s.is_empty() || s == "Unknown Artist" {

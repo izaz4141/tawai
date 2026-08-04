@@ -7,7 +7,7 @@ use reqwest::Client;
 use serde_json::Value;
 
 use crate::db::database::DatabasePool;
-use crate::signals::download::{DlGlance, DlListResponse, DlSearchResponse, DlSearchResult};
+use crate::signals::download::{DlListResponse, DlSearchResponse};
 use crate::utils::config::AppConfig;
 
 pub enum DownloadClient {

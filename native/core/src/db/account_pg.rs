@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sqlx::{PgPool, Row};
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::account;
@@ -111,8 +111,12 @@ pub async fn get_user_by_username(
 ) -> Result<Option<crate::signals::User>> {
     use crate::signals::User;
     let row: Option<(String, String, String, String, String, String, String, String)> = sqlx::query_as(
-        "SELECT id, username, display_name, password_hash, api_key, role, created_at, updated_at FROM users WHERE username = $1",
-    )
+            &format!(
+                "SELECT id, username, display_name, password_hash, api_key, role, {}, {} FROM users WHERE username = $1",
+                super::ts_utc("created_at"),
+                super::ts_utc("updated_at"),
+            ),
+        )
     .bind(username)
     .fetch_optional(pool)
     .await?;
@@ -179,8 +183,12 @@ pub async fn get_user_by_id(
 ) -> Result<Option<crate::signals::User>> {
     use crate::signals::User;
     let row: Option<(String, String, String, String, String, String, String, String)> = sqlx::query_as(
-        "SELECT id, username, display_name, password_hash, api_key, role, created_at, updated_at FROM users WHERE id = $1",
-    )
+            &format!(
+                "SELECT id, username, display_name, password_hash, api_key, role, {}, {} FROM users WHERE id = $1",
+                super::ts_utc("created_at"),
+                super::ts_utc("updated_at"),
+            ),
+        )
     .bind(user_id)
     .fetch_optional(pool)
     .await?;

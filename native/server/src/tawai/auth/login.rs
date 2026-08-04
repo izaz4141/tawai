@@ -43,21 +43,14 @@ pub async fn handle_login(
     let supplied_password = auth.password();
 
     // 1. Try existing JWT
-    match validate_jwt_request(&state, &jar, &headers).await {
-        Ok(claims) => {
-            logger::debug(&format!("[Login] Valid JWT session for '{}'", claims.sub));
-            authorized = true;
-            let db = state.context.db().await;
-            let mk = state.context.master_key.read().await.clone();
-            logged_in_user =
-                tawai_core::db::account::get_user_by_username(db.pool(), &claims.sub, &mk)
-                    .await
-                    .ok()
-                    .flatten();
-        }
-        Err(e) => {
-            logger::debug(&format!("[Login] No valid JWT session: {}", e));
-        }
+    if let Ok(claims) = validate_jwt_request(&state, &jar, &headers).await {
+        authorized = true;
+        let db = state.context.db().await;
+        let mk = state.context.master_key.read().await.clone();
+        logged_in_user = tawai_core::db::account::get_user_by_username(db.pool(), &claims.sub, &mk)
+            .await
+            .ok()
+            .flatten();
     }
 
     // 2. Fall back to Basic auth against DB users table
@@ -69,44 +62,31 @@ pub async fn handle_login(
             Ok(Some(user)) => {
                 match security::validate_password(&user.password_hash, supplied_password) {
                     Ok(true) => {
-                        logger::debug(&format!(
-                            "[Login] Password verified for '{}'",
-                            supplied_username
-                        ));
                         authorized = true;
                         logged_in_user = Some(user);
                     }
-                    Ok(false) => {
-                        logger::warn(&format!(
-                            "[Login] Password mismatch for '{}'",
-                            supplied_username
-                        ));
-                    }
+                    Ok(false) => {}
                     Err(e) => {
                         logger::error(&format!(
                             "[Login] Password check error for '{}': {}",
                             supplied_username, e
                         ));
+                        return (StatusCode::INTERNAL_SERVER_ERROR,).into_response();
                     }
                 }
             }
-            Ok(None) => {
-                logger::warn(&format!("[Login] No user '{}' in DB", supplied_username));
-            }
+            Ok(None) => {}
             Err(e) => {
                 logger::error(&format!(
                     "[Login] DB error looking up '{}': {}",
                     supplied_username, e
                 ));
+                return (StatusCode::INTERNAL_SERVER_ERROR,).into_response();
             }
         }
     }
 
     if !authorized {
-        logger::warn(&format!(
-            "[Login] FAILED for '{}' -> 401",
-            supplied_username
-        ));
         return (StatusCode::UNAUTHORIZED,).into_response();
     }
 

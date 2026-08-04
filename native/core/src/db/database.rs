@@ -4,7 +4,7 @@ use std::{
 };
 use tokio::sync::Notify;
 
-use crate::{app_context::AppContext, db::account, utils::logger};
+use crate::{app_context::AppContext, utils::logger};
 
 #[derive(Debug)]
 pub enum DatabasePool {

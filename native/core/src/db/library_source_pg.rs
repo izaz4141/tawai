@@ -4,12 +4,6 @@ use uuid::Uuid;
 
 use crate::signals::library::LibrarySourceInfo;
 
-fn now() -> String {
-    time::OffsetDateTime::now_utc()
-        .format(&time::format_description::well_known::Rfc3339)
-        .unwrap_or_default()
-}
-
 pub async fn add_source(
     pool: &PgPool,
     user_id: &str,
@@ -19,9 +13,8 @@ pub async fn add_source(
     access_rule: &str,
 ) -> Result<String> {
     let id = Uuid::new_v4().to_string();
-    let now = now();
     sqlx::query(
-        "INSERT INTO library_sources (id, source_type, url, name, owner_id, access_rule, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        "INSERT INTO library_sources (id, source_type, url, name, owner_id, access_rule, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())",
     )
     .bind(&id)
     .bind(source_type)
@@ -29,8 +22,6 @@ pub async fn add_source(
     .bind(name)
     .bind(user_id)
     .bind(access_rule)
-    .bind(&now)
-    .bind(&now)
     .execute(pool)
     .await?;
     Ok(id)
@@ -47,7 +38,12 @@ pub async fn remove_source(pool: &PgPool, source_id: &str) -> Result<bool> {
 
 pub async fn list_all_sources(pool: &PgPool) -> Result<Vec<LibrarySourceInfo>> {
     let rows = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
-        "SELECT id, source_type, url, name, owner_id, access_rule, last_sync_at, created_at, updated_at FROM library_sources ORDER BY created_at",
+        &format!(
+            "SELECT id, source_type, url, name, owner_id, access_rule, {}, {}, {} FROM library_sources ORDER BY created_at",
+            super::ts_utc("last_sync_at"),
+            super::ts_utc("created_at"),
+            super::ts_utc("updated_at"),
+        ),
     )
     .fetch_all(pool)
     .await?;
@@ -84,7 +80,12 @@ pub async fn list_all_sources(pool: &PgPool) -> Result<Vec<LibrarySourceInfo>> {
 
 pub async fn get_source_by_id(pool: &PgPool, source_id: &str) -> Result<Option<LibrarySourceInfo>> {
     let row = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
-        "SELECT id, source_type, url, name, owner_id, access_rule, last_sync_at, created_at, updated_at FROM library_sources WHERE id = $1",
+        &format!(
+            "SELECT id, source_type, url, name, owner_id, access_rule, {}, {}, {} FROM library_sources WHERE id = $1",
+            super::ts_utc("last_sync_at"),
+            super::ts_utc("created_at"),
+            super::ts_utc("updated_at"),
+        ),
     )
     .bind(source_id)
     .fetch_optional(pool)
@@ -143,7 +144,12 @@ pub async fn get_source_by_url_and_owner(
     owner_id: &str,
 ) -> Result<Option<LibrarySourceInfo>> {
     let row = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
-        "SELECT id, source_type, url, name, owner_id, access_rule, last_sync_at, created_at, updated_at FROM library_sources WHERE source_type = $1 AND url = $2 AND owner_id = $3",
+        &format!(
+            "SELECT id, source_type, url, name, owner_id, access_rule, {}, {}, {} FROM library_sources WHERE source_type = $1 AND url = $2 AND owner_id = $3",
+            super::ts_utc("last_sync_at"),
+            super::ts_utc("created_at"),
+            super::ts_utc("updated_at"),
+        ),
     )
     .bind(source_type)
     .bind(url)
@@ -194,19 +200,16 @@ pub async fn upsert_source(
     .await?;
 
     if let Some(id) = existing {
-        let now = now();
-        sqlx::query("UPDATE library_sources SET name = $1, updated_at = $2, last_sync_at = $2 WHERE id = $3")
+        sqlx::query("UPDATE library_sources SET name = $1, updated_at = NOW(), last_sync_at = NOW() WHERE id = $2")
             .bind(name)
-            .bind(&now)
             .bind(&id)
             .execute(pool)
             .await?;
         Ok(id)
     } else {
         let id = Uuid::new_v4().to_string();
-        let now = now();
         sqlx::query(
-            "INSERT INTO library_sources (id, source_type, url, name, owner_id, access_rule, created_at, updated_at, last_sync_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+            "INSERT INTO library_sources (id, source_type, url, name, owner_id, access_rule, created_at, updated_at, last_sync_at) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), NOW())"
         )
         .bind(&id)
         .bind(source_type)
@@ -214,9 +217,6 @@ pub async fn upsert_source(
         .bind(name)
         .bind(owner_id)
         .bind("all")
-        .bind(&now)
-        .bind(&now)
-        .bind(&now)
         .execute(pool)
         .await?;
         Ok(id)
@@ -224,11 +224,11 @@ pub async fn upsert_source(
 }
 
 pub async fn touch_source_sync_at(pool: &PgPool, source_id: &str) -> Result<()> {
-    let now = now();
-    sqlx::query("UPDATE library_sources SET updated_at = $1, last_sync_at = $1 WHERE id = $2")
-        .bind(&now)
-        .bind(source_id)
-        .execute(pool)
-        .await?;
+    sqlx::query(
+        "UPDATE library_sources SET updated_at = NOW(), last_sync_at = NOW() WHERE id = $1",
+    )
+    .bind(source_id)
+    .execute(pool)
+    .await?;
     Ok(())
 }

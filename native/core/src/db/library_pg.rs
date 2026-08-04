@@ -124,10 +124,10 @@ pub async fn list_artists(pool: &PgPool) -> Result<Vec<ArtistInfo>> {
 
 pub async fn list_playlists(pool: &PgPool) -> Result<Vec<PlaylistInfo>> {
     let rows = sqlx::query(
-        r#"SELECT c.id, c.name, c.description, c.is_smart, c.created_at,
-                  (SELECT COUNT(*) FROM collection_tracks ct WHERE ct.collection_id = c.id) AS track_count
-           FROM collections c
-           ORDER BY c.name"#,
+        &format!(
+            "SELECT c.id, c.name, c.description, c.is_smart, {}, (SELECT COUNT(*) FROM collection_tracks ct WHERE ct.collection_id = c.id) AS track_count FROM collections c ORDER BY c.name",
+            super::ts_utc("c.created_at"),
+        ),
     )
     .fetch_all(pool)
     .await?;

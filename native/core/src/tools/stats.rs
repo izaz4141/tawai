@@ -521,7 +521,7 @@ async fn get_library_stats_pg(
         r#"SELECT
                CASE
                  WHEN a.date IS NOT NULL AND LENGTH(a.date) >= 4
-                   THEN CAST(EXTRACT(YEAR FROM DATE(a.date)) / 10 * 10 AS TEXT) || 's'
+                   THEN CAST((CAST(SUBSTR(a.date, 1, 4) AS INTEGER) / 10 * 10) AS TEXT) || 's'
                  ELSE 'Unknown'
                END AS decade,
                COUNT(*)::bigint as cnt

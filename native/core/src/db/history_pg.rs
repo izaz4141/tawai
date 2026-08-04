@@ -29,11 +29,12 @@ pub async fn get_recent_history(
     user_id: &str,
     limit: i32,
 ) -> Result<Vec<PlaybackRecord>> {
-    let rows = sqlx::query(
+    let rows = sqlx::query(&format!(
         r#"SELECT ph.id, ph.track_id, COALESCE(t.title, 'Unknown') AS track_title,
                   COALESCE(a.title, 'Unknown Album') AS album_title,
                   COALESCE(ar.name, 'Unknown Artist') AS artist_name,
-                  ph.played_at, ph.source, ph.scrobbled, t.duration_secs
+                   {},
+                   ph.source, ph.scrobbled, t.duration_secs
            FROM playback_history ph
            LEFT JOIN tracks t ON ph.track_id = t.id
            LEFT JOIN albums a ON t.album_id = a.id
@@ -41,7 +42,8 @@ pub async fn get_recent_history(
            WHERE ph.user_id = $1
            ORDER BY ph.played_at DESC
            LIMIT $2"#,
-    )
+        super::ts_utc("ph.played_at"),
+    ))
     .bind(user_id)
     .bind(limit)
     .fetch_all(pool)

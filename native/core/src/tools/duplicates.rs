@@ -17,15 +17,17 @@ pub struct FindDuplicatesOptions {
     pub source_id: Option<String>,
 }
 
-fn source_filter(source_id: &Option<String>) -> (&'static str, &'static str) {
-    let base_filter = " AND ls.source_type NOT LIKE 'recommendation:%'";
-    if source_id.is_some() {
-        (
-            "WHERE t.source_id = ? AND ls.source_type NOT LIKE 'recommendation:%'",
-            " AND t.source_id = ?",
-        )
-    } else {
-        (base_filter, base_filter)
+fn source_filter(source_id: &Option<String>) -> &'static str {
+    match source_id {
+        Some(_) => " AND ls.source_type NOT LIKE 'recommendation:%' AND t.source_id = ?",
+        None => " AND ls.source_type NOT LIKE 'recommendation:%'",
+    }
+}
+
+fn source_filter_pg(source_id: &Option<String>) -> &'static str {
+    match source_id {
+        Some(_) => " AND ls.source_type NOT LIKE 'recommendation:%' AND t.source_id = $1",
+        None => " AND ls.source_type NOT LIKE 'recommendation:%'",
     }
 }
 
@@ -351,8 +353,7 @@ async fn find_by_fingerprint_pg(
 async fn find_by_title_artist_sq(
     pool: &SqlitePool,
     source_id: &Option<String>,
-    where_clause: &str,
-    _and_clause: &str,
+    filter_clause: &str,
 ) -> Result<Vec<DuplicateGroup>> {
     let sql = format!(
         r#"SELECT LOWER(t.title) AS norm_title, LOWER(COALESCE(ar.name, '')) AS norm_artist,
@@ -360,10 +361,10 @@ async fn find_by_title_artist_sq(
            FROM tracks t
            JOIN artists ar ON t.artist_id = ar.id
            JOIN library_sources ls ON t.source_id = ls.id
-           WHERE ls.source_type NOT LIKE 'recommendation:%' {}
+           WHERE 1=1 {}
            GROUP BY norm_title, norm_artist
            HAVING COUNT(*) > 1"#,
-        where_clause,
+        filter_clause,
     );
     let mut query = sqlx::query(&sql);
     if let Some(sid) = source_id {
@@ -392,8 +393,7 @@ async fn find_by_title_artist_sq(
 async fn find_by_title_artist_pg(
     pool: &sqlx::PgPool,
     source_id: &Option<String>,
-    where_clause: &str,
-    _and_clause: &str,
+    filter_clause: &str,
 ) -> Result<Vec<DuplicateGroup>> {
     let sql = format!(
         r#"SELECT LOWER(t.title) AS norm_title, LOWER(COALESCE(ar.name, '')) AS norm_artist,
@@ -401,10 +401,10 @@ async fn find_by_title_artist_pg(
            FROM tracks t
            JOIN artists ar ON t.artist_id = ar.id
            JOIN library_sources ls ON t.source_id = ls.id
-           WHERE ls.source_type NOT LIKE 'recommendation:%' {}
+           WHERE 1=1 {}
            GROUP BY norm_title, norm_artist
            HAVING COUNT(*) > 1"#,
-        where_clause,
+        filter_clause,
     );
     let mut query = sqlx::query(&sql);
     if let Some(sid) = source_id {
@@ -440,11 +440,11 @@ pub async fn find_duplicates(
     if options.check_file_size_duration {
         let groups = match pool {
             DatabasePool::Sqlite(p) => {
-                let (_, filter) = source_filter(&options.source_id);
+                let filter = source_filter(&options.source_id);
                 find_by_file_size_duration_sq(p, &options.source_id, filter).await?
             }
             DatabasePool::Postgres(p) => {
-                let (_, filter) = source_filter(&options.source_id);
+                let filter = source_filter_pg(&options.source_id);
                 find_by_file_size_duration_pg(p, &options.source_id, filter).await?
             }
         };
@@ -457,11 +457,11 @@ pub async fn find_duplicates(
     if options.check_mbid {
         let groups = match pool {
             DatabasePool::Sqlite(p) => {
-                let (_, filter) = source_filter(&options.source_id);
+                let filter = source_filter(&options.source_id);
                 find_by_mbid_sq(p, &options.source_id, filter).await?
             }
             DatabasePool::Postgres(p) => {
-                let (_, filter) = source_filter(&options.source_id);
+                let filter = source_filter_pg(&options.source_id);
                 find_by_mbid_pg(p, &options.source_id, filter).await?
             }
         };
@@ -476,11 +476,11 @@ pub async fn find_duplicates(
     if options.check_fingerprint {
         let groups = match pool {
             DatabasePool::Sqlite(p) => {
-                let (_, filter) = source_filter(&options.source_id);
+                let filter = source_filter(&options.source_id);
                 find_by_fingerprint_sq(p, &options.source_id, filter).await?
             }
             DatabasePool::Postgres(p) => {
-                let (_, filter) = source_filter(&options.source_id);
+                let filter = source_filter_pg(&options.source_id);
                 find_by_fingerprint_pg(p, &options.source_id, filter).await?
             }
         };
@@ -495,12 +495,12 @@ pub async fn find_duplicates(
     if options.check_title_artist {
         let groups = match pool {
             DatabasePool::Sqlite(p) => {
-                let (where_clause, and_clause) = source_filter(&options.source_id);
-                find_by_title_artist_sq(p, &options.source_id, where_clause, and_clause).await?
+                let filter = source_filter(&options.source_id);
+                find_by_title_artist_sq(p, &options.source_id, filter).await?
             }
             DatabasePool::Postgres(p) => {
-                let (where_clause, and_clause) = source_filter(&options.source_id);
-                find_by_title_artist_pg(p, &options.source_id, where_clause, and_clause).await?
+                let filter = source_filter_pg(&options.source_id);
+                find_by_title_artist_pg(p, &options.source_id, filter).await?
             }
         };
         for g in groups {

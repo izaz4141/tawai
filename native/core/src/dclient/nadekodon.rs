@@ -11,7 +11,7 @@ use crate::utils::config::AppConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct DownloadGlance {
+pub struct DownloadGlance {
     pub id: String,
     pub download_type: String,
     pub name: String,
@@ -25,7 +25,7 @@ struct DownloadGlance {
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct ListResponse {
+pub struct ListResponse {
     pub id: String,
     pub downloads: Vec<DownloadGlance>,
     pub total_count: i64,
@@ -34,7 +34,7 @@ struct ListResponse {
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct CreateResponse {
+pub struct CreateResponse {
     pub id: String,
     pub download_id: String,
     pub success: bool,
@@ -42,7 +42,7 @@ struct CreateResponse {
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct DetailsResponse {
+pub struct DetailsResponse {
     pub id: String,
     pub download_id: String,
     pub name: String,
@@ -58,7 +58,7 @@ struct DetailsResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct PartInfo {
+pub struct PartInfo {
     pub start: i64,
     pub end: i64,
     pub current: i64,
@@ -68,7 +68,7 @@ const TAWAI_CATEGORY: &str = "tawai";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct NadekodonApiLoginResponse {
+pub struct NadekodonApiLoginResponse {
     api_key: String,
     access_token: String,
     csrf_token: String,
@@ -77,14 +77,14 @@ struct NadekodonApiLoginResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct NadekodonApiStatusResponse {
+pub struct NadekodonApiStatusResponse {
     status: String,
     version: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct NadekodonApiCreateRequest {
+pub struct NadekodonApiCreateRequest {
     url: String,
     dest: String,
     video_format: Option<String>,
@@ -98,7 +98,7 @@ struct NadekodonApiCreateRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct NadekodonApiListRequest {
+pub struct NadekodonApiListRequest {
     offset_index: u64,
     before: u64,
     after: u64,
@@ -111,7 +111,7 @@ struct NadekodonApiListRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct NadekodonApiGlance {
+pub struct NadekodonApiGlance {
     id: String,
     download_type: String,
     name: String,
@@ -128,7 +128,7 @@ struct NadekodonApiGlance {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct NadekodonApiListResponse {
+pub struct NadekodonApiListResponse {
     list: Vec<NadekodonApiGlance>,
     total_count: i64,
     start_index: i64,
@@ -137,7 +137,7 @@ struct NadekodonApiListResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct NadekodonApiDetailResponse {
+pub struct NadekodonApiDetailResponse {
     id: String,
     name: String,
     url: String,
@@ -157,7 +157,7 @@ struct NadekodonApiDetailResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct NadekodonApiPartInfo {
+pub struct NadekodonApiPartInfo {
     start: i64,
     end: i64,
     current: i64,
@@ -165,33 +165,33 @@ struct NadekodonApiPartInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct NadekodonApiIdRequest {
+pub struct NadekodonApiIdRequest {
     id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct NadekodonApiDeleteRequest {
+pub struct NadekodonApiDeleteRequest {
     id: String,
     delete_file: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct NadekodonApiCategory {
+pub struct NadekodonApiCategory {
     name: String,
     save_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct NadekodonApiCategoryListResponse {
+pub struct NadekodonApiCategoryListResponse {
     categories: Vec<NadekodonApiCategory>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct NadekodonApiCategoryUpdateRequest {
+pub struct NadekodonApiCategoryUpdateRequest {
     categories: Vec<NadekodonApiCategory>,
 }
 

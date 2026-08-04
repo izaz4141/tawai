@@ -103,23 +103,9 @@ async fn find_missing_metadata_pg(
     pool: &sqlx::PgPool,
     check: &MissingMetadataCheck,
 ) -> Result<Vec<MissingMetadataEntry>> {
-    let has_cover_col = sqlx::query(
-        "SELECT EXISTS (SELECT 1 FROM pragma_table_info('tracks') WHERE name = 'cover')",
-    )
-    .fetch_optional(pool)
-    .await
-    .is_ok();
-
-    let cover_select = if has_cover_col {
-        "t.cover"
-    } else {
-        "NULL::bytea AS cover"
-    };
-
-    let query_str = format!(
-        r#"SELECT t.id, t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
+    let query_str = r#"SELECT t.id, t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
                   COALESCE(a.title, '') AS album_title, t.track_num, a.date,
-                  {cover_select},
+                  t.cover,
                   (SELECT STRING_AGG(g.name, '||') FROM track_genres tg
                    JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id) AS genres
            FROM tracks t
@@ -127,8 +113,7 @@ async fn find_missing_metadata_pg(
            JOIN artists ar ON t.artist_id = ar.id
            JOIN library_sources ls ON t.source_id = ls.id
            WHERE ls.source_type NOT LIKE 'recommendation:%'
-           ORDER BY t.file_path"#,
-    );
+           ORDER BY t.file_path"#;
 
     let rows = sqlx::query(&query_str).fetch_all(pool).await?;
 
@@ -144,6 +129,7 @@ async fn find_missing_metadata_pg(
         let album: String = row.get("album_title");
         let track_num: Option<i32> = row.get("track_num");
         let date: Option<String> = row.get("date");
+        let cover: Option<Vec<u8>> = row.get("cover");
         let genres: Option<String> = row.get("genres");
 
         if check.check_title && title.trim().is_empty() {
@@ -174,8 +160,7 @@ async fn find_missing_metadata_pg(
         if check.check_track_number && track_num.is_none() {
             missing.push("track_number".to_string());
         }
-        if check.check_cover {
-            // PG cover check — try getting column dynamically
+        if check.check_cover && cover.is_none() {
             missing.push("cover".to_string());
         }
 
