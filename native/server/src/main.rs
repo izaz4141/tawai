@@ -51,6 +51,17 @@ async fn main() {
     let mut config_value = context.cfg().await.value.clone();
     config_value["server_port"] = serde_json::json!(port);
 
+    // Default download_folder to {tawai_home}/downloads when unset
+    let existing = config_value
+        .get("download_folder")
+        .and_then(|v| v.as_str())
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
+    let downloads_dir = format!("{}/downloads", server::tawai_home());
+    if !existing {
+        config_value["download_folder"] = serde_json::json!(downloads_dir);
+    }
+
     // Inject optional downstream service connection details from the environment.
     // Environment variables override whatever is already stored in the config file.
     // save_config encrypts the slskd/nadekodon API keys with the master key.
