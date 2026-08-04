@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Tawai
-Comment=Music Player
+Comment=Music discovery, metadata management, and player
 Exec=tawai
 Icon=tawai
 Type=Application
