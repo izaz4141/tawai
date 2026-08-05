@@ -5,9 +5,9 @@
   <h3>Tawai</h3>
   <p>Music Discovery, Metadata Management, and Player</p>
   <p>
-    <a href="https://github.com/izaz4141/tawai/releases"><img src="https://img.shields.io/github/v/release/izaz4141/tawai?style=for-the-badge&labelColor=101418&color=9ccbfb" alt="GitHub release"></a>
-    <a href="https://github.com/izaz4141/tawai/blob/main/LICENSE.md"><img src="https://img.shields.io/github/license/izaz4141/tawai?style=for-the-badge&labelColor=101418&color=b9c8da" alt="GitHub License"></a>
-    <a href="https://github.com/izaz4141/tawai/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/izaz4141/tawai/build.yml?branch=main&style=for-the-badge&labelColor=101418&label=BUILD" alt="Build Status"></a>
+    <a href="releases"><img src="https://img.shields.io/github/v/release/izaz4141/tawai?style=for-the-badge&labelColor=101418&color=9ccbfb" alt="GitHub release"></a>
+    <a href="LICENSE.md"><img src="https://img.shields.io/github/license/izaz4141/tawai?style=for-the-badge&labelColor=101418&color=b9c8da" alt="GitHub License"></a>
+    <a href="actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/izaz4141/tawai/build.yml?branch=master&style=for-the-badge&labelColor=101418&label=BUILD" alt="Build Status"></a>
   </p>
 
   <p>
@@ -30,9 +30,7 @@ Tawai is an open-source music player and discovery tool. It combines automatic a
 - **Library Management**: Scan local music directories, detect duplicates via fingerprinting, and automatically tag your files.
 - **Audio Analysis**: Chromaprint-based fingerprinting for accurate track identification.
 - **Cross-Platform**: Linux, Windows, Android, and Web — one codebase.
-- **Modern UI**: Material Design 3 interface built with Flutter.
 - **Scrobbling**: Automatic ListenBrainz scrobbling with user token configuration.
-- **SQLite / PostgreSQL**: Local standalone mode uses SQLite; server mode uses PostgreSQL.
 - **Remote Control**: Standalone Axum REST API server for remote clients and web access.
 - **slskd Integration**: Connect to a slskd instance for Soulseek music discovery.
 
