@@ -185,6 +185,25 @@ pub struct ScanLibraryRequest {
     pub force: bool,
 }
 
+#[derive(Serialize, RustSignal)]
+pub struct ScanLibraryResponse {
+    pub id: String,
+    pub started: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Deserialize, DartSignal)]
+pub struct ScanStatusRequest {
+    pub id: String,
+}
+
+#[derive(Serialize, RustSignal)]
+pub struct ScanStatusResponse {
+    pub id: String,
+    pub running: bool,
+    pub progress: Option<ScanProgressSignal>,
+}
+
 impl From<tawai_core::signals::library::TrackInfo> for TrackInfo {
     fn from(t: tawai_core::signals::library::TrackInfo) -> Self {
         Self {
@@ -255,7 +274,7 @@ impl From<tawai_core::signals::library::PlaylistInfo> for PlaylistInfo {
     }
 }
 
-#[derive(Serialize, RustSignal, Default)]
+#[derive(Serialize, RustSignal, SignalPiece, Default)]
 pub struct ScanProgressSignal {
     pub id: String,
     pub current_file: String,
@@ -299,6 +318,41 @@ pub struct ListTracksBySourceRequest {
 pub struct ListTracksBySourceResponse {
     pub id: String,
     pub tracks: Vec<TrackInfo>,
+}
+
+// ---------------------------------------------------------------------------
+// List download folder tracks
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize, DartSignal)]
+pub struct ListDownloadFolderTracksRequest {
+    pub id: String,
+    pub path: String,
+}
+
+#[derive(Serialize, RustSignal)]
+pub struct ListDownloadFolderTracksResponse {
+    pub id: String,
+    pub tracks: Vec<TrackInfo>,
+}
+
+// ---------------------------------------------------------------------------
+// Scan a single library source
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize, DartSignal)]
+pub struct ScanSourceRequest {
+    pub id: String,
+    pub user_id: String,
+    pub source_id: String,
+    pub force: bool,
+}
+
+#[derive(Serialize, RustSignal)]
+pub struct ScanSourceResponse {
+    pub id: String,
+    pub started: bool,
+    pub error: Option<String>,
 }
 
 // ---------------------------------------------------------------------------

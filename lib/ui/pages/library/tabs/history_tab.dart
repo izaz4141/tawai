@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/services/playback_service.dart';
+import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/components/track_action_sheet.dart';
 import 'package:tawai/utils/helper.dart';
 
@@ -19,9 +20,11 @@ class LibraryHistoryTab extends StatelessWidget {
     if (history.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 120),
-          Center(child: Text('No playback history yet')),
+        children: [
+          SizedBox(
+            height: AppTheme.spaceMD * 10 * AppTheme.spaceScale(context),
+          ),
+          const Center(child: Text('No playback history yet')),
         ],
       );
     }
@@ -55,7 +58,7 @@ class LibraryHistoryTab extends StatelessWidget {
                   message: 'From Jellyfin',
                   child: Icon(
                     Icons.cloud,
-                    size: 16,
+                    size: AppTheme.iconSM * AppTheme.iconScale(context),
                     color: Theme.of(context).colorScheme.primary,
                   ),
                 )
@@ -64,11 +67,11 @@ class LibraryHistoryTab extends StatelessWidget {
                   message: 'Scrobbled to ListenBrainz',
                   child: Icon(
                     Icons.check_circle_outline,
-                    size: 16,
+                    size: AppTheme.iconSM * AppTheme.iconScale(context),
                     color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
-              const SizedBox(width: 8),
+              SizedBox(width: AppTheme.spaceSM * AppTheme.spaceScale(context)),
               Text(
                 formatDuration(r.durationSecs),
                 style: Theme.of(context).textTheme.bodySmall,

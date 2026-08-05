@@ -54,12 +54,12 @@ fn create_csrf_token() -> String {
 
 async fn create_jwt_token(
     state: &SharedState,
-    username: &str,
+    user_id: &str,
     csrf_token: &str,
 ) -> Result<String, jsonwebtoken::errors::Error> {
     let now = get_current_timestamp();
     let claims = JwtClaims {
-        sub: username.to_string(),
+        sub: user_id.to_string(),
         exp: get_expiry_timestamp(),
         csrf: csrf_token.to_string(),
         iat: now,
@@ -89,10 +89,10 @@ pub async fn validate_jwt_token(
 
 pub async fn create_jwt_response(
     state: &SharedState,
-    username: &str,
+    user_id: &str,
 ) -> Result<JwtResponse, jsonwebtoken::errors::Error> {
     let csrf = create_csrf_token();
-    let access_token = create_jwt_token(state, username, &csrf).await?;
+    let access_token = create_jwt_token(state, user_id, &csrf).await?;
     let expires_in = JWT_EXPIRY_HOURS * 3600;
 
     Ok(JwtResponse {
@@ -161,17 +161,17 @@ pub async fn check_api_key(
     // 1. Try X-API-Key header -> per-user DB lookup
     if let Some(key) = req.headers().get("X-API-Key")
         && let Ok(k) = key.to_str()
-        && let Ok(username) = resolve_api_key_user(&state, k).await
+        && let Ok(user_id) = resolve_api_key_user(&state, k).await
     {
         let mut req = req;
-        req.extensions_mut().insert(username);
+        req.extensions_mut().insert(user_id);
         return Ok(next.run(req).await);
     }
 
     // 2. Fall back to JWT cookie + CSRF header
-    let (req, username) = authenticate_via_jwt(&state, req).await?;
+    let (req, user_id) = authenticate_via_jwt(&state, req).await?;
     let mut req = req;
-    req.extensions_mut().insert(username);
+    req.extensions_mut().insert(user_id);
     Ok(next.run(req).await)
 }
 
@@ -183,32 +183,32 @@ pub async fn require_admin(
     // 1. Try X-API-Key header -> per-user DB lookup
     if let Some(key) = req.headers().get("X-API-Key")
         && let Ok(k) = key.to_str()
-        && let Ok(username) = resolve_api_key_user(&state, k).await
+        && let Ok(user_id) = resolve_api_key_user(&state, k).await
     {
         let db = state.context.db().await;
-        let role = tawai_core::db::account::get_user_role(db.pool(), &username)
+        let role = tawai_core::db::account::get_user_role(db.pool(), &user_id)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         if role.as_deref() == Some("admin") {
             let mut req = req;
-            req.extensions_mut().insert(username);
+            req.extensions_mut().insert(user_id);
             return Ok(next.run(req).await);
         }
         return Err(StatusCode::FORBIDDEN);
     }
 
     // 2. Fall back to JWT cookie + CSRF header
-    let (req, username) = authenticate_via_jwt(&state, req).await?;
+    let (req, user_id) = authenticate_via_jwt(&state, req).await?;
     let db = state.context.db().await;
-    let role = tawai_core::db::account::get_user_role(db.pool(), &username)
+    let role = tawai_core::db::account::get_user_role(db.pool(), &user_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     match role.as_deref() {
         Some("admin") => {
             let mut req = req;
-            req.extensions_mut().insert(username);
+            req.extensions_mut().insert(user_id);
             Ok(next.run(req).await)
         }
         _ => Err(StatusCode::FORBIDDEN),

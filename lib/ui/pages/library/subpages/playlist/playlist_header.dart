@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
+import 'package:tawai/ui/theme/app_theme.dart';
 
 class PlaylistHeader extends StatelessWidget {
   const PlaylistHeader({super.key, required this.playlist});
@@ -11,21 +12,27 @@ class PlaylistHeader extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Card(
-      margin: const EdgeInsets.all(16),
+      margin: EdgeInsets.all(
+        AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(
+          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+        ),
         child: Row(
           children: [
             CircleAvatar(
-              radius: 40,
+              radius: AppTheme.radiusLG * AppTheme.radiusScale(context),
               backgroundColor: theme.colorScheme.primaryContainer,
               child: Icon(
                 playlist.isSmart ? Icons.auto_awesome : Icons.playlist_play,
-                size: 36,
+                size: AppTheme.iconLG * AppTheme.iconScale(context),
                 color: theme.colorScheme.onPrimaryContainer,
               ),
             ),
-            const SizedBox(width: 16),
+            SizedBox(
+              width: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            ),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -40,7 +47,9 @@ class PlaylistHeader extends StatelessWidget {
                   if (playlist.description != null &&
                       playlist.description!.isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.only(top: 2),
+                      padding: EdgeInsets.only(
+                        top: AppTheme.spaceXS * AppTheme.spaceScale(context),
+                      ),
                       child: Text(
                         playlist.description!,
                         style: theme.textTheme.bodySmall,
@@ -48,7 +57,9 @@ class PlaylistHeader extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  const SizedBox(height: 4),
+                  SizedBox(
+                    height: AppTheme.spaceXS * AppTheme.spaceScale(context),
+                  ),
                   Text(
                     '${playlist.trackCount} tracks${playlist.isSmart ? ' · Smart' : ''}',
                     style: theme.textTheme.bodySmall?.copyWith(

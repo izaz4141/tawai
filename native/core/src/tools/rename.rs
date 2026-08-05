@@ -228,6 +228,55 @@ pub fn rename_audio_file(old_path: &Path, pattern: &str, tag: &AudioTag) -> Resu
     Ok(new_path)
 }
 
+/// Move (and rename) an audio file into `source_url`, rooting the naming
+/// pattern's subdirectories at that folder.
+///
+/// When `pattern` is `None` the file keeps its current stem name. When a
+/// pattern is given, `format_naming_pattern` is applied and the result is
+/// used as the file stem.
+pub fn move_file_into_source(
+    old_path: &Path,
+    source_url: &str,
+    pattern: Option<&str>,
+    tag: &AudioTag,
+) -> Result<PathBuf> {
+    let ext = old_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("mp3");
+    let stem = old_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("track");
+    let base_name = match pattern {
+        Some(p) => {
+            let formatted = format_naming_pattern(p, tag);
+            if formatted.trim().is_empty() {
+                stem.to_string()
+            } else {
+                formatted
+            }
+        }
+        None => stem.to_string(),
+    };
+    let new_path = Path::new(source_url).join(format!("{}.{}", base_name, ext));
+    if new_path == old_path {
+        return Ok(new_path);
+    }
+    if let Some(parent) = new_path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+    }
+    std::fs::rename(old_path, &new_path).with_context(|| {
+        format!(
+            "Failed to move {} to {}",
+            old_path.display(),
+            new_path.display()
+        )
+    })?;
+    Ok(new_path)
+}
+
 pub async fn batch_rename_preview(
     file_paths: &[String],
     pattern: &str,

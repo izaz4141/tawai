@@ -61,7 +61,9 @@ Future<String?> showNadekodonFormatPicker(
                     '${(f['abr'] as num?)?.toDouble().toStringAsFixed(0) ?? '?'} kbps — ${f['acodec'] ?? '?'}',
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
-                  const SizedBox(height: 2),
+                  SizedBox(
+                    height: AppTheme.spaceXS * AppTheme.spaceScale(context),
+                  ),
                   Text(
                     '${(f['note'] as String?)?.isNotEmpty == true ? '${f['note']} · ' : ''}'
                     '${f['filesize'] != null ? '${formatFileSize((f['filesize'] as num).toInt())} · ' : ''}'

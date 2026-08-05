@@ -641,23 +641,46 @@ class RinfService {
   // Scan
   // ---------------------------------------------------------------------------
 
-  Stream<ScanProgressSignal> scanLibrary({
+  Future<({bool started, String? error})> scanLibrary({
     required String userId,
     required bool force,
-  }) {
+  }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
-    final controller = StreamController<ScanProgressSignal>();
-    final sub = ScanProgressSignal.rustSignalStream.listen((p) {
-      if (p.message.id == id || p.message.id.isEmpty) {
-        controller.add(p.message);
-        if (p.message.complete) {
-          unawaited(controller.close());
-        }
-      }
-    });
-    controller.onCancel = () => sub.cancel();
+    final stream = ScanLibraryResponse.rustSignalStream.where(
+      (s) => s.message.id == id,
+    );
     ScanLibraryRequest(id: id, userId: userId, force: force).sendSignalToRust();
-    return controller.stream;
+    final result = await stream.first;
+    return (started: result.message.started, error: result.message.error);
+  }
+
+  Future<({bool running, ScanProgressSignal? progress})> getScanStatus() async {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final stream = ScanStatusResponse.rustSignalStream.where(
+      (s) => s.message.id == id,
+    );
+    ScanStatusRequest(id: id).sendSignalToRust();
+    final result = await stream.first;
+    return (running: result.message.running, progress: result.message.progress);
+  }
+
+  Future<({bool started, String? error})> scanSource({
+    required String userId,
+    required String sourceId,
+    required bool force,
+  }) async {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final stream = ScanSourceResponse.rustSignalStream.where(
+      (s) => s.message.id == id,
+    );
+    ScanSourceRequest(
+      id: id,
+      userId: userId,
+      sourceId: sourceId,
+      force: force,
+    ).sendSignalToRust();
+    final result = await stream.first;
+    return (started: result.message.started, error: result.message.error);
   }
 
   Future<void> startPeriodicScan() async {
@@ -758,6 +781,16 @@ class RinfService {
     return signal.message.tracks;
   }
 
+  Future<List<TrackInfo>> listDownloadFolderTracks(String path) async {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final stream = ListDownloadFolderTracksResponse.rustSignalStream.where(
+      (s) => s.message.id == id,
+    );
+    ListDownloadFolderTracksRequest(id: id, path: path).sendSignalToRust();
+    final signal = await stream.first;
+    return signal.message.tracks;
+  }
+
   Future<List<TrackInfo>> listTracksBySource(String sourceId) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = ListTracksBySourceResponse.rustSignalStream.where(
@@ -818,7 +851,9 @@ class RinfService {
     return signal.message.recording;
   }
 
-  Future<({bool success, String? error})> applyIdentification({
+  Future<({bool success, String? error, String? newFilePath})>
+  applyIdentification({
+    required String userId,
     required String trackId,
     required String title,
     required String artist,
@@ -833,6 +868,8 @@ class RinfService {
     String? lyrics,
     List<int>? coverBytes,
     int totalDiscs = 0,
+    String? filePath,
+    String? targetSourceId,
   }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = ApplyIdentificationResponse.rustSignalStream.where(
@@ -840,6 +877,7 @@ class RinfService {
     );
     ApplyIdentificationRequest(
       id: id,
+      userId: userId,
       trackId: trackId,
       title: title,
       artist: artist,
@@ -854,9 +892,15 @@ class RinfService {
       lyrics: lyrics,
       coverBytes: coverBytes,
       totalDiscs: totalDiscs,
+      filePath: filePath,
+      targetSourceId: targetSourceId,
     ).sendSignalToRust();
     final signal = await stream.first;
-    return (success: signal.message.success, error: signal.message.error);
+    return (
+      success: signal.message.success,
+      error: signal.message.error,
+      newFilePath: signal.message.newFilePath,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -1146,12 +1190,19 @@ class RinfService {
   // Fingerprint track
   // ---------------------------------------------------------------------------
 
-  Future<RecordingInfo?> fingerprintTrack(String trackId) async {
+  Future<RecordingInfo?> fingerprintTrack(
+    String trackId, {
+    String? filePath,
+  }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = FingerprintTrackResponse.rustSignalStream.where(
       (s) => s.message.id == id,
     );
-    FingerprintTrackRequest(id: id, trackId: trackId).sendSignalToRust();
+    FingerprintTrackRequest(
+      id: id,
+      trackId: trackId,
+      filePath: filePath,
+    ).sendSignalToRust();
     final signal = await stream.first;
     return signal.message.recording;
   }

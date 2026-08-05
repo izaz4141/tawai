@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/services/playback_service.dart';
+import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/ui/pages/library/subpages/artist/artist_detail_page.dart';
 import 'package:tawai/ui/widgets/components/sheet.dart';
@@ -24,18 +25,28 @@ class _AlbumActionSheet extends StatelessWidget {
     final theme = Theme.of(context);
     return Sheet(
       header: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        padding: EdgeInsets.fromLTRB(
+          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+          AppTheme.spaceMD * AppTheme.spaceScale(context),
+          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+          AppTheme.spaceXS * AppTheme.spaceScale(context),
+        ),
         child: Row(
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(
+                AppTheme.radiusSM * AppTheme.radiusScale(context),
+              ),
               child: SizedBox(
-                width: 56,
-                height: 56,
-                child: CoverImage(albumId: album.id, iconSize: 28),
+                width: AppTheme.spaceSM * 7 * AppTheme.spaceScale(context),
+                height: AppTheme.spaceSM * 7 * AppTheme.spaceScale(context),
+                child: CoverImage(
+                  albumId: album.id,
+                  iconSize: AppTheme.iconLG * AppTheme.iconScale(context),
+                ),
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: AppTheme.spaceMD * AppTheme.spaceScale(context)),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

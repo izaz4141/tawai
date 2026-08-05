@@ -125,10 +125,13 @@ class _IdentifyPageState extends State<IdentifyPage> {
                   children: [
                     Icon(
                       Icons.album,
-                      size: 64,
+                      size: AppTheme.iconXXL * AppTheme.iconScale(context),
                       color: Theme.of(context).colorScheme.outline,
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(
+                      height:
+                          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                    ),
                     Text(
                       'No identified tracks',
                       style: Theme.of(context).textTheme.bodyLarge,
@@ -143,7 +146,8 @@ class _IdentifyPageState extends State<IdentifyPage> {
               ? Row(
                   children: [
                     SizedBox(
-                      width: 360,
+                      width:
+                          AppTheme.spaceXL * 15 * AppTheme.widthScale(context),
                       child: LeftPanel(
                         controller: _controller,
                         loadingMetadata: loadingMetadata,
@@ -161,7 +165,8 @@ class _IdentifyPageState extends State<IdentifyPage> {
               : Column(
                   children: [
                     SizedBox(
-                      height: 240,
+                      height:
+                          AppTheme.spaceXL * 10 * AppTheme.spaceScale(context),
                       child: LeftPanel(
                         controller: _controller,
                         loadingMetadata: loadingMetadata,

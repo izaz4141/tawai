@@ -8,6 +8,10 @@ class UnidentifiedSource extends IdentifySource {
   const UnidentifiedSource();
 }
 
+class DownloadFolderSource extends IdentifySource {
+  const DownloadFolderSource();
+}
+
 class LibrarySource extends IdentifySource {
   final LibrarySourceInfo info;
   const LibrarySource(this.info);

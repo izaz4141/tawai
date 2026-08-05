@@ -237,8 +237,14 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             child: _isLoading
                                 ? SizedBox(
-                                    height: 20,
-                                    width: 20,
+                                    height:
+                                        AppTheme.spaceXS *
+                                        5 *
+                                        AppTheme.spaceScale(context),
+                                    width:
+                                        AppTheme.spaceXS *
+                                        5 *
+                                        AppTheme.spaceScale(context),
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
                                     ),
@@ -256,7 +262,7 @@ class _LoginPageState extends State<LoginPage> {
           Positioned(
             bottom: AppTheme.spaceLG * AppTheme.spaceScale(context),
             right: AppTheme.spaceLG * AppTheme.spaceScale(context),
-            width: 48,
+            width: AppTheme.iconXL * AppTheme.iconScale(context),
             child: Material(
               elevation: 4,
               shape: const CircleBorder(),

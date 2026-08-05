@@ -19,22 +19,13 @@ use crate::server::SharedState;
 )]
 pub async fn handle_downloads_poll(
     State(state): State<SharedState>,
-    Extension(username): Extension<String>,
+    Extension(user_id): Extension<String>,
     Json(req): Json<DownloadsPollRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     let pool = db.pool();
 
-    let auth_user_id = match db::account::get_user_id_by_username(pool, &username).await {
-        Ok(Some(uid)) => uid,
-        _ => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": "Failed to resolve user" })),
-            )
-                .into_response();
-        }
-    };
+    let auth_user_id = user_id;
 
     let role = db::account::get_user_role(pool, &auth_user_id)
         .await

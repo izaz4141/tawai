@@ -194,7 +194,22 @@ pub async fn handle_fingerprint_track(context: Arc<AppContext>) {
         let msg = signal_pack.message;
         let db = context.db().await;
 
-        let (fingerprint, duration) =
+        let (fingerprint, duration) = if let Some(file_path) = msg.file_path.as_deref() {
+            let path = std::path::Path::new(file_path);
+            match audio::fingerprint::compute_fingerprint(path) {
+                Ok(fp) => (fp.fingerprint, fp.duration),
+                Err(e) => {
+                    logger::debug(&format!("compute_fingerprint failed: {e}"));
+                    FingerprintTrackResponse {
+                        id: msg.id,
+                        track_id: msg.track_id,
+                        recording: None,
+                    }
+                    .send_signal_to_dart();
+                    continue;
+                }
+            }
+        } else {
             match library::lookup_fingerprint_by_id(db.pool(), &msg.track_id).await {
                 Ok(Some(v)) => v,
                 _ => {
@@ -206,7 +221,8 @@ pub async fn handle_fingerprint_track(context: Arc<AppContext>) {
                     .send_signal_to_dart();
                     continue;
                 }
-            };
+            }
+        };
 
         let recording = match musicbrainz::lookup_by_fingerprint(
             context.client(),

@@ -71,7 +71,12 @@ class _DownloadsSheetState extends State<_DownloadsSheet> {
       minChildSize: 0.3,
       maxChildSize: 0.9,
       header: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        padding: EdgeInsets.fromLTRB(
+          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+          AppTheme.spaceMD * AppTheme.spaceScale(context),
+          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+          AppTheme.spaceXS * AppTheme.spaceScale(context),
+        ),
         child: Text('Downloads', style: textTheme.titleMedium),
       ),
       bodyBuilder: (scrollCtrl) {

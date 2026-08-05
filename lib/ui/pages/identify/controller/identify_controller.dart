@@ -26,7 +26,11 @@ class IdentifyController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    librarySources = await BridgeService.instance.listEditableSources(userId);
+    librarySources = (await BridgeService.instance.listEditableSources(userId))
+        .where((s) =>
+            s.sourceType != 'jellyfin' &&
+            !s.sourceType.startsWith('recommendation:'))
+        .toList();
     notifyListeners();
   }
 
@@ -37,15 +41,21 @@ class IdentifyController extends ChangeNotifier {
       List<TrackInfo> fetched;
       if (selectedSource is UnidentifiedSource) {
         fetched = await BridgeService.instance.listUnidentifiedTracks();
+      } else if (selectedSource is DownloadFolderSource) {
+        fetched = await BridgeService.instance.listDownloadFolderTracks(
+          path: SettingsManager.downloadFolder.value,
+        );
       } else if (selectedSource is LibrarySource) {
         final src = selectedSource as LibrarySource;
         fetched = await BridgeService.instance.listTracksBySource(src.info.id);
       } else {
         fetched = [];
       }
-      final identified = fetched.where((t) => t.mbidRecording != null).toList();
+      final identified = fetched
+          .where((t) => t.mbidRecording != null && t.albumMbid != null)
+          .toList();
       final unidentified = fetched
-          .where((t) => t.mbidRecording == null)
+          .where((t) => !(t.mbidRecording != null && t.albumMbid != null))
           .toList();
       tracks = unidentified
           .where((t) => !_processedTrackIds.contains(t.id))
@@ -75,6 +85,7 @@ class IdentifyController extends ChangeNotifier {
   Future<RecordingInfo?> fingerprintTrack(TrackInfo track) async {
     final remoteRecording = await BridgeService.instance.fingerprintTrack(
       track.id,
+      filePath: track.sourceType == 'download_folder' ? track.filePath : null,
     );
     if (remoteRecording != null) addSessionResult(track, remoteRecording);
     return remoteRecording;
@@ -364,7 +375,8 @@ class IdentifyController extends ChangeNotifier {
     }
   }
 
-  Future<({bool success, String? error})> applyIdentification({
+  Future<({bool success, String? error, String? newFilePath})>
+  applyIdentification({
     required String trackId,
     required String title,
     required String artist,
@@ -378,8 +390,12 @@ class IdentifyController extends ChangeNotifier {
     String? mbidRecording,
     String? lyrics,
     Uint8List? coverBytes,
+    String? filePath,
+    String? targetSourceId,
   }) {
+    final userId = SettingsManager.currentUserId.value ?? '';
     return BridgeService.instance.applyIdentification(
+      userId: userId,
       trackId: trackId,
       title: title,
       artist: artist,
@@ -393,6 +409,18 @@ class IdentifyController extends ChangeNotifier {
       mbidRecording: mbidRecording,
       lyrics: lyrics,
       coverBytes: coverBytes,
+      filePath: filePath,
+      targetSourceId: targetSourceId,
+    );
+  }
+
+  Future<void> applyDownloadScan(String sourceId) async {
+    final userId = SettingsManager.currentUserId.value;
+    if (userId == null || userId.isEmpty) return;
+    await BridgeService.instance.scanSource(
+      userId: userId,
+      sourceId: sourceId,
+      force: false,
     );
   }
 

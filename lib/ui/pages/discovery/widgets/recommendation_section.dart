@@ -55,8 +55,8 @@ class RecommendationSection extends StatelessWidget {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   SizedBox(
-                                    width: 14,
-                                    height: 14,
+                                    width: AppTheme.spaceMD * scale,
+                                    height: AppTheme.spaceMD * scale,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2,
                                       color: colors.onPrimaryContainer
@@ -140,7 +140,7 @@ class RecommendationSection extends StatelessWidget {
     }
 
     return SizedBox(
-      height: 220,
+      height: AppTheme.spaceXXL * 7 * AppTheme.spaceScale(context),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.symmetric(

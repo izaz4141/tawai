@@ -402,6 +402,8 @@ impl AppContext {
                     continue;
                 }
 
+                *ctx.scan_progress.write().await = None;
+
                 let client = ctx.client().clone();
                 let sync_client = client.clone();
                 let sources2 = sources.clone();

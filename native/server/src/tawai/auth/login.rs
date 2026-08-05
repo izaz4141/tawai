@@ -44,13 +44,28 @@ pub async fn handle_login(
 
     // 1. Try existing JWT
     if let Ok(claims) = validate_jwt_request(&state, &jar, &headers).await {
-        authorized = true;
         let db = state.context.db().await;
         let mk = state.context.master_key.read().await.clone();
-        logged_in_user = tawai_core::db::account::get_user_by_username(db.pool(), &claims.sub, &mk)
-            .await
-            .ok()
-            .flatten();
+        match tawai_core::db::account::get_user_by_id(db.pool(), &claims.sub, &mk).await {
+            Ok(Some(user)) => {
+                authorized = true;
+                logged_in_user = Some(user);
+            }
+            Ok(None) => {
+                logger::error(&format!(
+                    "[Login] JWT valid for '{}' but user not found in DB",
+                    claims.sub
+                ));
+                return (StatusCode::INTERNAL_SERVER_ERROR,).into_response();
+            }
+            Err(e) => {
+                logger::error(&format!(
+                    "[Login] DB error resolving JWT subject '{}': {}",
+                    claims.sub, e
+                ));
+                return (StatusCode::INTERNAL_SERVER_ERROR,).into_response();
+            }
+        }
     }
 
     // 2. Fall back to Basic auth against DB users table
@@ -90,8 +105,24 @@ pub async fn handle_login(
         return (StatusCode::UNAUTHORIZED,).into_response();
     }
 
-    let user = logged_in_user.unwrap();
-    let jwt_response = create_jwt_response(&state, &user.username).await.unwrap();
+    let user = match logged_in_user {
+        Some(user) => user,
+        None => {
+            logger::error("[Login] Authenticated but user state is missing");
+            return (StatusCode::INTERNAL_SERVER_ERROR,).into_response();
+        }
+    };
+
+    let jwt_response = match create_jwt_response(&state, &user.id).await {
+        Ok(res) => res,
+        Err(e) => {
+            logger::error(&format!(
+                "[Login] Failed to issue JWT for '{}': {}",
+                user.username, e
+            ));
+            return (StatusCode::INTERNAL_SERVER_ERROR,).into_response();
+        }
+    };
     let jar = build_jwt_cookie(jar, &jwt_response);
 
     (

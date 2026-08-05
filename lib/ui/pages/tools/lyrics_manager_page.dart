@@ -62,7 +62,7 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
     return AlertDialog(
       title: const Text('Search LRCLIB'),
       content: SizedBox(
-        width: 500,
+        width: AppTheme.dialogWidth(context),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -82,20 +82,26 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
                     onSubmitted: (_) => _doSearch(),
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(
+                  width: AppTheme.spaceSM * AppTheme.spaceScale(context),
+                ),
                 IconButton(
                   onPressed: _loading ? null : _doSearch,
                   icon: _loading
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                      ? SizedBox(
+                          width:
+                              AppTheme.spaceLG * AppTheme.spaceScale(context),
+                          height:
+                              AppTheme.spaceLG * AppTheme.spaceScale(context),
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
                         )
                       : const Icon(Icons.search),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
             if (_results.isEmpty && !_loading)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 24),
@@ -134,7 +140,10 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 2),
+                          SizedBox(
+                            height:
+                                AppTheme.spaceXS * AppTheme.spaceScale(context),
+                          ),
                           Text(
                             preview,
                             style: textTheme.bodySmall?.copyWith(
@@ -147,11 +156,14 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
                       trailing: Chip(
                         avatar: Icon(
                           r.synced ? Icons.timer : Icons.text_fields,
-                          size: 14,
+                          size: AppTheme.iconSM * AppTheme.iconScale(context),
                         ),
                         label: Text(
                           r.synced ? 'Synced' : 'Plain',
-                          style: const TextStyle(fontSize: 11),
+                          style: TextStyle(
+                            fontSize:
+                                AppTheme.textSM * AppTheme.textScale(context),
+                          ),
                         ),
                         visualDensity: VisualDensity.compact,
                       ),
@@ -386,7 +398,7 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
           ? Row(
               children: [
                 SizedBox(
-                  width: 360,
+                  width: AppTheme.spaceXL * 15 * AppTheme.widthScale(context),
                   child: _buildTrackPanel(colors, textTheme),
                 ),
                 const VerticalDivider(width: 1),
@@ -396,7 +408,7 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
           : Column(
               children: [
                 SizedBox(
-                  height: 280,
+                  height: AppTheme.spaceXXL * 9 * AppTheme.spaceScale(context),
                   child: _buildTrackPanel(colors, textTheme),
                 ),
                 const Divider(height: 1),
@@ -410,15 +422,20 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          padding: EdgeInsets.fromLTRB(
+            AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            AppTheme.spaceSM * AppTheme.spaceScale(context),
+            AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            AppTheme.spaceXS * AppTheme.spaceScale(context),
+          ),
           child: DropdownButtonFormField<String>(
             value: _selectedSourceId,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Source',
               isDense: true,
               contentPadding: EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
+                horizontal: AppTheme.spaceMD * AppTheme.spaceScale(context),
+                vertical: AppTheme.spaceMD * AppTheme.spaceScale(context),
               ),
             ),
             items: _sources.map((s) {
@@ -430,16 +447,21 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+          padding: EdgeInsets.fromLTRB(
+            AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            AppTheme.spaceXS * AppTheme.spaceScale(context),
+            AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            AppTheme.spaceXS * AppTheme.spaceScale(context),
+          ),
           child: TextField(
             controller: _searchController,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: 'Search tracks...',
-              prefixIcon: Icon(Icons.search),
+              prefixIcon: const Icon(Icons.search),
               isDense: true,
               contentPadding: EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
+                horizontal: AppTheme.spaceMD * AppTheme.spaceScale(context),
+                vertical: AppTheme.spaceMD * AppTheme.spaceScale(context),
               ),
             ),
           ),
@@ -470,7 +492,7 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
                         hasLyrics
                             ? Icons.music_note
                             : Icons.music_note_outlined,
-                        size: 20,
+                        size: AppTheme.iconMD * AppTheme.iconScale(context),
                         color: hasLyrics
                             ? colors.primary
                             : colors.onSurfaceVariant,
@@ -502,8 +524,14 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.edit_note, size: 64, color: colors.onSurfaceVariant),
-            const SizedBox(height: 16),
+            Icon(
+              Icons.edit_note,
+              size: AppTheme.iconXXL * AppTheme.iconScale(context),
+              color: colors.onSurfaceVariant,
+            ),
+            SizedBox(
+              height: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            ),
             Text(
               'Select a track to edit lyrics',
               style: textTheme.bodyLarge?.copyWith(
@@ -519,11 +547,21 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          padding: EdgeInsets.fromLTRB(
+            AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            AppTheme.spaceMD * AppTheme.spaceScale(context),
+            AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            AppTheme.spaceXS * AppTheme.spaceScale(context),
+          ),
           child: Text(_selectedTrack!.title, style: textTheme.titleMedium),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          padding: EdgeInsets.fromLTRB(
+            AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            0,
+            AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            AppTheme.spaceSM * AppTheme.spaceScale(context),
+          ),
           child: Text(
             _selectedTrack!.artistsString,
             style: textTheme.bodyMedium?.copyWith(
@@ -537,13 +575,16 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
             children: [
               FilledButton.icon(
                 onPressed: _showSearchDialog,
-                icon: const Icon(Icons.search, size: 18),
+                icon: Icon(
+                  Icons.search,
+                  size: AppTheme.iconSM * AppTheme.iconScale(context),
+                ),
                 label: const Text('Search LRCLIB'),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -552,40 +593,61 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
               maxLines: null,
               expands: true,
               textAlignVertical: TextAlignVertical.top,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-              decoration: const InputDecoration(
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: AppTheme.textSM * AppTheme.textScale(context),
+              ),
+              decoration: InputDecoration(
                 hintText: 'Enter lyrics here...',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.all(12),
+                border: const OutlineInputBorder(),
+                contentPadding: EdgeInsets.all(
+                  AppTheme.spaceMD * AppTheme.spaceScale(context),
+                ),
               ),
             ),
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          padding: EdgeInsets.fromLTRB(
+            AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            AppTheme.spaceSM * AppTheme.spaceScale(context),
+            AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            AppTheme.spaceMD * AppTheme.spaceScale(context),
+          ),
           child: Row(
             children: [
               FilledButton.icon(
                 onPressed: _saving ? null : _saveLyrics,
                 icon: _saving
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                    ? SizedBox(
+                        width:
+                            AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                        height:
+                            AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                        child: const CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.save, size: 18),
+                    : Icon(
+                        Icons.save,
+                        size: AppTheme.iconSM * AppTheme.iconScale(context),
+                      ),
                 label: const Text('Save'),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: AppTheme.spaceSM * AppTheme.spaceScale(context)),
               OutlinedButton.icon(
                 onPressed: _saving ? null : _clearLyrics,
-                icon: const Icon(Icons.clear, size: 18),
+                icon: Icon(
+                  Icons.clear,
+                  size: AppTheme.iconSM * AppTheme.iconScale(context),
+                ),
                 label: const Text('Clear'),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: AppTheme.spaceSM * AppTheme.spaceScale(context)),
               OutlinedButton.icon(
                 onPressed: _saving ? null : _romajizeLyrics,
-                icon: const Icon(Icons.translate, size: 18),
+                icon: Icon(
+                  Icons.translate,
+                  size: AppTheme.iconSM * AppTheme.iconScale(context),
+                ),
                 label: const Text('Romajize'),
               ),
             ],

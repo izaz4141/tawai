@@ -110,8 +110,8 @@ class _LibraryPageState extends State<LibraryPage>
   }
 
   double _albumRowHeight(BuildContext context) {
-    const padding = 8.0;
-    const spacing = 8.0;
+    const padding = AppTheme.spaceSM;
+    const spacing = AppTheme.spaceSM;
     final crossAxisCount = AppTheme.isDesktop(context) ? 4 : 2;
     final viewportWidth = MediaQuery.of(context).size.width;
     final availableWidth =
@@ -135,7 +135,7 @@ class _LibraryPageState extends State<LibraryPage>
           scrollController: _trackScrollController,
           items: tracks,
           labelSelector: (t) => t.title,
-          itemExtent: 72,
+          itemExtent: AppTheme.spaceMD * 6 * AppTheme.spaceScale(context),
         );
       case 1:
         return AlphabetIndexScroller<AlbumInfo>(
@@ -150,14 +150,14 @@ class _LibraryPageState extends State<LibraryPage>
           scrollController: _artistScrollController,
           items: artists,
           labelSelector: (a) => a.name,
-          itemExtent: 72,
+          itemExtent: AppTheme.spaceMD * 6 * AppTheme.spaceScale(context),
         );
       case 3:
         return AlphabetIndexScroller<PlaylistInfo>(
           scrollController: _playlistScrollController,
           items: playlists,
           labelSelector: (p) => p.name,
-          itemExtent: 72,
+          itemExtent: AppTheme.spaceMD * 6 * AppTheme.spaceScale(context),
           startIndex: 1,
         );
       default:

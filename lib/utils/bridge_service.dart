@@ -519,7 +519,7 @@ class BridgeService {
   // Scan
   // ---------------------------------------------------------------------------
 
-  Stream<ScanProgressSignal> scanLibrary({
+  Future<({bool started, String? error})> scanLibrary({
     required String userId,
     required bool force,
   }) {
@@ -528,10 +528,24 @@ class BridgeService {
         : RinfService.instance.scanLibrary(userId: userId, force: force);
   }
 
-  Future<({bool running, Map<String, dynamic>? progress})> getScanStatus() {
+  Future<({bool started, String? error})> scanSource({
+    required String userId,
+    required String sourceId,
+    required bool force,
+  }) {
+    return _isRemote
+        ? APIService.instance.scanSource(sourceId: sourceId, force: force)
+        : RinfService.instance.scanSource(
+            userId: userId,
+            sourceId: sourceId,
+            force: force,
+          );
+  }
+
+  Future<({bool running, ScanProgressSignal? progress})> getScanStatus() {
     return _isRemote
         ? APIService.instance.getScanStatus()
-        : Future.value((running: false, progress: null));
+        : RinfService.instance.getScanStatus();
   }
 
   // ---------------------------------------------------------------------------
@@ -632,6 +646,12 @@ class BridgeService {
         : RinfService.instance.listUnidentifiedTracks(sourceId: sourceId);
   }
 
+  Future<List<TrackInfo>> listDownloadFolderTracks({String? path}) async {
+    return _isRemote
+        ? APIService.instance.listDownloadFolderTracks()
+        : RinfService.instance.listDownloadFolderTracks(path ?? '');
+  }
+
   Future<List<TrackInfo>> listTracksBySource(String sourceId) async {
     return _isRemote
         ? APIService.instance.listTracksBySource(sourceId)
@@ -656,7 +676,9 @@ class BridgeService {
         : RinfService.instance.searchMusicBrainz(query);
   }
 
-  Future<({bool success, String? error})> applyIdentification({
+  Future<({bool success, String? error, String? newFilePath})>
+  applyIdentification({
+    required String userId,
     required String trackId,
     required String title,
     required String artist,
@@ -671,9 +693,12 @@ class BridgeService {
     String? lyrics,
     List<int>? coverBytes,
     int totalDiscs = 0,
+    String? filePath,
+    String? targetSourceId,
   }) async {
     return _isRemote
         ? APIService.instance.applyIdentification(
+            userId: userId,
             trackId: trackId,
             title: title,
             artist: artist,
@@ -688,8 +713,11 @@ class BridgeService {
             lyrics: lyrics,
             coverBytes: coverBytes,
             totalDiscs: totalDiscs,
+            filePath: filePath,
+            targetSourceId: targetSourceId,
           )
         : RinfService.instance.applyIdentification(
+            userId: userId,
             trackId: trackId,
             title: title,
             artist: artist,
@@ -704,6 +732,8 @@ class BridgeService {
             lyrics: lyrics,
             coverBytes: coverBytes,
             totalDiscs: totalDiscs,
+            filePath: filePath,
+            targetSourceId: targetSourceId,
           );
   }
 
@@ -711,10 +741,13 @@ class BridgeService {
   // Fingerprint track
   // ---------------------------------------------------------------------------
 
-  Future<RecordingInfo?> fingerprintTrack(String trackId) async {
+  Future<RecordingInfo?> fingerprintTrack(
+    String trackId, {
+    String? filePath,
+  }) async {
     return _isRemote
-        ? APIService.instance.fingerprintTrack(trackId)
-        : RinfService.instance.fingerprintTrack(trackId);
+        ? APIService.instance.fingerprintTrack(trackId, filePath: filePath)
+        : RinfService.instance.fingerprintTrack(trackId, filePath: filePath);
   }
 
   Future<GetReleaseTracksResponse> getReleaseTracks(String releaseId) async {

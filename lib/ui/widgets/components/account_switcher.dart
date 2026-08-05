@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
@@ -17,6 +18,11 @@ class AccountSwitcher extends StatelessWidget {
     return ValueListenableBuilder<String>(
       valueListenable: SettingsManager.serverHost,
       builder: (context, host, _) {
+        final displayHost = kIsWeb
+            ? Uri.base.origin
+            : host == '127.0.0.1' || host == 'localhost'
+            ? 'Local Session'
+            : host;
         return InkWell(
           onTap: () {
             if (onAccountSwitch != null) onAccountSwitch!();
@@ -42,7 +48,8 @@ class AccountSwitcher extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        SettingsManager.currentUser.value?.username ?? host,
+                        SettingsManager.currentUser.value?.username ??
+                            displayHost,
                         style: textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: colors.onSurface,
@@ -51,9 +58,7 @@ class AccountSwitcher extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        host == '127.0.0.1' || host == 'localhost'
-                            ? 'Local Session'
-                            : host,
+                        displayHost,
                         style: textTheme.bodyMedium?.copyWith(
                           color: colors.onSurfaceVariant,
                         ),

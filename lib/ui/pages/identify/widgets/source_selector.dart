@@ -47,6 +47,20 @@ class SourceSelector extends StatelessWidget {
               ],
             ),
           ),
+          DropdownMenuItem(
+            value: const DownloadFolderSource(),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.download_for_offline_outlined,
+                  size: AppTheme.iconMD,
+                  color: colors.tertiary,
+                ),
+                const SizedBox(width: AppTheme.spaceSM),
+                const Text('Download folder'),
+              ],
+            ),
+          ),
           ...librarySources.map(
             (src) => DropdownMenuItem(
               value: LibrarySource(src),

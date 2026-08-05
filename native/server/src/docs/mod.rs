@@ -54,6 +54,9 @@ use security::SecurityModifier;
         crate::tawai::download::search::handle_search,
         crate::tawai::download::test_connection::handle_test_connection,
         crate::tawai::download::get_info::handle_get_info,
+        crate::tawai::library::identify::track::handle_list_download_folder_tracks,
+        crate::tawai::identify::mb::track::handle_fingerprint_path,
+        crate::tawai::library::scan::source::handle_scan_source,
     ),
     components(
         schemas(
@@ -96,6 +99,9 @@ use security::SecurityModifier;
             crate::tawai::library::tracks::list::TracksResponse,
             crate::tawai::library::tracks::mbid::MbidResponse,
             crate::tawai::library::identify::UnidentifiedQuery,
+            crate::tawai::library::identify::ApplyIdentifyBody,
+            crate::tawai::identify::mb::track::FingerprintPathBody,
+            crate::tawai::library::scan::source::ScanSourceQuery,
             crate::tawai::version::current::VersionCurrentResponse,
             crate::tawai::version::compare::CompareVersionsRequest,
             crate::tawai::version::compare::CompareVersionsResponse,

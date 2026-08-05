@@ -21,9 +21,11 @@ class LibraryAlbumsTab extends StatelessWidget {
     if (albums.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 120),
-          Center(child: Text('No albums in library')),
+        children: [
+          SizedBox(
+            height: AppTheme.spaceMD * 10 * AppTheme.spaceScale(context),
+          ),
+          const Center(child: Text('No albums in library')),
         ],
       );
     }
@@ -42,16 +44,17 @@ class LibraryAlbumsTab extends StatelessWidget {
         controller: scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
-          8,
-          8,
-          8 + AlphabetIndexScroller.kStripWidth,
-          8,
+          AppTheme.spaceSM * AppTheme.spaceScale(context),
+          AppTheme.spaceSM * AppTheme.spaceScale(context),
+          AppTheme.spaceSM * AppTheme.spaceScale(context) +
+              AlphabetIndexScroller.kStripWidth,
+          AppTheme.spaceSM * AppTheme.spaceScale(context),
         ),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: crossAxisCount,
           childAspectRatio: 0.85,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
+          crossAxisSpacing: AppTheme.spaceSM * AppTheme.spaceScale(context),
+          mainAxisSpacing: AppTheme.spaceSM * AppTheme.spaceScale(context),
         ),
         itemCount: albums.length,
         itemBuilder: (context, index) {

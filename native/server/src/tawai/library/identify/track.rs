@@ -1,17 +1,14 @@
+use std::path::Path;
+
 use axum::{
     Json,
-    extract::{Query, State},
+    extract::{Extension, Query, State},
     http::StatusCode,
     response::IntoResponse,
 };
 use base64::Engine as _;
 use serde::Deserialize;
-use tawai_core::{
-    audio,
-    db::{account, library, user_settings},
-    signals::library::TrackInfo,
-    tools,
-};
+use tawai_core::{db::{account, library}, signals::library::TrackInfo};
 use utoipa::ToSchema;
 
 use crate::server::SharedState;
@@ -24,6 +21,8 @@ pub struct UnidentifiedQuery {
 #[derive(Deserialize, ToSchema)]
 pub struct ApplyIdentifyBody {
     pub track_id: String,
+    pub file_path: Option<String>,
+    pub source_id: Option<String>,
     pub title: String,
     pub artist: String,
     pub artist_mbid: Option<String>,
@@ -37,6 +36,32 @@ pub struct ApplyIdentifyBody {
     pub lyrics: Option<String>,
     pub cover_bytes: Option<String>,
     pub total_discs: Option<i32>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/tawai/library/identify/download-folder",
+    tags = ["tawai.library"],
+    security(("ApiKeyAuth" = [])),
+    responses(
+        (status = 200, description = "Tracks read from the download folder", body = Vec<TrackInfo>),
+    )
+)]
+pub async fn handle_list_download_folder_tracks(
+    State(state): State<SharedState>,
+) -> impl IntoResponse {
+    let cfg = state.context.cfg().await;
+    let folder = cfg
+        .value
+        .get("download_folder")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let tracks =
+        tawai_core::utils::identify::list_download_folder_tracks(Path::new(&folder))
+            .unwrap_or_default();
+    Json(tracks).into_response()
 }
 
 #[utoipa::path(
@@ -81,33 +106,24 @@ pub async fn handle_list_unidentified(
 )]
 pub async fn handle_apply_identification(
     State(state): State<SharedState>,
+    Extension(user_id): Extension<String>,
     Json(body): Json<ApplyIdentifyBody>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
+    let mk = state.context.master_key.read().await.clone();
 
-    let track = match library::lookup_track(db.pool(), &body.track_id).await {
-        Ok(Some(t)) => t,
-        Ok(None) => {
+    let user = match account::get_user_by_id(db.pool(), &user_id, &mk).await {
+        Ok(Some(u)) => u,
+        _ => {
             return (
-                StatusCode::NOT_FOUND,
+                StatusCode::UNAUTHORIZED,
                 Json(serde_json::json!({
-                    "error": "Track not found"
-                })),
-            )
-                .into_response();
-        }
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "error": e.to_string()
+                    "error": "User not found"
                 })),
             )
                 .into_response();
         }
     };
-
-    let file_path = std::path::PathBuf::from(&track.file_path);
 
     let cover_bytes = match &body.cover_bytes {
         Some(s) if !s.is_empty() => match base64::engine::general_purpose::STANDARD.decode(s) {
@@ -125,98 +141,39 @@ pub async fn handle_apply_identification(
         _ => None,
     };
 
-    let write_tag = audio::tags::AudioTag {
-        title: body.title.clone(),
-        artist: body.artist.clone(),
-        album: body.album.clone(),
-        album_artist: body.artist.clone(),
-        album_disambiguation: body.album_disambiguation.clone(),
-        release_date: body.release_date.clone(),
-        track_number: body.track_num.unwrap_or(track.track_num.unwrap_or(0)),
-        disc_number: body.disc_num.unwrap_or(track.disc_num.unwrap_or(1)),
-        mbid_recording: body.mbid_recording.clone(),
-        mbid_artist: body.artist_mbid.clone(),
-        mbid_release: body.album_mbid.clone(),
-        mbid_release_artist: body.artist_mbid.clone(),
-        lyrics: body.lyrics.clone(),
-        cover: cover_bytes.clone(),
-        ..Default::default()
+    let params = tawai_core::utils::identify::ApplyIdentificationParams {
+        track_id: body.track_id,
+        file_path: body.file_path,
+        target_source_id: body.source_id,
+        title: body.title,
+        artist: body.artist,
+        artist_mbid: body.artist_mbid,
+        album: body.album,
+        album_mbid: body.album_mbid,
+        album_disambiguation: body.album_disambiguation,
+        release_date: body.release_date,
+        track_num: body.track_num,
+        disc_num: body.disc_num,
+        mbid_recording: body.mbid_recording,
+        lyrics: body.lyrics,
+        cover_bytes,
+        total_discs: body.total_discs.unwrap_or(0),
     };
 
-    if let Err(e) = audio::tags::write_audio_tags(&file_path, &write_tag) {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({
-                "error": format!("write_audio_tags failed: {e}")
-            })),
-        )
-            .into_response();
-    }
-
-    if let Some(cover) = &cover_bytes {
-        let _ = library::update_album_cover(db.pool(), &track.album_id, cover).await;
-    }
-
-    let new_file_path = match {
-        let db2 = state.context.db().await;
-        let pattern = user_settings::get_setting(
-            db2.pool(),
-            &account::DEFAULT_USERNAME,
-            "identify_naming_pattern",
-        )
+    match tawai_core::utils::identify::apply_identification(db.pool(), &user.id, &user.role, &params)
         .await
-        .filter(|s| !s.is_empty());
-
-        if let Some(pattern) = pattern {
-            tools::rename::rename_audio_file(&file_path, &pattern, &write_tag)
-                .map(|p| Some(p.to_string_lossy().to_string()))
-        } else {
-            Ok(None)
-        }
-    } {
-        Ok(path) => path,
-        Err(e) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({
-                    "error": format!("rename_audio_file failed: {e}")
-                })),
-            )
-                .into_response();
-        }
-    };
-
-    let artist_pairs = [(body.artist.clone(), body.artist_mbid.clone())];
-    let album_artist_pairs = [(body.artist.clone(), body.artist_mbid.clone())];
-
-    if let Err(e) = library::update_track(
-        db.pool(),
-        &body.track_id,
-        &body.title,
-        &artist_pairs,
-        &body.album,
-        &album_artist_pairs,
-        body.album_mbid.as_deref(),
-        body.release_date,
-        body.track_num,
-        body.disc_num,
-        body.mbid_recording.as_deref(),
-        body.lyrics.as_deref(),
-        cover_bytes.as_deref(),
-        new_file_path.as_deref(),
-        body.album_disambiguation.clone(),
-        body.total_discs.unwrap_or(0),
-    )
-    .await
     {
-        return (
+        Ok(outcome) => Json(serde_json::json!({
+            "success": true,
+            "new_file_path": outcome.new_file_path,
+        }))
+        .into_response(),
+        Err(e) => (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({
-                "error": format!("update_track failed: {e}")
+                "error": e.to_string()
             })),
         )
-            .into_response();
+            .into_response(),
     }
-
-    Json(serde_json::json!({ "success": true })).into_response()
 }

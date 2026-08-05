@@ -148,9 +148,9 @@ class _ConnectServiceDialogState extends State<ConnectServiceDialog> {
             onPressed: _isTesting ? null : _runTest,
             child: _isTesting
                 ? SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    width: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                    height: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                    child: const CircularProgressIndicator(strokeWidth: 2),
                   )
                 : Text('Test', style: textTheme.bodyMedium),
           ),

@@ -90,10 +90,18 @@ class _StatsPageState extends State<StatsPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.error_outline, size: 48, color: colors.error),
-                  const SizedBox(height: 16),
+                  Icon(
+                    Icons.error_outline,
+                    size: AppTheme.iconXL * AppTheme.iconScale(context),
+                    color: colors.error,
+                  ),
+                  SizedBox(
+                    height: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                  ),
                   Text(_error!, style: textTheme.bodyLarge),
-                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                  ),
                   FilledButton.icon(
                     onPressed: _load,
                     icon: const Icon(Icons.refresh),
@@ -382,7 +390,9 @@ class _StatsPageState extends State<StatsPage>
                 ),
               ),
             ],
-            SizedBox(height: 120),
+            SizedBox(
+              height: AppTheme.spaceMD * 10 * AppTheme.spaceScale(context),
+            ),
           ],
         ),
       ),
@@ -434,7 +444,14 @@ class _StatsPageState extends State<StatsPage>
       return Wrap(
         spacing: AppTheme.spaceMD,
         runSpacing: AppTheme.spaceMD,
-        children: cards.map((c) => SizedBox(width: 240, child: c)).toList(),
+        children: cards
+            .map(
+              (c) => SizedBox(
+                width: AppTheme.spaceXL * 10 * AppTheme.spaceScale(context),
+                child: c,
+              ),
+            )
+            .toList(),
       );
     }
     return Column(
@@ -608,8 +625,8 @@ class _StatCard extends StatelessWidget {
               : CrossAxisAlignment.center,
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: AppTheme.iconXL * AppTheme.iconScale(context),
+              height: AppTheme.iconXL * AppTheme.iconScale(context),
               decoration: BoxDecoration(
                 color: colors.primaryContainer,
                 borderRadius: BorderRadius.circular(AppTheme.radiusSM),

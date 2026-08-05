@@ -285,12 +285,15 @@ class _RenamerPageState extends State<RenamerPage> {
     return FilledButton.icon(
       onPressed: loading ? null : _previewRename,
       icon: loading
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
+          ? SizedBox(
+              width: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+              height: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+              child: const CircularProgressIndicator(strokeWidth: 2),
             )
-          : const Icon(Icons.preview, size: 18),
+          : Icon(
+              Icons.preview,
+              size: AppTheme.iconSM * AppTheme.iconScale(context),
+            ),
       label: Text(loading ? 'Loading...' : 'Preview'),
     );
   }
@@ -320,7 +323,7 @@ class _RenamerPageState extends State<RenamerPage> {
         children: [
           Icon(
             Icons.drive_file_rename_outline,
-            size: 64,
+            size: AppTheme.iconXXL * AppTheme.iconScale(context),
             color: colors.onSurfaceVariant,
           ),
           SizedBox(height: AppTheme.spaceMD),
@@ -344,13 +347,20 @@ class _RenamerPageState extends State<RenamerPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, size: 48, color: colors.error),
+            Icon(
+              Icons.error_outline,
+              size: AppTheme.iconXL * AppTheme.iconScale(context),
+              color: colors.error,
+            ),
             SizedBox(height: AppTheme.spaceSM),
             Text(_error ?? 'Unknown error', style: textTheme.bodyMedium),
             SizedBox(height: AppTheme.spaceMD),
             FilledButton.icon(
               onPressed: _previewRename,
-              icon: const Icon(Icons.refresh, size: 18),
+              icon: Icon(
+                Icons.refresh,
+                size: AppTheme.iconSM * AppTheme.iconScale(context),
+              ),
               label: const Text('Retry'),
             ),
           ],
@@ -372,7 +382,11 @@ class _RenamerPageState extends State<RenamerPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check_circle, size: 64, color: colors.primary),
+            Icon(
+              Icons.check_circle,
+              size: AppTheme.iconXXL * AppTheme.iconScale(context),
+              color: colors.primary,
+            ),
             SizedBox(height: AppTheme.spaceMD),
             Text(
               'All $_conformingCount file(s) already match the pattern',
@@ -422,7 +436,10 @@ class _RenamerPageState extends State<RenamerPage> {
                 ),
               FilledButton.tonalIcon(
                 onPressed: _selectedIndices.isEmpty ? null : _applyRename,
-                icon: const Icon(Icons.check, size: 18),
+                icon: Icon(
+                  Icons.check,
+                  size: AppTheme.iconSM * AppTheme.iconScale(context),
+                ),
                 label: Text('Apply (${_selectedIndices.length})'),
               ),
             ],
@@ -527,7 +544,7 @@ class _RenamePreviewCard extends StatelessWidget {
                         children: [
                           Icon(
                             Icons.arrow_forward,
-                            size: 14,
+                            size: AppTheme.iconSM * AppTheme.iconScale(context),
                             color: colors.primary,
                           ),
                           SizedBox(width: AppTheme.spaceXS),
@@ -547,7 +564,12 @@ class _RenamePreviewCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (isError) Icon(Icons.error, size: 20, color: colors.error),
+              if (isError)
+                Icon(
+                  Icons.error,
+                  size: AppTheme.iconMD * AppTheme.iconScale(context),
+                  color: colors.error,
+                ),
             ],
           ),
         ),

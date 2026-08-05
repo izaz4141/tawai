@@ -14,7 +14,7 @@ import 'package:tawai/ui/widgets/components/list_text_field.dart';
 import 'package:tawai/ui/widgets/components/spin_box.dart';
 import 'package:tawai/ui/widgets/dialog/db_account_manager_dialog.dart';
 import 'package:tawai/ui/widgets/dialog/permission_dialog.dart';
-import 'package:tawai/utils/io_service.dart';
+import 'package:tawai/utils/folder_picker.dart';
 import 'package:tawai/utils/platform_service.dart';
 
 class SettingsGlobalTab extends StatelessWidget {
@@ -88,30 +88,23 @@ class SettingsGlobalTab extends StatelessWidget {
         ValueListenableBuilder<String>(
           valueListenable: SettingsManager.downloadFolder,
           builder: (context, path, _) {
-            final remote = PlatformService().isRemote;
+            Future<void> pick() async {
+              final p = await pickFolder(
+                context,
+                initialPath: path.isNotEmpty ? path : null,
+              );
+              if (p != null && context.mounted) {
+                SettingsManager.downloadFolder.value = p;
+              }
+            }
+
             return ListButton(
               title: 'Download Folder',
               subtitle: path.isEmpty ? 'Not set' : path,
-              enabled: !remote,
-              onPressed: remote
-                  ? null
-                  : () async {
-                      final p = await IOServiceFactory.create()
-                          .getDirectoryPath();
-                      if (p != null && context.mounted) {
-                        SettingsManager.downloadFolder.value = p;
-                      }
-                    },
+              enabled: true,
+              onPressed: pick,
               trailing: OutlinedButton(
-                onPressed: remote
-                    ? null
-                    : () async {
-                        final p = await IOServiceFactory.create()
-                            .getDirectoryPath();
-                        if (p != null && context.mounted) {
-                          SettingsManager.downloadFolder.value = p;
-                        }
-                      },
+                onPressed: pick,
                 child: const Text('Browse'),
               ),
             );

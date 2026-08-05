@@ -1,60 +1,58 @@
-use axum::{
-    Extension, Json,
-    extract::State,
-    response::{
-        IntoResponse,
-        sse::{Event, KeepAlive, Sse},
-    },
-};
-use futures::stream::{self, Stream, StreamExt};
-use serde::Deserialize;
-use std::convert::Infallible;
+use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use std::sync::atomic::Ordering;
-use tawai_core::signals::library::ScanProgress;
+use tawai_core::signals::library::{ScanLibraryRequest, ScanLibraryResponse, ScanProgress};
 use tawai_core::{
     db::{account, library_source},
     utils::logger,
 };
-use tokio_stream::wrappers::WatchStream;
-use utoipa::ToSchema;
 
 use crate::server::SharedState;
 
-#[derive(Deserialize, ToSchema)]
-pub struct ScanQuery {
-    pub force: Option<bool>,
-}
-
-fn sse_event(progress: ScanProgress) -> Result<Event, Infallible> {
-    Ok(Event::default().json_data(progress).unwrap())
-}
-
-fn error_stream(msg: String) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    Sse::new(stream::once(async {
-        sse_event(ScanProgress {
-            complete: true,
-            error: Some(msg),
-            ..Default::default()
-        })
-    }))
-}
-
+#[utoipa::path(
+    post,
+    path = "/api/tawai/library/scan",
+    tags = ["tawai.library.scan"],
+    security(("ApiKeyAuth" = [])),
+    request_body = ScanLibraryRequest,
+    responses(
+        (status = 200, description = "Scan started", body = ScanLibraryResponse),
+        (status = 403, description = "Forbidden"),
+    )
+)]
 pub async fn handle_scan(
     State(state): State<SharedState>,
-    Extension(username): Extension<String>,
-    Json(query): Json<ScanQuery>,
+    Extension(user_id): Extension<String>,
+    Json(req): Json<ScanLibraryRequest>,
 ) -> impl IntoResponse {
-    let force = query.force.unwrap_or(false);
+    let id = req.id;
+    let force = req.force;
 
     if state.context.scan_running.swap(true, Ordering::SeqCst) {
-        return error_stream("A scan is already in progress".to_string()).into_response();
+        return (
+            StatusCode::OK,
+            Json(ScanLibraryResponse {
+                id,
+                started: false,
+                error: Some("A scan is already in progress".to_string()),
+            }),
+        )
+            .into_response();
     }
+    *state.context.scan_progress.write().await = None;
 
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
-    let Ok(Some(user)) = account::get_user_by_username(db.pool(), &username, &mk).await else {
-        logger::error(&format!("Cant find user with username: {}", username));
-        return error_stream(format!("Cant find user with username: {}", username).to_string())
+    let Ok(Some(user)) = account::get_user_by_id(db.pool(), &user_id, &mk).await else {
+        state.context.scan_running.store(false, Ordering::SeqCst);
+        logger::error(&format!("Cant find user with id: {}", user_id));
+        return (
+            StatusCode::OK,
+            Json(ScanLibraryResponse {
+                id,
+                started: false,
+                error: Some(format!("Cant find user with id: {}", user_id)),
+            }),
+        )
             .into_response();
     };
 
@@ -64,33 +62,42 @@ pub async fn handle_scan(
 
     if sources.is_empty() {
         state.context.scan_running.store(false, Ordering::SeqCst);
-        return error_stream("No library sources configured".to_string()).into_response();
+        return (
+            StatusCode::OK,
+            Json(ScanLibraryResponse {
+                id,
+                started: false,
+                error: Some("No library sources configured".to_string()),
+            }),
+        )
+            .into_response();
     }
 
-    let (tx, rx) = tokio::sync::watch::channel(ScanProgress::default());
-    let rx2 = rx.clone();
+    let (tx, mut rx) = tokio::sync::watch::channel(ScanProgress::default());
 
     let client = state.context.client().clone();
     let sources2 = sources.clone();
     let ctx = state.context.clone();
 
     tokio::spawn(async move {
-        let pool = db.pool();
-        tawai_core::audio::scan::run_scan(&pool, client, &sources2, force, Some(tx)).await;
+        tawai_core::audio::scan::run_scan(db.pool(), client, &sources2, force, Some(tx)).await;
         ctx.scan_running.store(false, Ordering::SeqCst);
     });
 
     tokio::spawn(async move {
-        let mut rx = rx2;
         while rx.changed().await.is_ok() {
             let p = rx.borrow_and_update().clone();
             *state.context.scan_progress.write().await = Some(p);
         }
     });
 
-    let stream = WatchStream::new(rx).map(sse_event);
-
-    Sse::new(stream)
-        .keep_alive(KeepAlive::default())
+    (
+        StatusCode::OK,
+        Json(ScanLibraryResponse {
+            id,
+            started: true,
+            error: None,
+        }),
+    )
         .into_response()
 }

@@ -29,12 +29,12 @@ pub struct ReportPlaybackPayload {
 )]
 pub async fn handle_report_playback(
     State(state): State<SharedState>,
-    Extension(username): Extension<String>,
+    Extension(user_id): Extension<String>,
     Json(payload): Json<ReportPlaybackPayload>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
-    let user = match account::get_user_by_username(db.pool(), &username, &mk).await {
+    let user = match account::get_user_by_id(db.pool(), &user_id, &mk).await {
         Ok(Some(u)) => u,
         _ => return axum::http::StatusCode::UNAUTHORIZED.into_response(),
     };

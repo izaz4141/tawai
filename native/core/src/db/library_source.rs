@@ -103,6 +103,22 @@ pub async fn get_source_by_id(
     }
 }
 
+/// Look up the full library source row backing a track, including access
+/// metadata (`owner_id`, `access_rule`).
+pub async fn get_source_info_by_track_id(
+    pool: &DatabasePool,
+    track_id: &str,
+) -> Result<Option<LibrarySourceInfo>> {
+    match pool {
+        DatabasePool::Sqlite(p) => {
+            super::library_source_sq::get_source_info_by_track_id(p, track_id).await
+        }
+        DatabasePool::Postgres(p) => {
+            super::library_source_pg::get_source_info_by_track_id(p, track_id).await
+        }
+    }
+}
+
 pub async fn get_source_by_url_and_owner(
     pool: &DatabasePool,
     source_type: &str,

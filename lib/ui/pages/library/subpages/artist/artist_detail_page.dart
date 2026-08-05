@@ -100,7 +100,7 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
                         ArtistHeader(artist: widget.artist),
                         const Center(
                           child: Padding(
-                            padding: EdgeInsets.all(32),
+                            padding: EdgeInsets.all(AppTheme.spaceXXL),
                             child: Text('No albums found'),
                           ),
                         ),
@@ -114,11 +114,24 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
                         ),
                         SliverToBoxAdapter(
                           child: Card(
-                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                            margin: EdgeInsets.fromLTRB(
+                              AppTheme.spaceSM *
+                                  2 *
+                                  AppTheme.spaceScale(context),
+                              0,
+                              AppTheme.spaceSM *
+                                  2 *
+                                  AppTheme.spaceScale(context),
+                              AppTheme.spaceSM * AppTheme.spaceScale(context),
+                            ),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
+                              padding: EdgeInsets.symmetric(
+                                horizontal:
+                                    AppTheme.spaceSM *
+                                    AppTheme.spaceScale(context),
+                                vertical:
+                                    AppTheme.spaceXS *
+                                    AppTheme.spaceScale(context),
                               ),
                               child: Row(
                                 children: [
@@ -129,8 +142,12 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
                                           : _playAllArtist,
                                       icon: _isPlayingAll
                                           ? SizedBox(
-                                              width: 18,
-                                              height: 18,
+                                              width:
+                                                  AppTheme.spaceLG *
+                                                  AppTheme.spaceScale(context),
+                                              height:
+                                                  AppTheme.spaceLG *
+                                                  AppTheme.spaceScale(context),
                                               child: CircularProgressIndicator(
                                                 strokeWidth: 2,
                                                 color:
@@ -156,14 +173,23 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
                           ),
                         ),
                         SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                          padding: EdgeInsets.fromLTRB(
+                            AppTheme.spaceSM * AppTheme.spaceScale(context),
+                            0,
+                            AppTheme.spaceSM * AppTheme.spaceScale(context),
+                            AppTheme.spaceSM * AppTheme.spaceScale(context),
+                          ),
                           sliver: SliverGrid(
                             gridDelegate:
                                 SliverGridDelegateWithFixedCrossAxisCount(
                                   crossAxisCount: isDesktop ? 4 : 2,
                                   childAspectRatio: 0.85,
-                                  crossAxisSpacing: 8,
-                                  mainAxisSpacing: 8,
+                                  crossAxisSpacing:
+                                      AppTheme.spaceSM *
+                                      AppTheme.spaceScale(context),
+                                  mainAxisSpacing:
+                                      AppTheme.spaceSM *
+                                      AppTheme.spaceScale(context),
                                 ),
                             delegate: SliverChildBuilderDelegate(
                               (context, index) => AlbumCard(

@@ -26,10 +26,10 @@ class ActionButtons extends StatelessWidget {
             child: FilledButton.icon(
               onPressed: fingerprinting ? null : onFingerprint,
               icon: fingerprinting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                  ? SizedBox(
+                      width: AppTheme.spaceLG * AppTheme.spaceScale(context),
+                      height: AppTheme.spaceLG * AppTheme.spaceScale(context),
+                      child: const CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.fingerprint),
               label: const Text('Fingerprint'),
@@ -40,10 +40,10 @@ class ActionButtons extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: lookingUp ? null : onLookup,
               icon: lookingUp
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                  ? SizedBox(
+                      width: AppTheme.spaceLG * AppTheme.spaceScale(context),
+                      height: AppTheme.spaceLG * AppTheme.spaceScale(context),
+                      child: const CircularProgressIndicator(strokeWidth: 2),
                     )
                   : Icon(Icons.search, color: colors.primary),
               label: Text('Lookup', style: TextStyle(color: colors.primary)),

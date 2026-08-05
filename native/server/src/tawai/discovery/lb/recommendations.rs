@@ -39,10 +39,10 @@ pub struct RecommendationsQuery {
 )]
 pub async fn handle_get_recommendations(
     State(state): State<SharedState>,
-    Extension(username): Extension<String>,
+    Extension(user_id): Extension<String>,
     Query(query): Query<RecommendationsQuery>,
 ) -> impl IntoResponse {
-    let (token, user_name) = match util::resolve_lb_user(&state, &username).await {
+    let (token, user_name) = match util::resolve_lb_user(&state, &user_id).await {
         Ok(ok) => ok,
         Err(err) => return err,
     };

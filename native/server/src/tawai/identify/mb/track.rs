@@ -10,10 +10,16 @@ use tawai_core::{
     db::library,
     metadata::musicbrainz,
     signals::library::{MatchCandidate, TrackInfo},
+    signals::metadata::RecordingInfo,
 };
 use utoipa::ToSchema;
 
 use crate::server::SharedState;
+
+#[derive(Deserialize, ToSchema)]
+pub struct FingerprintPathBody {
+    pub file_path: String,
+}
 
 #[utoipa::path(
     get,
@@ -126,4 +132,41 @@ pub async fn handle_fingerprint_track(
         };
 
     Json(Some(info)).into_response()
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/tawai/identify/mb/fingerprint",
+    tags = ["tawai.identify"],
+    security(("ApiKeyAuth" = [])),
+    request_body = FingerprintPathBody,
+    responses(
+        (status = 200, description = "Fingerprint lookup result", body = Option<RecordingInfo>),
+    )
+)]
+pub async fn handle_fingerprint_path(
+    State(state): State<SharedState>,
+    Json(body): Json<FingerprintPathBody>,
+) -> impl IntoResponse {
+    let path = std::path::Path::new(&body.file_path);
+    let (fingerprint, duration) = match audio::fingerprint::compute_fingerprint(path) {
+        Ok(fp) => (fp.fingerprint, fp.duration),
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": format!("compute_fingerprint failed: {e}")
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    match musicbrainz::lookup_by_fingerprint(state.context.client(), &fingerprint, duration).await {
+        Ok(info) => Json(Some(info)).into_response(),
+        Err(e) => {
+            tawai_core::utils::logger::debug(&format!("AcoustID lookup failed: {e}"));
+            Json(None::<tawai_core::signals::metadata::RecordingInfo>).into_response()
+        }
+    }
 }

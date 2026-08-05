@@ -52,7 +52,7 @@ class AlbumTrackRow extends StatelessWidget {
             children: [
               if (position != null)
                 SizedBox(
-                  width: 24,
+                  width: AppTheme.spaceXL * scale,
                   child: Text(
                     '$position',
                     style: Theme.of(
@@ -82,11 +82,14 @@ class AlbumTrackRow extends StatelessWidget {
                           ),
                         ),
                         if (warningIcon)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 4),
+                          Padding(
+                            padding: EdgeInsets.only(
+                              left: AppTheme.spaceXS * scale,
+                            ),
                             child: Icon(
                               Icons.warning_amber_rounded,
-                              size: 14,
+                              size:
+                                  AppTheme.iconSM * AppTheme.iconScale(context),
                               color: Colors.orange,
                             ),
                           ),

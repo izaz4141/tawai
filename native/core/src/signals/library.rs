@@ -194,6 +194,25 @@ pub struct ScanLibraryRequest {
     pub force: bool,
 }
 
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ScanLibraryResponse {
+    pub id: String,
+    pub started: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct ScanStatusRequest {
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ScanStatusResponse {
+    pub id: String,
+    pub running: bool,
+    pub progress: Option<ScanProgress>,
+}
+
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct AddLibraryFolderRequest {
     pub id: String,

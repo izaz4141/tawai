@@ -2,42 +2,26 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:tawai/src/bindings/bindings.dart';
-import 'package:rinf/rinf.dart';
 
 import 'package:tawai/utils/bridge_service.dart';
-import 'package:tawai/utils/platform_service.dart';
 import 'package:tawai/utils/settings.dart';
 
 class ScanService {
   static final ScanService _instance = ScanService._();
   static ScanService get instance => _instance;
-  ScanService._() {
-    _initAmbientListeners();
-    _startStatusPolling();
-  }
+  ScanService._();
 
   final ValueNotifier<bool> isScanning = ValueNotifier(false);
   final ValueNotifier<ScanProgressSignal?> progress = ValueNotifier(null);
 
-  // Per-operation subscription (both local and remote user-initiated scans)
-  StreamSubscription<ScanProgressSignal>? _scanSub;
+  static const Duration _idleInterval = Duration(seconds: 5);
+  static const Duration _activeInterval = Duration(seconds: 1);
 
-  // Ambient listener for local periodic scans (hub-initiated)
-  StreamSubscription<RustSignalPack<ScanProgressSignal>>? _ambientProgressSub;
-
+  int _refCount = 0;
   Timer? _statusPollTimer;
+  bool _polling = false;
 
   String get _userId => SettingsManager.currentUser.value?.id ?? '';
-  bool get _isRemote => PlatformService().isRemote;
-
-  void _initAmbientListeners() {
-    _ambientProgressSub = ScanProgressSignal.rustSignalStream.listen((pack) {
-      _processProgress(pack.message);
-      if (pack.message.complete) {
-        _finalizeScan();
-      }
-    });
-  }
 
   // ---------------------------------------------------------------------------
   // Library Sources
@@ -66,100 +50,102 @@ class ScanService {
   }
 
   // ---------------------------------------------------------------------------
+  // Polling lifecycle (refCount-gated by UI consumers)
+  // ---------------------------------------------------------------------------
+
+  void acquire() {
+    _refCount++;
+    if (!_polling) {
+      _polling = true;
+      _scheduleNextPoll();
+    }
+  }
+
+  void release() {
+    _refCount--;
+    if (_refCount <= 0) {
+      _refCount = 0;
+      _stopStatusPolling();
+    }
+  }
+
+  void _startStatusPolling() {
+    if (_polling) return;
+    _polling = true;
+    _scheduleNextPoll();
+  }
+
+  void _stopStatusPolling() {
+    _statusPollTimer?.cancel();
+    _statusPollTimer = null;
+    _polling = false;
+  }
+
+  void _scheduleNextPoll() {
+    _statusPollTimer?.cancel();
+    final interval = isScanning.value ? _activeInterval : _idleInterval;
+    _statusPollTimer = Timer(interval, _pollScanStatus);
+  }
+
+  // ---------------------------------------------------------------------------
   // Scan
   // ---------------------------------------------------------------------------
 
-  void incrementalScan() {
+  Future<void> incrementalScan() async {
     if (isScanning.value) return;
-    _resetProgress();
-    isScanning.value = true;
-    _performScan(force: false);
+    await _performScan(force: false);
   }
 
-  void forceRescan() {
+  Future<void> forceRescan() async {
     if (isScanning.value) return;
+    await _performScan(force: true);
+  }
+
+  Future<void> _performScan({required bool force}) async {
     _resetProgress();
     isScanning.value = true;
-    _performScan(force: true);
+    final result = await BridgeService.instance.scanLibrary(
+      userId: _userId,
+      force: force,
+    );
+    if (result.started) {
+      if (!_polling) _startStatusPolling();
+    } else {
+      debugPrint('Scan failed to start: ${result.error}');
+      isScanning.value = false;
+      progress.value = null;
+    }
   }
 
   void _resetProgress() {
     progress.value = null;
   }
 
-  void _performScan({required bool force}) {
-    _scanSub?.cancel();
-    _scanSub = BridgeService.instance
-        .scanLibrary(userId: _userId, force: force)
-        .listen(
-          _processProgress,
-          onDone: _finalizeScan,
-          onError: (_) => _finalizeScan(),
-        );
-  }
-
-  void _processProgress(ScanProgressSignal signal) {
-    if (!isScanning.value && signal.stage.isNotEmpty) {
-      isScanning.value = true;
-    }
-    progress.value = signal;
-  }
-
   void _finalizeScan() {
     isScanning.value = false;
     progress.value = null;
-    _scanSub?.cancel();
-    _scanSub = null;
-    _stopStatusPolling();
-    _startStatusPolling();
   }
 
   // ---------------------------------------------------------------------------
-  // Remote status polling (detect scans by other users)
+  // Status polling (adaptive: slow when idle, fast while scanning)
   // ---------------------------------------------------------------------------
-
-  void _startStatusPolling() {
-    if (!_isRemote) return;
-    _statusPollTimer?.cancel();
-    _statusPollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      _pollScanStatus();
-    });
-  }
-
-  void _stopStatusPolling() {
-    _statusPollTimer?.cancel();
-    _statusPollTimer = null;
-  }
 
   Future<void> _pollScanStatus() async {
     final result = await BridgeService.instance.getScanStatus();
     if (result.running) {
       if (!isScanning.value) isScanning.value = true;
       if (result.progress != null) {
-        progress.value = ScanProgressSignal(
-          id: '',
-          currentFile: result.progress!['current_file'] as String? ?? '',
-          filesScanned:
-              (result.progress!['files_scanned'] as num?)?.toInt() ?? 0,
-          totalFiles: (result.progress!['total_files'] as num?)?.toInt() ?? 0,
-          stage: result.progress!['stage'] as String? ?? '',
-          complete: result.progress!['complete'] as bool? ?? false,
-          tracksFound: (result.progress!['tracks_found'] as num?)?.toInt() ?? 0,
-          newTracks: (result.progress!['new_tracks'] as num?)?.toInt() ?? 0,
-          duplicates: (result.progress!['duplicates'] as num?)?.toInt() ?? 0,
-          deleted: (result.progress!['deleted'] as num?)?.toInt() ?? 0,
-          currentSource: result.progress!['current_source'] as String? ?? '',
-          error: result.progress!['error'] as String?,
-        );
+        progress.value = result.progress;
       }
     } else if (!result.running && isScanning.value) {
       _finalizeScan();
+    }
+    if (_polling) {
+      _scheduleNextPoll();
     }
   }
 
   void dispose() {
     _stopStatusPolling();
-    _scanSub?.cancel();
-    _ambientProgressSub?.cancel();
   }
 }

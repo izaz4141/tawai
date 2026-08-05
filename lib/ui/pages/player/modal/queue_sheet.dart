@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/src/bindings/bindings.dart';
+import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/components/sheet.dart';
 
 class QueueSheet extends StatelessWidget {
@@ -19,7 +20,12 @@ class QueueSheet extends StatelessWidget {
           minChildSize: 0.3,
           maxChildSize: 0.9,
           header: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            padding: EdgeInsets.fromLTRB(
+              AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+              AppTheme.spaceMD * AppTheme.spaceScale(context),
+              AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+              AppTheme.spaceXS * AppTheme.spaceScale(context),
+            ),
             child: Row(
               children: [
                 Text(
@@ -28,7 +34,9 @@ class QueueSheet extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(
+                  width: AppTheme.spaceSM * AppTheme.spaceScale(context),
+                ),
                 Text(
                   '${items.length} track${items.length == 1 ? '' : 's'}',
                   style: Theme.of(context).textTheme.bodySmall,
@@ -73,7 +81,10 @@ class QueueSheet extends StatelessWidget {
                     type: MaterialType.transparency,
                     child: ListTile(
                       leading: IconButton(
-                        icon: const Icon(Icons.close, size: 18),
+                        icon: Icon(
+                          Icons.close,
+                          size: AppTheme.iconSM * AppTheme.iconScale(context),
+                        ),
                         onPressed: () =>
                             PlaybackService.instance.removeFromQueue(index),
                       ),

@@ -114,9 +114,17 @@ class _MissingMetadataPageState extends State<MissingMetadataPage> {
                     onPressed: _scanning ? null : _scan,
                     icon: _scanning
                         ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            width:
+                                AppTheme.spaceSM *
+                                2 *
+                                AppTheme.spaceScale(context),
+                            height:
+                                AppTheme.spaceSM *
+                                2 *
+                                AppTheme.spaceScale(context),
+                            child: const CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
                           )
                         : const Icon(Icons.search),
                     label: Text(
@@ -223,7 +231,12 @@ class _MissingMetadataPageState extends State<MissingMetadataPage> {
     ValueChanged<bool> onChanged,
   ) {
     return FilterChip(
-      label: Text(label, style: const TextStyle(fontSize: 12)),
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: AppTheme.textSM * AppTheme.textScale(context),
+        ),
+      ),
       selected: selected,
       onSelected: onChanged,
       visualDensity: VisualDensity.compact,

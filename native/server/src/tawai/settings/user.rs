@@ -6,7 +6,7 @@ use axum::{
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
-use tawai_core::db::{account, user_settings};
+use tawai_core::db::user_settings;
 use utoipa::ToSchema;
 
 use crate::server::SharedState;
@@ -42,14 +42,9 @@ pub struct SetUserSettingPayload {
 )]
 pub async fn handle_get_all_user_settings(
     State(state): State<SharedState>,
-    Extension(username): Extension<String>,
+    Extension(user_id): Extension<String>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
-    let user_id = match account::get_user_by_username(db.pool(), &username, &mk).await {
-        Ok(Some(u)) => u.id,
-        _ => return axum::http::StatusCode::UNAUTHORIZED.into_response(),
-    };
     let pairs = user_settings::get_all_settings(db.pool(), &user_id).await;
     let settings: HashMap<_, _> = pairs.into_iter().collect();
     Json(AllUserSettingsResponse { settings }).into_response()
@@ -70,15 +65,10 @@ pub async fn handle_get_all_user_settings(
 )]
 pub async fn handle_get_user_setting(
     State(state): State<SharedState>,
-    Extension(username): Extension<String>,
+    Extension(user_id): Extension<String>,
     Path(key): Path<String>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
-    let user_id = match account::get_user_by_username(db.pool(), &username, &mk).await {
-        Ok(Some(u)) => u.id,
-        _ => return axum::http::StatusCode::UNAUTHORIZED.into_response(),
-    };
     match user_settings::get_setting(db.pool(), &user_id, &key).await {
         Some(value) => Json(UserSettingResponse {
             key: key.clone(),
@@ -112,16 +102,11 @@ pub async fn handle_get_user_setting(
 )]
 pub async fn handle_set_user_setting(
     State(state): State<SharedState>,
-    Extension(username): Extension<String>,
+    Extension(user_id): Extension<String>,
     Path(key): Path<String>,
     Json(payload): Json<SetUserSettingPayload>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
-    let user_id = match account::get_user_by_username(db.pool(), &username, &mk).await {
-        Ok(Some(u)) => u.id,
-        _ => return axum::http::StatusCode::UNAUTHORIZED.into_response(),
-    };
     match user_settings::set_setting(db.pool(), &user_id, &key, &payload.value).await {
         Ok(()) => axum::http::StatusCode::OK.into_response(),
         Err(e) => {

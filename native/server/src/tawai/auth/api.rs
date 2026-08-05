@@ -26,16 +26,16 @@ pub struct ApiKeyResponse {
 )]
 pub async fn handle_generate_api(
     State(state): State<SharedState>,
-    Extension(username): Extension<String>,
+    Extension(user_id): Extension<String>,
     jar: CookieJar,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
-    let new_key = tawai_core::db::account::regenerate_user_api_key(db.pool(), &username, &mk)
+    let new_key = tawai_core::db::account::regenerate_user_api_key(db.pool(), &user_id, &mk)
         .await
         .unwrap_or_default();
 
-    let jwt_response = create_jwt_response(&state, &username).await.unwrap();
+    let jwt_response = create_jwt_response(&state, &user_id).await.unwrap();
     let jar = build_jwt_cookie(jar, &jwt_response);
 
     let json_response = ApiKeyResponse {

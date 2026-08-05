@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::Arc;
 
 use rinf::{DartSignal, RustSignal};
@@ -7,7 +8,21 @@ use crate::utils::logger;
 use tawai_core::app_context::AppContext;
 use tawai_core::audio;
 use tawai_core::db::library;
-use tawai_core::tools;
+
+pub async fn handle_list_download_folder_tracks(context: Arc<AppContext>) {
+    use signals::library::*;
+    let receiver = ListDownloadFolderTracksRequest::get_dart_signal_receiver();
+    while let Some(signal_pack) = receiver.recv().await {
+        let msg = signal_pack.message;
+        let path = Path::new(&msg.path);
+        let tracks: Vec<TrackInfo> = tawai_core::utils::identify::list_download_folder_tracks(path)
+            .unwrap_or_default()
+            .into_iter()
+            .map(Into::into)
+            .collect();
+        ListDownloadFolderTracksResponse { id: msg.id, tracks }.send_signal_to_dart();
+    }
+}
 
 pub async fn handle_list_unidentified_tracks(context: Arc<AppContext>) {
     use signals::metadata::*;
@@ -41,165 +56,77 @@ pub async fn handle_apply_identification(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
+        let mk = context.master_key.read().await.clone();
 
-        let track = match library::lookup_track(db.pool(), &msg.track_id).await {
-            Ok(Some(t)) => t,
-            Ok(None) => {
-                logger::error(&format!("Track not found: {}", msg.track_id));
+        let user = match tawai_core::db::account::get_user_by_id(db.pool(), &msg.user_id, &mk).await
+        {
+            Ok(Some(u)) => u,
+            _ => {
+                logger::error(&format!(
+                    "apply_identification: user not found: {}",
+                    msg.user_id
+                ));
                 ApplyIdentificationResponse {
                     id: msg.id,
-                    track_id: msg.track_id,
+                    track_id: msg.track_id.clone(),
                     success: false,
-                    error: Some("Track not found".to_string()),
-                }
-                .send_signal_to_dart();
-                continue;
-            }
-            Err(e) => {
-                logger::error(&format!("lookup_track failed: {e}"));
-                ApplyIdentificationResponse {
-                    id: msg.id,
-                    track_id: msg.track_id,
-                    success: false,
-                    error: Some(e.to_string()),
+                    error: Some("User not found".to_string()),
+                    new_file_path: None,
                 }
                 .send_signal_to_dart();
                 continue;
             }
         };
 
-        let file_path = std::path::PathBuf::from(&track.file_path);
-
-        let title = if msg.title.is_empty() && !track.title.is_empty() {
-            track.title.clone()
-        } else {
-            msg.title.clone()
-        };
-        let artist = if msg.artist.is_empty() && !track.artists_string.is_empty() {
-            track.artists_string.clone()
-        } else {
-            msg.artist.clone()
-        };
-        let album = if msg.album.is_empty() && !track.album_title.is_empty() {
-            track.album_title.clone()
-        } else {
-            msg.album.clone()
-        };
-        let track_num = msg.track_num.or(track.track_num);
-        let disc_num = msg.disc_num.or(track.disc_num);
-        let mbid_recording = msg.mbid_recording.or(track.mbid_recording);
-        let lyrics = msg.lyrics.or_else(|| track.lyrics.clone());
-
-        let write_tag = audio::tags::AudioTag {
-            title: title.clone(),
-            artist: artist.clone(),
-            album: album.clone(),
-            album_artist: artist.clone(),
-            album_disambiguation: msg.album_disambiguation.clone(),
-            release_date: msg.release_date.clone(),
-            track_number: track_num.unwrap_or(0),
-            disc_number: disc_num.unwrap_or(1),
-            mbid_recording: mbid_recording.clone(),
-            mbid_artist: msg.artist_mbid.clone(),
-            mbid_release: msg.album_mbid.clone(),
-            mbid_release_artist: msg.artist_mbid.clone(),
-            lyrics: lyrics.clone(),
-            cover: msg.cover_bytes.clone(),
-            ..Default::default()
+        let params = tawai_core::utils::identify::ApplyIdentificationParams {
+            track_id: msg.track_id.clone(),
+            file_path: msg.file_path.clone(),
+            target_source_id: msg.target_source_id.clone(),
+            title: msg.title,
+            artist: msg.artist,
+            artist_mbid: msg.artist_mbid,
+            album: msg.album,
+            album_mbid: msg.album_mbid,
+            album_disambiguation: msg.album_disambiguation,
+            release_date: msg.release_date,
+            track_num: msg.track_num,
+            disc_num: msg.disc_num,
+            mbid_recording: msg.mbid_recording,
+            lyrics: msg.lyrics,
+            cover_bytes: msg.cover_bytes,
+            total_discs: msg.total_discs,
         };
 
-        if let Err(e) = audio::tags::write_audio_tags(&file_path, &write_tag) {
-            logger::error(&format!("write_audio_tags failed: {e}"));
-            ApplyIdentificationResponse {
-                id: msg.id,
-                track_id: msg.track_id,
-                success: false,
-                error: Some(e.to_string()),
-            }
-            .send_signal_to_dart();
-            continue;
-        }
-
-        if let Some(cover_bytes) = &msg.cover_bytes {
-            if let Err(e) =
-                library::update_album_cover(db.pool(), &track.album_id, cover_bytes).await
-            {
-                logger::error(&format!("update_album_cover failed (non-fatal): {e}"));
-            }
-        }
-
-        let new_file_path = match {
-            let db2 = context.db().await;
-            let pattern = tawai_core::db::user_settings::get_setting(
-                db2.pool(),
-                &tawai_core::db::account::DEFAULT_USERNAME,
-                "identify_naming_pattern",
-            )
-            .await
-            .filter(|s| !s.is_empty());
-
-            if let Some(pattern) = pattern {
-                tools::rename::rename_audio_file(&file_path, &pattern, &write_tag)
-                    .map(|p| Some(p.to_string_lossy().to_string()))
-            } else {
-                Ok(None)
-            }
-        } {
-            Ok(path) => path,
-            Err(e) => {
-                logger::error(&format!("rename_audio_file failed: {e}"));
-                ApplyIdentificationResponse {
-                    id: msg.id,
-                    track_id: msg.track_id,
-                    success: false,
-                    error: Some(e.to_string()),
-                }
-                .send_signal_to_dart();
-                continue;
-            }
-        };
-
-        let artist_pairs = [(artist.clone(), msg.artist_mbid.clone())];
-        let album_artist_pairs = [(artist.clone(), msg.artist_mbid.clone())];
-
-        if let Err(e) = library::update_track(
+        match tawai_core::utils::identify::apply_identification(
             db.pool(),
-            &msg.track_id,
-            &title,
-            &artist_pairs,
-            &album,
-            &album_artist_pairs,
-            msg.album_mbid.as_deref(),
-            msg.release_date,
-            track_num,
-            disc_num,
-            mbid_recording.as_deref(),
-            lyrics.as_deref(),
-            msg.cover_bytes.as_deref(),
-            new_file_path.as_deref(),
-            msg.album_disambiguation.clone(),
-            msg.total_discs,
+            &user.id,
+            &user.role,
+            &params,
         )
         .await
         {
-            logger::error(&format!("update_track failed: {e}"));
-            ApplyIdentificationResponse {
-                id: msg.id,
-                track_id: msg.track_id,
-                success: false,
-                error: Some(e.to_string()),
+            Ok(outcome) => {
+                ApplyIdentificationResponse {
+                    id: msg.id,
+                    track_id: msg.track_id,
+                    success: true,
+                    error: None,
+                    new_file_path: outcome.new_file_path,
+                }
+                .send_signal_to_dart();
             }
-            .send_signal_to_dart();
-            continue;
+            Err(e) => {
+                logger::error(&format!("apply_identification failed: {e}"));
+                ApplyIdentificationResponse {
+                    id: msg.id,
+                    track_id: msg.track_id,
+                    success: false,
+                    error: Some(e.to_string()),
+                    new_file_path: None,
+                }
+                .send_signal_to_dart();
+            }
         }
-
-        ApplyIdentificationResponse {
-            id: msg.id,
-            track_id: msg.track_id,
-            success: true,
-            error: None,
-        }
-        .send_signal_to_dart();
     }
 }
 

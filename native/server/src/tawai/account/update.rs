@@ -60,7 +60,7 @@ pub struct UpdateAccountResponse {
 )]
 pub async fn handle_update_account(
     State(state): State<SharedState>,
-    Extension(username): Extension<String>,
+    Extension(user_id): Extension<String>,
     jar: CookieJar,
     headers: HeaderMap,
     Json(payload): Json<UpdateAccountRequest>,
@@ -73,7 +73,7 @@ pub async fn handle_update_account(
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
 
-    let authorizer = account::get_user_by_username(db.pool(), &username, &mk)
+    let authorizer = account::get_user_by_id(db.pool(), &user_id, &mk)
         .await
         .unwrap_or(None);
 
@@ -89,7 +89,7 @@ pub async fn handle_update_account(
     }
 
     let is_admin = authorizer.role == "admin";
-    if payload.target_username != username && !is_admin {
+    if payload.target_username != authorizer.username && !is_admin {
         return (StatusCode::FORBIDDEN,).into_response();
     }
 
@@ -164,12 +164,7 @@ pub async fn handle_update_account(
         ),
     };
 
-    let jwt_username = if payload.target_username == username {
-        result_username.clone()
-    } else {
-        username
-    };
-    let jwt_response = create_jwt_response(&state, &jwt_username).await.unwrap();
+    let jwt_response = create_jwt_response(&state, &authorizer.id).await.unwrap();
     let jar = build_jwt_cookie(jar, &jwt_response);
 
     (

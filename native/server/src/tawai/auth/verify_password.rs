@@ -20,7 +20,7 @@ const X_PASSWORD: HeaderName = HeaderName::from_static("x-password");
 )]
 pub async fn handle_verify_password(
     State(state): State<SharedState>,
-    Extension(username): Extension<String>,
+    Extension(user_id): Extension<String>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let password = headers
@@ -30,7 +30,7 @@ pub async fn handle_verify_password(
 
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
-    match account::get_user_by_username(db.pool(), &username, &mk).await {
+    match account::get_user_by_id(db.pool(), &user_id, &mk).await {
         Ok(Some(user)) => {
             if security::validate_password(&user.password_hash, password).unwrap_or(false) {
                 (StatusCode::OK,).into_response()

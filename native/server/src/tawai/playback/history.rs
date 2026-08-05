@@ -5,7 +5,7 @@ use axum::{
 };
 use serde::Deserialize;
 use serde::Serialize;
-use tawai_core::db::{account, history};
+use tawai_core::db::history;
 use tawai_core::signals::playback::PlaybackRecord;
 use utoipa::ToSchema;
 
@@ -35,15 +35,10 @@ pub struct HistoryResponse {
 )]
 pub async fn handle_get_history(
     State(state): State<SharedState>,
-    Extension(username): Extension<String>,
+    Extension(user_id): Extension<String>,
     Query(query): Query<HistoryQuery>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
-    let user_id = match account::get_user_by_username(db.pool(), &username, &mk).await {
-        Ok(Some(u)) => u.id,
-        _ => return axum::http::StatusCode::UNAUTHORIZED.into_response(),
-    };
     let limit = query.limit.unwrap_or(50);
 
     match history::get_recent_history(db.pool(), &user_id, limit).await {

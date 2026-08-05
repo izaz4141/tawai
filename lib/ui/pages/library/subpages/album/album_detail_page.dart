@@ -81,11 +81,18 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
                   }
                   if (index == 1) {
                     return Card(
-                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      margin: EdgeInsets.fromLTRB(
+                        AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                        0,
+                        AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                        AppTheme.spaceSM * AppTheme.spaceScale(context),
+                      ),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
+                        padding: EdgeInsets.symmetric(
+                          horizontal:
+                              AppTheme.spaceSM * AppTheme.spaceScale(context),
+                          vertical:
+                              AppTheme.spaceXS * AppTheme.spaceScale(context),
                         ),
                         child: Row(
                           children: [
@@ -94,8 +101,12 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
                                 onPressed: _isPlayingAll ? null : _playAll,
                                 icon: _isPlayingAll
                                     ? SizedBox(
-                                        width: 18,
-                                        height: 18,
+                                        width:
+                                            AppTheme.spaceLG *
+                                            AppTheme.spaceScale(context),
+                                        height:
+                                            AppTheme.spaceLG *
+                                            AppTheme.spaceScale(context),
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
                                           color: theme.colorScheme.primary,

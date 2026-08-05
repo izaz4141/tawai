@@ -134,10 +134,13 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
                   children: [
                     Icon(
                       Icons.copy_all,
-                      size: 64,
+                      size: AppTheme.iconXXL * AppTheme.iconScale(context),
                       color: colors.onSurfaceVariant,
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(
+                      height:
+                          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                    ),
                     Text(
                       'Configure options above and tap Scan',
                       style: textTheme.bodyLarge?.copyWith(
@@ -154,8 +157,15 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.check_circle, size: 64, color: colors.primary),
-                    const SizedBox(height: 16),
+                    Icon(
+                      Icons.check_circle,
+                      size: AppTheme.iconXXL * AppTheme.iconScale(context),
+                      color: colors.primary,
+                    ),
+                    SizedBox(
+                      height:
+                          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                    ),
                     Text('No duplicates found!', style: textTheme.titleMedium),
                   ],
                 ),
@@ -164,7 +174,9 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
           else
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.all(8),
+                padding: EdgeInsets.all(
+                  AppTheme.spaceSM * AppTheme.spaceScale(context),
+                ),
                 itemCount: _groups.length,
                 itemBuilder: (context, index) {
                   final group = _groups[index];
@@ -183,7 +195,12 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
     bool isDesktop,
   ) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: EdgeInsets.fromLTRB(
+        AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+        AppTheme.spaceSM * AppTheme.spaceScale(context),
+        AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+        AppTheme.spaceSM * AppTheme.spaceScale(context),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -192,8 +209,8 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
             children: [
               Expanded(
                 child: Wrap(
-                  spacing: 16,
-                  runSpacing: 4,
+                  spacing: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                  runSpacing: AppTheme.spaceXS * AppTheme.spaceScale(context),
                   children: [
                     FilterChip(
                       label: const Text('File Size + Duration'),
@@ -222,19 +239,26 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
               FilledButton.icon(
                 onPressed: _scanning ? null : _scan,
                 icon: _scanning
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                    ? SizedBox(
+                        width:
+                            AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                        height:
+                            AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                        child: const CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.search, size: 18),
+                    : Icon(
+                        Icons.search,
+                        size: AppTheme.iconSM * AppTheme.iconScale(context),
+                      ),
                 label: Text(_scanning ? 'Scanning...' : 'Scan'),
               ),
             ],
           ),
           if (_hasScanned)
             Padding(
-              padding: const EdgeInsets.only(top: 4),
+              padding: EdgeInsets.only(
+                top: AppTheme.spaceXS * AppTheme.spaceScale(context),
+              ),
               child: Text(
                 '${_groups.fold<int>(0, (s, g) => s + g.tracks.length)} duplicates in ${_groups.length} groups',
                 style: textTheme.bodySmall?.copyWith(
@@ -253,7 +277,9 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
     TextTheme textTheme,
   ) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: EdgeInsets.only(
+        bottom: AppTheme.spaceSM * AppTheme.spaceScale(context),
+      ),
       child: ExpansionTile(
         leading: Icon(_methodIcon(group.method), color: colors.primary),
         title: Text(
@@ -264,10 +290,10 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
           children: [
             Icon(
               Icons.circle,
-              size: 10,
+              size: AppTheme.iconXS * AppTheme.iconScale(context),
               color: _confidenceColor(group.confidence),
             ),
-            const SizedBox(width: 4),
+            SizedBox(width: AppTheme.spaceXS * AppTheme.spaceScale(context)),
             Text(
               '${(group.confidence * 100).toInt()}% confidence',
               style: textTheme.bodySmall,
@@ -279,7 +305,7 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
             dense: true,
             leading: Icon(
               Icons.audiotrack,
-              size: 20,
+              size: AppTheme.iconMD * AppTheme.iconScale(context),
               color: colors.onSurfaceVariant,
             ),
             title: Text(
@@ -294,7 +320,11 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
               style: textTheme.bodySmall,
             ),
             trailing: IconButton(
-              icon: Icon(Icons.delete_outline, size: 18, color: colors.error),
+              icon: Icon(
+                Icons.delete_outline,
+                size: AppTheme.iconSM * AppTheme.iconScale(context),
+                color: colors.error,
+              ),
               tooltip: 'Delete track',
               onPressed: () {
                 // TODO: implement delete

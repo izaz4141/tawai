@@ -1,6 +1,8 @@
+pub mod source;
 pub mod start;
 pub mod status;
 
+pub use source::*;
 pub use start::*;
 pub use status::*;
 
@@ -13,5 +15,6 @@ use axum::{
 pub fn create_scan_router() -> Router<SharedState> {
     Router::new()
         .route("/", post(start::handle_scan))
+        .route("/source", post(source::handle_scan_source))
         .route("/status", get(status::handle_scan_status))
 }

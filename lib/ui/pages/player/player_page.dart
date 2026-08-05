@@ -39,17 +39,26 @@ class PlayerPage extends StatelessWidget {
               final track = q.currentTrack;
               if (track == null) {
                 if (isLoading) {
-                  return const Center(
+                  return Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         SizedBox(
-                          width: 32,
-                          height: 32,
-                          child: CircularProgressIndicator(strokeWidth: 3),
+                          width:
+                              AppTheme.spaceXXL * AppTheme.spaceScale(context),
+                          height:
+                              AppTheme.spaceXXL * AppTheme.spaceScale(context),
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 3,
+                          ),
                         ),
-                        SizedBox(height: 16),
-                        Text('Loading track...'),
+                        SizedBox(
+                          height:
+                              AppTheme.spaceSM *
+                              2 *
+                              AppTheme.spaceScale(context),
+                        ),
+                        const Text('Loading track...'),
                       ],
                     ),
                   );
@@ -264,7 +273,7 @@ class _PlayerControlsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final ps = PlaybackService.instance;
     return SizedBox(
-      height: 80,
+      height: AppTheme.spaceSM * 10 * AppTheme.spaceScale(context),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [

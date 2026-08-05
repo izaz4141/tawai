@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
+import 'package:tawai/ui/theme/app_theme.dart';
 
 class ArtistHeader extends StatelessWidget {
   const ArtistHeader({super.key, required this.artist});
@@ -11,28 +12,38 @@ class ArtistHeader extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Card(
-      margin: const EdgeInsets.all(16),
+      margin: EdgeInsets.all(
+        AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(
+          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+        ),
         child: Row(
           children: [
             CircleAvatar(
-              radius: 48,
+              radius: AppTheme.spaceMD * 4 * AppTheme.radiusScale(context),
               backgroundColor: theme.colorScheme.surfaceContainerHighest,
               child: artist.thumbnailUrl != null
                   ? ClipRRect(
-                      borderRadius: BorderRadius.circular(48),
+                      borderRadius: BorderRadius.circular(
+                        AppTheme.spaceMD * 4 * AppTheme.radiusScale(context),
+                      ),
                       child: Image.network(
                         artist.thumbnailUrl!,
-                        width: 96,
-                        height: 96,
+                        width:
+                            AppTheme.spaceMD * 8 * AppTheme.spaceScale(context),
+                        height:
+                            AppTheme.spaceMD * 8 * AppTheme.spaceScale(context),
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => _initial(theme),
                       ),
                     )
                   : _initial(theme),
             ),
-            const SizedBox(width: 16),
+            SizedBox(
+              width: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            ),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -44,14 +55,18 @@ class ArtistHeader extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(
+                    height: AppTheme.spaceXS * AppTheme.spaceScale(context),
+                  ),
                   Text(
                     '${artist.albumCount} albums · ${artist.trackCount} tracks',
                     style: theme.textTheme.bodySmall,
                   ),
                   if (artist.sortName != null && artist.sortName != artist.name)
                     Padding(
-                      padding: const EdgeInsets.only(top: 2),
+                      padding: EdgeInsets.only(
+                        top: AppTheme.spaceXS * AppTheme.spaceScale(context),
+                      ),
                       child: Text(
                         'Sort by: ${artist.sortName}',
                         style: theme.textTheme.bodySmall?.copyWith(

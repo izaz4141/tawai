@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tawai/ui/theme/app_theme.dart';
 
 class ComparisonEditableRow extends StatelessWidget {
   final String label;
@@ -22,12 +23,14 @@ class ComparisonEditableRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final orig = originalValue ?? '';
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: EdgeInsets.symmetric(
+        vertical: AppTheme.spaceXS * AppTheme.spaceScale(context),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           SizedBox(
-            width: 64,
+            width: AppTheme.spaceXXL * 2 * AppTheme.spaceScale(context),
             child: Text(
               label,
               style: textTheme.labelSmall?.copyWith(
@@ -40,18 +43,18 @@ class ComparisonEditableRow extends StatelessWidget {
             child: TextField(
               controller: controller,
               style: textTheme.bodySmall,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isDense: true,
                 contentPadding: EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 6,
+                  horizontal: AppTheme.spaceSM * AppTheme.spaceScale(context),
+                  vertical: AppTheme.spaceSM * AppTheme.spaceScale(context),
                 ),
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
               ),
             ),
           ),
           SizedBox(
-            width: 36,
+            width: AppTheme.spaceLG * 2 * AppTheme.spaceScale(context),
             child: ListenableBuilder(
               listenable: controller,
               builder: (context, _) {
@@ -83,7 +86,11 @@ class ComparisonEditableRow extends StatelessWidget {
 
                 return IconButton(
                   onPressed: onPress,
-                  icon: Icon(icon, size: 18, color: iconColor),
+                  icon: Icon(
+                    icon,
+                    size: AppTheme.iconSM * AppTheme.iconScale(context),
+                    color: iconColor,
+                  ),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   tooltip: tooltip,
@@ -133,12 +140,14 @@ class ComparisonReadonlyRow extends StatelessWidget {
     final hasRevert = applied && onRevert != null;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: EdgeInsets.symmetric(
+        vertical: AppTheme.spaceXS * AppTheme.spaceScale(context),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           SizedBox(
-            width: 64,
+            width: AppTheme.spaceXXL * 2 * AppTheme.spaceScale(context),
             child: Text(
               label,
               style: textTheme.labelSmall?.copyWith(
@@ -149,7 +158,9 @@ class ComparisonReadonlyRow extends StatelessWidget {
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
+              padding: EdgeInsets.symmetric(
+                vertical: AppTheme.spaceSM * AppTheme.spaceScale(context),
+              ),
               child: Text(
                 current,
                 style: textTheme.bodySmall,
@@ -159,7 +170,7 @@ class ComparisonReadonlyRow extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 36,
+            width: AppTheme.spaceLG * 2 * AppTheme.spaceScale(context),
             child: IconButton(
               onPressed: hasApply
                   ? onApply
@@ -172,7 +183,7 @@ class ComparisonReadonlyRow extends StatelessWidget {
                     : hasRevert
                     ? Icons.undo
                     : Icons.arrow_back,
-                size: 18,
+                size: AppTheme.iconSM * AppTheme.iconScale(context),
                 color: hasApply
                     ? colors.primary
                     : hasRevert
@@ -190,7 +201,9 @@ class ComparisonReadonlyRow extends StatelessWidget {
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
+              padding: EdgeInsets.symmetric(
+                vertical: AppTheme.spaceSM * AppTheme.spaceScale(context),
+              ),
               child: Text(
                 remote,
                 style: textTheme.bodySmall,

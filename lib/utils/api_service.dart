@@ -11,6 +11,7 @@ import 'package:tawai/utils/platform_service.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/utils/logger.dart';
 import 'package:tawai/utils/system_service.dart';
+import 'package:tawai/models/fs.dart';
 import 'package:tawai/models/user.dart';
 
 class APIService {
@@ -276,6 +277,27 @@ class APIService {
       log("Regen API-Key failed: $e", isError: true);
       return false;
     }
+  }
+
+  Future<FsListing?> listDirectory(String path) async {
+    try {
+      final uri = Uri.parse(
+        '$baseUrl/api/tawai/system/fs/list',
+      ).replace(queryParameters: {'path': path});
+      final response = await http.get(uri, headers: _authHeaders());
+      if (response.statusCode == 200) {
+        return FsListing.fromJson(
+          jsonDecode(response.body) as Map<String, dynamic>,
+        );
+      }
+      log(
+        "listDirectory failed: ${response.statusCode} ${response.body}",
+        isError: true,
+      );
+    } catch (e) {
+      log('listDirectory error: $e', isError: true);
+    }
+    return null;
   }
 
   Future<bool> restartServer() async {
@@ -1221,6 +1243,50 @@ class APIService {
     return [];
   }
 
+  Future<List<TrackInfo>> listDownloadFolderTracks() async {
+    try {
+      final uri = Uri.parse(
+        '$baseUrl/api/tawai/library/identify/download-folder',
+      );
+      final response = await http.get(uri, headers: _authHeaders());
+      if (response.statusCode == 200) {
+        final list = jsonDecode(response.body) as List<dynamic>;
+        return list.map((e) {
+          final m = e as Map<String, dynamic>;
+          return TrackInfo(
+            id: m['id'] as String,
+            title: m['title'] as String,
+            albumId: m['album_id'] as String? ?? '',
+            albumTitle: m['album_title'] as String? ?? '',
+            artistsString: m['artists_string'] as String? ?? '',
+            artists: [],
+            trackNum: m['track_num'] as int?,
+            discNum: m['disc_num'] as int?,
+            durationSecs: (m['duration_secs'] as num?)?.toDouble(),
+            filePath: m['file_path'] as String? ?? '',
+            fileSize: m['file_size'] as int?,
+            bitrate: m['bitrate'] as int?,
+            trackGain: (m['track_gain'] as num?)?.toDouble(),
+            trackPeak: (m['track_peak'] as num?)?.toDouble(),
+            mbidRecording: m['mbid_recording'] as String?,
+            artistMbid: m['artist_mbid'] as String?,
+            albumMbid: m['album_mbid'] as String?,
+            source: m['source'] as String? ?? 'remote',
+            sourceType: m['source_type'] as String? ?? '',
+            genres:
+                (m['genres'] as List<dynamic>?)
+                    ?.map((g) => g as String)
+                    .toList() ??
+                [],
+          );
+        }).toList();
+      }
+    } catch (e) {
+      log('listDownloadFolderTracks error: $e', isError: true);
+    }
+    return [];
+  }
+
   Future<List<TrackInfo>> listTracksBySource(String sourceId) async {
     try {
       final response = await http.get(
@@ -1463,7 +1529,9 @@ class APIService {
     return null;
   }
 
-  Future<({bool success, String? error})> applyIdentification({
+  Future<({bool success, String? error, String? newFilePath})>
+  applyIdentification({
+    String? userId,
     required String trackId,
     required String title,
     required String artist,
@@ -1478,6 +1546,8 @@ class APIService {
     String? lyrics,
     List<int>? coverBytes,
     int totalDiscs = 0,
+    String? filePath,
+    String? targetSourceId,
   }) async {
     try {
       final body = <String, dynamic>{
@@ -1498,6 +1568,8 @@ class APIService {
       if (lyrics != null) body['lyrics'] = lyrics;
       if (coverBytes != null) body['cover_bytes'] = base64Encode(coverBytes);
       if (totalDiscs > 0) body['total_discs'] = totalDiscs;
+      if (filePath != null) body['file_path'] = filePath;
+      if (targetSourceId != null) body['source_id'] = targetSourceId;
 
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/library/identify/apply'),
@@ -1505,72 +1577,92 @@ class APIService {
         body: jsonEncode(body),
       );
       if (response.statusCode == 200) {
-        return (success: true, error: null);
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return (
+          success: true,
+          error: null,
+          newFilePath: data['new_file_path'] as String?,
+        );
       }
       final data = jsonDecode(response.body);
       return (
         success: false,
         error: data['error'] as String? ?? 'HTTP ${response.statusCode}',
+        newFilePath: null,
       );
     } catch (e) {
       log('applyIdentification error: $e', isError: true);
-      return (success: false, error: e.toString());
+      return (success: false, error: e.toString(), newFilePath: null);
     }
   }
 
-  Future<RecordingInfo?> fingerprintTrack(String trackId) async {
+  Future<RecordingInfo?> fingerprintTrack(
+    String trackId, {
+    String? filePath,
+  }) async {
     try {
+      if (filePath != null) {
+        final response = await http.post(
+          Uri.parse('$baseUrl/api/tawai/identify/mb/fingerprint'),
+          headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
+          body: jsonEncode({'file_path': filePath}),
+        );
+        return _parseFingerprintResponse(response);
+      }
       final response = await http.get(
         Uri.parse(
           '$baseUrl/api/tawai/library/identify/tracks/$trackId/fingerprint',
         ),
         headers: _authHeaders(),
       );
-      if (response.statusCode == 200) {
-        final json = jsonDecode(response.body);
-        if (json == null) return null;
-        return RecordingInfo(
-          id: json['id'] as String,
-          title: json['title'] as String,
-          score: (json['score'] as num).toDouble(),
-          artist: json['artist'] as String,
-          artistId: json['artist_id'] as String?,
-          durationSecs: (json['duration_secs'] as num?)?.toDouble(),
-          acoustId: json['acoust_id'] as String?,
-          releases:
-              (json['releases'] as List<dynamic>?)
-                  ?.map(
-                    (r) => ReleaseInfo(
-                      id: r['id'] as String,
-                      title: r['title'] as String,
-                      date: r['date'] as String?,
-                      country: r['country'] as String?,
-                      artist: r['artist'] as String? ?? '',
-                      artistId: r['artist_id'] as String?,
-                      tracks:
-                          (r['tracks'] as List<dynamic>?)
-                              ?.map(
-                                (t) => ReleaseTrackInfo(
-                                  id: t['id'] as String,
-                                  title: t['title'] as String,
-                                  position: t['position'] as int?,
-                                  durationSecs: (t['duration_secs'] as num?)
-                                      ?.toDouble(),
-                                ),
-                              )
-                              .toList() ??
-                          [],
-                    ),
-                  )
-                  .toList() ??
-              [],
-          cover: json['cover'] as String?,
-        );
-      }
+      return _parseFingerprintResponse(response);
     } catch (e) {
       log('fingerprintTrack error: $e', isError: true);
     }
     return null;
+  }
+
+  RecordingInfo? _parseFingerprintResponse(http.Response response) {
+    if (response.statusCode != 200) return null;
+    final json = jsonDecode(response.body);
+    if (json == null) return null;
+    return RecordingInfo(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      score: (json['score'] as num).toDouble(),
+      artist: json['artist'] as String,
+      artistId: json['artist_id'] as String?,
+      durationSecs: (json['duration_secs'] as num?)?.toDouble(),
+      acoustId: json['acoust_id'] as String?,
+      releases:
+          (json['releases'] as List<dynamic>?)
+              ?.map(
+                (r) => ReleaseInfo(
+                  id: r['id'] as String,
+                  title: r['title'] as String,
+                  date: r['date'] as String?,
+                  country: r['country'] as String?,
+                  artist: r['artist'] as String? ?? '',
+                  artistId: r['artist_id'] as String?,
+                  tracks:
+                      (r['tracks'] as List<dynamic>?)
+                          ?.map(
+                            (t) => ReleaseTrackInfo(
+                              id: t['id'] as String,
+                              title: t['title'] as String,
+                              position: t['position'] as int?,
+                              durationSecs: (t['duration_secs'] as num?)
+                                  ?.toDouble(),
+                            ),
+                          )
+                          .toList() ??
+                      [],
+                ),
+              )
+              .toList() ??
+          [],
+      cover: json['cover'] as String?,
+    );
   }
 
   Future<LyricsResult?> fetchLyrics({
@@ -2019,55 +2111,30 @@ class APIService {
   }
 
   // ---------------------------------------------------------------------------
-  // Scan (remote — SSE streaming)
+  // Scan (remote — start ack + status polling)
   // ---------------------------------------------------------------------------
 
-  Stream<ScanProgressSignal> scanLibrary({required bool force}) {
-    final controller = StreamController<ScanProgressSignal>();
-    _startSseScan(force, controller);
-    return controller.stream;
-  }
-
-  Future<void> _startSseScan(
-    bool force,
-    StreamController<ScanProgressSignal> controller,
-  ) async {
+  Future<({bool started, String? error})> scanLibrary({
+    required bool force,
+  }) async {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
     try {
-      final request =
-          http.Request('POST', Uri.parse('$baseUrl/api/tawai/library/scan'))
-            ..headers.addAll(
-              _authHeaders(extra: {'Content-Type': 'application/json'}),
-            )
-            ..body = jsonEncode({'force': force});
-      final response = await http.Client().send(request);
-      final lines = response.stream
-          .transform(utf8.decoder)
-          .transform(const LineSplitter());
-      await for (final line in lines) {
-        if (line.startsWith('data: ')) {
-          final data = jsonDecode(line.substring(6)) as Map<String, dynamic>;
-          final signal = ScanProgressSignal(
-            id: '',
-            currentFile: data['current_file'] as String? ?? '',
-            filesScanned: (data['files_scanned'] as num?)?.toInt() ?? 0,
-            totalFiles: (data['total_files'] as num?)?.toInt() ?? 0,
-            stage: data['stage'] as String? ?? '',
-            complete: data['complete'] as bool? ?? false,
-            tracksFound: (data['tracks_found'] as num?)?.toInt() ?? 0,
-            newTracks: (data['new_tracks'] as num?)?.toInt() ?? 0,
-            duplicates: (data['duplicates'] as num?)?.toInt() ?? 0,
-            deleted: (data['deleted'] as num?)?.toInt() ?? 0,
-            currentSource: data['current_source'] as String? ?? '',
-            error: data['error'] as String?,
-          );
-          controller.add(signal);
-          if (signal.complete) break;
-        }
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/tawai/library/scan'),
+        headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
+        body: jsonEncode({'id': id, 'force': force}),
+      );
+      if (response.statusCode != 200) {
+        return (started: false, error: 'HTTP ${response.statusCode}');
       }
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return (
+        started: data['started'] as bool? ?? false,
+        error: data['error'] as String?,
+      );
     } catch (e) {
-      log("SSE scan error: $e", isError: true);
-    } finally {
-      await controller.close();
+      log("Scan start error: $e", isError: true);
+      return (started: false, error: 'Request failed');
     }
   }
 
@@ -2075,21 +2142,116 @@ class APIService {
   // Scan status (remote polling)
   // ---------------------------------------------------------------------------
 
-  Future<({bool running, Map<String, dynamic>? progress})>
-  getScanStatus() async {
+  Future<({bool running, ScanProgressSignal? progress})> getScanStatus() async {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
     try {
-      final response = await http.get(
+      final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/library/scan/status'),
-        headers: _authHeaders(),
+        headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
+        body: jsonEncode({'id': id}),
       );
       if (response.statusCode != 200) return (running: false, progress: null);
       final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final progress = data['progress'] as Map<String, dynamic>?;
       return (
-        running: data['running'] as bool,
-        progress: data['progress'] as Map<String, dynamic>?,
+        running: data['running'] as bool? ?? false,
+        progress: progress == null
+            ? null
+            : ScanProgressSignal(
+                id: '',
+                currentFile: progress['current_file'] as String? ?? '',
+                filesScanned: (progress['files_scanned'] as num?)?.toInt() ?? 0,
+                totalFiles: (progress['total_files'] as num?)?.toInt() ?? 0,
+                stage: progress['stage'] as String? ?? '',
+                complete: progress['complete'] as bool? ?? false,
+                tracksFound: (progress['tracks_found'] as num?)?.toInt() ?? 0,
+                newTracks: (progress['new_tracks'] as num?)?.toInt() ?? 0,
+                duplicates: (progress['duplicates'] as num?)?.toInt() ?? 0,
+                deleted: (progress['deleted'] as num?)?.toInt() ?? 0,
+                currentSource: progress['current_source'] as String? ?? '',
+                error: progress['error'] as String?,
+              ),
       );
     } catch (_) {
       return (running: false, progress: null);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Scan single source (remote SSE)
+  // ---------------------------------------------------------------------------
+
+  Future<({bool started, String? error})> scanSource({
+    required String sourceId,
+    required bool force,
+  }) async {
+    try {
+      final client = http.Client();
+      final request =
+          http.Request(
+              'POST',
+              Uri.parse('$baseUrl/api/tawai/library/scan/source'),
+            )
+            ..headers.addAll(
+              _authHeaders(extra: {'Content-Type': 'application/json'}),
+            )
+            ..body = jsonEncode({'source_id': sourceId, 'force': force});
+      final streamed = await client.send(request);
+      if (streamed.statusCode != 200) {
+        client.close();
+        return (started: false, error: 'HTTP ${streamed.statusCode}');
+      }
+
+      final completer = Completer<({bool started, String? error})>();
+      final buffer = StringBuffer();
+      StreamSubscription<String>? subscription;
+      subscription = streamed.stream
+          .transform(utf8.decoder)
+          .listen(
+            (chunk) {
+              buffer.write(chunk);
+              if (!buffer.toString().contains('\n\n')) return;
+              String? dataLine;
+              for (final line in buffer.toString().split('\n')) {
+                if (line.startsWith('data:')) {
+                  dataLine = line;
+                  break;
+                }
+              }
+              if (dataLine == null) return;
+              final data = dataLine
+                  .replaceFirst(RegExp(r'^data:\s*'), '')
+                  .trim();
+              if (data.isEmpty) return;
+              final json = jsonDecode(data) as Map<String, dynamic>;
+              final complete = json['complete'] as bool? ?? false;
+              final error = json['error'] as String?;
+              if (complete && error != null) {
+                completer.complete((started: false, error: error));
+              } else {
+                completer.complete((started: true, error: null));
+              }
+              subscription?.cancel();
+              client.close();
+            },
+            onError: (Object e) {
+              if (!completer.isCompleted) {
+                completer.complete((started: false, error: 'Stream error'));
+              }
+            },
+          );
+
+      return completer.future.timeout(
+        const Duration(seconds: 60),
+        onTimeout: () {
+          subscription?.cancel();
+          client.close();
+          return (started: false, error: 'Timeout');
+        },
+      );
+    } catch (e) {
+      log('scanSource error: $e', isError: true);
+      return (started: false, error: 'Request failed');
     }
   }
 

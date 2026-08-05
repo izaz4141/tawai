@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
+import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/components/cover_image.dart';
 
 class AlbumHeader extends StatelessWidget {
@@ -14,20 +15,28 @@ class AlbumHeader extends StatelessWidget {
     final displayCount = trackCount ?? album.trackCount;
 
     return Card(
-      margin: const EdgeInsets.all(16),
+      margin: EdgeInsets.all(
+        AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(
+          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+        ),
         child: Row(
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(
+                AppTheme.radiusSM * AppTheme.radiusScale(context),
+              ),
               child: SizedBox(
-                width: 120,
-                height: 120,
+                width: AppTheme.spaceMD * 10 * AppTheme.spaceScale(context),
+                height: AppTheme.spaceMD * 10 * AppTheme.spaceScale(context),
                 child: CoverImage(albumId: album.id),
               ),
             ),
-            const SizedBox(width: 16),
+            SizedBox(
+              width: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            ),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -39,7 +48,9 @@ class AlbumHeader extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(
+                    height: AppTheme.spaceXS * AppTheme.spaceScale(context),
+                  ),
                   Text(
                     album.artistsString,
                     style: theme.textTheme.titleSmall?.copyWith(
@@ -48,7 +59,9 @@ class AlbumHeader extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(
+                    height: AppTheme.spaceXS * AppTheme.spaceScale(context),
+                  ),
                   Text(
                     [
                       if (album.releaseDate != null) '${album.releaseDate}',

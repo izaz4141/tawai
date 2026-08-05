@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
+import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/components/track_list_tile.dart';
 import 'package:tawai/ui/widgets/components/alphabet_index_scroller.dart';
 
@@ -18,9 +19,11 @@ class LibraryTracksTab extends StatelessWidget {
     if (tracks.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        children: const [
-          SizedBox(height: 120),
-          Center(child: Text('No tracks in library')),
+        children: [
+          SizedBox(
+            height: AppTheme.spaceMD * 10 * AppTheme.spaceScale(context),
+          ),
+          const Center(child: Text('No tracks in library')),
         ],
       );
     }

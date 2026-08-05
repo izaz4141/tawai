@@ -7,7 +7,7 @@ pub use release::*;
 pub use track::*;
 
 use crate::server::SharedState;
-use axum::{Router, routing::get};
+use axum::{Router, routing::get, routing::post};
 
 pub fn create_mb_router() -> Router<SharedState> {
     Router::new()
@@ -22,4 +22,5 @@ pub fn create_mb_router() -> Router<SharedState> {
             "/track/{id}/fingerprint",
             get(track::handle_fingerprint_track),
         )
+        .route("/fingerprint", post(track::handle_fingerprint_path))
 }

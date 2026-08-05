@@ -105,7 +105,9 @@ async fn main() {
 
     // Scan handlers
     spawn(utils::scan::handle_scan_library(context.clone()));
+    spawn(utils::scan::handle_scan_status(context.clone()));
     spawn(utils::scan::handle_start_periodic_scan(context.clone()));
+    spawn(utils::scan::handle_scan_source(context.clone()));
 
     // Tag editor / Library identify handlers
     spawn(utils::tagging_editor::handle_list_unidentified_tracks(
@@ -124,6 +126,9 @@ async fn main() {
         context.clone(),
     ));
     spawn(utils::tagging_editor::handle_write_file_tags(
+        context.clone(),
+    ));
+    spawn(utils::tagging_editor::handle_list_download_folder_tracks(
         context.clone(),
     ));
 

@@ -30,20 +30,10 @@ pub struct ListDownloadParams {
 )]
 pub async fn handle_list_downloads(
     State(state): State<SharedState>,
-    Extension(username): Extension<String>,
+    Extension(user_id): Extension<String>,
     Query(params): Query<ListDownloadParams>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    let user_id = match db::account::get_user_id_by_username(db.pool(), &username).await {
-        Ok(Some(uid)) => uid,
-        _ => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": "Failed to resolve user" })),
-            )
-                .into_response();
-        }
-    };
 
     match db::download::list_downloads(db.pool(), &user_id, params.source.as_deref()).await {
         Ok(downloads) => Json(ListDownloadsResponse { downloads }).into_response(),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tawai/ui/theme/app_theme.dart';
 
 class LibraryFilterDialog extends StatelessWidget {
   final String? selectedSource;
@@ -32,7 +33,7 @@ class LibraryFilterDialog extends StatelessWidget {
     return AlertDialog(
       title: const Text('Filter by Source'),
       content: SizedBox(
-        width: 320,
+        width: AppTheme.spaceXXL * 10 * AppTheme.widthScale(context),
         child: ListView(
           shrinkWrap: true,
           children: [
@@ -42,7 +43,7 @@ class LibraryFilterDialog extends StatelessWidget {
                 selectedSource == null
                     ? Icons.radio_button_checked
                     : Icons.radio_button_unchecked,
-                size: 20,
+                size: AppTheme.iconMD * AppTheme.iconScale(context),
                 color: selectedSource == null
                     ? colors.primary
                     : colors.onSurfaceVariant,
@@ -66,7 +67,7 @@ class LibraryFilterDialog extends StatelessWidget {
                   isSelected
                       ? Icons.radio_button_checked
                       : Icons.radio_button_unchecked,
-                  size: 20,
+                  size: AppTheme.iconMD * AppTheme.iconScale(context),
                   color: isSelected ? colors.primary : colors.onSurfaceVariant,
                 ),
                 title: Text(

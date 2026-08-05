@@ -31,7 +31,11 @@ class TrackListView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check_circle_outline, size: 48, color: colors.outline),
+            Icon(
+              Icons.check_circle_outline,
+              size: AppTheme.iconXL * AppTheme.iconScale(context),
+              color: colors.outline,
+            ),
             const SizedBox(height: AppTheme.spaceMD),
             Text('No tracks', style: Theme.of(context).textTheme.bodyLarge),
             const SizedBox(height: AppTheme.spaceSM),

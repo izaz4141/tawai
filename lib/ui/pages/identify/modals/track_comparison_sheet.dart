@@ -104,6 +104,10 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
   String? _appliedRemoteRecId;
   String? _appliedRemoteAlbumId;
   String? _appliedRemoteArtistId;
+  String? _targetSourceId;
+
+  bool get _isDownloadFolder =>
+      widget.currentTrack.sourceType == 'download_folder';
 
   Uint8List? _coverBytes;
   Uint8List? _localCoverBytes;
@@ -156,6 +160,10 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     _origMbidArtist =
         widget.currentTrack.artistMbid ??
         widget.currentTrack.artists.firstOrNull?.mbid;
+
+    if (_isDownloadFolder && widget.controller.librarySources.isNotEmpty) {
+      _targetSourceId = widget.controller.librarySources.first.id;
+    }
 
     _shimmerController = AnimationController(
       vsync: this,
@@ -270,6 +278,15 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
   }
 
   Future<void> _apply() async {
+    if (_isDownloadFolder && _targetSourceId == null) {
+      if (!mounted) return;
+      AppSnackBar.show(
+        context,
+        'Select a target library source to move the file into',
+        type: SnackType.error,
+      );
+      return;
+    }
     setState(() => _applying = true);
     try {
       final st = widget.currentTrack;
@@ -313,9 +330,14 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
         mbidRecording: _appliedRemoteRecId,
         lyrics: _lyricsCtrl.text.isNotEmpty ? _lyricsCtrl.text : null,
         coverBytes: coverBytes,
+        filePath: _isDownloadFolder ? st.filePath : null,
+        targetSourceId: _isDownloadFolder ? _targetSourceId : null,
       );
       if (!mounted) return;
       if (result.success) {
+        if (_isDownloadFolder && _targetSourceId != null) {
+          widget.controller.applyDownloadScan(_targetSourceId!);
+        }
         Navigator.of(context).pop(
           ComparisonSheetResult(
             applied: true,
@@ -354,6 +376,40 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     return '${total ~/ 60}:${(total % 60).toString().padLeft(2, '0')}';
   }
 
+  Widget _buildTargetSourcePicker(ColorScheme colors, TextTheme textTheme) {
+    final sources = widget.controller.librarySources;
+    if (sources.isEmpty) {
+      return Padding(
+        padding: EdgeInsets.symmetric(
+          vertical: AppTheme.spaceSM * AppTheme.spaceScale(context),
+        ),
+        child: Text(
+          'No library sources configured to move files into.',
+          style: textTheme.bodySmall?.copyWith(color: colors.error),
+        ),
+      );
+    }
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        vertical: AppTheme.spaceSM * AppTheme.spaceScale(context),
+      ),
+      child: DropdownButtonFormField<String>(
+        value: _targetSourceId,
+        decoration: InputDecoration(
+          labelText: 'Move into library source',
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+          ),
+          isDense: true,
+        ),
+        items: sources
+            .map((s) => DropdownMenuItem(value: s.id, child: Text(s.name)))
+            .toList(),
+        onChanged: (v) => setState(() => _targetSourceId = v),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
@@ -378,7 +434,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
               onPressed: _fillMissing,
               child: const Text('Fill Missing'),
             ),
-            const SizedBox(width: 4),
+            SizedBox(width: AppTheme.spaceXS * AppTheme.spaceScale(context)),
             TextButton(
               onPressed: () {
                 showDialog(
@@ -526,6 +582,8 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
                       colors: colors,
                     ),
                     _lyricsRow(textTheme, colors, _lyricsCtrl),
+                    if (_isDownloadFolder)
+                      _buildTargetSourcePicker(colors, textTheme),
                   ],
                 ),
               ),
@@ -537,10 +595,12 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
                 child: FilledButton.icon(
                   onPressed: _applying ? null : _apply,
                   icon: _applying
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
+                      ? SizedBox(
+                          width:
+                              AppTheme.spaceLG * AppTheme.spaceScale(context),
+                          height:
+                              AppTheme.spaceLG * AppTheme.spaceScale(context),
+                          child: const CircularProgressIndicator(
                             strokeWidth: 2,
                             color: Colors.white,
                           ),
@@ -574,10 +634,10 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
                       })
                     : null,
                 onPickCoverFromUrl: _pickCoverFromUrl,
-                width: 120,
-                height: 120,
+                width: AppTheme.spaceMD * 10 * AppTheme.spaceScale(context),
+                height: AppTheme.spaceMD * 10 * AppTheme.spaceScale(context),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: AppTheme.spaceXS * AppTheme.spaceScale(context)),
               Text(
                 'Local',
                 style: textTheme.labelSmall?.copyWith(color: colors.primary),
@@ -585,7 +645,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
             ],
           ),
         ),
-        const SizedBox(width: 4),
+        SizedBox(width: AppTheme.spaceXS * AppTheme.spaceScale(context)),
         IconButton(
           onPressed: _downloadingCover
               ? null
@@ -596,10 +656,10 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
                       })
                     : _downloadCover),
           icon: _downloadingCover
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+              ? SizedBox(
+                  width: AppTheme.spaceLG * AppTheme.spaceScale(context),
+                  height: AppTheme.spaceLG * AppTheme.spaceScale(context),
+                  child: const CircularProgressIndicator(strokeWidth: 2),
                 )
               : Icon(
                   _coverBytes != null || _coverUrl != null
@@ -613,41 +673,61 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
               ? 'Revert cover'
               : 'Apply MusicBrainz cover',
         ),
-        const SizedBox(width: 4),
+        SizedBox(width: AppTheme.spaceXS * AppTheme.spaceScale(context)),
         Expanded(
           child: Column(
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(
+                  AppTheme.radiusSM * AppTheme.radiusScale(context),
+                ),
                 child: widget.album.albumMbid != null
                     ? Image.network(
                         'https://coverartarchive.org/release/${widget.album.albumMbid}/front-250.jpg',
-                        width: 120,
-                        height: 120,
+                        width:
+                            AppTheme.spaceMD *
+                            10 *
+                            AppTheme.spaceScale(context),
+                        height:
+                            AppTheme.spaceMD *
+                            10 *
+                            AppTheme.spaceScale(context),
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => Container(
-                          width: 120,
-                          height: 120,
+                          width:
+                              AppTheme.spaceMD *
+                              10 *
+                              AppTheme.spaceScale(context),
+                          height:
+                              AppTheme.spaceMD *
+                              10 *
+                              AppTheme.spaceScale(context),
                           color: colors.surfaceContainerHighest,
                           child: Icon(
                             Icons.album,
-                            size: 48,
+                            size: AppTheme.iconXL * AppTheme.iconScale(context),
                             color: colors.onSurfaceVariant,
                           ),
                         ),
                       )
                     : Container(
-                        width: 120,
-                        height: 120,
+                        width:
+                            AppTheme.spaceMD *
+                            10 *
+                            AppTheme.spaceScale(context),
+                        height:
+                            AppTheme.spaceMD *
+                            10 *
+                            AppTheme.spaceScale(context),
                         color: colors.surfaceContainerHighest,
                         child: Icon(
                           Icons.album,
-                          size: 48,
+                          size: AppTheme.iconXL * AppTheme.iconScale(context),
                           color: colors.onSurfaceVariant,
                         ),
                       ),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: AppTheme.spaceXS * AppTheme.spaceScale(context)),
               Text(
                 'MusicBrainz',
                 style: textTheme.labelSmall?.copyWith(color: colors.tertiary),
@@ -662,7 +742,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
   Widget _buildColumnHeaders(TextTheme textTheme, ColorScheme colors) {
     return Row(
       children: [
-        const SizedBox(width: 64),
+        SizedBox(width: AppTheme.spaceXXL * 2 * AppTheme.spaceScale(context)),
         Expanded(
           child: Text(
             'Local File',
@@ -672,7 +752,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
             ),
           ),
         ),
-        const SizedBox(width: 36),
+        SizedBox(width: AppTheme.spaceLG * 2 * AppTheme.spaceScale(context)),
         Expanded(
           child: Text(
             'MusicBrainz',
@@ -733,15 +813,20 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: EdgeInsets.symmetric(
+        vertical: AppTheme.spaceXS * AppTheme.spaceScale(context),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(
-            width: 64,
+          SizedBox(
+            width: AppTheme.spaceXXL * 2 * AppTheme.spaceScale(context),
             child: Text(
               'Lyrics',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontSize: AppTheme.textSM * AppTheme.textScale(context),
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           Expanded(
@@ -751,21 +836,25 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
               maxLines: null,
               minLines: 1,
               scrollPadding: EdgeInsets.zero,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isDense: true,
                 contentPadding: EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 6,
+                  horizontal: AppTheme.spaceSM * AppTheme.spaceScale(context),
+                  vertical: AppTheme.spaceSM * AppTheme.spaceScale(context),
                 ),
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
               ),
             ),
           ),
           SizedBox(
-            width: 36,
+            width: AppTheme.spaceLG * 2 * AppTheme.spaceScale(context),
             child: IconButton(
               onPressed: onPress,
-              icon: Icon(icon, size: 18, color: iconColor),
+              icon: Icon(
+                icon,
+                size: AppTheme.iconSM * AppTheme.iconScale(context),
+                color: iconColor,
+              ),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               tooltip: tooltip,
@@ -773,9 +862,15 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
+              padding: EdgeInsets.symmetric(
+                vertical: AppTheme.spaceSM * AppTheme.spaceScale(context),
+              ),
               child: _lyricsLoading
-                  ? ShimmerWidget(height: 68, controller: _shimmerController)
+                  ? ShimmerWidget(
+                      height:
+                          AppTheme.spaceMD * 6 * AppTheme.spaceScale(context),
+                      controller: _shimmerController,
+                    )
                   : SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Text(

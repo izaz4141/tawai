@@ -189,7 +189,13 @@ pub struct SearchMusicBrainzResponse {
 #[derive(Deserialize, DartSignal)]
 pub struct ApplyIdentificationRequest {
     pub id: String,
+    pub user_id: String,
     pub track_id: String,
+    /// When set (download-folder flow), the audio file to write tags to and
+    /// move into the target library source.
+    pub file_path: Option<String>,
+    /// When set, the library source to move the (download-folder) file into.
+    pub target_source_id: Option<String>,
     pub title: String,
     pub artist: String,
     pub artist_mbid: Option<String>,
@@ -211,6 +217,7 @@ pub struct ApplyIdentificationResponse {
     pub track_id: String,
     pub success: bool,
     pub error: Option<String>,
+    pub new_file_path: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -221,6 +228,9 @@ pub struct ApplyIdentificationResponse {
 pub struct FingerprintTrackRequest {
     pub id: String,
     pub track_id: String,
+    /// When set, fingerprint the audio file at this path directly instead of
+    /// looking up a stored fingerprint by track id (download-folder flow).
+    pub file_path: Option<String>,
 }
 
 #[derive(Serialize, RustSignal)]

@@ -10,7 +10,7 @@ import 'package:tawai/ui/widgets/components/list_switch.dart';
 import 'package:tawai/ui/widgets/components/list_text_field.dart';
 import 'package:tawai/ui/widgets/dialog/naming_format.dart';
 import 'package:tawai/utils/bridge_service.dart';
-import 'package:tawai/utils/io_service.dart';
+import 'package:tawai/utils/folder_picker.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/models/recommendation_source.dart';
 
@@ -28,12 +28,14 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
   void initState() {
     super.initState();
     _loadSources();
+    ScanService.instance.acquire();
     ScanService.instance.isScanning.addListener(_onScanStateChanged);
   }
 
   @override
   void dispose() {
     ScanService.instance.isScanning.removeListener(_onScanStateChanged);
+    ScanService.instance.release();
     super.dispose();
   }
 
@@ -156,20 +158,27 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: color),
-        SizedBox(width: 3),
+        Icon(
+          icon,
+          size: AppTheme.iconSM * AppTheme.iconScale(context),
+          color: color,
+        ),
+        SizedBox(width: AppTheme.spaceXS * AppTheme.spaceScale(context)),
         Text(
           label,
           style: TextStyle(
-            fontSize: 12,
+            fontSize: AppTheme.textSM * AppTheme.textScale(context),
             fontWeight: FontWeight.w600,
             color: color,
           ),
         ),
-        SizedBox(width: 2),
+        SizedBox(width: AppTheme.spaceXS * AppTheme.spaceScale(context)),
         Text(
           hint,
-          style: TextStyle(fontSize: 10, color: color.withValues(alpha: 0.7)),
+          style: TextStyle(
+            fontSize: AppTheme.textSM * AppTheme.textScale(context),
+            color: color.withValues(alpha: 0.7),
+          ),
         ),
       ],
     );
@@ -192,7 +201,9 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
         ),
         if (_sources.isEmpty)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: EdgeInsets.symmetric(
+              vertical: AppTheme.spaceSM * AppTheme.spaceScale(context),
+            ),
             child: Text(
               'No library sources configured. Add folders or remote libraries containing your music files.',
               style: textTheme.bodySmall?.copyWith(
@@ -205,7 +216,9 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
             final source = _sources[i];
             final isLocal = source.sourceType == 'local';
             return Card(
-              margin: const EdgeInsets.symmetric(vertical: 4),
+              margin: EdgeInsets.symmetric(
+                vertical: AppTheme.spaceXS * AppTheme.spaceScale(context),
+              ),
               child: ListTile(
                 leading: Icon(
                   isLocal ? Icons.folder_outlined : Icons.dns_outlined,
@@ -220,12 +233,21 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    SizedBox(width: 8),
+                    SizedBox(
+                      width: AppTheme.spaceSM * AppTheme.spaceScale(context),
+                    ),
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: EdgeInsets.symmetric(
+                        horizontal:
+                            AppTheme.spaceSM * AppTheme.spaceScale(context),
+                        vertical:
+                            AppTheme.spaceXS * AppTheme.spaceScale(context),
+                      ),
                       decoration: BoxDecoration(
                         color: colorScheme.secondaryContainer,
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(
+                          AppTheme.radiusSM * AppTheme.radiusScale(context),
+                        ),
                       ),
                       child: Text(
                         source.sourceType,
@@ -281,7 +303,9 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                         label: const Text('Incremental Scan'),
                       ),
                     ),
-                    SizedBox(width: 8),
+                    SizedBox(
+                      width: AppTheme.spaceSM * AppTheme.spaceScale(context),
+                    ),
                     Expanded(
                       child: FilledButton.tonalIcon(
                         onPressed: scanning ? null : _showForceRescanDialog,
@@ -293,11 +317,15 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                 ),
                 if (scanning && p != null) ...[
                   Padding(
-                    padding: EdgeInsets.only(top: 8),
+                    padding: EdgeInsets.only(
+                      top: AppTheme.spaceSM * AppTheme.spaceScale(context),
+                    ),
                     child: LinearProgressIndicator(value: _progressValue(p)),
                   ),
                   Padding(
-                    padding: EdgeInsets.only(top: 4),
+                    padding: EdgeInsets.only(
+                      top: AppTheme.spaceXS * AppTheme.spaceScale(context),
+                    ),
                     child: Text(
                       _stageLabel(p),
                       style: textTheme.bodySmall?.copyWith(
@@ -307,7 +335,9 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                   ),
                   if (p.stage == 'scanning' && p.currentFile.isNotEmpty)
                     Padding(
-                      padding: EdgeInsets.only(top: 2),
+                      padding: EdgeInsets.only(
+                        top: AppTheme.spaceXS * AppTheme.spaceScale(context),
+                      ),
                       child: Text(
                         p.currentFile,
                         style: textTheme.bodySmall?.copyWith(
@@ -320,7 +350,9 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                       ),
                     ),
                   if (p.stage == 'done') ...[
-                    SizedBox(height: 4),
+                    SizedBox(
+                      height: AppTheme.spaceXS * AppTheme.spaceScale(context),
+                    ),
                     Row(
                       children: [
                         _resultChip(
@@ -329,21 +361,30 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                           '${p.tracksFound}',
                           'Found',
                         ),
-                        SizedBox(width: 8),
+                        SizedBox(
+                          width:
+                              AppTheme.spaceSM * AppTheme.spaceScale(context),
+                        ),
                         _resultChip(
                           colorScheme.tertiary,
                           Icons.add_circle_outline,
                           '${p.newTracks}',
                           'New',
                         ),
-                        SizedBox(width: 8),
+                        SizedBox(
+                          width:
+                              AppTheme.spaceSM * AppTheme.spaceScale(context),
+                        ),
                         _resultChip(
                           colorScheme.error,
                           Icons.repeat,
                           '${p.duplicates}',
                           'Dups',
                         ),
-                        SizedBox(width: 8),
+                        SizedBox(
+                          width:
+                              AppTheme.spaceSM * AppTheme.spaceScale(context),
+                        ),
                         _resultChip(
                           colorScheme.secondary,
                           Icons.delete_outline,
@@ -416,7 +457,10 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
               enabled: isAdmin,
               suffixWidgets: [
                 IconButton(
-                  icon: const Icon(Icons.help_outline, size: 20),
+                  icon: Icon(
+                    Icons.help_outline,
+                    size: AppTheme.iconMD * AppTheme.iconScale(context),
+                  ),
                   tooltip: 'Naming Format Help',
                   onPressed: () => showNamingFormatHelpDialog(context),
                 ),
@@ -586,7 +630,10 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
   }
 
   Future<void> _pickFolder() async {
-    final path = await IOServiceFactory.create().getDirectoryPath();
+    final path = await pickFolder(
+      context,
+      initialPath: _localPath.isNotEmpty ? _localPath : null,
+    );
     if (path != null) {
       setState(() {
         _localPath = path;
@@ -692,7 +739,7 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Source Type', style: textTheme.labelMedium),
-            SizedBox(height: 8),
+            SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
             SegmentedButton<String>(
               segments: const [
                 ButtonSegment(
@@ -714,7 +761,9 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                 _selectedLibraryIds = {};
               }),
             ),
-            SizedBox(height: 16),
+            SizedBox(
+              height: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            ),
 
             if (_sourceType == 'local') ...[
               Row(
@@ -726,7 +775,9 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  SizedBox(width: 8),
+                  SizedBox(
+                    width: AppTheme.spaceSM * AppTheme.spaceScale(context),
+                  ),
                   OutlinedButton(
                     onPressed: _pickFolder,
                     child: const Text('Browse'),
@@ -745,7 +796,7 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                 ),
                 onChanged: (_) => _testError = null,
               ),
-              SizedBox(height: 12),
+              SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
               TextField(
                 controller: _usernameCtrl,
                 decoration: const InputDecoration(
@@ -755,7 +806,7 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                 ),
                 onChanged: (_) => _testError = null,
               ),
-              SizedBox(height: 12),
+              SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
               TextField(
                 controller: _passwordCtrl,
                 decoration: const InputDecoration(
@@ -766,23 +817,33 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                 obscureText: true,
                 onChanged: (_) => _testError = null,
               ),
-              SizedBox(height: 12),
+              SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: _fieldsFilled ? _testConnection : null,
                   icon: _testing
                       ? SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          width:
+                              AppTheme.spaceSM *
+                              2 *
+                              AppTheme.spaceScale(context),
+                          height:
+                              AppTheme.spaceSM *
+                              2 *
+                              AppTheme.spaceScale(context),
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
                         )
                       : const Icon(Icons.wifi_find),
                   label: Text(_testing ? 'Testing...' : 'Test Connection'),
                 ),
               ),
               if (_testError != null) ...[
-                SizedBox(height: 8),
+                SizedBox(
+                  height: AppTheme.spaceSM * AppTheme.spaceScale(context),
+                ),
                 Text(
                   _testError!,
                   style: textTheme.bodySmall?.copyWith(
@@ -791,9 +852,13 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                 ),
               ],
               if (_jellyfinLibraries.isNotEmpty) ...[
-                SizedBox(height: 12),
+                SizedBox(
+                  height: AppTheme.spaceMD * AppTheme.spaceScale(context),
+                ),
                 Text('Music Libraries', style: textTheme.labelMedium),
-                SizedBox(height: 4),
+                SizedBox(
+                  height: AppTheme.spaceXS * AppTheme.spaceScale(context),
+                ),
                 ..._jellyfinLibraries.map(
                   (lib) => CheckboxListTile(
                     dense: true,
@@ -815,7 +880,9 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
               ],
             ],
 
-            SizedBox(height: 16),
+            SizedBox(
+              height: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            ),
             TextField(
               controller: _nameCtrl,
               decoration: const InputDecoration(

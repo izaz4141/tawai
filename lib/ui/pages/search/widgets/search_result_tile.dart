@@ -85,10 +85,12 @@ class SearchResultTile extends StatelessWidget {
           ],
         ),
         trailing: loadingUrls.contains(entry.filename)
-            ? const SizedBox(
-                width: 48,
-                height: 48,
-                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ? SizedBox(
+                width: AppTheme.iconXL * AppTheme.iconScale(context),
+                height: AppTheme.iconXL * AppTheme.iconScale(context),
+                child: const Center(
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
               )
             : IconButton(
                 icon: const Icon(Icons.download),

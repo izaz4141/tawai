@@ -47,29 +47,31 @@ class RecordingCard extends StatelessWidget {
                       RecordingThumb(recording: recording),
                       if (recording.isOwned)
                         Positioned(
-                          top: 6,
-                          right: 6,
+                          top: AppTheme.spaceSM * scale,
+                          right: AppTheme.spaceSM * scale,
                           child: Material(
                             color: colors.primary,
                             shape: const CircleBorder(),
                             child: Padding(
-                              padding: EdgeInsets.all(2),
+                              padding: EdgeInsets.all(AppTheme.spaceXS * scale),
                               child: Icon(
                                 Icons.check_circle,
-                                size: 18,
+                                size:
+                                    AppTheme.iconSM *
+                                    AppTheme.iconScale(context),
                                 color: colors.onPrimary,
                               ),
                             ),
                           ),
                         ),
                       Positioned(
-                        right: 6,
-                        bottom: 6,
+                        right: AppTheme.spaceSM * scale,
+                        bottom: AppTheme.spaceSM * scale,
                         child: PreviewButton(
                           recording: recording,
                           iconSize: AppTheme.iconMD,
-                          backgroundColor: colors.primaryContainer.withOpacity(
-                            0.9,
+                          backgroundColor: colors.primaryContainer.withValues(
+                            alpha: 0.9,
                           ),
                           foregroundColor: colors.onPrimaryContainer,
                         ),

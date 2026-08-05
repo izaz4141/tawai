@@ -130,6 +130,48 @@ pub async fn get_source_by_track_id(
     Ok(row)
 }
 
+pub async fn get_source_info_by_track_id(
+    pool: &PgPool,
+    track_id: &str,
+) -> Result<Option<LibrarySourceInfo>> {
+    let row = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
+        &format!(
+            "SELECT ls.id, ls.source_type, ls.url, ls.name, ls.owner_id, ls.access_rule, {}, {}, {} FROM tracks t JOIN library_sources ls ON t.source_id = ls.id WHERE t.id = $1",
+            super::ts_utc("ls.last_sync_at"),
+            super::ts_utc("ls.created_at"),
+            super::ts_utc("ls.updated_at"),
+        ),
+    )
+    .bind(track_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(
+        |(
+            id,
+            source_type,
+            url,
+            name,
+            owner_id,
+            access_rule,
+            last_sync_at,
+            created_at,
+            updated_at,
+        )| {
+            LibrarySourceInfo {
+                id,
+                source_type,
+                url,
+                name,
+                last_sync_at,
+                owner_id,
+                access_rule,
+                created_at,
+                updated_at,
+            }
+        },
+    ))
+}
+
 pub async fn get_urls_for_scan(pool: &PgPool) -> Result<Vec<String>> {
     let rows = sqlx::query_scalar::<_, String>("SELECT url FROM library_sources")
         .fetch_all(pool)

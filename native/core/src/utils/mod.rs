@@ -1,6 +1,8 @@
 pub mod config;
 pub mod encryption;
+pub mod fs;
 pub mod helper;
+pub mod identify;
 pub mod logger;
 pub mod playback;
 pub mod romajize;

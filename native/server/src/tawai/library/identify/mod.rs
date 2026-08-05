@@ -16,6 +16,10 @@ pub fn create_library_identify_router() -> Router<SharedState> {
     Router::new()
         .route("/unidentified", get(track::handle_list_unidentified))
         .route("/apply", post(track::handle_apply_identification))
+        .route(
+            "/download-folder",
+            get(track::handle_list_download_folder_tracks),
+        )
         .route("/lyrics", get(lyrics::handle_get_lyrics))
         .route("/lyrics/search", get(lyrics::handle_search_lyrics))
         .route("/tags/read", post(edit::handle_read_file_tags))

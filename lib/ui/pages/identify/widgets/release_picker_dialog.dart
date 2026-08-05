@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
+import 'package:tawai/ui/theme/app_theme.dart';
 
 void showReleasePickerDialog({
   required BuildContext context,
@@ -24,15 +25,17 @@ void showReleasePickerDialog({
             child: Row(
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(
+                    AppTheme.radiusSM * AppTheme.radiusScale(context),
+                  ),
                   child: Image.network(
                     'https://coverartarchive.org/release/${release.id}/front-250.jpg',
-                    width: 48,
-                    height: 48,
+                    width: AppTheme.iconXL * AppTheme.iconScale(context),
+                    height: AppTheme.iconXL * AppTheme.iconScale(context),
                     fit: BoxFit.cover,
                     errorBuilder: (_, _, _) => Container(
-                      width: 48,
-                      height: 48,
+                      width: AppTheme.iconXL * AppTheme.iconScale(context),
+                      height: AppTheme.iconXL * AppTheme.iconScale(context),
                       color: Theme.of(
                         context,
                       ).colorScheme.surfaceContainerHighest,
@@ -43,7 +46,9 @@ void showReleasePickerDialog({
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
+                SizedBox(
+                  width: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                ),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

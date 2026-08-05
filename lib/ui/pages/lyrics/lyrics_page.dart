@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/src/bindings/bindings.dart';
+import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/lyrics_parser.dart';
 import 'package:tawai/utils/settings.dart';
@@ -195,10 +196,10 @@ class _LyricsPageState extends State<LyricsPage> {
         children: [
           Icon(
             Icons.lyrics_outlined,
-            size: 48,
+            size: AppTheme.iconXL * AppTheme.iconScale(context),
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context)),
           Text(message, style: Theme.of(context).textTheme.bodyLarge),
         ],
       ),
@@ -208,22 +209,28 @@ class _LyricsPageState extends State<LyricsPage> {
   Widget _buildError(TextTheme textTheme) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(
+          AppTheme.spaceXL * AppTheme.spaceScale(context),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               Icons.error_outline,
-              size: 48,
+              size: AppTheme.iconXL * AppTheme.iconScale(context),
               color: Theme.of(context).colorScheme.error,
             ),
-            const SizedBox(height: 16),
+            SizedBox(
+              height: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            ),
             Text(
               _error!,
               style: textTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
+            SizedBox(
+              height: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+            ),
             FilledButton.tonalIcon(
               onPressed: _loadLyrics,
               icon: const Icon(Icons.refresh),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
+import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/pages/library/subpages/playlist/playlist_detail_page.dart';
 import 'package:tawai/ui/widgets/components/alphabet_index_scroller.dart';
 
@@ -24,7 +25,9 @@ class LibraryPlaylistsTab extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           _buildHeader(context),
-          const SizedBox(height: 80),
+          SizedBox(
+            height: AppTheme.spaceSM * 10 * AppTheme.spaceScale(context),
+          ),
           const Center(child: Text('No playlists yet')),
         ],
       );
@@ -68,7 +71,7 @@ class LibraryPlaylistsTab extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(8),
+      padding: EdgeInsets.all(AppTheme.spaceSM * AppTheme.spaceScale(context)),
       child: Row(
         children: [
           Expanded(
@@ -79,7 +82,10 @@ class LibraryPlaylistsTab extends StatelessWidget {
           ),
           FilledButton.icon(
             onPressed: onCreatePlaylist,
-            icon: const Icon(Icons.add, size: 18),
+            icon: Icon(
+              Icons.add,
+              size: AppTheme.iconSM * AppTheme.iconScale(context),
+            ),
             label: const Text('New'),
           ),
         ],
