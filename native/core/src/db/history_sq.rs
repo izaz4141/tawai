@@ -55,7 +55,7 @@ pub async fn get_recent_history(
             artist_name: row.get("artist_name"),
             played_at: row.get("played_at"),
             source: row.get("source"),
-            scrobbled: row.get::<i32, _>("scrobbled") != 0,
+            scrobbled: row.get::<bool, _>("scrobbled"),
             duration_secs: row.get("duration_secs"),
         })
         .collect())

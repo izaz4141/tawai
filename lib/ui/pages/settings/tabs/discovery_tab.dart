@@ -10,7 +10,7 @@ import 'package:tawai/ui/widgets/components/list_switch.dart';
 import 'package:tawai/ui/widgets/components/list_text_field.dart';
 import 'package:tawai/ui/widgets/dialog/naming_format.dart';
 import 'package:tawai/utils/bridge_service.dart';
-import 'package:tawai/utils/folder_picker.dart';
+import 'package:tawai/utils/io_service.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/models/recommendation_source.dart';
 
@@ -630,7 +630,7 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
   }
 
   Future<void> _pickFolder() async {
-    final path = await pickFolder(
+    final path = await IOServiceFactory.create().getDirectoryPath(
       context,
       initialPath: _localPath.isNotEmpty ? _localPath : null,
     );

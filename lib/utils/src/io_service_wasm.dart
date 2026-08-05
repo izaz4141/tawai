@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:web/web.dart' as html;
 import 'io_service_base.dart';
+import 'package:tawai/ui/widgets/dialog/server_folder_picker.dart';
 
 class WasmIOService implements IOService {
   @override
@@ -70,8 +72,11 @@ class WasmIOService implements IOService {
   }
 
   @override
-  Future<String?> getDirectoryPath() async {
-    throw UnsupportedError('Directory picker is not supported in WASM.');
+  Future<String?> getDirectoryPath(
+    BuildContext context, {
+    String? initialPath,
+  }) {
+    return showServerFolderPicker(context, startPath: initialPath);
   }
 
   @override

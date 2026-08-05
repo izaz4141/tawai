@@ -27,6 +27,7 @@ class _ServerFolderPicker extends StatefulWidget {
 }
 
 class _ServerFolderPickerState extends State<_ServerFolderPicker> {
+  final TextEditingController _pathController = TextEditingController();
   String? _currentPath;
   List<FsEntry> _entries = [];
   bool _loading = true;
@@ -36,7 +37,14 @@ class _ServerFolderPickerState extends State<_ServerFolderPicker> {
   void initState() {
     super.initState();
     _currentPath = widget.startPath;
+    _pathController.text = widget.startPath ?? '';
     _load();
+  }
+
+  @override
+  void dispose() {
+    _pathController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -59,6 +67,7 @@ class _ServerFolderPickerState extends State<_ServerFolderPicker> {
     }
     setState(() {
       _currentPath = listing.path;
+      _pathController.text = listing.path;
       _entries = listing.entries;
       _loading = false;
       _error = null;
@@ -78,6 +87,12 @@ class _ServerFolderPickerState extends State<_ServerFolderPicker> {
     if (!mounted || listing?.parent == null) return;
     _currentPath = listing!.parent;
     _load();
+  }
+
+  void _submitPath(String value) {
+    final path = value.trim();
+    if (path.isEmpty) return;
+    _loadAt(path);
   }
 
   @override
@@ -100,12 +115,17 @@ class _ServerFolderPickerState extends State<_ServerFolderPicker> {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          _currentPath ?? 'Select folder',
+                        child: TextField(
+                          controller: _pathController,
+                          decoration: const InputDecoration(
+                            hintText: 'Type a path',
+                            isDense: true,
+                            border: InputBorder.none,
+                          ),
                           style: textTheme.bodySmall?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                           ),
-                          overflow: TextOverflow.ellipsis,
+                          onSubmitted: _submitPath,
                         ),
                       ),
                       if (_currentPath != null && _currentPath != '/')

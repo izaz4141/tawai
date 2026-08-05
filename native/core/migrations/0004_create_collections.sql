@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS collections (
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
-    is_smart INTEGER NOT NULL DEFAULT 0,
+    is_smart BOOLEAN NOT NULL DEFAULT 0,
     rules TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))

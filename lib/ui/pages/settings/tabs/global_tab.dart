@@ -14,7 +14,7 @@ import 'package:tawai/ui/widgets/components/list_text_field.dart';
 import 'package:tawai/ui/widgets/components/spin_box.dart';
 import 'package:tawai/ui/widgets/dialog/db_account_manager_dialog.dart';
 import 'package:tawai/ui/widgets/dialog/permission_dialog.dart';
-import 'package:tawai/utils/folder_picker.dart';
+import 'package:tawai/utils/io_service.dart';
 import 'package:tawai/utils/platform_service.dart';
 
 class SettingsGlobalTab extends StatelessWidget {
@@ -89,7 +89,7 @@ class SettingsGlobalTab extends StatelessWidget {
           valueListenable: SettingsManager.downloadFolder,
           builder: (context, path, _) {
             Future<void> pick() async {
-              final p = await pickFolder(
+              final p = await IOServiceFactory.create().getDirectoryPath(
                 context,
                 initialPath: path.isNotEmpty ? path : null,
               );

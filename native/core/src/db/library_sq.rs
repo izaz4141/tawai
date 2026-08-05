@@ -3,6 +3,7 @@ use sqlx::{Row, SqlitePool};
 
 use crate::audio::tags::derive_sort_name;
 use crate::signals::library::*;
+use crate::utils::helper::sha256_hex;
 
 pub async fn lookup_track(pool: &SqlitePool, track_id: &str) -> Result<Option<TrackInfo>> {
     let row = sqlx::query(
@@ -503,8 +504,8 @@ pub async fn track_exists_by_fingerprint(
     fingerprint: &str,
 ) -> Result<Option<String>> {
     let track_id: Option<String> =
-        sqlx::query_scalar("SELECT track_id FROM fingerprints WHERE fingerprint = ?")
-            .bind(fingerprint)
+        sqlx::query_scalar("SELECT track_id FROM fingerprints WHERE fingerprint_hash = ?")
+            .bind(sha256_hex(fingerprint))
             .fetch_optional(pool)
             .await?;
     Ok(track_id)
@@ -518,11 +519,12 @@ pub async fn insert_fingerprint(
 ) -> Result<()> {
     let id = uuid::Uuid::new_v4().to_string();
     sqlx::query(
-        "INSERT INTO fingerprints (id, track_id, fingerprint, acoust_id) VALUES (?, ?, ?, ?)",
+        "INSERT INTO fingerprints (id, track_id, fingerprint, fingerprint_hash, acoust_id) VALUES (?, ?, ?, ?, ?)",
     )
     .bind(&id)
     .bind(track_id)
     .bind(fingerprint)
+    .bind(sha256_hex(fingerprint))
     .bind(acoust_id)
     .execute(pool)
     .await?;

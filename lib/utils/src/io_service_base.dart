@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 class PickFileResult {
   final String? name;
@@ -21,7 +22,7 @@ abstract class IOService {
   Future<bool> directoryExists(String path);
   Future<Uint8List> readFileBytes(String path);
   Future<void> writeFileBytes(String path, Uint8List bytes);
-  Future<String?> getDirectoryPath();
+  Future<String?> getDirectoryPath(BuildContext context, {String? initialPath});
   Future<void> setPermissions(String path, String mode);
   String? getCookie(String name);
   Future<PickFileResult?> pickFile({List<String>? allowedExtensions});

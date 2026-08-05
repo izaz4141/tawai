@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS playback_history (
     track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
     played_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     source TEXT NOT NULL DEFAULT 'local',
-    scrobbled INTEGER NOT NULL DEFAULT 0
+    scrobbled BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE INDEX IF NOT EXISTS idx_playback_history_user ON playback_history(user_id);

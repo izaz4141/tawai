@@ -3,6 +3,7 @@ use sqlx::{PgPool, Row};
 
 use crate::audio::tags::derive_sort_name;
 use crate::signals::library::*;
+use crate::utils::helper::sha256_hex;
 
 pub async fn lookup_track(pool: &PgPool, track_id: &str) -> Result<Option<TrackInfo>> {
     let row = sqlx::query(
@@ -360,8 +361,8 @@ pub async fn delete_track_artists(pool: &PgPool, track_id: &str) -> Result<()> {
 pub async fn get_track_artists(pool: &PgPool, track_id: &str) -> Result<Vec<ArtistInfo>> {
     let rows = sqlx::query(
         r#"SELECT ar.id, ar.name, ar.sort_name, ar.mbid, ar.thumbnail_url,
-                  0 AS album_count,
-                  0 AS track_count
+                  0::BIGINT AS album_count,
+                  0::BIGINT AS track_count
            FROM track_artists ta
            JOIN artists ar ON ta.artist_id = ar.id
            WHERE ta.track_id = $1
@@ -403,8 +404,8 @@ pub async fn delete_album_artists(pool: &PgPool, album_id: &str) -> Result<()> {
 pub async fn get_album_artists(pool: &PgPool, album_id: &str) -> Result<Vec<ArtistInfo>> {
     let rows = sqlx::query(
         r#"SELECT ar.id, ar.name, ar.sort_name, ar.mbid, ar.thumbnail_url,
-                  0 AS album_count,
-                  0 AS track_count
+                  0::BIGINT AS album_count,
+                  0::BIGINT AS track_count
            FROM album_artists aa
            JOIN artists ar ON aa.artist_id = ar.id
            WHERE aa.album_id = $1
@@ -428,7 +429,7 @@ pub async fn batch_populate_track_artists(pool: &PgPool, tracks: &mut [TrackInfo
     let placeholders: Vec<String> = (1..=ids.len()).map(|i| format!("${}", i)).collect();
     let sql = format!(
         r#"SELECT ta.track_id, ar.id, ar.name, ar.sort_name, ar.mbid, ar.thumbnail_url,
-                  0 AS album_count, 0 AS track_count
+                  0::BIGINT AS album_count, 0::BIGINT AS track_count
            FROM track_artists ta
            JOIN artists ar ON ta.artist_id = ar.id
            WHERE ta.track_id IN ({})
@@ -464,7 +465,7 @@ pub async fn batch_populate_album_artists(pool: &PgPool, albums: &mut [AlbumInfo
     let placeholders: Vec<String> = (1..=ids.len()).map(|i| format!("${}", i)).collect();
     let sql = format!(
         r#"SELECT aa.album_id, ar.id, ar.name, ar.sort_name, ar.mbid, ar.thumbnail_url,
-                  0 AS album_count, 0 AS track_count
+                  0::BIGINT AS album_count, 0::BIGINT AS track_count
            FROM album_artists aa
            JOIN artists ar ON aa.artist_id = ar.id
            WHERE aa.album_id IN ({})
@@ -505,8 +506,8 @@ pub async fn track_exists_by_fingerprint(
     fingerprint: &str,
 ) -> Result<Option<String>> {
     let track_id: Option<String> =
-        sqlx::query_scalar("SELECT track_id FROM fingerprints WHERE fingerprint = $1")
-            .bind(fingerprint)
+        sqlx::query_scalar("SELECT track_id FROM fingerprints WHERE fingerprint_hash = $1")
+            .bind(sha256_hex(fingerprint))
             .fetch_optional(pool)
             .await?;
     Ok(track_id)
@@ -520,11 +521,12 @@ pub async fn insert_fingerprint(
 ) -> Result<()> {
     let id = uuid::Uuid::new_v4().to_string();
     sqlx::query(
-        "INSERT INTO fingerprints (id, track_id, fingerprint, acoust_id) VALUES ($1, $2, $3, $4)",
+        "INSERT INTO fingerprints (id, track_id, fingerprint, fingerprint_hash, acoust_id) VALUES ($1, $2, $3, $4, $5)",
     )
     .bind(&id)
     .bind(track_id)
     .bind(fingerprint)
+    .bind(sha256_hex(fingerprint))
     .bind(acoust_id)
     .execute(pool)
     .await?;
