@@ -4,7 +4,7 @@
 //! directories and normalize paths. They never create, modify, or delete
 //! anything on disk.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -42,8 +42,7 @@ pub struct FsListing {
 /// browsering (and returned in listings).
 pub fn resolve_path(path: &str) -> Result<String> {
     let expanded = shellexpand_full_path(path);
-    let canonical =
-        fs::canonicalize(&expanded).with_context(|| format!("cannot resolve path: {path}"))?;
+    let canonical = fs::canonicalize(&expanded)?;
     let as_string = canonical.to_string_lossy().into_owned();
     if !canonical.is_dir() {
         anyhow::bail!("{as_string} is not a directory");
@@ -62,8 +61,7 @@ pub fn list_dir(path: &str) -> Result<FsListing> {
         .map(|p| p.to_string_lossy().into_owned());
 
     let mut entries = Vec::new();
-    let read = fs::read_dir(canonical_path)
-        .with_context(|| format!("cannot read directory: {canonical}"))?;
+    let read = fs::read_dir(canonical_path)?;
     for item in read {
         let item = match item {
             Ok(i) => i,

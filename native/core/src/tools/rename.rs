@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use sqlx::Row;
 
 use crate::audio::tags::AudioTag;
@@ -213,17 +213,10 @@ pub fn rename_audio_file(old_path: &Path, pattern: &str, tag: &AudioTag) -> Resu
     }
 
     if let Some(parent) = new_path.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+        std::fs::create_dir_all(parent)?;
     }
 
-    std::fs::rename(old_path, &new_path).with_context(|| {
-        format!(
-            "Failed to rename {} to {}",
-            old_path.display(),
-            new_path.display()
-        )
-    })?;
+    std::fs::rename(old_path, &new_path)?;
 
     Ok(new_path)
 }
@@ -264,16 +257,9 @@ pub fn move_file_into_source(
         return Ok(new_path);
     }
     if let Some(parent) = new_path.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+        std::fs::create_dir_all(parent)?;
     }
-    std::fs::rename(old_path, &new_path).with_context(|| {
-        format!(
-            "Failed to move {} to {}",
-            old_path.display(),
-            new_path.display()
-        )
-    })?;
+    std::fs::rename(old_path, &new_path)?;
     Ok(new_path)
 }
 

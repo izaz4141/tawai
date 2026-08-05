@@ -15,7 +15,7 @@ pub struct FingerprintResult {
 }
 
 pub fn compute_fingerprint(path: &Path) -> Result<FingerprintResult> {
-    let src = std::fs::File::open(path).context("Failed to open audio file")?;
+    let src = std::fs::File::open(path)?;
     let mss = MediaSourceStream::new(Box::new(src), Default::default());
 
     let mut hint = Hint::new();
@@ -23,14 +23,12 @@ pub fn compute_fingerprint(path: &Path) -> Result<FingerprintResult> {
         hint.with_extension(ext);
     }
 
-    let mut format = symphonia::default::get_probe()
-        .probe(
-            &hint,
-            mss,
-            FormatOptions::default(),
-            MetadataOptions::default(),
-        )
-        .context("Failed to probe audio format")?;
+    let mut format = symphonia::default::get_probe().probe(
+        &hint,
+        mss,
+        FormatOptions::default(),
+        MetadataOptions::default(),
+    )?;
 
     let track = format
         .tracks()
@@ -55,13 +53,10 @@ pub fn compute_fingerprint(path: &Path) -> Result<FingerprintResult> {
     let track_id = track.id;
 
     let mut decoder = symphonia::default::get_codecs()
-        .make_audio_decoder(&audio_params, &AudioDecoderOptions::default())
-        .context("Failed to create decoder")?;
+        .make_audio_decoder(&audio_params, &AudioDecoderOptions::default())?;
 
     let mut fingerprinter = Fingerprinter::new(Algorithm::default());
-    fingerprinter
-        .start(sample_rate, num_channels)
-        .context("Failed to start fingerprinter")?;
+    fingerprinter.start(sample_rate, num_channels)?;
 
     let mut total_frames: usize = 0;
 
@@ -125,17 +120,13 @@ pub fn compute_fingerprint(path: &Path) -> Result<FingerprintResult> {
             }
 
             if !interleaved.is_empty() {
-                fingerprinter
-                    .feed(&interleaved)
-                    .context("Failed to feed audio to fingerprinter")?;
+                fingerprinter.feed(&interleaved)?;
                 total_frames += frames;
             }
         }
     }
 
-    fingerprinter
-        .finish()
-        .context("Failed to finish fingerprinting")?;
+    fingerprinter.finish()?;
 
     let fingerprint = fingerprinter.encode();
     let duration = total_frames as f64 / sample_rate as f64;

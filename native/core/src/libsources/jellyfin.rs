@@ -211,18 +211,14 @@ impl JellyfinParser {
             .get(&views_url)
             .header("Authorization", &auth_header)
             .send()
-            .await
-            .context("Failed to fetch Jellyfin user views")?;
+            .await?;
 
         if !resp.status().is_success() {
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("Jellyfin views request failed: {}", text);
         }
 
-        let data: ViewsResponse = resp
-            .json()
-            .await
-            .context("Failed to parse Jellyfin views response")?;
+        let data: ViewsResponse = resp.json().await?;
 
         let libraries: Vec<JellyfinLibraryInfo> = data
             .items
@@ -273,18 +269,14 @@ impl JellyfinParser {
             .header("X-Emby-Authorization", DEVICE_INFO)
             .json(&body)
             .send()
-            .await
-            .context("Failed to authenticate with Jellyfin")?;
+            .await?;
 
         if !resp.status().is_success() {
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("Jellyfin authentication failed: {}", text);
         }
 
-        let data: AuthResponse = resp
-            .json()
-            .await
-            .context("Failed to parse Jellyfin auth response")?;
+        let data: AuthResponse = resp.json().await?;
 
         Ok((data.access_token, data.user.id))
     }
@@ -316,18 +308,14 @@ impl JellyfinParser {
                 .get(&page_url)
                 .header("Authorization", &auth_header)
                 .send()
-                .await
-                .context("Failed to list Jellyfin audio items")?;
+                .await?;
 
             if !resp.status().is_success() {
                 let text = resp.text().await.unwrap_or_default();
                 anyhow::bail!("Jellyfin list items failed: {}", text);
             }
 
-            let data: ItemsResponse = resp
-                .json()
-                .await
-                .context("Failed to parse Jellyfin items response")?;
+            let data: ItemsResponse = resp.json().await?;
 
             let count = data.items.len();
             all_items.extend(data.items);
@@ -355,8 +343,7 @@ impl JellyfinParser {
             .get(&stream_url)
             .header("Authorization", &auth_header)
             .send()
-            .await
-            .context("Failed to stream audio from Jellyfin")?;
+            .await?;
 
         if !response.status().is_success() {
             anyhow::bail!(
@@ -365,22 +352,20 @@ impl JellyfinParser {
             );
         }
 
-        let mut tmp = tempfile::NamedTempFile::new().context("Failed to create temp file")?;
+        let mut tmp = tempfile::NamedTempFile::new()?;
         let mut hasher = Sha256::new();
         let mut byte_stream = response.bytes_stream();
 
         while let Some(chunk) = byte_stream.next().await {
-            let chunk = chunk.context("Failed to read audio stream chunk")?;
+            let chunk = chunk?;
             hasher.update(&chunk);
-            tmp.write_all(&chunk)
-                .context("Failed to write audio data to temp file")?;
+            tmp.write_all(&chunk)?;
         }
 
         let file_hash = hex::encode(hasher.finalize());
         let file_size = std::fs::metadata(tmp.path()).map(|m| m.len()).unwrap_or(0);
 
-        tmp.seek(std::io::SeekFrom::Start(0))
-            .context("Failed to seek temp file")?;
+        tmp.seek(std::io::SeekFrom::Start(0))?;
 
         let (tag, duration_secs, sample_rate, bitrate) = tags::read_audio_tags(tmp.path())?;
 
@@ -414,8 +399,7 @@ impl JellyfinParser {
             .get(&url)
             .header("Authorization", &auth_header)
             .send()
-            .await
-            .context("Failed to fetch Jellyfin item")?;
+            .await?;
         if resp.status().is_success() {
             Ok(Some(resp.json().await?))
         } else {

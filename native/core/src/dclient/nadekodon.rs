@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -277,21 +277,13 @@ impl NadekodonClient {
 
     pub async fn test_connection(&self) -> Result<String> {
         let url = format!("{}/api/nadeko/system/status", self.base_url);
-        let resp = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .context("Failed to connect to nadekodon — is the server running?")?;
+        let resp = self.client.get(&url).send().await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("nadekodon health check failed {}: {}", status, text);
         }
-        let data: NadekodonApiStatusResponse = resp
-            .json()
-            .await
-            .context("Failed to parse nadekodon status response")?;
+        let data: NadekodonApiStatusResponse = resp.json().await?;
         Ok(data.version)
     }
 
@@ -303,17 +295,13 @@ impl NadekodonClient {
             .post(&url)
             .basic_auth(username, Some(password))
             .send()
-            .await
-            .context("Failed to send nadekodon login request")?;
+            .await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("nadekodon login failed {}: {}", status, text);
         }
-        let data: NadekodonApiLoginResponse = resp
-            .json()
-            .await
-            .context("Failed to parse nadekodon login response")?;
+        let data: NadekodonApiLoginResponse = resp.json().await?;
         Ok(data.api_key)
     }
 
@@ -331,8 +319,7 @@ impl NadekodonClient {
             .headers(self.headers())
             .json(&body)
             .send()
-            .await
-            .context("Failed to create nadekodon category")?;
+            .await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
@@ -343,22 +330,13 @@ impl NadekodonClient {
 
     pub async fn list_categories(&self) -> Result<Vec<NadekodonApiCategory>> {
         let url = format!("{}/api/nadeko/download/categories", self.base_url);
-        let resp = self
-            .client
-            .get(&url)
-            .headers(self.headers())
-            .send()
-            .await
-            .context("Failed to fetch nadekodon categories")?;
+        let resp = self.client.get(&url).headers(self.headers()).send().await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("nadekodon list categories failed {}: {}", status, text);
         }
-        let data: NadekodonApiCategoryListResponse = resp
-            .json()
-            .await
-            .context("Failed to parse nadekodon categories response")?;
+        let data: NadekodonApiCategoryListResponse = resp.json().await?;
         Ok(data.categories)
     }
 
@@ -396,17 +374,13 @@ impl NadekodonClient {
             .headers(self.headers())
             .json(&body)
             .send()
-            .await
-            .context("Failed to send nadekodon create download request")?;
+            .await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("nadekodon create download failed {}: {}", status, text);
         }
-        let id_value: serde_json::Value = resp
-            .json()
-            .await
-            .context("Failed to parse nadekodon create response")?;
+        let id_value: serde_json::Value = resp.json().await?;
         let download_id = id_value["id"].as_str().unwrap_or_default().to_string();
         Ok(download_id)
     }
@@ -439,17 +413,13 @@ impl NadekodonClient {
             .headers(self.headers())
             .json(&body)
             .send()
-            .await
-            .context("Failed to fetch nadekodon downloads")?;
+            .await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("nadekodon list downloads failed {}: {}", status, text);
         }
-        let data: NadekodonApiListResponse = resp
-            .json()
-            .await
-            .context("Failed to parse nadekodon list response")?;
+        let data: NadekodonApiListResponse = resp.json().await?;
         let downloads = data
             .list
             .into_iter()
@@ -480,22 +450,13 @@ impl NadekodonClient {
             "{}/api/nadeko/download/details/{}",
             self.base_url, download_id
         );
-        let resp = self
-            .client
-            .get(&url)
-            .headers(self.headers())
-            .send()
-            .await
-            .context("Failed to fetch nadekodon download details")?;
+        let resp = self.client.get(&url).headers(self.headers()).send().await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("nadekodon get details failed {}: {}", status, text);
         }
-        let data: NadekodonApiDetailResponse = resp
-            .json()
-            .await
-            .context("Failed to parse nadekodon details response")?;
+        let data: NadekodonApiDetailResponse = resp.json().await?;
         Ok(DetailsResponse {
             id: String::new(),
             download_id: data.id,
@@ -531,8 +492,7 @@ impl NadekodonClient {
             .headers(self.headers())
             .json(&body)
             .send()
-            .await
-            .with_context(|| format!("Failed to send nadekodon action to {}", path))?;
+            .await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
@@ -568,8 +528,7 @@ impl NadekodonClient {
             .headers(self.headers())
             .json(&body)
             .send()
-            .await
-            .context("Failed to send nadekodon delete request")?;
+            .await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
@@ -664,17 +623,13 @@ impl NadekodonClient {
             .headers(self.headers())
             .json(&body)
             .send()
-            .await
-            .context("Failed to send nadekodon search-ytdl request")?;
+            .await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("nadekodon search-ytdl failed {}: {}", status, text);
         }
-        let data: YtdlSearchOutput = resp
-            .json()
-            .await
-            .context("Failed to parse nadekodon search-ytdl response")?;
+        let data: YtdlSearchOutput = resp.json().await?;
         Ok(data)
     }
 
@@ -687,17 +642,13 @@ impl NadekodonClient {
             .headers(self.headers())
             .json(&body)
             .send()
-            .await
-            .context("Failed to query nadekodon ytdl")?;
+            .await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("nadekodon query-ytdl failed {}: {}", status, text);
         }
-        let data: YtdlQueryOutput = resp
-            .json()
-            .await
-            .context("Failed to parse nadekodon query-ytdl response")?;
+        let data: YtdlQueryOutput = resp.json().await?;
         Ok(data)
     }
 

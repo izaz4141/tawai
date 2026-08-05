@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use serde::Deserialize;
 
@@ -27,13 +27,9 @@ pub async fn fetch_preview(
         encoded
     );
 
-    let resp = client
-        .get(&url)
-        .send()
-        .await
-        .context("iTunes search failed")?;
+    let resp = client.get(&url).send().await?;
 
-    let body: ItunesResponse = resp.json().await.context("iTunes response parse failed")?;
+    let body: ItunesResponse = resp.json().await?;
 
     Ok(body.results.into_iter().next().and_then(|r| r.preview_url))
 }

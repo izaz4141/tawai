@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use crate::audio;
 use crate::db::account::DEFAULT_USERNAME;
@@ -112,9 +112,20 @@ pub async fn apply_identification(
             };
             let track_num = params.track_num.or(t.track_num);
             let disc_num = params.disc_num.or(t.disc_num);
-            let mbid_recording = params.mbid_recording.clone().or_else(|| t.mbid_recording.clone());
+            let mbid_recording = params
+                .mbid_recording
+                .clone()
+                .or_else(|| t.mbid_recording.clone());
             let lyrics = params.lyrics.clone().or_else(|| t.lyrics.clone());
-            (title, artist, album, track_num, disc_num, mbid_recording, lyrics)
+            (
+                title,
+                artist,
+                album,
+                track_num,
+                disc_num,
+                mbid_recording,
+                lyrics,
+            )
         }
         None => (
             params.title.clone(),
@@ -152,9 +163,7 @@ pub async fn apply_identification(
     if let Some(cover_bytes) = &params.cover_bytes {
         if let Some(track) = &track {
             if let Err(e) = library::update_album_cover(pool, &track.album_id, cover_bytes).await {
-                crate::utils::logger::warn(&format!(
-                    "update_album_cover failed (non-fatal): {e}"
-                ));
+                crate::utils::logger::warn(&format!("update_album_cover failed (non-fatal): {e}"));
             }
         }
     }

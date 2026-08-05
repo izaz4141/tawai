@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use sha2::{Digest, Sha256};
 use std::io::Read;
 use walkdir::WalkDir;
@@ -39,13 +39,11 @@ pub fn walk_directory(dir: &Path) -> Vec<PathBuf> {
 }
 
 fn hash_file(path: &Path) -> Result<String> {
-    let mut file = std::fs::File::open(path).context("Failed to open file for hashing")?;
+    let mut file = std::fs::File::open(path)?;
     let mut hasher = Sha256::new();
     let mut buf = [0; 8192];
     loop {
-        let n = file
-            .read(&mut buf)
-            .context("Failed to read file for hashing")?;
+        let n = file.read(&mut buf)?;
         if n == 0 {
             break;
         }
@@ -64,6 +62,13 @@ pub fn scan_file(path: &Path) -> Result<ParsedTrack> {
         if fingerprint_supported_format(ext) {
             if let Ok(result) = compute_fingerprint(path) {
                 tag.acoust_id_fingerprint = Some(result.fingerprint);
+                if let Err(e) = tags::write_audio_tags(path, &tag) {
+                    logger::warn(&format!(
+                        "Failed to write acoust_id_fingerprint to {}: {}",
+                        path.display(),
+                        e
+                    ));
+                }
             }
         }
     }

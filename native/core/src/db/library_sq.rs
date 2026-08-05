@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use sqlx::{Row, SqlitePool};
 
 use crate::audio::tags::derive_sort_name;
@@ -184,8 +184,7 @@ pub async fn insert_artist(
         .bind(sort_name)
         .bind(mbid.as_deref())
         .execute(pool)
-        .await
-        .context("Failed to insert artist")?;
+        .await?;
     Ok(id)
 }
 
@@ -233,8 +232,7 @@ pub async fn insert_album(
     .bind(disambiguation)
     .bind(total_discs)
     .execute(pool)
-    .await
-    .context("Failed to insert album")?;
+    .await?;
     Ok(id)
 }
 
@@ -253,8 +251,7 @@ pub async fn insert_genre(pool: &SqlitePool, name: &str) -> Result<String> {
         .bind(&id)
         .bind(name)
         .execute(pool)
-        .await
-        .context("Failed to insert genre")?;
+        .await?;
     Ok(id)
 }
 
@@ -321,8 +318,7 @@ pub async fn insert_track(
     .bind(track_gain)
     .bind(track_peak)
     .execute(pool)
-    .await
-    .context("Failed to insert track")?;
+    .await?;
     Ok(id)
 }
 
@@ -529,8 +525,7 @@ pub async fn insert_fingerprint(
     .bind(fingerprint)
     .bind(acoust_id)
     .execute(pool)
-    .await
-    .context("Failed to insert fingerprint")?;
+    .await?;
     Ok(())
 }
 

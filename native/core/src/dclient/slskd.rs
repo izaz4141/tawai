@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde_json::Value;
 use tokio::time::{Duration, sleep};
@@ -143,17 +143,13 @@ impl SlskdClient {
             .headers(self.headers())
             .json(&body)
             .send()
-            .await
-            .context("Failed to send slskd search request")?;
+            .await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("slskd search failed {}: {}", status, text);
         }
-        let data: serde_json::Value = resp
-            .json()
-            .await
-            .context("Failed to parse slskd search response")?;
+        let data: serde_json::Value = resp.json().await?;
         let result = self.search_complete(&data["id"].to_string()).await?;
         Ok(result)
     }
@@ -171,17 +167,13 @@ impl SlskdClient {
                     .query(&[("includeResponses", "true")])
                     .headers(self.headers())
                     .send()
-                    .await
-                    .context("Failed to send slskd search result request")?;
+                    .await?;
                 if !resp.status().is_success() {
                     let status = resp.status();
                     let text = resp.text().await.unwrap_or_default();
                     anyhow::bail!("slskd search failed {}: {}", status, text);
                 }
-                data = resp
-                    .json()
-                    .await
-                    .context("Failed to parse slskd search response")?;
+                data = resp.json().await?;
                 complete = data["isComplete"].as_bool().unwrap_or(false);
             }
             serde_json::from_value(data)?
@@ -213,39 +205,26 @@ impl SlskdClient {
             .headers(self.headers())
             .json(&body)
             .send()
-            .await
-            .context("Failed to send slskd download request")?;
+            .await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("slskd download failed {}: {}", status, text);
         }
-        let data: serde_json::Value = resp
-            .json()
-            .await
-            .context("Failed to parse slskd download response")?;
+        let data: serde_json::Value = resp.json().await?;
         let result = serde_json::from_value(data)?;
         Ok(result)
     }
 
     pub async fn list_downloads(&self) -> Result<Vec<SlskdDownloadInfo>> {
         let url = format!("{}/api/v0/transfers/downloads", self.base_url);
-        let resp = self
-            .client
-            .get(&url)
-            .headers(self.headers())
-            .send()
-            .await
-            .context("Failed to fetch slskd downloads")?;
+        let resp = self.client.get(&url).headers(self.headers()).send().await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("slskd list downloads failed {}: {}", status, text);
         }
-        let users: Vec<SlskdUserTransfer> = resp
-            .json()
-            .await
-            .context("Failed to parse slskd downloads response")?;
+        let users: Vec<SlskdUserTransfer> = resp.json().await?;
         let flat = users
             .into_iter()
             .flat_map(|u| {
@@ -277,8 +256,7 @@ impl SlskdClient {
             .delete(&url)
             .headers(self.headers())
             .send()
-            .await
-            .context("Failed to cancel slskd download")?;
+            .await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
@@ -362,19 +340,13 @@ impl SlskdClient {
 
     pub async fn test_connection(&self) -> Result<String> {
         let url = format!("{}/api/v0/application/version", self.base_url);
-        let resp = self
-            .client
-            .get(&url)
-            .headers(self.headers())
-            .send()
-            .await
-            .context("Failed to connect to slskd — is the server running?")?;
+        let resp = self.client.get(&url).headers(self.headers()).send().await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("slskd health check failed {}: {}", status, text);
         }
-        let version = resp.text().await.context("Failed to get slskd version")?;
+        let version = resp.text().await?;
         Ok(version)
     }
 

@@ -8,7 +8,10 @@ use axum::{
 };
 use base64::Engine as _;
 use serde::Deserialize;
-use tawai_core::{db::{account, library}, signals::library::TrackInfo};
+use tawai_core::{
+    db::{account, library},
+    signals::library::TrackInfo,
+};
 use utoipa::ToSchema;
 
 use crate::server::SharedState;
@@ -58,9 +61,8 @@ pub async fn handle_list_download_folder_tracks(
         .unwrap_or("")
         .to_string();
 
-    let tracks =
-        tawai_core::utils::identify::list_download_folder_tracks(Path::new(&folder))
-            .unwrap_or_default();
+    let tracks = tawai_core::utils::identify::list_download_folder_tracks(Path::new(&folder))
+        .unwrap_or_default();
     Json(tracks).into_response()
 }
 
@@ -160,8 +162,13 @@ pub async fn handle_apply_identification(
         total_discs: body.total_discs.unwrap_or(0),
     };
 
-    match tawai_core::utils::identify::apply_identification(db.pool(), &user.id, &user.role, &params)
-        .await
+    match tawai_core::utils::identify::apply_identification(
+        db.pool(),
+        &user.id,
+        &user.role,
+        &params,
+    )
+    .await
     {
         Ok(outcome) => Json(serde_json::json!({
             "success": true,

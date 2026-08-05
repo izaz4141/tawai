@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use lofty::config::WriteOptions;
 use lofty::file::AudioFile;
 use lofty::file::TaggedFileExt;
@@ -131,7 +131,7 @@ pub fn parse_gain_db(s: &str) -> Option<f64> {
 }
 
 pub fn read_audio_tags(path: &Path) -> Result<(AudioTag, f64, Option<u32>, Option<u32>)> {
-    let tagged_file = read_from_path(path).context("Failed to read audio tags")?;
+    let tagged_file = read_from_path(path)?;
     let properties = tagged_file.properties();
     let tags = tagged_file.tags();
 
@@ -299,7 +299,7 @@ pub fn read_audio_tags(path: &Path) -> Result<(AudioTag, f64, Option<u32>, Optio
 /// Write tags to an audio file using lofty.
 /// Writes all metadata fields from the provided `AudioTag`.
 pub fn write_audio_tags(path: &Path, audio_tag: &AudioTag) -> Result<()> {
-    let mut tagged_file = read_from_path(path).context("Failed to read audio file")?;
+    let mut tagged_file = read_from_path(path)?;
 
     let tag = if let Some(tag) = tagged_file.primary_tag_mut() {
         tag
@@ -394,9 +394,7 @@ pub fn write_audio_tags(path: &Path, audio_tag: &AudioTag) -> Result<()> {
         tag.push_picture(picture);
     }
 
-    tagged_file
-        .save_to_path(path, WriteOptions::default())
-        .context("Failed to write audio tags")?;
+    tagged_file.save_to_path(path, WriteOptions::default())?;
     Ok(())
 }
 

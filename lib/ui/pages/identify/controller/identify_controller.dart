@@ -27,9 +27,11 @@ class IdentifyController extends ChangeNotifier {
       return;
     }
     librarySources = (await BridgeService.instance.listEditableSources(userId))
-        .where((s) =>
-            s.sourceType != 'jellyfin' &&
-            !s.sourceType.startsWith('recommendation:'))
+        .where(
+          (s) =>
+              s.sourceType != 'jellyfin' &&
+              !s.sourceType.startsWith('recommendation:'),
+        )
         .toList();
     notifyListeners();
   }

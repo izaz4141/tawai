@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::Deserialize;
 
 use crate::signals::metadata::LyricsResult;
@@ -50,10 +50,7 @@ pub async fn get_lyrics(
         );
     }
 
-    let track: LrclibTrack = resp
-        .json()
-        .await
-        .context("Failed to parse LRCLIB get response")?;
+    let track: LrclibTrack = resp.json().await?;
 
     Ok(convert_track(track, prefer_sync))
 }
@@ -77,10 +74,7 @@ pub async fn search_lyrics(client: &reqwest::Client, query: &str) -> Result<Vec<
         );
     }
 
-    let tracks: Vec<LrclibTrack> = resp
-        .json()
-        .await
-        .context("Failed to parse LRCLIB search response")?;
+    let tracks: Vec<LrclibTrack> = resp.json().await?;
 
     Ok(tracks
         .into_iter()

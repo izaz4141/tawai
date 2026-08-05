@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use crate::audio::tags;
 use crate::db::database::DatabasePool;
@@ -108,12 +108,11 @@ pub async fn write_track_lyrics(
 
     let path = Path::new(&track.file_path);
 
-    let (mut audio_tag, _duration, _sample_rate, _bitrate) =
-        tags::read_audio_tags(path).context("Failed to read audio tags")?;
+    let (mut audio_tag, _duration, _sample_rate, _bitrate) = tags::read_audio_tags(path)?;
 
     audio_tag.lyrics = Some(lyrics.to_string());
 
-    tags::write_audio_tags(path, &audio_tag).context("Failed to write audio tags")?;
+    tags::write_audio_tags(path, &audio_tag)?;
 
     match pool {
         DatabasePool::Sqlite(p) => {
