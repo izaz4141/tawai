@@ -1,6 +1,6 @@
 use axum::{
     body::Body,
-    extract::{FromRequestParts, State},
+    extract::{FromRequestParts, Query, State},
     http::{HeaderMap, Request, StatusCode},
     middleware::Next,
     response::IntoResponse,
@@ -213,4 +213,26 @@ pub async fn require_admin(
         }
         _ => Err(StatusCode::FORBIDDEN),
     }
+}
+
+#[derive(Deserialize)]
+pub struct AuthQuery {
+    pub token: String,
+}
+pub async fn auth_query(
+    State(state): State<SharedState>,
+    req: Request<Body>,
+    next: Next,
+) -> Result<impl IntoResponse, StatusCode> {
+    let Query(params) =
+        Query::<AuthQuery>::try_from_uri(req.uri()).map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    let token_data = validate_jwt_token(&state, &params.token)
+        .await
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    let mut req = req;
+    req.extensions_mut().insert(token_data.claims.sub);
+
+    Ok(next.run(req).await)
 }

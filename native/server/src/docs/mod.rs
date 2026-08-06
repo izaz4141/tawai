@@ -178,7 +178,7 @@ use security::SecurityModifier;
     security(
         ("BasicAuth" = []),
         ("ApiKeyAuth" = []),
-        ("SIDCookie" = [])
+        ("TokenQueryAuth" = [])
     )
 )]
 pub struct ApiDoc;

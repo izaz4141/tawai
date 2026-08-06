@@ -43,7 +43,7 @@ fn content_type(path: &str) -> &'static str {
     get,
     path = "/api/tawai/playback/stream/{id}",
     tags = ["tawai.playback"],
-    security(("ApiKeyAuth" = [])),
+    security(("TokenQueryAuth" = [])),
     params(
         ("id" = String, Path, description = "Track ID"),
         ("bitrate" = Option<String>, Query, description = "Preferred bitrate (lossless, 128, 192, 256, 320)"),
@@ -55,7 +55,6 @@ fn content_type(path: &str) -> &'static str {
 )]
 pub async fn handle_stream_track(
     State(state): State<SharedState>,
-    Extension(_username): Extension<String>,
     Path(id): Path<String>,
     Query(query): Query<StreamQuery>,
 ) -> impl IntoResponse {

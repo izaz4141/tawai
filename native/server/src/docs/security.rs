@@ -23,10 +23,10 @@ impl Modify for SecurityModifier {
         );
 
         components.add_security_scheme(
-            "SIDCookie",
-            SecurityScheme::ApiKey(ApiKey::Cookie(ApiKeyValue::with_description(
-                "SID",
-                "Session cookie for qbittorrent api route",
+            "TokenQueryAuth",
+            SecurityScheme::ApiKey(ApiKey::Query(ApiKeyValue::with_description(
+                "token",
+                "Short lived token",
             ))),
         );
     }

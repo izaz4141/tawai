@@ -4,10 +4,13 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use tawai_core::db::account;
-use tawai_core::signals::playback::{PlayTrackRequest, PlayTrackResponse};
 use tawai_core::utils::playback::resolve_playable_track;
+use tawai_core::{
+    signals::playback::{PlayTrackRequest, PlayTrackResponse},
+    utils::logger,
+};
 
+use crate::security::create_jwt_response;
 use crate::server::SharedState;
 
 #[utoipa::path(
@@ -22,7 +25,7 @@ use crate::server::SharedState;
 )]
 pub async fn handle_play_track(
     State(state): State<SharedState>,
-    Extension(username): Extension<String>,
+    Extension(user_id): Extension<String>,
     Json(req): Json<PlayTrackRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
@@ -46,13 +49,17 @@ pub async fn handle_play_track(
     {
         result.file_path
     } else if let Some(tid) = &result.resolved_track_id {
-        let mk = state.context.master_key.read().await.clone();
-        if let Ok(Some(api_key)) = account::get_user_api_key(db.pool(), &username, &mk).await {
-            let mut headers = result.headers.unwrap_or_default();
-            headers.push(("X-API-Key".to_string(), api_key));
-            result.headers = Some(headers);
+        match create_jwt_response(&state, &user_id).await {
+            Ok(jwt_resp) => format!(
+                "/api/tawai/playback/stream/{}?token={}",
+                tid, jwt_resp.access_token
+            ),
+            Err(e) => {
+                logger::error(&format!("Error creating jwt_response: {e}"));
+                result.error = Some("Error creating jwt_response".to_string());
+                result.file_path
+            }
         }
-        format!("/api/tawai/playback/stream/{}", tid)
     } else {
         result.file_path
     };
