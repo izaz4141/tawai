@@ -56,17 +56,21 @@ pub async fn list_downloads(
     source: Option<&str>,
 ) -> Result<Vec<DownloadRecord>> {
     let rows = if let Some(src) = source {
-        sqlx::query(
-            "SELECT id, source, source_id, url, dest_path, filename, total_size, downloaded, state, error, added_at::text, updated_at::text FROM downloads WHERE user_id = $1 AND source = $2 ORDER BY added_at DESC",
-        )
+        sqlx::query(&format!(
+            "SELECT id, source, source_id, url, dest_path, filename, total_size, downloaded, state, error, {}, {} FROM downloads WHERE user_id = $1 AND source = $2 ORDER BY downloads.added_at DESC",
+            super::ts_utc("added_at"),
+            super::ts_utc("updated_at"),
+        ))
         .bind(user_id)
         .bind(src)
         .fetch_all(pool)
         .await?
     } else {
-        sqlx::query(
-            "SELECT id, source, source_id, url, dest_path, filename, total_size, downloaded, state, error, added_at::text, updated_at::text FROM downloads WHERE user_id = $1 ORDER BY added_at DESC",
-        )
+        sqlx::query(&format!(
+            "SELECT id, source, source_id, url, dest_path, filename, total_size, downloaded, state, error, {}, {} FROM downloads WHERE user_id = $1 ORDER BY downloads.added_at DESC",
+            super::ts_utc("added_at"),
+            super::ts_utc("updated_at"),
+        ))
         .bind(user_id)
         .fetch_all(pool)
         .await?
@@ -92,9 +96,11 @@ pub async fn list_downloads(
 }
 
 pub async fn get_download(pool: &PgPool, id: &str) -> Result<Option<DownloadRecord>> {
-    let row = sqlx::query(
-        "SELECT id, source, source_id, url, dest_path, filename, total_size, downloaded, state, error, added_at::text, updated_at::text FROM downloads WHERE id = $1",
-    )
+    let row = sqlx::query(&format!(
+        "SELECT id, source, source_id, url, dest_path, filename, total_size, downloaded, state, error, {}, {} FROM downloads WHERE id = $1",
+        super::ts_utc("added_at"),
+        super::ts_utc("updated_at"),
+    ))
     .bind(id)
     .fetch_optional(pool)
     .await?;
@@ -129,9 +135,11 @@ pub async fn get_download_by_source(
     source: &str,
     source_id: &str,
 ) -> Result<Option<DownloadRecord>> {
-    let row = sqlx::query(
-        "SELECT id, source, source_id, url, dest_path, filename, total_size, downloaded, state, error, added_at::text, updated_at::text FROM downloads WHERE source = $1 AND source_id = $2 LIMIT 1",
-    )
+    let row = sqlx::query(&format!(
+        "SELECT id, source, source_id, url, dest_path, filename, total_size, downloaded, state, error, {}, {} FROM downloads WHERE source = $1 AND source_id = $2 LIMIT 1",
+        super::ts_utc("added_at"),
+        super::ts_utc("updated_at"),
+    ))
     .bind(source)
     .bind(source_id)
     .fetch_optional(pool)

@@ -232,37 +232,23 @@ pub async fn upsert_source(
     name: &str,
     owner_id: &str,
 ) -> Result<String> {
-    let existing: Option<String> = sqlx::query_scalar(
-        "SELECT id FROM library_sources WHERE source_type = $1 AND url = $2 AND owner_id = $3",
+    let id = Uuid::new_v4().to_string();
+    let result: String = sqlx::query_scalar(
+        "INSERT INTO library_sources (id, source_type, url, name, owner_id, access_rule, created_at, updated_at, last_sync_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), NOW())
+         ON CONFLICT (source_type, url, owner_id)
+         DO UPDATE SET name = EXCLUDED.name, updated_at = NOW(), last_sync_at = NOW()
+         RETURNING id",
     )
+    .bind(&id)
     .bind(source_type)
     .bind(url)
+    .bind(name)
     .bind(owner_id)
-    .fetch_optional(pool)
+    .bind("all")
+    .fetch_one(pool)
     .await?;
-
-    if let Some(id) = existing {
-        sqlx::query("UPDATE library_sources SET name = $1, updated_at = NOW(), last_sync_at = NOW() WHERE id = $2")
-            .bind(name)
-            .bind(&id)
-            .execute(pool)
-            .await?;
-        Ok(id)
-    } else {
-        let id = Uuid::new_v4().to_string();
-        sqlx::query(
-            "INSERT INTO library_sources (id, source_type, url, name, owner_id, access_rule, created_at, updated_at, last_sync_at) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW(), NOW())"
-        )
-        .bind(&id)
-        .bind(source_type)
-        .bind(url)
-        .bind(name)
-        .bind(owner_id)
-        .bind("all")
-        .execute(pool)
-        .await?;
-        Ok(id)
-    }
+    Ok(result)
 }
 
 pub async fn touch_source_sync_at(pool: &PgPool, source_id: &str) -> Result<()> {

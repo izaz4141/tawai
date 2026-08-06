@@ -108,6 +108,7 @@ pub struct ListPlaylistsResponse {
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct CreatePlaylistRequest {
     pub id: String,
+    pub user_id: String,
     pub name: String,
 }
 

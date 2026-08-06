@@ -224,46 +224,26 @@ pub async fn upsert_source(
     name: &str,
     owner_id: &str,
 ) -> Result<String> {
-    let existing: Option<String> = sqlx::query_scalar(
-        "SELECT id FROM library_sources WHERE source_type = ? AND url = ? AND owner_id = ?",
+    let id = Uuid::new_v4().to_string();
+    let now = now();
+    let result: String = sqlx::query_scalar(
+        "INSERT INTO library_sources (id, source_type, url, name, owner_id, access_rule, created_at, updated_at, last_sync_at)
+         VALUES (?, ?, ?, ?, ?, 'all', ?, ?, ?)
+         ON CONFLICT (source_type, url, owner_id)
+         DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at, last_sync_at = excluded.last_sync_at
+         RETURNING id",
     )
+    .bind(&id)
     .bind(source_type)
     .bind(url)
+    .bind(name)
     .bind(owner_id)
-    .fetch_optional(pool)
+    .bind(&now)
+    .bind(&now)
+    .bind(&now)
+    .fetch_one(pool)
     .await?;
-
-    if let Some(id) = existing {
-        let now = now();
-        sqlx::query(
-            "UPDATE library_sources SET name = ?, updated_at = ?, last_sync_at = ? WHERE id = ?",
-        )
-        .bind(name)
-        .bind(&now)
-        .bind(&now)
-        .bind(&id)
-        .execute(pool)
-        .await?;
-        Ok(id)
-    } else {
-        let id = Uuid::new_v4().to_string();
-        let now = now();
-        sqlx::query(
-            "INSERT INTO library_sources (id, source_type, url, name, owner_id, access_rule, created_at, updated_at, last_sync_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        )
-        .bind(&id)
-        .bind(source_type)
-        .bind(url)
-        .bind(name)
-        .bind(owner_id)
-        .bind("all")
-        .bind(&now)
-        .bind(&now)
-        .bind(&now)
-        .execute(pool)
-        .await?;
-        Ok(id)
-    }
+    Ok(result)
 }
 
 pub async fn touch_source_sync_at(pool: &SqlitePool, source_id: &str) -> Result<()> {

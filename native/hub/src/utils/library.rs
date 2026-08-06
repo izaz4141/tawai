@@ -71,7 +71,8 @@ pub async fn handle_create_playlist(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let result = tawai_core::db::library::create_playlist(db.pool(), &msg.name).await;
+        let result =
+            tawai_core::db::library::create_playlist(db.pool(), &msg.user_id, &msg.name).await;
         match result {
             Ok(playlist_id) => {
                 signals::library::CreatePlaylistResponse {

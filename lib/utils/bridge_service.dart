@@ -228,9 +228,9 @@ class BridgeService {
   }
 
   Future<String> createPlaylist(String name) async {
-    return _isRemote
-        ? APIService.instance.createPlaylist(name)
-        : RinfService.instance.createPlaylist(name);
+    if (_isRemote) return APIService.instance.createPlaylist(name);
+    final userId = SettingsManager.currentUserId.value ?? '';
+    return RinfService.instance.createPlaylist(userId, name);
   }
 
   Future<bool> deletePlaylist(String playlistId) async {

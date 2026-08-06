@@ -223,12 +223,16 @@ class RinfService {
     return signal.message.playlists;
   }
 
-  Future<String> createPlaylist(String name) async {
+  Future<String> createPlaylist(String userId, String name) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = CreatePlaylistResponse.rustSignalStream.where(
       (s) => s.message.id == id,
     );
-    CreatePlaylistRequest(id: id, name: name).sendSignalToRust();
+    CreatePlaylistRequest(
+      id: id,
+      userId: userId,
+      name: name,
+    ).sendSignalToRust();
     final signal = await stream.first;
     return signal.message.playlistId;
   }

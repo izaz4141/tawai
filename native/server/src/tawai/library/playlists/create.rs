@@ -1,4 +1,4 @@
-use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use tawai_core::db::library;
 use utoipa::ToSchema;
@@ -17,10 +17,11 @@ pub struct CreatePlaylistResponse {
 
 pub async fn handle_create_playlist(
     State(state): State<SharedState>,
+    Extension(user_id): Extension<String>,
     Json(body): Json<CreatePlaylistBody>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    match library::create_playlist(db.pool(), &body.name).await {
+    match library::create_playlist(db.pool(), &user_id, &body.name).await {
         Ok(playlist_id) => Json(CreatePlaylistResponse { playlist_id }).into_response(),
         Err(e) => {
             tawai_core::utils::logger::error(&format!("create playlist failed: {}", e));

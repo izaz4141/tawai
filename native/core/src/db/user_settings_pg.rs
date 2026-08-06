@@ -1,4 +1,5 @@
 use sqlx::PgPool;
+use uuid::Uuid;
 
 pub async fn set_setting(
     pool: &PgPool,
@@ -6,10 +7,12 @@ pub async fn set_setting(
     key: &str,
     value: &str,
 ) -> anyhow::Result<()> {
+    let id = Uuid::new_v4().to_string();
     sqlx::query(
-        "INSERT INTO user_settings (user_id, key, value) VALUES ($1, $2, $3)
+        "INSERT INTO user_settings (id, user_id, key, value) VALUES ($1, $2, $3, $4)
          ON CONFLICT(user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()",
     )
+    .bind(&id)
     .bind(user_id)
     .bind(key)
     .bind(value)

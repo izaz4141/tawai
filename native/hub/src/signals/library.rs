@@ -108,6 +108,7 @@ pub struct PlaylistInfo {
 #[derive(Deserialize, DartSignal)]
 pub struct CreatePlaylistRequest {
     pub id: String,
+    pub user_id: String,
     pub name: String,
 }
 

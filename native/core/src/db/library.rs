@@ -284,10 +284,14 @@ pub async fn list_playlists(pool: &DatabasePool) -> anyhow::Result<Vec<PlaylistI
     }
 }
 
-pub async fn create_playlist(pool: &DatabasePool, name: &str) -> anyhow::Result<String> {
+pub async fn create_playlist(
+    pool: &DatabasePool,
+    user_id: &str,
+    name: &str,
+) -> anyhow::Result<String> {
     match pool {
-        DatabasePool::Sqlite(p) => super::library_sq::create_playlist(p, name).await,
-        DatabasePool::Postgres(p) => super::library_pg::create_playlist(p, name).await,
+        DatabasePool::Sqlite(p) => super::library_sq::create_playlist(p, user_id, name).await,
+        DatabasePool::Postgres(p) => super::library_pg::create_playlist(p, user_id, name).await,
     }
 }
 

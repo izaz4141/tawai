@@ -135,10 +135,11 @@ pub async fn list_playlists(pool: &SqlitePool) -> Result<Vec<PlaylistInfo>> {
     Ok(rows.into_iter().map(|row| map_playlist_row(row)).collect())
 }
 
-pub async fn create_playlist(pool: &SqlitePool, name: &str) -> Result<String> {
+pub async fn create_playlist(pool: &SqlitePool, user_id: &str, name: &str) -> Result<String> {
     let id = uuid::Uuid::new_v4().to_string();
-    sqlx::query("INSERT INTO collections (id, name) VALUES (?, ?)")
+    sqlx::query("INSERT INTO collections (id, user_id, name) VALUES (?, ?, ?)")
         .bind(&id)
+        .bind(user_id)
         .bind(name)
         .execute(pool)
         .await?;
@@ -544,18 +545,20 @@ pub async fn delete_tracks_by_source_id(pool: &SqlitePool, source_id: &str) -> R
         .fetch_all(pool)
         .await?;
 
-    let album_ids: Vec<String> =
-        sqlx::query_scalar("SELECT DISTINCT album_id FROM tracks WHERE source_id = ?")
-            .bind(source_id)
-            .fetch_all(pool)
-            .await?;
+    let album_ids: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT album_id FROM tracks WHERE source_id = ? AND album_id IS NOT NULL",
+    )
+    .bind(source_id)
+    .fetch_all(pool)
+    .await?;
 
     let artist_ids: Vec<String> = {
-        let mut ids: Vec<String> =
-            sqlx::query_scalar("SELECT DISTINCT artist_id FROM tracks WHERE source_id = ?")
-                .bind(source_id)
-                .fetch_all(pool)
-                .await?;
+        let mut ids: Vec<String> = sqlx::query_scalar(
+            "SELECT DISTINCT artist_id FROM tracks WHERE source_id = ? AND artist_id IS NOT NULL",
+        )
+        .bind(source_id)
+        .fetch_all(pool)
+        .await?;
         ids.extend(sqlx::query_scalar::<_, String>(
             "SELECT DISTINCT artist_id FROM album_artists WHERE album_id IN (SELECT album_id FROM tracks WHERE source_id = ?)",
         )
@@ -767,21 +770,22 @@ fn map_playlist_row(row: sqlx::sqlite::SqliteRow) -> PlaylistInfo {
 }
 
 pub async fn get_album_cover(pool: &SqlitePool, album_id: &str) -> Result<Option<Vec<u8>>> {
-    let result: Option<Vec<u8>> = sqlx::query_scalar("SELECT cover FROM albums WHERE id = ?")
-        .bind(album_id)
-        .fetch_optional(pool)
-        .await?;
-    Ok(result.filter(|b| !b.is_empty()))
+    let result: Option<Option<Vec<u8>>> =
+        sqlx::query_scalar::<_, Option<Vec<u8>>>("SELECT cover FROM albums WHERE id = ?")
+            .bind(album_id)
+            .fetch_optional(pool)
+            .await?;
+    Ok(result.flatten().filter(|b| !b.is_empty()))
 }
 
 pub async fn get_track_cover(pool: &SqlitePool, track_id: &str) -> Result<Option<Vec<u8>>> {
-    let result: Option<Vec<u8>> = sqlx::query_scalar(
+    let result: Option<Option<Vec<u8>>> = sqlx::query_scalar::<_, Option<Vec<u8>>>(
         "SELECT COALESCE(t.cover, a.cover) FROM tracks t LEFT JOIN albums a ON t.album_id = a.id WHERE t.id = ?",
     )
     .bind(track_id)
     .fetch_optional(pool)
     .await?;
-    Ok(result.filter(|b| !b.is_empty()))
+    Ok(result.flatten().filter(|b| !b.is_empty()))
 }
 
 // ---------------------------------------------------------------------------
