@@ -8,6 +8,7 @@ import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/utils/io_service.dart';
 import 'package:tawai/utils/platform_service.dart';
 
+import 'package:tawai/utils/bindings_json.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/utils/logger.dart';
 import 'package:tawai/utils/system_service.dart';
@@ -515,7 +516,7 @@ class APIService {
       final body = {
         'id': DateTime.now().microsecondsSinceEpoch.toString(),
         'track_id': trackId,
-        'track': ?track,
+        if (track != null) 'track': track.toJson(),
       };
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/playback/play'),
@@ -546,7 +547,7 @@ class APIService {
     try {
       final body = <String, dynamic>{
         'id': DateTime.now().microsecondsSinceEpoch.toString(),
-        'track': track,
+        'track': track.toJson(),
       };
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/playback/preview'),
