@@ -58,7 +58,7 @@ RUN apk add --no-cache \
 
 RUN addgroup -g 1000 tawai && \
     adduser -u 1000 -G tawai -D -s /bin/bash tawai && \
-    mkdir -p /home/tawai/{config,downloads,logs,data} && \
+    mkdir -p /home/tawai/config /home/tawai/downloads /home/tawai/logs /home/tawai/data && \
     mkdir -p /var/lib/nginx /var/log/nginx /var/cache/nginx /etc/nginx && \
     chown -R tawai:tawai /home/tawai /var/lib/nginx /var/log/nginx /var/cache/nginx /etc/nginx
 
