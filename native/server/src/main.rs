@@ -90,7 +90,7 @@ async fn main() {
     });
 
     state.context.spawn_periodic_scan(
-        Duration::from_secs(300),
+        Duration::from_secs(3600 * 3),
         Arc::new(|p: ScanProgress| {
             if p.complete {
                 logger::info(&format!(

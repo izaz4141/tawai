@@ -230,7 +230,10 @@ pub async fn handle_start_periodic_scan(context: Arc<AppContext>) {
     let receiver = StartPeriodicScanRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let id = signal_pack.message.id;
-        context.spawn_periodic_scan(Duration::from_secs(300), Arc::new(|_p: ScanProgress| {}));
+        context.spawn_periodic_scan(
+            Duration::from_secs(3600 * 3),
+            Arc::new(|_p: ScanProgress| {}),
+        );
         StartPeriodicScanResponse { id }.send_signal_to_dart();
     }
 }
