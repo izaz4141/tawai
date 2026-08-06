@@ -2,16 +2,12 @@ use crate::security::create_jwt_response;
 use crate::server::{SharedState, build_jwt_cookie};
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::http::header::{HeaderMap, HeaderName};
 use axum::response::IntoResponse;
 use axum::{Extension, Json};
 use axum_extra::extract::CookieJar;
-use serde::{Deserialize, Serialize};
 use tawai_core::db::account;
+use tawai_core::signals::account::{UpdateAccountRequest, UpdateAccountResponse};
 use tawai_core::utils::{logger, security};
-use utoipa::ToSchema;
-
-const X_PASSWORD: HeaderName = HeaderName::from_static("x-password");
 
 fn sanitize_role(role: Option<&str>) -> &'static str {
     match role {
@@ -20,36 +16,11 @@ fn sanitize_role(role: Option<&str>) -> &'static str {
     }
 }
 
-#[derive(Deserialize, ToSchema)]
-pub struct UpdateAccountRequest {
-    pub target_username: String,
-    pub new_username: Option<String>,
-    pub new_password: Option<String>,
-    pub display_name: Option<String>,
-    pub role: Option<String>,
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct UpdateAccountResponse {
-    pub success: bool,
-    pub user_id: String,
-    pub username: String,
-    pub display_name: String,
-    pub role: String,
-    pub api_key: String,
-    pub access_token: String,
-    pub csrf_token: String,
-    pub expires_in: u64,
-}
-
 #[utoipa::path(
     post,
     path = "/api/tawai/account/update",
     tags = ["tawai.account"],
     security(("ApiKeyAuth" = [])),
-    params(
-        ("X-Password" = String, Header, description = "Current password"),
-    ),
     request_body = UpdateAccountRequest,
     responses(
         (status = 200, description = "Credentials updated successfully"),
@@ -60,20 +31,14 @@ pub struct UpdateAccountResponse {
 )]
 pub async fn handle_update_account(
     State(state): State<SharedState>,
-    Extension(user_id): Extension<String>,
+    Extension(_user_id): Extension<String>,
     jar: CookieJar,
-    headers: HeaderMap,
     Json(payload): Json<UpdateAccountRequest>,
 ) -> impl IntoResponse {
-    let current_password = headers
-        .get(X_PASSWORD)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or_default();
-
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
 
-    let authorizer = account::get_user_by_id(db.pool(), &user_id, &mk)
+    let authorizer = account::get_user_by_username(db.pool(), &payload.username, &mk)
         .await
         .unwrap_or(None);
 
@@ -83,7 +48,8 @@ pub async fn handle_update_account(
     };
 
     let is_valid =
-        security::validate_password(&authorizer.password_hash, current_password).unwrap_or(false);
+        security::validate_password(&authorizer.password_hash, &payload.current_password)
+            .unwrap_or(false);
     if !is_valid {
         return (StatusCode::UNAUTHORIZED,).into_response();
     }
@@ -171,15 +137,13 @@ pub async fn handle_update_account(
         StatusCode::OK,
         jar,
         axum::Json(UpdateAccountResponse {
+            id: payload.id,
             success: true,
             user_id,
             username: result_username,
             display_name,
             role,
             api_key,
-            access_token: jwt_response.access_token,
-            csrf_token: jwt_response.csrf_token,
-            expires_in: jwt_response.expires_in,
         }),
     )
         .into_response()

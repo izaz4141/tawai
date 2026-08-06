@@ -3,40 +3,42 @@ use axum::{
     extract::{Extension, State},
     response::IntoResponse,
 };
-use serde::Deserialize;
 use tawai_core::db::{account, database::DatabasePool, history, library};
-use utoipa::ToSchema;
+use tawai_core::signals::playback::{ReportPlaybackRequest, ReportPlaybackResponse};
 
 use crate::server::SharedState;
-
-#[derive(Deserialize, ToSchema)]
-pub struct ReportPlaybackPayload {
-    pub track_id: String,
-    pub played_at: String,
-    pub source: String,
-}
 
 #[utoipa::path(
     post,
     path = "/api/tawai/discovery/lb/report",
     tags = ["tawai.discovery"],
     security(("ApiKeyAuth" = [])),
-    request_body = ReportPlaybackPayload,
+    request_body = ReportPlaybackRequest,
     responses(
-        (status = 200, description = "Playback recorded"),
+        (status = 200, description = "Playback recorded", body = ReportPlaybackResponse),
+        (status = 401, description = "Unauthorized"),
         (status = 500, description = "Server error")
     )
 )]
 pub async fn handle_report_playback(
     State(state): State<SharedState>,
     Extension(user_id): Extension<String>,
-    Json(payload): Json<ReportPlaybackPayload>,
+    Json(payload): Json<ReportPlaybackRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
     let user = match account::get_user_by_id(db.pool(), &user_id, &mk).await {
         Ok(Some(u)) => u,
-        _ => return axum::http::StatusCode::UNAUTHORIZED.into_response(),
+        _ => {
+            return (
+                axum::http::StatusCode::UNAUTHORIZED,
+                Json(ReportPlaybackResponse {
+                    id: payload.id,
+                    success: false,
+                }),
+            )
+                .into_response();
+        }
     };
 
     match history::record_playback(db.pool(), &user.id, &payload.track_id, &payload.source).await {
@@ -74,11 +76,22 @@ pub async fn handle_report_playback(
                 }
             }
 
-            axum::http::StatusCode::OK.into_response()
+            Json(ReportPlaybackResponse {
+                id: payload.id,
+                success: true,
+            })
+            .into_response()
         }
         Err(e) => {
             tawai_core::utils::logger::error(&format!("record playback failed: {}", e));
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ReportPlaybackResponse {
+                    id: payload.id,
+                    success: false,
+                }),
+            )
+                .into_response()
         }
     }
 }

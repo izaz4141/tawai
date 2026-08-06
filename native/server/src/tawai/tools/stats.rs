@@ -24,10 +24,12 @@ pub async fn handle_get_library_stats(
         .await
     {
         Ok(stats) => Json(GetLibraryStatsResponse {
+            id: String::new(),
             stats: Some(stats),
             error: None,
         }),
         Err(e) => Json(GetLibraryStatsResponse {
+            id: String::new(),
             stats: None,
             error: Some(e.to_string()),
         }),

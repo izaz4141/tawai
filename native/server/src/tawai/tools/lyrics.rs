@@ -15,13 +15,16 @@ use tawai_core::signals::tools::{
     )
 )]
 pub async fn handle_romajize_lyrics(Json(body): Json<RomajizeLyricsRequest>) -> impl IntoResponse {
+    let id = body.id.clone();
     match tawai_core::tools::lyrics::romajize_lyrics(body) {
         Ok(result) => Json(RomajizeLyricsResponse {
+            id,
             romajized: result.romajized,
             synced: result.synced,
             error: result.error,
         }),
         Err(e) => Json(RomajizeLyricsResponse {
+            id,
             romajized: String::new(),
             synced: false,
             error: Some(e.to_string()),
@@ -46,10 +49,12 @@ pub async fn handle_write_track_lyrics(
         .await
     {
         Ok(result) => Json(WriteTrackLyricsResponse {
+            id: body.id,
             success: result.success,
             error: result.error,
         }),
         Err(e) => Json(WriteTrackLyricsResponse {
+            id: body.id,
             success: false,
             error: Some(e.to_string()),
         }),

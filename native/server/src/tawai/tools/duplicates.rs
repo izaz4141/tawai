@@ -27,6 +27,7 @@ pub async fn handle_find_duplicates(
     match tawai_core::tools::duplicates::find_duplicates(db.pool(), &options).await {
         Ok(result) => Json(result),
         Err(e) => Json(FindDuplicatesResponse {
+            id: String::new(),
             groups: vec![],
             total_duplicates: 0,
             total_groups: 0,

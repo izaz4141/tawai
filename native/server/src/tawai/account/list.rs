@@ -2,21 +2,7 @@ use crate::server::SharedState;
 use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::{Extension, Json};
-use serde::Serialize;
-use utoipa::ToSchema;
-
-#[derive(Serialize, ToSchema)]
-pub struct UserInfo {
-    pub id: String,
-    pub username: String,
-    pub display_name: String,
-    pub role: String,
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct ListUsersResponse {
-    pub users: Vec<UserInfo>,
-}
+use tawai_core::signals::account::{ListUsersResponse, UserListItem};
 
 #[utoipa::path(
     get,
@@ -38,13 +24,15 @@ pub async fn handle_list_users(
         .unwrap_or_default();
 
     let response = ListUsersResponse {
+        id: String::new(),
         users: users
             .into_iter()
-            .map(|u| UserInfo {
+            .map(|u| UserListItem {
                 id: u.id,
                 username: u.username,
                 display_name: u.display_name,
                 role: u.role,
+                api_key: u.api_key,
             })
             .collect(),
     };

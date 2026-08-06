@@ -59,6 +59,17 @@ String snakeToCamel(String input) {
   }).join();
 }
 
+String pathStyling(String path) {
+  final p = path.replaceAll('\\', '/');
+  final posix = RegExp(r'^/home/[^/]+(?=[/]|$)');
+  final win = RegExp(r'^[a-zA-Z]:/(?:.*/)?Users/[^/]+', caseSensitive: false);
+  for (final re in [posix, win]) {
+    final m = re.firstMatch(p);
+    if (m != null) return '~${p.substring(m.end)}';
+  }
+  return path;
+}
+
 String camelToSnake(String input) {
   return input
       .replaceAllMapped(

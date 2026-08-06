@@ -41,11 +41,15 @@ pub struct JellyfinLibraryInfo {
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct TestJellyfinSourceRequest {
+    #[serde(default)]
+    pub id: String,
     pub url: String,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct TestJellyfinSourceResponse {
+    #[serde(default)]
+    pub id: String,
     pub libraries: Vec<JellyfinLibraryInfo>,
     pub error: Option<String>,
 }
@@ -54,9 +58,40 @@ pub struct TestJellyfinSourceResponse {
 // ListenBrainz Discovery
 // ---------------------------------------------------------------------------
 
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct GetLBRecommendationsRequest {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub user_id: String,
+    pub rec_type: String,
+    pub count: Option<i32>,
+    pub offset: Option<i32>,
+    pub index: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct GetLBRecommendationsResponse {
+    #[serde(default)]
+    pub id: String,
+    pub recommendations: Vec<DiscoveryRecording>,
+    pub playlist_title: Option<String>,
+    pub playlist_id: Option<String>,
+    pub playlist_count: Option<u32>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct ValidateLBTokenRequest {
+    #[serde(default)]
+    pub id: String,
+    pub token: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct ValidateTokenResponse {
-    pub code: i32,
+pub struct ValidateLBTokenResponse {
+    #[serde(default)]
+    pub id: String,
     pub message: String,
     pub valid: bool,
     pub user_name: Option<String>,
@@ -68,12 +103,16 @@ pub struct ValidateTokenResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SyncRecsRequest {
+    #[serde(default)]
+    pub id: String,
     pub user_id: String,
     pub included_keys: String,
 }
 
 #[derive(Debug, Clone, Serialize, Default, ToSchema)]
 pub struct SyncRecsResponse {
+    #[serde(default)]
+    pub id: String,
     pub success: bool,
     pub added_sources: Vec<String>,
     pub removed_sources: Vec<String>,

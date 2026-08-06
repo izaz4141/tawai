@@ -1,10 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/utils/bridge_service.dart';
+import 'package:tawai/utils/helper.dart';
 import 'package:tawai/utils/settings.dart';
 
 class RenamerPage extends StatefulWidget {
@@ -23,7 +22,6 @@ class _RenamerPageState extends State<RenamerPage> {
   final _patternController = TextEditingController();
   List<LibrarySourceInfo> _sources = [];
   String? _selectedSourceId;
-  String _homePath = '';
 
   List<RenamePreview> _previews = [];
   Set<int> _selectedIndices = {};
@@ -33,10 +31,6 @@ class _RenamerPageState extends State<RenamerPage> {
   void initState() {
     super.initState();
     _patternController.text = SettingsManager.namingPattern.value;
-    _homePath =
-        Platform.environment['HOME'] ??
-        Platform.environment['USERPROFILE'] ??
-        '';
     _loadSources();
   }
 
@@ -456,7 +450,6 @@ class _RenamerPageState extends State<RenamerPage> {
             itemBuilder: (context, index) {
               final p = _previews[index];
               return _RenamePreviewCard(
-                homePath: _homePath,
                 preview: p,
                 selected: _selectedIndices.contains(index),
                 onToggle: (v) {
@@ -482,24 +475,15 @@ class _RenamerPageState extends State<RenamerPage> {
 // ---------------------------------------------------------------------------
 
 class _RenamePreviewCard extends StatelessWidget {
-  final String homePath;
   final RenamePreview preview;
   final bool selected;
   final ValueChanged<bool> onToggle;
 
   const _RenamePreviewCard({
-    required this.homePath,
     required this.preview,
     required this.selected,
     required this.onToggle,
   });
-
-  String _display(String path) {
-    if (homePath.isNotEmpty && path.startsWith(homePath)) {
-      return '~${path.substring(homePath.length)}';
-    }
-    return path;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -507,8 +491,8 @@ class _RenamePreviewCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final isError = preview.expectedPath.startsWith('<error');
 
-    final oldPath = _display(preview.filePath);
-    final newPath = isError ? '' : _display(preview.expectedPath);
+    final oldPath = pathStyling(preview.filePath);
+    final newPath = isError ? '' : pathStyling(preview.expectedPath);
 
     return Card(
       margin: EdgeInsets.symmetric(vertical: AppTheme.spaceXS),

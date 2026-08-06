@@ -36,7 +36,11 @@ pub async fn handle_list_downloads(
     let db = state.context.db().await;
 
     match db::download::list_downloads(db.pool(), &user_id, params.source.as_deref()).await {
-        Ok(downloads) => Json(ListDownloadsResponse { downloads }).into_response(),
+        Ok(downloads) => Json(ListDownloadsResponse {
+            id: String::new(),
+            downloads,
+        })
+        .into_response(),
         Err(e) => (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({ "error": e.to_string() })),

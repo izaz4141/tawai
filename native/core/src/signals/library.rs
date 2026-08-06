@@ -191,6 +191,8 @@ pub struct LibraryFolderInfo {
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct ScanLibraryRequest {
     pub id: String,
+    #[serde(default)]
+    pub user_id: String,
     pub force: bool,
 }
 
@@ -362,7 +364,11 @@ pub struct SearchMusicBrainzResponse {
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct ApplyIdentificationRequest {
     pub id: String,
+    #[serde(default)]
+    pub user_id: String,
     pub track_id: String,
+    pub file_path: Option<String>,
+    pub target_source_id: Option<String>,
     pub title: String,
     pub artist: String,
     pub artist_mbid: Option<String>,
@@ -375,6 +381,7 @@ pub struct ApplyIdentificationRequest {
     pub mbid_recording: Option<String>,
     pub lyrics: Option<String>,
     pub cover_bytes: Option<Vec<u8>>,
+    pub total_discs: i32,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -383,4 +390,172 @@ pub struct ApplyIdentificationResponse {
     pub track_id: String,
     pub success: bool,
     pub error: Option<String>,
+    pub new_file_path: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Get Track / Covers
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct GetTrackRequest {
+    pub id: String,
+    pub track_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct GetTrackResponse {
+    pub id: String,
+    pub track: TrackInfo,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct GetAlbumCoverRequest {
+    pub id: String,
+    pub album_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct GetAlbumCoverResponse {
+    pub id: String,
+    pub cover: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct GetTrackCoverRequest {
+    pub id: String,
+    pub track_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct GetTrackCoverResponse {
+    pub id: String,
+    pub cover: Option<Vec<u8>>,
+}
+
+// ---------------------------------------------------------------------------
+// Periodic Scan
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct StartPeriodicScanRequest {
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct StartPeriodicScanResponse {
+    pub id: String,
+}
+
+// ---------------------------------------------------------------------------
+// Tracks by source / download folder
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct ListTracksBySourceRequest {
+    pub id: String,
+    pub source_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ListTracksBySourceResponse {
+    pub id: String,
+    pub tracks: Vec<TrackInfo>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct ListDownloadFolderTracksRequest {
+    pub id: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ListDownloadFolderTracksResponse {
+    pub id: String,
+    pub tracks: Vec<TrackInfo>,
+}
+
+// ---------------------------------------------------------------------------
+// Scan a single library source
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct ScanSourceRequest {
+    pub id: String,
+    #[serde(default)]
+    pub user_id: String,
+    pub source_id: String,
+    pub force: bool,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ScanSourceResponse {
+    pub id: String,
+    pub started: bool,
+    pub error: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Get album MBID
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct GetAlbumMbidRequest {
+    pub id: String,
+    pub album_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct GetAlbumMbidResponse {
+    pub id: String,
+    pub mbid: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Library Source Management
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct AddLibrarySourceRequest {
+    pub id: String,
+    #[serde(default)]
+    pub user_id: String,
+    pub url: String,
+    pub name: String,
+    pub source_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct AddLibrarySourceResponse {
+    pub id: String,
+    pub source_id: String,
+    pub success: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct RemoveLibrarySourceRequest {
+    pub id: String,
+    #[serde(default)]
+    pub user_id: String,
+    pub source_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct RemoveLibrarySourceResponse {
+    pub id: String,
+    pub success: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct ListLibrarySourcesRequest {
+    pub id: String,
+    #[serde(default)]
+    pub user_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ListLibrarySourcesResponse {
+    pub id: String,
+    pub sources: Vec<LibrarySourceInfo>,
 }

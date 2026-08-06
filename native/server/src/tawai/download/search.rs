@@ -1,8 +1,6 @@
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use tawai_core::dclient::DownloadClient;
-use tawai_core::signals::download::{
-    DlSearchResult, DownloadSearchRequest, DownloadSearchResponse,
-};
+use tawai_core::signals::download::{DlSearchItem, DownloadSearchRequest, DownloadSearchResponse};
 
 use crate::server::SharedState;
 

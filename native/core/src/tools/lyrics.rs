@@ -91,6 +91,7 @@ pub fn romajize_lyrics(request: RomajizeLyricsRequest) -> Result<RomajizeLyricsR
     };
 
     Ok(RomajizeLyricsResponse {
+        id: String::new(),
         romajized,
         synced,
         error: None,

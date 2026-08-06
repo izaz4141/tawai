@@ -7,7 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'io_service_base.dart';
 import 'package:tawai/utils/platform_service.dart';
-import 'package:tawai/ui/widgets/dialog/server_folder_picker.dart';
+import 'package:tawai/ui/widgets/dialog/folder_picker_dialog.dart';
 
 class NativeIOService implements IOService {
   final Map<String, Lock> _fileLocks = {};
@@ -91,7 +91,7 @@ class NativeIOService implements IOService {
     String? initialPath,
   }) async {
     if (PlatformService().isRemote) {
-      return showServerFolderPicker(context, startPath: initialPath);
+      return FolderPickerDialog.show(context, startPath: initialPath);
     }
     return await FilePicker.getDirectoryPath();
   }

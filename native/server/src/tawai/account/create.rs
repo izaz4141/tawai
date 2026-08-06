@@ -2,14 +2,10 @@ use crate::server::SharedState;
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::http::header::{HeaderMap, HeaderName};
 use axum::response::IntoResponse;
-use serde::{Deserialize, Serialize};
 use tawai_core::db::account;
+use tawai_core::signals::account::{CreateAccountRequest, CreateAccountResponse};
 use tawai_core::utils::{encryption, helper, logger, security};
-use utoipa::ToSchema;
-
-const X_PASSWORD: HeaderName = HeaderName::from_static("x-password");
 
 fn sanitize_role(role: Option<&str>) -> &'static str {
     match role {
@@ -18,33 +14,11 @@ fn sanitize_role(role: Option<&str>) -> &'static str {
     }
 }
 
-#[derive(Deserialize, ToSchema)]
-pub struct CreateAccountRequest {
-    pub admin_username: String,
-    pub username: String,
-    pub password: String,
-    pub display_name: Option<String>,
-    pub role: Option<String>,
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct CreateAccountResponse {
-    pub success: bool,
-    pub user_id: String,
-    pub username: String,
-    pub display_name: String,
-    pub role: String,
-    pub api_key: String,
-}
-
 #[utoipa::path(
     post,
     path = "/api/tawai/account/create",
     tags = ["tawai.account"],
     security(("ApiKeyAuth" = [])),
-    params(
-        ("X-Password" = String, Header, description = "Admin password"),
-    ),
     request_body = CreateAccountRequest,
     responses(
         (status = 200, description = "Account created"),
@@ -55,14 +29,8 @@ pub struct CreateAccountResponse {
 )]
 pub async fn handle_create_account(
     State(state): State<SharedState>,
-    headers: HeaderMap,
     Json(payload): Json<CreateAccountRequest>,
 ) -> impl IntoResponse {
-    let admin_password = headers
-        .get(X_PASSWORD)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or_default();
-
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
 
@@ -73,7 +41,8 @@ pub async fn handle_create_account(
     let is_admin = match &admin {
         Some(u) => {
             u.role == "admin"
-                && security::validate_password(&u.password_hash, admin_password).unwrap_or(false)
+                && security::validate_password(&u.password_hash, &payload.admin_password)
+                    .unwrap_or(false)
         }
         None => false,
     };
@@ -82,6 +51,7 @@ pub async fn handle_create_account(
         return (
             StatusCode::UNAUTHORIZED,
             Json(CreateAccountResponse {
+                id: payload.id,
                 success: false,
                 user_id: String::new(),
                 username: payload.username,
@@ -101,6 +71,7 @@ pub async fn handle_create_account(
         return (
             StatusCode::CONFLICT,
             Json(CreateAccountResponse {
+                id: payload.id,
                 success: false,
                 user_id: String::new(),
                 username: payload.username,
@@ -141,6 +112,7 @@ pub async fn handle_create_account(
         Ok(user_id) => (
             StatusCode::OK,
             Json(CreateAccountResponse {
+                id: payload.id,
                 success: true,
                 user_id,
                 username: payload.username,

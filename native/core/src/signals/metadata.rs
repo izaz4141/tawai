@@ -57,3 +57,175 @@ pub struct LyricsResult {
     pub lyrics: String,
     pub synced: bool,
 }
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct EnhancedSearchRequest {
+    #[serde(default)]
+    pub id: String,
+    pub query: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct EnhancedSearchResponse {
+    #[serde(default)]
+    pub id: String,
+    pub recordings: Vec<RecordingInfo>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct GetReleaseTracksRequest {
+    #[serde(default)]
+    pub id: String,
+    pub release_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct GetReleaseTracksResponse {
+    #[serde(default)]
+    pub id: String,
+    pub release_id: String,
+    pub release_title: String,
+    pub release_date: Option<String>,
+    pub artist: String,
+    pub artist_id: Option<String>,
+    pub disambiguation: Option<String>,
+    pub tracks: Vec<ReleaseTrackInfo>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct FingerprintTrackRequest {
+    #[serde(default)]
+    pub id: String,
+    pub track_id: String,
+    pub file_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct FingerprintTrackResponse {
+    #[serde(default)]
+    pub id: String,
+    pub track_id: String,
+    pub recording: Option<RecordingInfo>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct FetchRecordingRequest {
+    #[serde(default)]
+    pub id: String,
+    pub mbid: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct FetchRecordingResponse {
+    #[serde(default)]
+    pub id: String,
+    pub recording: Option<RecordingInfo>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct FetchLyricsRequest {
+    #[serde(default)]
+    pub id: String,
+    pub title: String,
+    pub artist: String,
+    pub album: Option<String>,
+    pub duration: Option<f64>,
+    pub prefer_sync: bool,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct FetchLyricsResponse {
+    #[serde(default)]
+    pub id: String,
+    pub result: Option<LyricsResult>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct SearchLyricsRequest {
+    #[serde(default)]
+    pub id: String,
+    pub query: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct SearchLyricsResponse {
+    #[serde(default)]
+    pub id: String,
+    pub results: Vec<LyricsResult>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct ReadFileTagsRequest {
+    #[serde(default)]
+    pub id: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ReadFileTagsResponse {
+    #[serde(default)]
+    pub id: String,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub album_artist: String,
+    pub genres: Vec<String>,
+    pub track_number: i32,
+    pub disc_number: i32,
+    pub release_date: Option<String>,
+    pub lyrics: Option<String>,
+    pub cover: Option<Vec<u8>>,
+    pub duration_secs: f64,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct WriteFileTagsRequest {
+    #[serde(default)]
+    pub id: String,
+    pub path: String,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub album_artist: String,
+    pub genres: Vec<String>,
+    pub track_number: i32,
+    pub disc_number: i32,
+    pub release_date: Option<String>,
+    pub lyrics: Option<String>,
+    pub cover: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct WriteFileTagsResponse {
+    #[serde(default)]
+    pub id: String,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct FormatNamingPreviewRequest {
+    #[serde(default)]
+    pub id: String,
+    pub pattern: String,
+    pub title: String,
+    pub artist: String,
+    pub album_artist: String,
+    pub album: String,
+    pub release_date: Option<String>,
+    pub track_number: i32,
+    pub disc_number: i32,
+    pub album_disambiguation: Option<String>,
+    pub total_discs: i32,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct FormatNamingPreviewResponse {
+    #[serde(default)]
+    pub id: String,
+    pub result: String,
+}

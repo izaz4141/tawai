@@ -6,6 +6,8 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:synchronized/synchronized.dart';
 
 import 'package:tawai/src/bindings/bindings.dart';
+import 'package:tawai/ui/app.dart';
+import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/settings.dart' show SettingsManager;
 import 'package:tawai/utils/helper.dart';
@@ -605,12 +607,22 @@ class PlaybackService {
         track: track,
       );
       _inflight.remove(track.id);
-      if (result.error != null) return null;
+      if (result.error != null) {
+        _notifyPlaybackError(result.error!);
+        return null;
+      }
       return SourceCache(result.filePath, result.headers);
-    } catch (_) {
+    } catch (e) {
       _inflight.remove(track.id);
+      _notifyPlaybackError(e.toString());
       return null;
     }
+  }
+
+  void _notifyPlaybackError(String message) {
+    final context = navigatorKey.currentContext;
+    if (context == null) return;
+    AppSnackBar.show(context, message, type: SnackType.error);
   }
 
   void _attachSource(String trackId, SourceCache cache) {

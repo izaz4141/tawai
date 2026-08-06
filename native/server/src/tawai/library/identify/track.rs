@@ -6,11 +6,10 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use base64::Engine as _;
 use serde::Deserialize;
 use tawai_core::{
     db::{account, library},
-    signals::library::TrackInfo,
+    signals::library::{ApplyIdentificationRequest, ApplyIdentificationResponse, TrackInfo},
 };
 use utoipa::ToSchema;
 
@@ -19,26 +18,6 @@ use crate::server::SharedState;
 #[derive(Deserialize, ToSchema)]
 pub struct UnidentifiedQuery {
     pub source_id: Option<String>,
-}
-
-#[derive(Deserialize, ToSchema)]
-pub struct ApplyIdentifyBody {
-    pub track_id: String,
-    pub file_path: Option<String>,
-    pub source_id: Option<String>,
-    pub title: String,
-    pub artist: String,
-    pub artist_mbid: Option<String>,
-    pub album: String,
-    pub album_mbid: Option<String>,
-    pub album_disambiguation: Option<String>,
-    pub release_date: Option<String>,
-    pub track_num: Option<i32>,
-    pub disc_num: Option<i32>,
-    pub mbid_recording: Option<String>,
-    pub lyrics: Option<String>,
-    pub cover_bytes: Option<String>,
-    pub total_discs: Option<i32>,
 }
 
 #[utoipa::path(
@@ -101,15 +80,16 @@ pub async fn handle_list_unidentified(
     path = "/api/tawai/library/identify/apply",
     tags = ["tawai.library"],
     security(("ApiKeyAuth" = [])),
+    request_body = ApplyIdentificationRequest,
     responses(
-        (status = 200, description = "Identification applied"),
-        (status = 400, description = "Error applying identification"),
+        (status = 200, description = "Identification applied", body = ApplyIdentificationResponse),
+        (status = 400, description = "Error applying identification", body = ApplyIdentificationResponse),
     )
 )]
 pub async fn handle_apply_identification(
     State(state): State<SharedState>,
     Extension(user_id): Extension<String>,
-    Json(body): Json<ApplyIdentifyBody>,
+    Json(body): Json<ApplyIdentificationRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
@@ -119,47 +99,35 @@ pub async fn handle_apply_identification(
         _ => {
             return (
                 StatusCode::UNAUTHORIZED,
-                Json(serde_json::json!({
-                    "error": "User not found"
-                })),
+                Json(ApplyIdentificationResponse {
+                    id: body.id,
+                    track_id: body.track_id.clone(),
+                    success: false,
+                    error: Some("User not found".to_string()),
+                    new_file_path: None,
+                }),
             )
                 .into_response();
         }
     };
 
-    let cover_bytes = match &body.cover_bytes {
-        Some(s) if !s.is_empty() => match base64::engine::general_purpose::STANDARD.decode(s) {
-            Ok(bytes) => Some(bytes),
-            Err(e) => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(serde_json::json!({
-                        "error": format!("Invalid cover_bytes base64: {e}")
-                    })),
-                )
-                    .into_response();
-            }
-        },
-        _ => None,
-    };
-
     let params = tawai_core::utils::identify::ApplyIdentificationParams {
-        track_id: body.track_id,
-        file_path: body.file_path,
-        target_source_id: body.source_id,
-        title: body.title,
-        artist: body.artist,
-        artist_mbid: body.artist_mbid,
-        album: body.album,
-        album_mbid: body.album_mbid,
-        album_disambiguation: body.album_disambiguation,
-        release_date: body.release_date,
+        track_id: body.track_id.clone(),
+        file_path: body.file_path.clone(),
+        target_source_id: body.target_source_id.clone(),
+        title: body.title.clone(),
+        artist: body.artist.clone(),
+        artist_mbid: body.artist_mbid.clone(),
+        album: body.album.clone(),
+        album_mbid: body.album_mbid.clone(),
+        album_disambiguation: body.album_disambiguation.clone(),
+        release_date: body.release_date.clone(),
         track_num: body.track_num,
         disc_num: body.disc_num,
-        mbid_recording: body.mbid_recording,
-        lyrics: body.lyrics,
-        cover_bytes,
-        total_discs: body.total_discs.unwrap_or(0),
+        mbid_recording: body.mbid_recording.clone(),
+        lyrics: body.lyrics.clone(),
+        cover_bytes: body.cover_bytes.clone(),
+        total_discs: body.total_discs,
     };
 
     match tawai_core::utils::identify::apply_identification(
@@ -170,16 +138,23 @@ pub async fn handle_apply_identification(
     )
     .await
     {
-        Ok(outcome) => Json(serde_json::json!({
-            "success": true,
-            "new_file_path": outcome.new_file_path,
-        }))
+        Ok(outcome) => Json(ApplyIdentificationResponse {
+            id: body.id,
+            track_id: body.track_id,
+            success: true,
+            error: None,
+            new_file_path: outcome.new_file_path,
+        })
         .into_response(),
         Err(e) => (
             StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({
-                "error": e.to_string()
-            })),
+            Json(ApplyIdentificationResponse {
+                id: body.id,
+                track_id: body.track_id,
+                success: false,
+                error: Some(e.to_string()),
+                new_file_path: None,
+            }),
         )
             .into_response(),
     }

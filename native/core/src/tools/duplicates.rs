@@ -521,6 +521,7 @@ pub async fn find_duplicates(
     let total_groups = groups.len() as u32;
 
     Ok(FindDuplicatesResponse {
+        id: String::new(),
         groups,
         total_duplicates,
         total_groups,

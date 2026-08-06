@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
 use crate::metadata::musicbrainz;
-use crate::signals::discovery::ValidateTokenResponse;
+use crate::signals::discovery::ValidateLBTokenResponse;
 use crate::signals::library::TrackInfo;
 use crate::signals::metadata::RecordingInfo;
 
@@ -106,7 +106,7 @@ pub async fn update_now_playing(
 pub async fn validate_token(
     client: &reqwest::Client,
     token: &str,
-) -> Result<ValidateTokenResponse> {
+) -> Result<ValidateLBTokenResponse> {
     let resp = client
         .get("https://api.listenbrainz.org/1/validate-token")
         .header("Authorization", format!("Token {token}"))
@@ -114,7 +114,7 @@ pub async fn validate_token(
         .await
         .map_err(|e| anyhow::anyhow!("failed to send validate-token request: {e}"))?;
 
-    let body: ValidateTokenResponse = resp
+    let body: ValidateLBTokenResponse = resp
         .json()
         .await
         .map_err(|e| anyhow::anyhow!("failed to parse validate-token response: {e}"))?;

@@ -6,7 +6,7 @@ use tokio::time::{Duration, sleep};
 
 use crate::db;
 use crate::db::database::DatabasePool;
-use crate::signals::download::{DlGlance, DlListResponse, DlSearchResponse, DlSearchResult};
+use crate::signals::download::{DlGlance, DlListResponse, DlSearchItem, DlSearchResponse};
 use crate::utils::config::AppConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -761,7 +761,7 @@ impl NadekodonClient {
         let results = resp
             .results
             .into_iter()
-            .map(|r| DlSearchResult {
+            .map(|r| DlSearchItem {
                 filename: r.title.clone(),
                 size: 0,
                 source_type: "nadekodon".to_string(),

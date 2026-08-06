@@ -1,6 +1,6 @@
 use crate::server::SharedState;
 use axum::{Json, extract::State, response::IntoResponse};
-use tawai_core::signals::{EncryptRequest, EncryptResponse};
+use tawai_core::signals::crypt::{EncryptRequest, EncryptResponse};
 use tawai_core::utils::encryption;
 
 #[utoipa::path(
@@ -27,6 +27,7 @@ pub async fn handle_encrypt(
         }
     };
     Json(EncryptResponse {
+        id: req.id,
         encrypted_key: encrypted_text,
         master_key,
     })

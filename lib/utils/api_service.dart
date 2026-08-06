@@ -89,7 +89,7 @@ class APIService {
   Future<Uint8List?> getAlbumCover(String albumId) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api/tawai/albums/$albumId/cover'),
+        Uri.parse('$baseUrl/api/tawai/library/albums/$albumId/cover'),
         headers: _authHeaders(),
       );
       if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
@@ -104,7 +104,7 @@ class APIService {
   Future<Uint8List?> getTrackCover(String trackId) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api/tawai/tracks/$trackId/cover'),
+        Uri.parse('$baseUrl/api/tawai/library/tracks/$trackId/cover'),
         headers: _authHeaders(),
       );
       if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
@@ -512,45 +512,11 @@ class APIService {
   Future<({String filePath, String? error, List<List<String>>? headers})>
   playTrack(String? trackId, {TrackInfo? track}) async {
     try {
-      final body = <String, dynamic>{
+      final body = {
         'id': DateTime.now().microsecondsSinceEpoch.toString(),
         'track_id': trackId,
+        'track': ?track,
       };
-      if (track != null) {
-        body['track'] = {
-          'id': track.id,
-          'title': track.title,
-          'album_id': track.albumId,
-          'album_title': track.albumTitle,
-          'artists_string': track.artistsString,
-          'artists': track.artists
-              .map(
-                (a) => {
-                  'id': a.id,
-                  'name': a.name,
-                  'sort_name': a.sortName,
-                  'mbid': a.mbid,
-                  'thumbnail_url': a.thumbnailUrl,
-                  'album_count': a.albumCount,
-                  'track_count': a.trackCount,
-                },
-              )
-              .toList(),
-          'track_num': track.trackNum,
-          'disc_num': track.discNum,
-          'duration_secs': track.durationSecs,
-          'file_path': '',
-          'file_size': null,
-          'bitrate': null,
-          'mbid_recording': track.mbidRecording,
-          'artist_mbid': track.artistMbid,
-          'album_mbid': track.albumMbid,
-          'lyrics': null,
-          'release_date': null,
-          'source': 'preview',
-          'genres': [],
-        };
-      }
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/playback/play'),
         headers: {..._authHeaders(), 'Content-Type': 'application/json'},
@@ -584,7 +550,7 @@ class APIService {
       };
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/playback/preview'),
-        headers: _authHeaders(),
+        headers: {..._authHeaders(), 'Content-Type': 'application/json'},
         body: jsonEncode(body),
       );
       final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -1351,7 +1317,7 @@ class APIService {
   Future<List<MatchCandidate>> identifySingleTrack(String trackId) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api/tawai/library/identify/tracks/$trackId'),
+        Uri.parse('$baseUrl/api/tawai/identify/mb/track/$trackId'),
         headers: _authHeaders(),
       );
       if (response.statusCode == 200) {
@@ -1436,9 +1402,7 @@ class APIService {
   Future<GetReleaseTracksResponse> getReleaseTracks(String releaseId) async {
     try {
       final response = await http.get(
-        Uri.parse(
-          '$baseUrl/api/tawai/library/discover/release/$releaseId/tracks',
-        ),
+        Uri.parse('$baseUrl/api/tawai/identify/mb/release/$releaseId/tracks'),
         headers: _authHeaders(),
       );
       if (response.statusCode == 200) {
@@ -1480,7 +1444,7 @@ class APIService {
   Future<RecordingInfo?> fetchRecording(String mbid) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/api/tawai/library/discover/recording/$mbid'),
+        Uri.parse('$baseUrl/api/tawai/identify/mb/recording/$mbid'),
         headers: _authHeaders(),
       );
       if (response.statusCode == 200) {
@@ -1610,9 +1574,7 @@ class APIService {
         return _parseFingerprintResponse(response);
       }
       final response = await http.get(
-        Uri.parse(
-          '$baseUrl/api/tawai/library/identify/tracks/$trackId/fingerprint',
-        ),
+        Uri.parse('$baseUrl/api/tawai/identify/mb/track/$trackId/fingerprint'),
         headers: _authHeaders(),
       );
       return _parseFingerprintResponse(response);

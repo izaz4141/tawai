@@ -8,7 +8,7 @@ use utoipa::ToSchema;
 
 use crate::db;
 use crate::db::database::DatabasePool;
-use crate::signals::download::{DlGlance, DlListResponse, DlSearchResponse, DlSearchResult};
+use crate::signals::download::{DlGlance, DlListResponse, DlSearchItem, DlSearchResponse};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -410,12 +410,12 @@ impl SlskdClient {
 
     pub async fn search(&self, query: &str) -> Result<DlSearchResponse> {
         let resp = self.search_internal(query).await?;
-        let results: Vec<DlSearchResult> = resp
+        let results: Vec<DlSearchItem> = resp
             .responses
             .into_iter()
             .flat_map(|r| {
                 let username = r.username;
-                r.files.into_iter().map(move |f| DlSearchResult {
+                r.files.into_iter().map(move |f| DlSearchItem {
                     filename: f.filename.clone(),
                     size: f.size,
                     source_type: "slskd".to_string(),

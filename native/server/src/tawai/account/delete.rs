@@ -2,35 +2,16 @@ use crate::server::SharedState;
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::http::header::{HeaderMap, HeaderName};
 use axum::response::IntoResponse;
-use serde::{Deserialize, Serialize};
 use tawai_core::db::account;
+use tawai_core::signals::account::{DeleteAccountRequest, DeleteAccountResponse};
 use tawai_core::utils::{logger, security};
-use utoipa::ToSchema;
-
-const X_PASSWORD: HeaderName = HeaderName::from_static("x-password");
-
-#[derive(Deserialize, ToSchema)]
-pub struct DeleteAccountRequest {
-    pub admin_username: String,
-    pub target_username: String,
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct DeleteAccountResponse {
-    pub success: bool,
-    pub username: String,
-}
 
 #[utoipa::path(
     post,
     path = "/api/tawai/account/delete",
     tags = ["tawai.account"],
     security(("ApiKeyAuth" = [])),
-    params(
-        ("X-Password" = String, Header, description = "Admin password"),
-    ),
     request_body = DeleteAccountRequest,
     responses(
         (status = 200, description = "Account deleted"),
@@ -42,14 +23,8 @@ pub struct DeleteAccountResponse {
 )]
 pub async fn handle_delete_account(
     State(state): State<SharedState>,
-    headers: HeaderMap,
     Json(payload): Json<DeleteAccountRequest>,
 ) -> impl IntoResponse {
-    let admin_password = headers
-        .get(X_PASSWORD)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or_default();
-
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
 
@@ -60,7 +35,8 @@ pub async fn handle_delete_account(
     let is_admin = match &admin {
         Some(u) => {
             u.role == "admin"
-                && security::validate_password(&u.password_hash, admin_password).unwrap_or(false)
+                && security::validate_password(&u.password_hash, &payload.admin_password)
+                    .unwrap_or(false)
         }
         None => false,
     };
@@ -69,6 +45,7 @@ pub async fn handle_delete_account(
         return (
             StatusCode::UNAUTHORIZED,
             Json(DeleteAccountResponse {
+                id: payload.id,
                 success: false,
                 username: payload.target_username,
             }),
@@ -86,6 +63,7 @@ pub async fn handle_delete_account(
             return (
                 StatusCode::NOT_FOUND,
                 Json(DeleteAccountResponse {
+                    id: payload.id,
                     success: false,
                     username: payload.target_username,
                 }),
@@ -101,6 +79,7 @@ pub async fn handle_delete_account(
             return (
                 StatusCode::BAD_REQUEST,
                 Json(DeleteAccountResponse {
+                    id: payload.id,
                     success: false,
                     username: payload.target_username,
                 }),
@@ -113,6 +92,7 @@ pub async fn handle_delete_account(
         Ok(true) => (
             StatusCode::OK,
             Json(DeleteAccountResponse {
+                id: payload.id,
                 success: true,
                 username: payload.target_username,
             }),
@@ -121,6 +101,7 @@ pub async fn handle_delete_account(
         Ok(false) => (
             StatusCode::NOT_FOUND,
             Json(DeleteAccountResponse {
+                id: payload.id,
                 success: false,
                 username: payload.target_username,
             }),

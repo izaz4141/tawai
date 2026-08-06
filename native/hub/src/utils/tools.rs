@@ -212,6 +212,7 @@ pub async fn handle_romajize_lyrics() {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let req = tawai_core::signals::tools::RomajizeLyricsRequest {
+            id: msg.id.clone(),
             lyrics: msg.lyrics,
             synced: msg.synced,
             lang: msg.lang,

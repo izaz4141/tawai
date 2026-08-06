@@ -52,11 +52,15 @@ pub struct DecadeEntry {
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct GetLibraryStatsRequest {
+    #[serde(default)]
+    pub id: String,
     pub naming_pattern: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct GetLibraryStatsResponse {
+    #[serde(default)]
+    pub id: String,
     pub stats: Option<LibraryStats>,
     pub error: Option<String>,
 }
@@ -88,17 +92,21 @@ pub struct MissingMetadataCheck {
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct FindMissingMetadataRequest {
-    pub check_title: Option<bool>,
-    pub check_artist: Option<bool>,
-    pub check_album: Option<bool>,
-    pub check_genre: Option<bool>,
-    pub check_year: Option<bool>,
-    pub check_track_number: Option<bool>,
-    pub check_cover: Option<bool>,
+    #[serde(default)]
+    pub id: String,
+    pub check_title: bool,
+    pub check_artist: bool,
+    pub check_album: bool,
+    pub check_genre: bool,
+    pub check_year: bool,
+    pub check_track_number: bool,
+    pub check_cover: bool,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct FindMissingMetadataResponse {
+    #[serde(default)]
+    pub id: String,
     pub tracks: Vec<MissingMetadataEntry>,
     pub error: Option<String>,
 }
@@ -122,26 +130,50 @@ pub struct NamingViolation {
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
-pub struct BatchRenameRequest {
+pub struct BatchRenamePreviewRequest {
+    #[serde(default)]
+    pub id: String,
     pub file_paths: Vec<String>,
     pub pattern: String,
     pub source_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct BatchRenameResponse {
+pub struct BatchRenamePreviewResponse {
+    #[serde(default)]
+    pub id: String,
     pub previews: Vec<RenamePreview>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
-pub struct CheckConventionRequest {
+pub struct BatchRenameApplyRequest {
+    #[serde(default)]
+    pub id: String,
+    pub file_paths: Vec<String>,
+    pub pattern: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct BatchRenameApplyResponse {
+    #[serde(default)]
+    pub id: String,
+    pub results: Vec<RenamePreview>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct CheckNamingConventionRequest {
+    #[serde(default)]
+    pub id: String,
     pub source_id: Option<String>,
     pub pattern: String,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct CheckConventionResponse {
+pub struct CheckNamingConventionResponse {
+    #[serde(default)]
+    pub id: String,
     pub violations: Vec<NamingViolation>,
     pub error: Option<String>,
 }
@@ -158,6 +190,8 @@ pub struct WriteLyricsResult {
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct WriteTrackLyricsRequest {
+    #[serde(default)]
+    pub id: String,
     pub track_id: String,
     pub lyrics: String,
     pub synced: bool,
@@ -165,6 +199,8 @@ pub struct WriteTrackLyricsRequest {
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct WriteTrackLyricsResponse {
+    #[serde(default)]
+    pub id: String,
     pub success: bool,
     pub error: Option<String>,
 }
@@ -175,6 +211,8 @@ pub struct WriteTrackLyricsResponse {
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct RomajizeLyricsRequest {
+    #[serde(default)]
+    pub id: String,
     pub lyrics: String,
     pub synced: bool,
     pub lang: Option<String>,
@@ -182,6 +220,8 @@ pub struct RomajizeLyricsRequest {
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct RomajizeLyricsResponse {
+    #[serde(default)]
+    pub id: String,
     pub romajized: String,
     pub synced: bool,
     pub error: Option<String>,
@@ -214,6 +254,8 @@ pub struct DuplicateGroup {
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct FindDuplicatesRequest {
+    #[serde(default)]
+    pub id: String,
     pub check_fingerprint: bool,
     pub check_mbid: bool,
     pub check_file_size_duration: bool,
@@ -224,6 +266,8 @@ pub struct FindDuplicatesRequest {
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct FindDuplicatesResponse {
+    #[serde(default)]
+    pub id: String,
     pub groups: Vec<DuplicateGroup>,
     pub total_duplicates: u32,
     pub total_groups: u32,

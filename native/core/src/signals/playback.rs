@@ -47,9 +47,14 @@ pub struct PreviewTrackResponse {
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct ReportPlaybackRequest {
+    #[serde(default)]
     pub id: String,
+    #[serde(default)]
+    pub user_id: String,
     pub track_id: String,
+    #[serde(default)]
     pub played_at: String,
+    #[serde(default)]
     pub source: String,
 }
 
@@ -62,6 +67,8 @@ pub struct ReportPlaybackResponse {
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct GetHistoryRequest {
     pub id: String,
+    #[serde(default)]
+    pub user_id: String,
     pub limit: Option<i32>,
 }
 
@@ -69,4 +76,18 @@ pub struct GetHistoryRequest {
 pub struct GetHistoryResponse {
     pub id: String,
     pub records: Vec<PlaybackRecord>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct UpdateNowPlayingRequest {
+    pub id: String,
+    #[serde(default)]
+    pub user_id: String,
+    pub track_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct UpdateNowPlayingResponse {
+    pub id: String,
+    pub success: bool,
 }

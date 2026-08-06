@@ -22,6 +22,7 @@ pub async fn handle_sync_recs(
     .await;
 
     Json(SyncRecsResponse {
+        id: payload.id,
         success: result.success,
         added_sources: result.added_sources,
         removed_sources: result.removed_sources,

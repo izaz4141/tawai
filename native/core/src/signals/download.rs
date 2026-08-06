@@ -20,7 +20,7 @@ pub struct DlListResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct DlSearchResult {
+pub struct DlSearchItem {
     pub filename: String,
     pub size: u64,
     pub source_type: String,
@@ -36,7 +36,7 @@ pub struct DlSearchResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct DlSearchResponse {
-    pub results: Vec<DlSearchResult>,
+    pub results: Vec<DlSearchItem>,
 }
 
 // --- Create ---
@@ -173,7 +173,7 @@ pub struct DownloadSearchRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct DownloadSearchResponse {
     pub id: String,
-    pub results: Vec<DlSearchResult>,
+    pub results: Vec<DlSearchItem>,
     pub success: bool,
     pub error: Option<String>,
 }

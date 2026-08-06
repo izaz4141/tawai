@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:web/web.dart' as html;
 import 'io_service_base.dart';
-import 'package:tawai/ui/widgets/dialog/server_folder_picker.dart';
+import 'package:tawai/ui/widgets/dialog/folder_picker_dialog.dart';
 
 class WasmIOService implements IOService {
   @override
@@ -76,7 +76,7 @@ class WasmIOService implements IOService {
     BuildContext context, {
     String? initialPath,
   }) {
-    return showServerFolderPicker(context, startPath: initialPath);
+    return FolderPickerDialog.show(context, startPath: initialPath);
   }
 
   @override

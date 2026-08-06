@@ -1,6 +1,6 @@
 use crate::server::SharedState;
 use axum::{Json, extract::State, response::IntoResponse};
-use tawai_core::signals::{DecryptRequest, DecryptResponse};
+use tawai_core::signals::crypt::{DecryptRequest, DecryptResponse};
 use tawai_core::utils::encryption;
 
 #[utoipa::path(
@@ -26,5 +26,9 @@ pub async fn handle_decrypt(
             return (axum::http::StatusCode::INTERNAL_SERVER_ERROR,).into_response();
         }
     };
-    Json(DecryptResponse { decrypted_key }).into_response()
+    Json(DecryptResponse {
+        id: req.id,
+        decrypted_key,
+    })
+    .into_response()
 }

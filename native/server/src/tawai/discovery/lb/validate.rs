@@ -1,7 +1,7 @@
 use axum::{Json, extract::State, response::IntoResponse};
 use serde::Deserialize;
 use tawai_core::discovery::listenbrainz;
-use tawai_core::signals::discovery::ValidateTokenResponse;
+use tawai_core::signals::discovery::ValidateLBTokenResponse;
 use utoipa::ToSchema;
 
 use crate::server::SharedState;
@@ -18,7 +18,7 @@ pub struct ValidateTokenPayload {
     security(("ApiKeyAuth" = [])),
     request_body = ValidateTokenPayload,
     responses(
-        (status = 200, description = "Token validation result", body = ValidateTokenResponse),
+        (status = 200, description = "Token validation result", body = ValidateLBTokenResponse),
     )
 )]
 pub async fn handle_validate_lb_token(
