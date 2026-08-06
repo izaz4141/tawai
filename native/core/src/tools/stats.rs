@@ -549,7 +549,7 @@ async fn get_library_stats_pg(
            JOIN albums a ON t.album_id = a.id
            JOIN library_sources ls ON t.source_id = ls.id
            WHERE ls.source_type NOT LIKE 'recommendation:%'
-           GROUP BY t.album_id
+           GROUP BY a.id
            ORDER BY cnt DESC
            LIMIT 1"#,
     )
@@ -571,7 +571,7 @@ async fn get_library_stats_pg(
            JOIN artists ar ON t.artist_id = ar.id
            JOIN library_sources ls ON t.source_id = ls.id
            WHERE ls.source_type NOT LIKE 'recommendation:%'
-           GROUP BY t.artist_id
+           GROUP BY ar.id
            ORDER BY cnt DESC
            LIMIT 1"#,
     )

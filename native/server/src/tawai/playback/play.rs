@@ -4,6 +4,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use tawai_core::db::account;
 use tawai_core::signals::playback::{PlayTrackRequest, PlayTrackResponse};
 use tawai_core::utils::playback::resolve_playable_track;
 
@@ -21,13 +22,13 @@ use crate::server::SharedState;
 )]
 pub async fn handle_play_track(
     State(state): State<SharedState>,
-    Extension(_username): Extension<String>,
+    Extension(username): Extension<String>,
     Json(req): Json<PlayTrackRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     let cfg = state.context.cfg().await;
 
-    let result = resolve_playable_track(
+    let mut result = resolve_playable_track(
         db.pool(),
         state.context.client(),
         req.track_id.as_deref(),
@@ -45,6 +46,12 @@ pub async fn handle_play_track(
     {
         result.file_path
     } else if let Some(tid) = &result.resolved_track_id {
+        let mk = state.context.master_key.read().await.clone();
+        if let Ok(Some(api_key)) = account::get_user_api_key(db.pool(), &username, &mk).await {
+            let mut headers = result.headers.unwrap_or_default();
+            headers.push(("X-API-Key".to_string(), api_key));
+            result.headers = Some(headers);
+        }
         format!("/api/tawai/playback/stream/{}", tid)
     } else {
         result.file_path
