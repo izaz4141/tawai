@@ -51,7 +51,7 @@ pub async fn handle_search_lyrics(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
 
-        match lrclib::search_lyrics(context.client(), &msg.query).await {
+        match lrclib::search_lyrics(context.client(), &msg.query, msg.prefer_sync).await {
             Ok(results) => {
                 SearchLyricsResponse {
                     id: msg.id,

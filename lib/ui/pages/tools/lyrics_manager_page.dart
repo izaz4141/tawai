@@ -46,7 +46,10 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
     if (query.isEmpty) return;
     setState(() => _loading = true);
     try {
-      final results = await BridgeService.instance.searchLyrics(query: query);
+      final results = await BridgeService.instance.searchLyrics(
+        query: query,
+        preferSync: SettingsManager.lyricsPrefersync.value,
+      );
       if (mounted) setState(() => _results = results);
     } catch (e) {
       log('search error: $e', isError: true);
@@ -202,15 +205,21 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
     super.initState();
     _loadSources();
     _searchController.addListener(_onSearchChanged);
+    _lyricsController.addListener(_onLyricsChanged);
   }
 
   @override
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
+    _lyricsController.removeListener(_onLyricsChanged);
     _searchController.dispose();
     _lyricsController.dispose();
     _debounce?.cancel();
     super.dispose();
+  }
+
+  void _onLyricsChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onSearchChanged() {
@@ -379,6 +388,15 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
     if (mounted) {
       setState(() => _saving = false);
     }
+  }
+
+  void _toggleLyricsPreference() {
+    final next = !SettingsManager.lyricsPrefersync.value;
+    SettingsManager.saveUserSetting(
+      SettingsManager.lyricsPrefersync,
+      'lyrics_prefersync',
+      next,
+    );
   }
 
   @override
@@ -581,6 +599,35 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
                 ),
                 label: const Text('Search LRCLIB'),
               ),
+              SizedBox(width: AppTheme.spaceSM * AppTheme.spaceScale(context)),
+              OutlinedButton.icon(
+                onPressed: _saving || _lyricsController.text.trim().isEmpty
+                    ? null
+                    : _romajizeLyrics,
+                icon: Icon(
+                  Icons.translate,
+                  size: AppTheme.iconSM * AppTheme.iconScale(context),
+                ),
+                label: const Text('Romajize'),
+              ),
+              SizedBox(width: AppTheme.spaceSM * AppTheme.spaceScale(context)),
+              ValueListenableBuilder<bool>(
+                valueListenable: SettingsManager.lyricsPrefersync,
+                builder: (context, preferSync, _) {
+                  final synced = preferSync;
+                  return IconButton(
+                    tooltip: synced
+                        ? 'Prefer synced lyrics'
+                        : 'Prefer plain lyrics',
+                    icon: Icon(
+                      synced ? Icons.timer : Icons.text_fields,
+                      size: AppTheme.iconMD * AppTheme.iconScale(context),
+                      color: synced ? colors.primary : colors.onSurfaceVariant,
+                    ),
+                    onPressed: _toggleLyricsPreference,
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -640,15 +687,6 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
                   size: AppTheme.iconSM * AppTheme.iconScale(context),
                 ),
                 label: const Text('Clear'),
-              ),
-              SizedBox(width: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-              OutlinedButton.icon(
-                onPressed: _saving ? null : _romajizeLyrics,
-                icon: Icon(
-                  Icons.translate,
-                  size: AppTheme.iconSM * AppTheme.iconScale(context),
-                ),
-                label: const Text('Romajize'),
               ),
             ],
           ),

@@ -1238,12 +1238,19 @@ class RinfService {
     return signal.message.result;
   }
 
-  Future<List<LyricsResult>> searchLyrics({required String query}) async {
+  Future<List<LyricsResult>> searchLyrics({
+    required String query,
+    bool preferSync = true,
+  }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = SearchLyricsResponse.rustSignalStream.where(
       (s) => s.message.id == id,
     );
-    SearchLyricsRequest(id: id, query: query).sendSignalToRust();
+    SearchLyricsRequest(
+      id: id,
+      query: query,
+      preferSync: preferSync,
+    ).sendSignalToRust();
     final signal = await stream.first;
     if (signal.message.error != null) {
       log('searchLyrics error: ${signal.message.error}', isError: true);

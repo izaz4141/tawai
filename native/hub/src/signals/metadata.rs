@@ -309,6 +309,7 @@ pub struct FetchLyricsResponse {
 pub struct SearchLyricsRequest {
     pub id: String,
     pub query: String,
+    pub prefer_sync: bool,
 }
 
 #[derive(Serialize, RustSignal)]

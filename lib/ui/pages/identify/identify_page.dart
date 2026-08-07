@@ -18,7 +18,8 @@ class IdentifyPage extends StatefulWidget {
 
 class _IdentifyPageState extends State<IdentifyPage> {
   late final IdentifyController _controller;
-  bool loadingMetadata = false;
+  bool fingerprinting = false;
+  bool lookingUp = false;
 
   @override
   void initState() {
@@ -37,7 +38,7 @@ class _IdentifyPageState extends State<IdentifyPage> {
   Future<void> _onFingerprint() async {
     final track = _controller.selectedTrack;
     if (track == null) return;
-    setState(() => loadingMetadata = true);
+    setState(() => fingerprinting = true);
     try {
       final rec = await _controller.fingerprintTrack(track);
       if (!mounted) return;
@@ -51,42 +52,37 @@ class _IdentifyPageState extends State<IdentifyPage> {
       }
       _showReleasePickerForSession(track, rec);
     } finally {
-      if (mounted) setState(() => loadingMetadata = false);
+      if (mounted) setState(() => fingerprinting = false);
     }
   }
 
   Future<void> _onLookup() async {
     final track = _controller.selectedTrack;
     if (track == null) return;
-    setState(() => loadingMetadata = true);
+    setState(() => lookingUp = true);
     try {
       final results = await _controller.lookupTrack(track);
       if (!mounted) return;
-      if (results.isEmpty) {
-        AppSnackBar.show(
-          context,
-          'Lookup returned no results',
-          type: SnackType.error,
-        );
-      } else if (results.length == 1) {
+      if (results.length == 1) {
         _showReleasePickerForSession(track, results.first);
-      } else {
-        showIdentifyDialog(
-          context,
-          currentTitle: track.title,
-          currentArtist: track.artistsString,
-          currentAlbum: track.albumTitle,
-          onReleaseSelected: (recording, release) {
-            _controller.addSessionResult(track, recording);
-            final session = _controller.sessions[track.id];
-            if (session != null) {
-              _controller.onReleaseSelected(session, release);
-            }
-          },
-        );
+        return;
       }
+      showIdentifyDialog(
+        context,
+        currentTitle: track.title,
+        currentArtist: track.artistsString,
+        currentAlbum: track.albumTitle,
+        initialRecordings: results,
+        onReleaseSelected: (recording, release) {
+          _controller.addSessionResult(track, recording);
+          final session = _controller.sessions[track.id];
+          if (session != null) {
+            _controller.onReleaseSelected(session, release);
+          }
+        },
+      );
     } finally {
-      if (mounted) setState(() => loadingMetadata = false);
+      if (mounted) setState(() => lookingUp = false);
     }
   }
 
@@ -113,6 +109,7 @@ class _IdentifyPageState extends State<IdentifyPage> {
   @override
   Widget build(BuildContext context) {
     final isDesktop = AppTheme.isDesktop(context);
+    final anyLoading = fingerprinting || lookingUp;
 
     return AnimatedBuilder(
       animation: _controller,
@@ -150,9 +147,10 @@ class _IdentifyPageState extends State<IdentifyPage> {
                           AppTheme.spaceXL * 15 * AppTheme.widthScale(context),
                       child: LeftPanel(
                         controller: _controller,
-                        loadingMetadata: loadingMetadata,
-                        onFingerprint: loadingMetadata ? null : _onFingerprint,
-                        onLookup: loadingMetadata ? null : _onLookup,
+                        fingerprinting: fingerprinting,
+                        lookingUp: lookingUp,
+                        onFingerprint: anyLoading ? null : _onFingerprint,
+                        onLookup: anyLoading ? null : _onLookup,
                       ),
                     ),
                     Container(
@@ -169,9 +167,10 @@ class _IdentifyPageState extends State<IdentifyPage> {
                           AppTheme.spaceXL * 10 * AppTheme.spaceScale(context),
                       child: LeftPanel(
                         controller: _controller,
-                        loadingMetadata: loadingMetadata,
-                        onFingerprint: loadingMetadata ? null : _onFingerprint,
-                        onLookup: loadingMetadata ? null : _onLookup,
+                        fingerprinting: fingerprinting,
+                        lookingUp: lookingUp,
+                        onFingerprint: anyLoading ? null : _onFingerprint,
+                        onLookup: anyLoading ? null : _onLookup,
                       ),
                     ),
                     Container(

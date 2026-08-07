@@ -38,6 +38,7 @@ Future<MusicBrainzFetchResult?> showIdentifyDialog(
   String? currentTitle,
   String? currentArtist,
   String? currentAlbum,
+  List<RecordingInfo>? initialRecordings,
   void Function(RecordingInfo recording, ReleaseInfo release)?
   onReleaseSelected,
 }) {
@@ -47,6 +48,7 @@ Future<MusicBrainzFetchResult?> showIdentifyDialog(
       currentTitle: currentTitle,
       currentArtist: currentArtist,
       currentAlbum: currentAlbum,
+      initialRecordings: initialRecordings,
       onReleaseSelected: onReleaseSelected,
     ),
   );
@@ -58,6 +60,7 @@ class _IdentifyDialog extends StatefulWidget {
   final String? currentTitle;
   final String? currentArtist;
   final String? currentAlbum;
+  final List<RecordingInfo>? initialRecordings;
   final void Function(RecordingInfo recording, ReleaseInfo release)?
   onReleaseSelected;
 
@@ -65,6 +68,7 @@ class _IdentifyDialog extends StatefulWidget {
     this.currentTitle,
     this.currentArtist,
     this.currentAlbum,
+    this.initialRecordings,
     this.onReleaseSelected,
   });
 
@@ -119,6 +123,14 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
     );
     if (query.isNotEmpty) {
       _searchCtrl.text = query;
+    }
+    final initial = widget.initialRecordings;
+    if (initial != null) {
+      _recordings = initial;
+      _hasAutoSearched = true;
+      return;
+    }
+    if (query.isNotEmpty) {
       _hasAutoSearched = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => _search());
     }

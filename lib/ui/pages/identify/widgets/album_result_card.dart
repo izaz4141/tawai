@@ -418,8 +418,10 @@ class AlbumResultCard extends StatelessWidget {
           await controller.onReleaseSelected(session, recording.releases.first);
         } else {
           await controller.updateAlbumRelease(
-            albumKey,
-            recording.releases.first.id,
+            trackId: ut.trackId,
+            releaseId: recording.releases.first.id,
+            sourceAlbumId: album.sourceAlbumId,
+            albumTitle: ut.albumTitle,
           );
         }
       }
@@ -437,7 +439,12 @@ class AlbumResultCard extends StatelessWidget {
         if (session != null) {
           await controller.onReleaseSelected(session, release);
         } else {
-          await controller.updateAlbumRelease(albumKey, release.id);
+          await controller.updateAlbumRelease(
+            trackId: ut.trackId,
+            releaseId: release.id,
+            sourceAlbumId: album.sourceAlbumId,
+            albumTitle: ut.albumTitle,
+          );
         }
       },
     );

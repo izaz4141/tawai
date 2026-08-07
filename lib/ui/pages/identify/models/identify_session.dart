@@ -3,7 +3,7 @@ import 'package:tawai/src/bindings/bindings.dart';
 class IdentifySession {
   final TrackInfo track;
   final RecordingInfo recording;
-  ReleaseInfo? selectedRelease;
+  String? selectedReleaseMbid;
   List<ReleaseTrackInfo> releaseTracks;
   ReleaseTrackInfo? correctTrack;
   bool loadingReleaseTracks;
@@ -12,7 +12,7 @@ class IdentifySession {
   IdentifySession({
     required this.track,
     required this.recording,
-    this.selectedRelease,
+    this.selectedReleaseMbid,
     this.releaseTracks = const [],
     this.correctTrack,
     this.loadingReleaseTracks = false,

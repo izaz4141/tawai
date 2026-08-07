@@ -856,10 +856,16 @@ class BridgeService {
           );
   }
 
-  Future<List<LyricsResult>> searchLyrics({required String query}) async {
+  Future<List<LyricsResult>> searchLyrics({
+    required String query,
+    bool preferSync = true,
+  }) async {
     return _isRemote
-        ? APIService.instance.searchLyrics(query: query)
-        : RinfService.instance.searchLyrics(query: query);
+        ? APIService.instance.searchLyrics(query: query, preferSync: preferSync)
+        : RinfService.instance.searchLyrics(
+            query: query,
+            preferSync: preferSync,
+          );
   }
 
   // ---------------------------------------------------------------------------

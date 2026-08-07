@@ -586,33 +586,7 @@ class APIService {
       );
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
-        return TrackInfo(
-          id: json['id'] as String,
-          title: json['title'] as String,
-          albumId: json['album_id'] as String? ?? '',
-          albumTitle: json['album_title'] as String? ?? '',
-          artistsString: json['artists_string'] as String? ?? '',
-          artists: [],
-          trackNum: json['track_num'] as int?,
-          discNum: json['disc_num'] as int?,
-          durationSecs: (json['duration_secs'] as num?)?.toDouble(),
-          filePath: json['file_path'] as String? ?? '',
-          fileSize: json['file_size'] as int?,
-          bitrate: json['bitrate'] as int?,
-          trackGain: (json['track_gain'] as num?)?.toDouble(),
-          trackPeak: (json['track_peak'] as num?)?.toDouble(),
-          mbidRecording: json['mbid_recording'] as String?,
-          artistMbid: json['artist_mbid'] as String?,
-          albumMbid: json['album_mbid'] as String?,
-          releaseDate: json['release_date'] as String?,
-          source: json['source'] as String? ?? 'remote',
-          sourceType: json['source_type'] as String? ?? '',
-          genres:
-              (json['genres'] as List<dynamic>?)
-                  ?.map((g) => g as String)
-                  .toList() ??
-              [],
-        );
+        return TrackInfoJson.fromJson(json);
       }
     } catch (e) {
       log('getTrackInfo error: $e', isError: true);
@@ -689,30 +663,7 @@ class APIService {
         final list = json['tracks'] as List<dynamic>;
         return list.map((e) {
           final m = e as Map<String, dynamic>;
-          return TrackInfo(
-            id: m['id'] as String,
-            title: m['title'] as String,
-            albumId: m['album_id'] as String? ?? '',
-            albumTitle: m['album_title'] as String? ?? '',
-            artistsString: m['artists_string'] as String? ?? '',
-            artists: [],
-            trackNum: m['track_num'] as int?,
-            discNum: m['disc_num'] as int?,
-            durationSecs: (m['duration_secs'] as num?)?.toDouble(),
-            filePath: m['file_path'] as String? ?? '',
-            fileSize: m['file_size'] as int?,
-            bitrate: m['bitrate'] as int?,
-            trackGain: (m['track_gain'] as num?)?.toDouble(),
-            trackPeak: (m['track_peak'] as num?)?.toDouble(),
-            mbidRecording: m['mbid_recording'] as String?,
-            source: m['source'] as String? ?? 'remote',
-            sourceType: m['source_type'] as String? ?? '',
-            genres:
-                (m['genres'] as List<dynamic>?)
-                    ?.map((g) => g as String)
-                    .toList() ??
-                [],
-          );
+          return TrackInfoJson.fromJson(m);
         }).toList();
       }
     } catch (e) {
@@ -850,30 +801,7 @@ class APIService {
         final list = json['tracks'] as List<dynamic>;
         return list.map((e) {
           final m = e as Map<String, dynamic>;
-          return TrackInfo(
-            id: m['id'] as String,
-            title: m['title'] as String,
-            albumId: m['album_id'] as String? ?? '',
-            albumTitle: m['album_title'] as String? ?? '',
-            artistsString: m['artists_string'] as String? ?? '',
-            artists: [],
-            trackNum: m['track_num'] as int?,
-            discNum: m['disc_num'] as int?,
-            durationSecs: (m['duration_secs'] as num?)?.toDouble(),
-            filePath: m['file_path'] as String? ?? '',
-            fileSize: m['file_size'] as int?,
-            bitrate: m['bitrate'] as int?,
-            trackGain: (m['track_gain'] as num?)?.toDouble(),
-            trackPeak: (m['track_peak'] as num?)?.toDouble(),
-            mbidRecording: m['mbid_recording'] as String?,
-            source: m['source'] as String? ?? 'remote',
-            sourceType: m['source_type'] as String? ?? '',
-            genres:
-                (m['genres'] as List<dynamic>?)
-                    ?.map((g) => g as String)
-                    .toList() ??
-                [],
-          );
+          return TrackInfoJson.fromJson(m);
         }).toList();
       }
     } catch (e) {
@@ -1176,32 +1104,7 @@ class APIService {
         final list = jsonDecode(response.body) as List<dynamic>;
         return list.map((e) {
           final m = e as Map<String, dynamic>;
-          return TrackInfo(
-            id: m['id'] as String,
-            title: m['title'] as String,
-            albumId: m['album_id'] as String? ?? '',
-            albumTitle: m['album_title'] as String? ?? '',
-            artistsString: m['artists_string'] as String? ?? '',
-            artists: [],
-            trackNum: m['track_num'] as int?,
-            discNum: m['disc_num'] as int?,
-            durationSecs: (m['duration_secs'] as num?)?.toDouble(),
-            filePath: m['file_path'] as String? ?? '',
-            fileSize: m['file_size'] as int?,
-            bitrate: m['bitrate'] as int?,
-            trackGain: (m['track_gain'] as num?)?.toDouble(),
-            trackPeak: (m['track_peak'] as num?)?.toDouble(),
-            mbidRecording: m['mbid_recording'] as String?,
-            artistMbid: m['artist_mbid'] as String?,
-            albumMbid: m['album_mbid'] as String?,
-            source: m['source'] as String? ?? 'remote',
-            sourceType: m['source_type'] as String? ?? '',
-            genres:
-                (m['genres'] as List<dynamic>?)
-                    ?.map((g) => g as String)
-                    .toList() ??
-                [],
-          );
+          return TrackInfoJson.fromJson(m);
         }).toList();
       }
     } catch (e) {
@@ -1220,32 +1123,7 @@ class APIService {
         final list = jsonDecode(response.body) as List<dynamic>;
         return list.map((e) {
           final m = e as Map<String, dynamic>;
-          return TrackInfo(
-            id: m['id'] as String,
-            title: m['title'] as String,
-            albumId: m['album_id'] as String? ?? '',
-            albumTitle: m['album_title'] as String? ?? '',
-            artistsString: m['artists_string'] as String? ?? '',
-            artists: [],
-            trackNum: m['track_num'] as int?,
-            discNum: m['disc_num'] as int?,
-            durationSecs: (m['duration_secs'] as num?)?.toDouble(),
-            filePath: m['file_path'] as String? ?? '',
-            fileSize: m['file_size'] as int?,
-            bitrate: m['bitrate'] as int?,
-            trackGain: (m['track_gain'] as num?)?.toDouble(),
-            trackPeak: (m['track_peak'] as num?)?.toDouble(),
-            mbidRecording: m['mbid_recording'] as String?,
-            artistMbid: m['artist_mbid'] as String?,
-            albumMbid: m['album_mbid'] as String?,
-            source: m['source'] as String? ?? 'remote',
-            sourceType: m['source_type'] as String? ?? '',
-            genres:
-                (m['genres'] as List<dynamic>?)
-                    ?.map((g) => g as String)
-                    .toList() ??
-                [],
-          );
+          return TrackInfoJson.fromJson(m);
         }).toList();
       }
     } catch (e) {
@@ -1265,32 +1143,7 @@ class APIService {
         final list = body['tracks'] as List<dynamic>;
         return list.map((e) {
           final m = e as Map<String, dynamic>;
-          return TrackInfo(
-            id: m['id'] as String,
-            title: m['title'] as String,
-            albumId: m['album_id'] as String? ?? '',
-            albumTitle: m['album_title'] as String? ?? '',
-            artistsString: m['artists_string'] as String? ?? '',
-            artists: [],
-            trackNum: m['track_num'] as int?,
-            discNum: m['disc_num'] as int?,
-            durationSecs: (m['duration_secs'] as num?)?.toDouble(),
-            filePath: m['file_path'] as String? ?? '',
-            fileSize: m['file_size'] as int?,
-            bitrate: m['bitrate'] as int?,
-            trackGain: (m['track_gain'] as num?)?.toDouble(),
-            trackPeak: (m['track_peak'] as num?)?.toDouble(),
-            mbidRecording: m['mbid_recording'] as String?,
-            artistMbid: m['artist_mbid'] as String?,
-            albumMbid: m['album_mbid'] as String?,
-            source: m['source'] as String? ?? 'remote',
-            sourceType: m['source_type'] as String? ?? '',
-            genres:
-                (m['genres'] as List<dynamic>?)
-                    ?.map((g) => g as String)
-                    .toList() ??
-                [],
-          );
+          return TrackInfoJson.fromJson(m);
         }).toList();
       }
     } catch (e) {
@@ -1666,11 +1519,18 @@ class APIService {
     return null;
   }
 
-  Future<List<LyricsResult>> searchLyrics({required String query}) async {
+  Future<List<LyricsResult>> searchLyrics({
+    required String query,
+    bool preferSync = true,
+  }) async {
     try {
-      final uri = Uri.parse(
-        '$baseUrl/api/tawai/library/identify/lyrics/search',
-      ).replace(queryParameters: {'q': query});
+      final uri = Uri.parse('$baseUrl/api/tawai/library/identify/lyrics/search')
+          .replace(
+            queryParameters: {
+              'query': query,
+              'prefer_sync': preferSync.toString(),
+            },
+          );
       final response = await http.get(uri, headers: _authHeaders());
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as List<dynamic>;

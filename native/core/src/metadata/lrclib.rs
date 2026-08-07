@@ -55,7 +55,11 @@ pub async fn get_lyrics(
     Ok(convert_track(track, prefer_sync))
 }
 
-pub async fn search_lyrics(client: &reqwest::Client, query: &str) -> Result<Vec<LyricsResult>> {
+pub async fn search_lyrics(
+    client: &reqwest::Client,
+    query: &str,
+    prefer_sync: bool,
+) -> Result<Vec<LyricsResult>> {
     let url = format!("https://lrclib.net/api/search?q={}", urlencoding(query));
 
     let resp = client.get(&url).send().await.map_err(|e| {
@@ -78,7 +82,7 @@ pub async fn search_lyrics(client: &reqwest::Client, query: &str) -> Result<Vec<
 
     Ok(tracks
         .into_iter()
-        .map(|t| convert_track(t, false))
+        .map(|t| convert_track(t, prefer_sync))
         .collect())
 }
 

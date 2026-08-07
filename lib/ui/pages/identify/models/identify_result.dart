@@ -62,7 +62,14 @@ class IdentifyAlbumResult {
     this.albumDisambiguation,
   });
 
-  static String albumKey(String? albumId) => 'album_${albumId ?? ''}';
+  static String releaseKey(String? albumMbid) => 'release_${albumMbid ?? ''}';
+
+  static String sourceKey(String? albumId) => 'album_${albumId ?? ''}';
+
+  static String groupKey({String? albumMbid, String? sourceAlbumId}) {
+    if (albumMbid != null && albumMbid.isNotEmpty) return releaseKey(albumMbid);
+    return sourceKey(sourceAlbumId);
+  }
 
   int get unsavedCount =>
       userTracks.where((t) => t.isSession && !t.applied).length;

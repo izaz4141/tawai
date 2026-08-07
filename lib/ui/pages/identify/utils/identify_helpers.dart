@@ -80,7 +80,10 @@ void groupSessionIntoAlbum(
   TrackInfo track,
   Map<String, IdentifyAlbumResult> albumResults,
 ) {
-  final albumKey = IdentifyAlbumResult.albumKey(track.albumId);
+  final albumKey = IdentifyAlbumResult.groupKey(
+    albumMbid: session.selectedReleaseMbid,
+    sourceAlbumId: track.albumId,
+  );
   final existing = albumResults[albumKey];
   final userTrack = IdentifiedUserTrack(
     trackId: track.id,
@@ -141,7 +144,10 @@ void groupIdentifiedTracks(
           ),
         )
         .toList();
-    final albumKey = IdentifyAlbumResult.albumKey(first.albumId);
+    final albumKey = IdentifyAlbumResult.groupKey(
+      albumMbid: first.albumMbid,
+      sourceAlbumId: first.albumId,
+    );
     final existing = albumResults[albumKey];
     if (existing != null) {
       for (final ut in userTracks) {

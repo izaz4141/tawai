@@ -125,7 +125,7 @@ class IdentifyController extends ChangeNotifier {
     IdentifySession session,
     ReleaseInfo remoteRelease,
   ) async {
-    session.selectedRelease = remoteRelease;
+    session.selectedReleaseMbid = remoteRelease.id;
     session.loadingReleaseTracks = true;
     session.releaseTracks = [];
     session.correctTrack = null;
@@ -136,18 +136,13 @@ class IdentifyController extends ChangeNotifier {
     session.loadingReleaseTracks = false;
     session.releaseTracks = remoteReleaseData.tracks;
     _autoAssignSessionTrack(session);
-    final albumKey = IdentifyAlbumResult.albumKey(session.track.albumId);
-    final result = albumResults[albumKey];
-    if (result != null) {
-      if (result.releaseTracks.isEmpty) {
-        result.releaseTracks = remoteReleaseData.tracks;
-      }
-      result.albumMbid = remoteRelease.id;
-      result.releaseDate = remoteRelease.date;
-      result.releaseArtist = remoteRelease.artist;
-      result.releaseArtistMbid = remoteRelease.artistId;
-      result.albumDisambiguation = remoteRelease.disambiguation;
-    }
+    _moveUserTrackToRelease(
+      trackId: session.track.id,
+      releaseId: remoteRelease.id,
+      releaseData: remoteReleaseData,
+      sourceAlbumId: session.track.albumId,
+      albumTitle: session.track.albumTitle,
+    );
     notifyListeners();
   }
 
@@ -187,6 +182,64 @@ class IdentifyController extends ChangeNotifier {
       trackDiscNumber: session.track.discNum,
       releaseTracks: session.releaseTracks,
     );
+  }
+
+  IdentifiedUserTrack? _removeUserTrack(String trackId) {
+    IdentifiedUserTrack? removed;
+    final emptyKeys = <String>[];
+    for (final entry in albumResults.entries) {
+      final idx = entry.value.userTracks.indexWhere(
+        (t) => t.trackId == trackId,
+      );
+      if (idx >= 0) {
+        removed = entry.value.userTracks.removeAt(idx);
+        if (entry.value.userTracks.isEmpty) emptyKeys.add(entry.key);
+      }
+    }
+    for (final key in emptyKeys) {
+      albumResults.remove(key);
+    }
+    return removed;
+  }
+
+  void _moveUserTrackToRelease({
+    required String trackId,
+    required String releaseId,
+    required GetReleaseTracksResponse releaseData,
+    String? sourceAlbumId,
+    String? albumTitle,
+  }) {
+    final ut = _removeUserTrack(trackId);
+    final targetKey = IdentifyAlbumResult.releaseKey(releaseId);
+    final target = albumResults[targetKey];
+    if (target == null) {
+      final newGroup = IdentifyAlbumResult(
+        albumTitle: releaseData.releaseTitle.isNotEmpty
+            ? releaseData.releaseTitle
+            : (albumTitle ?? ''),
+        sourceAlbumId: sourceAlbumId,
+        albumMbid: releaseId,
+        releaseTracks: releaseData.tracks,
+        releaseDate: releaseData.releaseDate,
+        releaseArtist: releaseData.artist,
+        releaseArtistMbid: releaseData.artistId,
+        expanded: true,
+        userTracks: <IdentifiedUserTrack>[],
+      );
+      if (ut != null) newGroup.userTracks.add(ut);
+      albumResults[targetKey] = newGroup;
+    } else {
+      if (ut != null) {
+        target.userTracks.removeWhere((t) => t.trackId == trackId);
+        target.userTracks.add(ut);
+      }
+      if (releaseData.releaseTitle.isNotEmpty) {
+        target.albumTitle = releaseData.releaseTitle;
+      }
+      if (target.releaseTracks.isEmpty) {
+        target.releaseTracks = releaseData.tracks;
+      }
+    }
   }
 
   Future<void> onToggleAlbumExpand(String albumKey) async {
@@ -273,18 +326,22 @@ class IdentifyController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updateAlbumRelease(String albumKey, String releaseId) async {
-    final result = albumResults[albumKey];
-    if (result == null) return;
+  Future<void> updateAlbumRelease({
+    required String trackId,
+    required String releaseId,
+    String? sourceAlbumId,
+    String? albumTitle,
+  }) async {
     final remoteRelease = await BridgeService.instance.getReleaseTracks(
       releaseId,
     );
-    result.releaseTracks = remoteRelease.tracks;
-    result.albumMbid = releaseId;
-    result.albumTitle = remoteRelease.releaseTitle;
-    result.releaseDate = remoteRelease.releaseDate;
-    result.releaseArtist = remoteRelease.artist;
-    result.releaseArtistMbid = remoteRelease.artistId;
+    _moveUserTrackToRelease(
+      trackId: trackId,
+      releaseId: releaseId,
+      releaseData: remoteRelease,
+      sourceAlbumId: sourceAlbumId,
+      albumTitle: albumTitle,
+    );
     notifyListeners();
   }
 

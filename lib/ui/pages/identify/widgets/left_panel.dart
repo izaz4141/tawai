@@ -6,14 +6,16 @@ import 'package:tawai/ui/pages/identify/widgets/action_buttons.dart';
 
 class LeftPanel extends StatelessWidget {
   final IdentifyController controller;
-  final bool loadingMetadata;
+  final bool fingerprinting;
+  final bool lookingUp;
   final VoidCallback? onFingerprint;
   final VoidCallback? onLookup;
 
   const LeftPanel({
     super.key,
     required this.controller,
-    this.loadingMetadata = false,
+    this.fingerprinting = false,
+    this.lookingUp = false,
     this.onFingerprint,
     this.onLookup,
   });
@@ -42,8 +44,8 @@ class LeftPanel extends StatelessWidget {
         if (_showActions) ...[
           const Divider(height: 1),
           ActionButtons(
-            fingerprinting: loadingMetadata,
-            lookingUp: loadingMetadata,
+            fingerprinting: fingerprinting,
+            lookingUp: lookingUp,
             onFingerprint: onFingerprint,
             onLookup: onLookup,
           ),

@@ -18,13 +18,14 @@ class ActionButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final busy = fingerprinting || lookingUp;
     return Padding(
       padding: EdgeInsets.all(AppTheme.spaceMD * AppTheme.spaceScale(context)),
       child: Row(
         children: [
           Expanded(
             child: FilledButton.icon(
-              onPressed: fingerprinting ? null : onFingerprint,
+              onPressed: busy ? null : onFingerprint,
               icon: fingerprinting
                   ? SizedBox(
                       width: AppTheme.spaceLG * AppTheme.spaceScale(context),
@@ -38,7 +39,7 @@ class ActionButtons extends StatelessWidget {
           const SizedBox(width: AppTheme.spaceSM),
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: lookingUp ? null : onLookup,
+              onPressed: busy ? null : onLookup,
               icon: lookingUp
                   ? SizedBox(
                       width: AppTheme.spaceLG * AppTheme.spaceScale(context),

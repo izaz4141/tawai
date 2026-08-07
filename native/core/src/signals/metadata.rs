@@ -147,6 +147,7 @@ pub struct SearchLyricsRequest {
     #[serde(default)]
     pub id: String,
     pub query: String,
+    pub prefer_sync: bool,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
