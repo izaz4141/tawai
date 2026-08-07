@@ -4,10 +4,10 @@ import 'package:tawai/utils/settings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 
 class AuthConfirmDialog extends StatefulWidget {
-  const AuthConfirmDialog({super.key, this.title, this.username});
+  const AuthConfirmDialog({super.key, this.title, this.userId});
 
   final String? title;
-  final String? username;
+  final String? userId;
 
   @override
   State<AuthConfirmDialog> createState() => _AuthConfirmDialogState();
@@ -28,8 +28,8 @@ class _AuthConfirmDialogState extends State<AuthConfirmDialog> {
     final password = _passwordCtrl.text;
     if (password.isEmpty) return;
 
-    final username =
-        widget.username ?? SettingsManager.currentUser.value?.username ?? '';
+    final userId =
+        widget.userId ?? SettingsManager.currentUser.value?.id ?? '';
 
     setState(() {
       _isVerifying = true;
@@ -37,7 +37,7 @@ class _AuthConfirmDialogState extends State<AuthConfirmDialog> {
     });
 
     final valid = await BridgeService.instance.verifyCurrentPassword(
-      username,
+      userId,
       password,
     );
 

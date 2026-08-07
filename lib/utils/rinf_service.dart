@@ -62,16 +62,6 @@ class RinfService {
     );
   }
 
-  Future<String> hashPassword(String plainText, String salt) async {
-    final id = DateTime.now().microsecondsSinceEpoch.toString();
-    final stream = HashingOutput.rustSignalStream.where(
-      (s) => s.message.id == id,
-    );
-    HashPassword(id: id, plainText: plainText, salt: salt).sendSignalToRust();
-    final signal = await stream.first;
-    return signal.message.hashedText ?? '';
-  }
-
   Future<String?> generateMasterKey() async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = GenerateMasterKeyResponse.rustSignalStream.where(
@@ -80,14 +70,6 @@ class RinfService {
     GenerateMasterKeyRequest(id: id).sendSignalToRust();
     final signal = await stream.first;
     return signal.message.masterKey;
-  }
-
-  Future<String> generateSalt() async {
-    final id = DateTime.now().microsecondsSinceEpoch.toString();
-    final stream = SaltOutput.rustSignalStream.where((s) => s.message.id == id);
-    GenerateSalt(id: id).sendSignalToRust();
-    final signal = await stream.first;
-    return signal.message.salt;
   }
 
   Future<({bool success, String userId, String username})> login(
@@ -163,20 +145,6 @@ class RinfService {
       displayName: signal.message.displayName,
       role: signal.message.role,
     );
-  }
-
-  Future<bool> verifyPassword(String input, String reference) async {
-    final id = DateTime.now().microsecondsSinceEpoch.toString();
-    final stream = VerifyPasswordResult.rustSignalStream.where(
-      (s) => s.message.id == id,
-    );
-    VerifyPassword(
-      id: id,
-      input: input,
-      reference: reference,
-    ).sendSignalToRust();
-    final signal = await stream.first;
-    return signal.message.success;
   }
 
   // ---------------------------------------------------------------------------
@@ -1102,14 +1070,14 @@ class RinfService {
     return (success: signal.message.success, username: signal.message.username);
   }
 
-  Future<bool> verifyCurrentPassword(String username, String password) async {
+  Future<bool> verifyCurrentPassword(String userId, String password) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = VerifyCurrentPasswordResponse.rustSignalStream.where(
       (s) => s.message.id == id,
     );
     VerifyCurrentPasswordRequest(
       id: id,
-      username: username,
+      userId: userId,
       password: password,
     ).sendSignalToRust();
     final signal = await stream.first;

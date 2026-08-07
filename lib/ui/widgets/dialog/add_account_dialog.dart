@@ -418,7 +418,7 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
       if (index != -1) {
         final existing = users[index];
         final valid = await BridgeService.instance.verifyCurrentPassword(
-          existing.username,
+          existing.id,
           _passwordCtrl.text,
         );
         if (!mounted) return;

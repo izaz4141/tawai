@@ -128,7 +128,7 @@ pub struct DeleteAccountResponse {
 #[derive(Deserialize, DartSignal)]
 pub struct VerifyCurrentPasswordRequest {
     pub id: String,
-    pub username: String,
+    pub user_id: String,
     pub password: String,
 }
 

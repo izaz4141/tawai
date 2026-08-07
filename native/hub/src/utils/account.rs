@@ -453,7 +453,7 @@ pub async fn handle_verify_current_password(context: Arc<AppContext>) {
         let mk = context.master_key.read().await.clone();
 
         let user =
-            tawai_core::db::account::get_user_by_username(db.pool(), &msg.username, &mk).await;
+            tawai_core::db::account::get_user_by_id(db.pool(), &msg.user_id, &mk).await;
 
         let valid = match user {
             Ok(Some(u)) => {

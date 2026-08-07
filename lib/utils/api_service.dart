@@ -402,22 +402,6 @@ class APIService {
     return {};
   }
 
-  Future<String?> hashPassword(String plainText, String salt) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/tawai/auth/hash'),
-        headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'plain_text': plainText, 'salt': salt}),
-      );
-      if (response.statusCode == 200) {
-        return response.body;
-      }
-    } catch (e) {
-      log("Error hashing password: $e", isError: true);
-    }
-    return null;
-  }
-
   Future<String?> generateMasterKey() async {
     try {
       final response = await http.get(
@@ -427,21 +411,6 @@ class APIService {
       if (response.statusCode == 200) return response.body;
     } catch (e) {
       log("Error generating master key: $e", isError: true);
-    }
-    return null;
-  }
-
-  Future<String?> generateSalt() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/tawai/auth/generate-salt'),
-        headers: _authHeaders(),
-      );
-      if (response.statusCode == 200) {
-        return response.body;
-      }
-    } catch (e) {
-      log("Error generating salt: $e", isError: true);
     }
     return null;
   }

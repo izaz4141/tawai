@@ -39,27 +39,11 @@ class BridgeService {
     );
   }
 
-  Future<String> hashPassword(String plainText, String salt) async {
-    if (_isRemote) {
-      final result = await APIService.instance.hashPassword(plainText, salt);
-      return result ?? '';
-    }
-    return RinfService.instance.hashPassword(plainText, salt);
-  }
-
   Future<String?> generateMasterKey() async {
     if (_isRemote) {
       return APIService.instance.generateMasterKey();
     }
     return RinfService.instance.generateMasterKey();
-  }
-
-  Future<String> generateSalt() async {
-    if (_isRemote) {
-      final result = await APIService.instance.generateSalt();
-      return result ?? '';
-    }
-    return RinfService.instance.generateSalt();
   }
 
   Future<({bool success, String userId, String username})> login(
@@ -79,13 +63,6 @@ class BridgeService {
       );
     }
     return RinfService.instance.login(username, password, username, password);
-  }
-
-  Future<bool> verifyPassword(String input, String reference) async {
-    if (_isRemote) {
-      return APIService.instance.verifyPassword(input);
-    }
-    return RinfService.instance.verifyPassword(input, reference);
   }
 
   Future<
@@ -192,11 +169,11 @@ class BridgeService {
     );
   }
 
-  Future<bool> verifyCurrentPassword(String username, String password) async {
+  Future<bool> verifyCurrentPassword(String userId, String password) async {
     if (_isRemote) {
       return APIService.instance.verifyPassword(password);
     }
-    return RinfService.instance.verifyCurrentPassword(username, password);
+    return RinfService.instance.verifyCurrentPassword(userId, password);
   }
 
   // ---------------------------------------------------------------------------

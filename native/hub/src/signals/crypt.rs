@@ -44,30 +44,6 @@ pub struct EncryptResponse {
 }
 
 #[derive(Deserialize, DartSignal)]
-pub struct HashPassword {
-    pub id: String,
-    pub plain_text: String,
-    pub salt: String,
-}
-
-#[derive(Serialize, RustSignal)]
-pub struct HashingOutput {
-    pub id: String,
-    pub hashed_text: Option<String>,
-}
-
-#[derive(Deserialize, DartSignal)]
-pub struct GenerateSalt {
-    pub id: String,
-}
-
-#[derive(Serialize, RustSignal)]
-pub struct SaltOutput {
-    pub id: String,
-    pub salt: String,
-}
-
-#[derive(Deserialize, DartSignal)]
 pub struct GenerateMasterKeyRequest {
     pub id: String,
 }
@@ -93,17 +69,4 @@ pub struct LoginResult {
     pub success: bool,
     pub user_id: String,
     pub username: String,
-}
-
-#[derive(Deserialize, DartSignal)]
-pub struct VerifyPassword {
-    pub id: String,
-    pub input: String,
-    pub reference: String,
-}
-
-#[derive(Serialize, RustSignal)]
-pub struct VerifyPasswordResult {
-    pub id: String,
-    pub success: bool,
 }

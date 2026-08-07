@@ -129,7 +129,7 @@ pub struct DeleteAccountResponse {
 pub struct VerifyCurrentPasswordRequest {
     #[serde(default)]
     pub id: String,
-    pub username: String,
+    pub user_id: String,
     pub password: String,
 }
 
