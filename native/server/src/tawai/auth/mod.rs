@@ -2,6 +2,7 @@ pub mod api;
 pub mod decrypt;
 pub mod encrypt;
 pub mod login;
+pub mod logout;
 pub mod master_key;
 pub mod verify_password;
 
@@ -9,6 +10,7 @@ pub use api::*;
 pub use decrypt::*;
 pub use encrypt::*;
 pub use login::*;
+pub use logout::*;
 pub use master_key::*;
 pub use verify_password::*;
 
@@ -27,6 +29,7 @@ pub fn create_auth_router(state: SharedState) -> Router<SharedState> {
         .layer(GovernorLayer::new(auth_rate_limit_config()));
 
     let protected_router = Router::new()
+        .route("/logout", post(handle_logout))
         .route("/generate-master-key", get(handle_generate_master_key))
         .route("/generate-api", get(handle_generate_api))
         .route("/verify-password", post(handle_verify_password))

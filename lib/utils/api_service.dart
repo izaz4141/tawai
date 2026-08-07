@@ -2723,6 +2723,20 @@ class APIService {
     _csrfToken = '';
   }
 
+  Future<void> logout() async {
+    if (kIsWeb) {
+      try {
+        await http.post(
+          Uri.parse('$baseUrl/api/tawai/auth/logout'),
+          headers: _authHeaders(),
+        );
+      } catch (e) {
+        log('Logout request failed: $e', isError: true);
+      }
+    }
+    clearAuth();
+  }
+
   void dispose() {
     _timer?.cancel();
     SettingsManager.serverHost.removeListener(restartPolling);

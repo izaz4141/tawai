@@ -35,9 +35,11 @@ class AccountManagerDialog extends StatelessWidget {
                           Uri.base.origin,
                           style: textTheme.bodySmall,
                         ),
-                        onTap: () {
+                        onTap: () async {
                           SettingsManager.isLoggedIn.value = false;
-                          APIService.instance.clearAuth();
+                          if (kIsWeb) {
+                            await APIService.instance.logout();
+                          }
                           Navigator.pop(context);
                         },
                       ),
