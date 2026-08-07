@@ -109,22 +109,6 @@ pub fn global_rate_limit_config()
         .unwrap()
 }
 
-pub fn load_config(path: &str) -> Value {
-    let mut cfg = Value::Null;
-    if let Ok(content) = std::fs::read_to_string("./assets/docs/default.json")
-        && let Ok(v) = serde_json::from_str::<Value>(&content)
-    {
-        cfg = v;
-    }
-    logger::debug(&format!("Loading config from {}", path));
-    if let Ok(content) = std::fs::read_to_string(path)
-        && let Ok(v) = serde_json::from_str(&content)
-    {
-        cfg = v;
-    }
-    cfg
-}
-
 pub fn create_router(
     state: SharedState,
     governor_conf: GovernorConfig<SmartIpKeyExtractor, NoOpMiddleware<QuantaInstant>>,

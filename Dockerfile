@@ -36,6 +36,7 @@ RUN apk add --no-cache \
 
 COPY Cargo.toml Cargo.lock ./
 COPY native ./native
+COPY assets ./assets
 
 RUN cargo build --release -p tawai-server && \
     strip /app/target/release/tawai-server
