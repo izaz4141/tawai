@@ -1,8 +1,8 @@
 use crate::server::SharedState;
+use axum::extract::{Extension, State};
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
-use axum::{Json, extract::State};
 use tawai_core::db::account;
-use tawai_core::signals::account::{VerifyCurrentPasswordRequest, VerifyCurrentPasswordResponse};
 use tawai_core::utils::security;
 
 #[utoipa::path(
@@ -10,28 +10,35 @@ use tawai_core::utils::security;
     path = "/api/tawai/auth/verify-password",
     tags = ["tawai.auth"],
     security(("ApiKeyAuth" = [])),
-    request_body = VerifyCurrentPasswordRequest,
+    params(
+        ("X-Password" = String, Header, description = "Current password to verify")
+    ),
     responses(
-        (status = 200, description = "Password verified successfully", body = VerifyCurrentPasswordResponse),
+        (status = 200, description = "Password verified successfully"),
         (status = 401, description = "Invalid password")
     )
 )]
 pub async fn handle_verify_password(
     State(state): State<SharedState>,
-    Json(payload): Json<VerifyCurrentPasswordRequest>,
+    Extension(user_id): Extension<String>,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
 
-    let valid = match account::get_user_by_username(db.pool(), &payload.username, &mk).await {
-        Ok(Some(user)) => {
-            security::validate_password(&user.password_hash, &payload.password).unwrap_or(false)
-        }
+    let password = match headers.get("X-Password").and_then(|v| v.to_str().ok()) {
+        Some(p) => p,
+        None => return StatusCode::UNAUTHORIZED,
+    };
+
+    let valid = match account::get_user_by_id(db.pool(), &user_id, &mk).await {
+        Ok(Some(user)) => security::validate_password(&user.password_hash, password).unwrap_or(false),
         _ => false,
     };
 
-    Json(VerifyCurrentPasswordResponse {
-        id: payload.id,
-        valid,
-    })
+    if valid {
+        StatusCode::OK
+    } else {
+        StatusCode::UNAUTHORIZED
+    }
 }
