@@ -1,7 +1,11 @@
 use anyhow::Result;
-use std::{path::PathBuf, sync::Arc, time::UNIX_EPOCH};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::UNIX_EPOCH,
+};
 
-use crate::utils::{encryption::decrypt, logger};
+use crate::utils::encryption::decrypt;
 
 /// Config keys holding downstream service secrets. Never exposed to clients
 /// and stored encrypted on disk.
@@ -37,6 +41,19 @@ pub struct AppConfig {
     pub value: serde_json::Value,
     pub path: PathBuf,
     pub mtime: u64,
+}
+
+pub fn dash_cache_dir(cfg: &AppConfig) -> String {
+    let config_dir = cfg
+        .path
+        .parent()
+        .unwrap_or_else(|| Path::new("/home/tawai/config"));
+    config_dir
+        .join("..")
+        .join("cache")
+        .join("dash")
+        .to_string_lossy()
+        .to_string()
 }
 
 pub async fn load_config(path: String, master_key: String) -> Result<Arc<AppConfig>> {

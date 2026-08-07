@@ -16,7 +16,9 @@ use crate::signals::server::{
 use crate::utils::logger;
 use axum::{Router, routing::get};
 use rinf::{DartSignal, RustSignal};
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use tokio::{
@@ -222,6 +224,7 @@ pub async fn start_server_listener(context: Arc<AppContext>) {
             shutdown_signal: shutdown_signal.clone(),
             shutdown_requested: shutdown_requested.clone(),
             version: Arc::new(RwLock::new(None)),
+            dash_generation_locks: Arc::new(Mutex::new(HashMap::new())),
         });
 
         let governor_conf = global_rate_limit_config();

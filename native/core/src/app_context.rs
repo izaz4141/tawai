@@ -17,7 +17,7 @@ use crate::utils::config::{
     AppConfig, PRIVATE_CONFIG_KEYS, is_local_host, load_config, load_default_config,
     normalize_secret, strip_keys,
 };
-use crate::utils::{encryption::encrypt, encryption::valid_encryption_format, logger};
+use crate::utils::{cache, encryption::encrypt, encryption::valid_encryption_format, logger};
 
 #[derive(Clone)]
 pub struct AppContext {
@@ -137,6 +137,15 @@ impl AppContext {
                 }
             };
         *self.config.write().await = Some(app_config);
+        if let Some(db) = self.db.read().await.as_ref().cloned() {
+            let pool = db.pool().clone();
+            let cfg = self.cfg().await;
+            tokio::spawn(async move {
+                if let Err(e) = cache::cleanup_dash_cache(&pool, &cfg).await {
+                    logger::warn(&format!("Failed to clean up dash cache: {}", e));
+                }
+            });
+        }
         if let Err(e) = self.sync_accounts_from_db().await {
             logger::warn(&format!("Failed to sync accounts from db: {}", e));
         }

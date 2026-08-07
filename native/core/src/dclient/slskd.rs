@@ -12,7 +12,7 @@ use crate::signals::download::{DlGlance, DlListResponse, DlSearchItem, DlSearchR
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct SlskdSearchResultFile {
+pub struct SlskdSearchResultFile {
     pub bitrate: i32,
     pub code: i32,
     pub extension: String,
@@ -24,7 +24,7 @@ struct SlskdSearchResultFile {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct SlskdSearchResult {
+pub struct SlskdSearchResult {
     pub file_count: i32,
     pub files: Vec<SlskdSearchResultFile>,
     pub has_free_upload_slot: bool,
@@ -34,7 +34,7 @@ struct SlskdSearchResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct SlskdSearchResponse {
+pub struct SlskdSearchResponse {
     #[serde(alias = "id")]
     pub search_id: String,
     pub is_complete: bool,
@@ -43,7 +43,7 @@ struct SlskdSearchResponse {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct SlskdDownloadRequest {
+pub struct SlskdDownloadRequest {
     pub username: String,
     pub filename: String,
     pub user_id: Option<String>,
@@ -51,7 +51,7 @@ struct SlskdDownloadRequest {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SlskdDownloadResponse {
+pub struct SlskdDownloadResponse {
     #[serde(alias = "id")]
     pub download_id: String,
     pub success: bool,
@@ -59,7 +59,7 @@ struct SlskdDownloadResponse {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct SlskdCancelRequest {
+pub struct SlskdCancelRequest {
     #[serde(alias = "id")]
     pub download_id: String,
     pub username: String,
@@ -397,7 +397,13 @@ impl SlskdClient {
                 let record = db::download::get_download_by_source(p, "slskd", id)
                     .await?
                     .ok_or_else(|| anyhow::anyhow!("slskd download not found: {}", id))?;
-                record.url.split('/').next().unwrap_or("").to_string()
+                record
+                    .url
+                    .trim_end_matches('/')
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or("")
+                    .to_string()
             }
             None => anyhow::bail!("slskd cancel requires database pool"),
         };

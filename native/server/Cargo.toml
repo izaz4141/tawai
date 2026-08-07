@@ -37,3 +37,4 @@ utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
 headers = "0.4.1"
 jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
 tokio-stream = { version = "0.1.18", features = ["sync"] }
+tower-http = { version = "0.7.0", features = ["fs"] }

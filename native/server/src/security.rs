@@ -219,6 +219,12 @@ pub async fn require_admin(
 pub struct AuthQuery {
     pub token: String,
 }
+
+/// Validated JWT extracted from the `token` query parameter by [`auth_query`],
+/// made available to downstream handlers (e.g. to embed into DASH manifests).
+#[derive(Clone)]
+pub struct QueryToken(pub String);
+
 pub async fn auth_query(
     State(state): State<SharedState>,
     req: Request<Body>,
@@ -232,6 +238,7 @@ pub async fn auth_query(
         .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
     let mut req = req;
+    req.extensions_mut().insert(QueryToken(params.token));
     req.extensions_mut().insert(token_data.claims.sub);
 
     Ok(next.run(req).await)

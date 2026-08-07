@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{Seek, Write};
-use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use futures::StreamExt;
@@ -30,6 +29,7 @@ struct AuthUser {
     id: String,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct ItemsResponse {
@@ -67,6 +67,7 @@ struct ItemDto {
     production_year: Option<i32>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct MediaSourceDto {

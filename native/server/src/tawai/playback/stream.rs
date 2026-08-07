@@ -1,25 +1,16 @@
 use axum::{
-    Json,
     body::Body,
-    extract::{Extension, Path, Query, State},
-    http::{StatusCode, header},
-    response::IntoResponse,
+    extract::{Path, State},
+    http::{HeaderMap, Method, Request, StatusCode},
+    response::{IntoResponse, Response},
 };
-use serde::Deserialize;
-use tawai_core::audio::ffmpeg;
-use tawai_core::db::{library, library_source};
-use tawai_core::utils::playback::resolve_track_source;
-use tokio::fs::File;
-use tokio_util::io::ReaderStream;
+use mime::Mime;
+use tawai_core::db::library;
+use tower_http::services::ServeFile;
 
 use crate::server::SharedState;
 
-#[derive(Deserialize)]
-pub struct StreamQuery {
-    pub bitrate: Option<String>,
-}
-
-fn content_type(path: &str) -> &'static str {
+fn stream_content_type(path: &str) -> &'static str {
     if path.ends_with(".mp3") {
         "audio/mpeg"
     } else if path.ends_with(".flac") {
@@ -39,6 +30,9 @@ fn content_type(path: &str) -> &'static str {
     }
 }
 
+/// Progressive stream of a local track's original file, used by web clients
+/// (HTML5 audio) that cannot play DASH. Served with full HTTP range support so
+/// seeking works.
 #[utoipa::path(
     get,
     path = "/api/tawai/playback/stream/{id}",
@@ -46,17 +40,18 @@ fn content_type(path: &str) -> &'static str {
     security(("TokenQueryAuth" = [])),
     params(
         ("id" = String, Path, description = "Track ID"),
-        ("bitrate" = Option<String>, Query, description = "Preferred bitrate (lossless, 128, 192, 256, 320)"),
     ),
     responses(
-        (status = 200, description = "Audio stream (original or transcoded)"),
-        (status = 404, description = "Track not found")
+        (status = 200, description = "Audio stream (supports HTTP range requests)"),
+        (status = 206, description = "Partial content for byte-range requests"),
+        (status = 404, description = "Track not found"),
+        (status = 416, description = "Requested byte range not satisfiable")
     )
 )]
 pub async fn handle_stream_track(
     State(state): State<SharedState>,
     Path(id): Path<String>,
-    Query(query): Query<StreamQuery>,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
 
@@ -69,63 +64,29 @@ pub async fn handle_stream_track(
         }
     };
 
-    if track.file_path.starts_with("recommendation://") {
+    if track.file_path.starts_with("recommendation://")
+        || track.file_path.starts_with("jellyfin://")
+        || track.file_path.starts_with("http://")
+        || track.file_path.starts_with("https://")
+    {
         return (StatusCode::NOT_FOUND, Body::empty()).into_response();
     }
 
-    if track.file_path.starts_with("jellyfin://") {
-        let (source_type, source_url) =
-            library_source::get_source_by_track_id(db.pool(), &track.id)
-                .await
-                .ok()
-                .flatten()
-                .unwrap_or_default();
-        let (url, headers) = resolve_track_source(
-            &track.file_path,
-            &source_type,
-            &source_url,
-            state.context.client(),
-        )
-        .await;
-        return Json(tawai_core::signals::playback::PlayTrackResponse {
-            id: track.id.clone(),
-            file_path: url,
-            error: None,
-            headers,
-        })
-        .into_response();
-    }
-
-    let path = &track.file_path;
-
-    if let Some(bitrate) = &query.bitrate {
-        if bitrate != "lossless" {
-            match ffmpeg::transcode_stream(path, bitrate) {
-                Ok(transcode) => {
-                    let body = Body::from_stream(transcode);
-                    let ct = content_type(path);
-                    let headers = [(header::CONTENT_TYPE, ct)];
-                    return (headers, body).into_response();
-                }
-                Err(e) => {
-                    tawai_core::utils::logger::error(&format!("ffmpeg transcoding failed: {}", e));
-                    return (StatusCode::INTERNAL_SERVER_ERROR, Body::empty()).into_response();
-                }
-            }
+    let mime: Mime = stream_content_type(&track.file_path)
+        .parse()
+        .unwrap_or(mime::APPLICATION_OCTET_STREAM);
+    let mut request = Request::new(Body::empty());
+    *request.method_mut() = Method::GET;
+    *request.headers_mut() = headers;
+    let mut serve = ServeFile::new_with_mime(&track.file_path, &mime);
+    match serve.try_call(request).await {
+        Ok(response) => {
+            let (parts, body) = response.into_parts();
+            Response::from_parts(parts, Body::new(body))
         }
-    }
-
-    let file = match File::open(path).await {
-        Ok(f) => f,
         Err(e) => {
-            tawai_core::utils::logger::error(&format!("stream track file open failed: {}", e));
-            return (StatusCode::NOT_FOUND, Body::empty()).into_response();
+            tawai_core::utils::logger::error(&format!("stream file serve failed: {}", e));
+            (StatusCode::INTERNAL_SERVER_ERROR, Body::empty()).into_response()
         }
-    };
-
-    let stream = ReaderStream::new(file);
-    let body = Body::from_stream(stream);
-    let ct = content_type(path);
-    let headers = [(header::CONTENT_TYPE, ct)];
-    (headers, body).into_response()
+    }
 }

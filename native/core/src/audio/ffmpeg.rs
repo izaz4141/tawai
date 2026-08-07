@@ -1,74 +1,142 @@
-use std::path::Path;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use std::time::Duration;
+use std::time::UNIX_EPOCH;
 
 use anyhow::Context as _;
-use futures::Stream;
-use tokio::io::{AsyncRead, AsyncReadExt};
-use tokio::process::{Child, Command};
-use tokio_util::bytes::Bytes;
-use tokio_util::io::ReaderStream;
+use tokio::fs;
+use tokio::io::AsyncReadExt;
+use tokio::process::Command;
 
-fn output_format(source_path: &str) -> &'static str {
-    let ext = Path::new(source_path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_lowercase();
-    match ext.as_str() {
-        "flac" => "flac",
-        "ogg" => "ogg",
-        "opus" => "opus",
-        "m4a" | "aac" => "ipod",
-        "wav" => "wav",
-        "mp3" => "mp3",
-        "webm" => "webm",
-        _ => "mp3",
+/// Default DASH segment duration in seconds.
+pub const DASH_SEGMENT_DURATION_SECS: u32 = 6;
+
+/// Default adaptive bitrate ladder (kbps) for DASH representations.
+pub const DASH_BITRATES: &[u32] = &[128, 192, 256, 320];
+
+/// Transcode a local audio file into fMP4 (CMAF) DASH segments plus an MPD
+/// manifest written flat into `out_dir`.
+///
+/// A single ffmpeg pass decodes the source once and encodes one
+/// representation per bitrate in [`DASH_BITRATES`], all grouped into a single
+/// audio `AdaptationSet`. On success `out_dir` contains `manifest.mpd`,
+/// `init-<bandwidth>.m4s` and `seg-<bandwidth>-<number>.m4s` files.
+///
+/// Stale files in `out_dir` are removed before running, so this is safe to
+/// re-invoke to regenerate a cached representation set.
+pub async fn generate_dash_segments(source_path: &str, out_dir: &str) -> anyhow::Result<()> {
+    if fs::try_exists(out_dir).await.unwrap_or(false) {
+        fs::remove_dir_all(out_dir).await?;
     }
-}
+    fs::create_dir_all(out_dir).await?;
 
-pub struct TranscodeStream {
-    _child: Child,
-    stream: ReaderStream<Box<dyn AsyncRead + Unpin + Send>>,
-}
-
-impl Stream for TranscodeStream {
-    type Item = Result<Bytes, std::io::Error>;
-
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        Pin::new(&mut self.stream).poll_next(cx)
-    }
-}
-
-pub fn transcode_stream(source_path: &str, bitrate: &str) -> anyhow::Result<TranscodeStream> {
-    let fmt = output_format(source_path);
-    let mut child = Command::new("ffmpeg")
+    let manifest = format!("{}/manifest.mpd", out_dir);
+    let mut cmd = Command::new("ffmpeg");
+    cmd.arg("-y")
+        .arg("-hide_banner")
+        .arg("-loglevel")
+        .arg("error")
         .arg("-i")
-        .arg(source_path)
+        .arg(source_path);
+    for _ in DASH_BITRATES {
+        cmd.arg("-map").arg("0:a:0");
+    }
+    cmd.arg("-c:a")
+        .arg("aac")
+        .arg("-ac")
+        .arg("2")
+        .arg("-ar")
+        .arg("48000");
+    for (i, bitrate) in DASH_BITRATES.iter().enumerate() {
+        cmd.arg(format!("-b:a:{}", i)).arg(format!("{}k", bitrate));
+    }
+    cmd.arg("-seg_duration")
+        .arg(DASH_SEGMENT_DURATION_SECS.to_string())
+        .arg("-use_timeline")
+        .arg("0")
+        .arg("-use_template")
+        .arg("1")
+        .arg("-adaptation_sets")
+        .arg("id=0,streams=a")
+        .arg("-init_seg_name")
+        .arg("init-$Bandwidth$.m4s")
+        .arg("-media_seg_name")
+        .arg("seg-$Bandwidth$-$Number$.m4s")
         .arg("-f")
-        .arg(fmt)
-        .arg("-b:a")
-        .arg(format!("{}k", bitrate))
-        .arg("-")
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()?;
+        .arg("dash")
+        .arg(&manifest)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped());
 
-    let stdout = child
-        .stdout
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| anyhow::anyhow!("failed to run ffmpeg (is it installed?): {}", e))?;
+
+    let stderr = child
+        .stderr
         .take()
-        .ok_or_else(|| anyhow::anyhow!("failed to capture ffmpeg stdout"))?;
+        .ok_or_else(|| anyhow::anyhow!("failed to capture ffmpeg stderr"))?;
+    let mut buf = String::new();
+    let read = async {
+        AsyncReadExt::read_to_string(&mut tokio::io::BufReader::new(stderr), &mut buf).await
+    };
+    let _ = read.await;
 
-    let stream = ReaderStream::new(Box::new(stdout) as Box<dyn AsyncRead + Unpin + Send>);
+    let status = child.wait().await?;
+    if !status.success() {
+        let detail = if buf.trim().is_empty() {
+            status.to_string()
+        } else {
+            buf.trim().to_string()
+        };
+        anyhow::bail!(
+            "ffmpeg DASH generation failed for {}: {}",
+            source_path,
+            detail
+        );
+    }
 
-    Ok(TranscodeStream {
-        _child: child,
-        stream,
-    })
+    if !fs::try_exists(&manifest).await.unwrap_or(false) {
+        anyhow::bail!(
+            "ffmpeg DASH generation produced no manifest for {}",
+            source_path
+        );
+    }
+    Ok(())
+}
+
+async fn file_mtime_ms(path: &str) -> Option<u128> {
+    fs::metadata(path)
+        .await
+        .ok()?
+        .modified()
+        .ok()?
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|d| d.as_millis())
+}
+
+/// Whether the DASH cache at `out_dir` is valid for `source_path`.
+///
+/// Returns `false` when the manifest is missing or the source file has been
+/// modified more recently than the cached manifest (stale). When the source
+/// metadata cannot be read (e.g. file deleted or on an unreachable mount) the
+/// cache is assumed fresh rather than destroyed; the missing-source case is
+/// handled separately by `cache::cleanup_dash_cache` at init.
+pub async fn dash_cache_fresh(source_path: &str, out_dir: &str) -> anyhow::Result<bool> {
+    let manifest = format!("{}/manifest.mpd", out_dir);
+    if !fs::try_exists(&manifest).await.unwrap_or(false) {
+        return Ok(false);
+    }
+    match (
+        file_mtime_ms(source_path).await,
+        file_mtime_ms(&manifest).await,
+    ) {
+        (Some(source_mtime), Some(manifest_mtime)) => Ok(source_mtime <= manifest_mtime),
+        _ => Ok(true),
+    }
 }
 
 /// Integrated loudness (LUFS) and true peak (dBFS) of an audio file.
+#[derive(Debug)]
 pub struct LoudnessMeasurement {
     pub integrated_lufs: f64,
     pub peak_dbfs: f64,

@@ -76,12 +76,7 @@ impl DownloadClient {
         }
     }
 
-    pub async fn cancel(
-        &self,
-        id: &str,
-        extra: Option<Value>,
-        pool: Option<&DatabasePool>,
-    ) -> Result<()> {
+    pub async fn cancel(&self, id: &str, pool: Option<&DatabasePool>) -> Result<()> {
         match self {
             DownloadClient::Nadekodon(c) => c.cancel(id).await,
             DownloadClient::Slskd(c) => c.cancel(id, pool).await,

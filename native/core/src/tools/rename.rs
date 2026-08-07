@@ -7,11 +7,6 @@ use crate::audio::tags::AudioTag;
 use crate::db::database::DatabasePool;
 use crate::signals::tools::{NamingViolation, RenamePreview};
 
-/// Check if a value is non-empty (for conditional truthiness).
-fn is_truthy(val: &str) -> bool {
-    !val.is_empty()
-}
-
 /// Format a naming pattern with tag values.
 ///
 /// Variables: `{title}`, `{artist}`, `{album_artist}`, `{album}`,

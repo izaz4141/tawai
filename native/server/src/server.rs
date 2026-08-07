@@ -12,10 +12,11 @@ use axum_extra::extract::{
 };
 use governor::{clock::QuantaInstant, middleware::NoOpMiddleware};
 use serde_json::Value;
+use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use subtle::ConstantTimeEq;
 use time::Duration as TimeDuration;
@@ -42,8 +43,13 @@ pub struct AppState {
     pub shutdown_signal: Arc<Notify>,
     pub shutdown_requested: Arc<AtomicBool>,
     pub version: Arc<RwLock<Option<String>>>,
+    pub dash_generation_locks: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
 }
 pub type SharedState = Arc<AppState>;
+
+pub fn dash_cache_dir_for_track(cfg: &tcore::utils::config::AppConfig, track_id: &str) -> String {
+    format!("{}/{}", tcore::utils::config::dash_cache_dir(cfg), track_id)
+}
 
 pub fn normalize_secret(s: &str) -> &str {
     let s = s.trim();

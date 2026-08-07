@@ -222,7 +222,6 @@ struct PlaylistInfo {
 #[derive(Deserialize)]
 struct CreatedForPlaylists {
     playlists: Vec<PlaylistJspf>,
-    playlist_count: u32,
 }
 
 pub struct CreatedForResult {

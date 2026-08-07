@@ -5,7 +5,7 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 struct ItunesResponse {
     #[serde(rename = "resultCount")]
-    result_count: u32,
+    _result_count: u32,
     results: Vec<ItunesResult>,
 }
 

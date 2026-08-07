@@ -1,8 +1,10 @@
+pub mod dash;
 pub mod history;
 pub mod play;
 pub mod preview;
 pub mod stream;
 
+pub use dash::*;
 pub use history::*;
 pub use play::*;
 pub use preview::*;
@@ -18,6 +20,7 @@ use axum::{
 fn create_streaming_router(state: SharedState) -> Router<SharedState> {
     Router::new()
         .route("/stream/{id}", get(handle_stream_track))
+        .route("/dash/{id}/{file}", get(handle_dash_file))
         .layer(middleware::from_fn_with_state(state, auth_query))
 }
 

@@ -33,6 +33,7 @@ use security::SecurityModifier;
         crate::tawai::discovery::lb::now_playing::handle_update_now_playing,
         crate::tawai::playback::history::handle_get_history,
         crate::tawai::playback::stream::handle_stream_track,
+        crate::tawai::playback::dash::handle_dash_file,
         crate::tawai::library::tracks::detail::handle_get_track,
         crate::tawai::library::tracks::source::handle_list_tracks_by_source,
         crate::tawai::library::tracks::mbid::handle_get_album_mbid,

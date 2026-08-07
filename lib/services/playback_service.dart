@@ -660,11 +660,11 @@ class PlaybackService {
         m[pair[0]] = pair[1];
         return m;
       });
-      return AudioSource.uri(
-        Uri.parse(cache.filePath),
-        headers: headers,
-        tag: track.id,
-      );
+      final uri = Uri.parse(cache.filePath);
+      if (uri.path.endsWith('.mpd')) {
+        return DashAudioSource(uri, headers: headers, tag: track.id);
+      }
+      return AudioSource.uri(uri, headers: headers, tag: track.id);
     }
     return AudioSource.file(cache.filePath, tag: track.id);
   }

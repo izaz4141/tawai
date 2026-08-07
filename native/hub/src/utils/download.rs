@@ -214,10 +214,7 @@ pub async fn handle_download_cancel(context: Arc<AppContext>) {
             }
         };
         let pool = context.db().await;
-        match client
-            .cancel(&msg.download_id, None, Some(pool.pool()))
-            .await
-        {
+        match client.cancel(&msg.download_id, Some(pool.pool())).await {
             Ok(()) => {
                 signals::download::DownloadCancelResponse {
                     id: msg.id,

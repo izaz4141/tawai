@@ -1,7 +1,7 @@
 use axum::{
     Json,
     extract::{Extension, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
 use tawai_core::utils::playback::resolve_playable_track;
@@ -26,6 +26,7 @@ use crate::server::SharedState;
 pub async fn handle_play_track(
     State(state): State<SharedState>,
     Extension(user_id): Extension<String>,
+    headers: HeaderMap,
     Json(req): Json<PlayTrackRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
@@ -43,6 +44,11 @@ pub async fn handle_play_track(
     )
     .await;
 
+    // Native clients authenticate via `X-API-Key` and can play DASH (ExoPlayer
+    // / libmpv). Web clients authenticate via JWT cookie and must fall back to
+    // progressive streaming (HTML5 audio cannot play DASH).
+    let is_native = headers.contains_key("X-API-Key");
+
     let file_path = if result.file_path.starts_with("http://")
         || result.file_path.starts_with("https://")
         || result.file_path.is_empty()
@@ -50,10 +56,14 @@ pub async fn handle_play_track(
         result.file_path
     } else if let Some(tid) = &result.resolved_track_id {
         match create_jwt_response(&state, &user_id).await {
-            Ok(jwt_resp) => format!(
-                "/api/tawai/playback/stream/{}?token={}",
-                tid, jwt_resp.access_token
-            ),
+            Ok(jwt_resp) => {
+                let base = if is_native {
+                    format!("/api/tawai/playback/dash/{}/manifest.mpd", tid)
+                } else {
+                    format!("/api/tawai/playback/stream/{}", tid)
+                };
+                format!("{}?token={}", base, jwt_resp.access_token)
+            }
             Err(e) => {
                 logger::error(&format!("Error creating jwt_response: {e}"));
                 result.error = Some("Error creating jwt_response".to_string());

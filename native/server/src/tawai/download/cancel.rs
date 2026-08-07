@@ -32,7 +32,7 @@ pub async fn handle_cancel(
     };
 
     let db = state.context.db().await;
-    match client.cancel(&req.download_id, None, Some(db.pool())).await {
+    match client.cancel(&req.download_id, Some(db.pool())).await {
         Ok(()) => Json(DownloadCancelResponse {
             id: req.id,
             success: true,

@@ -6,7 +6,7 @@ use tokio::sync::Notify;
 
 use crate::{app_context::AppContext, utils::logger};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DatabasePool {
     Sqlite(sqlx::Pool<sqlx::Sqlite>),
     Postgres(sqlx::Pool<sqlx::Postgres>),

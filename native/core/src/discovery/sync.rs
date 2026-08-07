@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::ops::Deref;
 
 use tokio::time::{Duration, sleep};
 
@@ -187,8 +186,6 @@ async fn sync_one_source(
     token: &str,
     user_name: &str,
     source: &RecommendationSource,
-    source_display_name: &str,
-    user_id: &str,
     source_id: &str,
     discovery_collection_id: &str,
     source_collection_id: &str,
@@ -395,8 +392,6 @@ pub async fn sync_recs(params: SyncRecsParams<'_>) -> SyncRecsResult {
                 &token,
                 &user_name,
                 cat,
-                source.name.as_str(),
-                params.user_id,
                 &source_id,
                 &discovery_collection_id,
                 &source_collection_id,
@@ -439,8 +434,6 @@ pub async fn sync_recs(params: SyncRecsParams<'_>) -> SyncRecsResult {
                 &token,
                 &user_name,
                 cat,
-                &display_name,
-                params.user_id,
                 &source_id,
                 &discovery_collection_id,
                 &source_collection_id,
