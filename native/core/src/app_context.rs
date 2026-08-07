@@ -130,10 +130,19 @@ impl AppContext {
     pub async fn init_config(&self, path: String) -> Result<bool> {
         let (app_config, is_first_run) =
             match load_config(path.clone(), self.master_key.read().await.clone()).await {
-                Ok(cfg) => (cfg, false),
+                Ok(aconfig) => (aconfig, false),
                 Err(e) => {
                     logger::warn(&format!("Cant load provided config: {}", e.to_string()));
-                    (load_default_config(path).await?, true)
+                    let aconfig = match load_default_config(path.clone()).await {
+                        Ok(c) => c,
+                        Err(e) => {
+                            logger::error(&format!(
+                                "Cant load default config: {e}\n ConfigPath: {path}"
+                            ));
+                            anyhow::bail!("Cant load default config: {e}\n ConfigPath: {path}")
+                        }
+                    };
+                    (aconfig, true)
                 }
             };
         *self.config.write().await = Some(app_config);
