@@ -13,8 +13,7 @@ pub async fn ensure_default_user(pool: &SqlitePool, master_key: &str) -> Result<
 
     if !exists {
         let user_id = Uuid::new_v4().to_string();
-        let salt = security::generate_salt();
-        let hash = security::hash_password(account::DEFAULT_PASSWORD, &salt)?;
+        let hash = security::hash_password(account::DEFAULT_PASSWORD)?;
         let api_key = Uuid::new_v4().to_string();
         let encrypted = encryption::encrypt(&api_key, master_key)?;
         let api_key_hash = helper::sha256_hex(&api_key);

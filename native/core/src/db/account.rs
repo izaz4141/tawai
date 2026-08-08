@@ -1,5 +1,6 @@
 use crate::db::database::DatabasePool;
 use crate::signals::account::UserListItem;
+use crate::utils::security;
 
 pub const DEFAULT_USERNAME: &str = "admin";
 pub const DEFAULT_PASSWORD: &str = "admin";
@@ -15,18 +16,19 @@ pub async fn create_user(
     pool: &DatabasePool,
     username: &str,
     display_name: &str,
-    password_hash: &str,
+    password: &str,
     api_key_encrypted: &str,
     api_key_hash: &str,
     role: &str,
 ) -> anyhow::Result<String> {
+    let password_hash = security::hash_password(password)?;
     match pool {
         DatabasePool::Sqlite(p) => {
             super::account_sq::create_user(
                 p,
                 username,
                 display_name,
-                password_hash,
+                &password_hash,
                 api_key_encrypted,
                 api_key_hash,
                 role,
@@ -38,7 +40,7 @@ pub async fn create_user(
                 p,
                 username,
                 display_name,
-                password_hash,
+                &password_hash,
                 api_key_encrypted,
                 api_key_hash,
                 role,
@@ -51,11 +53,14 @@ pub async fn create_user(
 pub async fn change_password(
     pool: &DatabasePool,
     user_id: &str,
-    new_hash: &str,
+    new_password: &str,
 ) -> anyhow::Result<()> {
+    let new_hash = security::hash_password(new_password)?;
     match pool {
-        DatabasePool::Sqlite(p) => super::account_sq::change_password(p, user_id, new_hash).await,
-        DatabasePool::Postgres(p) => super::account_pg::change_password(p, user_id, new_hash).await,
+        DatabasePool::Sqlite(p) => super::account_sq::change_password(p, user_id, &new_hash).await,
+        DatabasePool::Postgres(p) => {
+            super::account_pg::change_password(p, user_id, &new_hash).await
+        }
     }
 }
 

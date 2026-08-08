@@ -140,10 +140,6 @@ pub async fn create_user(
         return Err(anyhow::Error::new(AccountError::Conflict));
     }
 
-    let salt = security::generate_salt();
-    let hash = security::hash_password(&req.password, &salt)
-        .map_err(|e| anyhow::Error::new(AccountError::Internal(e)))?;
-
     let api_key = uuid::Uuid::new_v4().to_string();
     let encrypted = encryption::encrypt(&api_key, mk).unwrap_or_else(|_| api_key.clone());
     let api_key_hash = helper::sha256_hex(&api_key);
@@ -154,7 +150,7 @@ pub async fn create_user(
         db.pool(),
         &req.username,
         &display_name,
-        &hash,
+        &req.password,
         &encrypted,
         &api_key_hash,
         role,
@@ -242,9 +238,7 @@ pub async fn update_user(
 
     if let Some(new_password) = &req.new_password {
         if !new_password.is_empty() {
-            let hashed = security::hash_password(new_password, &target.password_hash)
-                .map_err(|e| anyhow::Error::new(AccountError::Internal(e)))?;
-            account::change_password(db.pool(), &target.id, &hashed)
+            account::change_password(db.pool(), &target.id, new_password)
                 .await
                 .map_err(|e| anyhow::Error::new(AccountError::Internal(e)))?;
         }
