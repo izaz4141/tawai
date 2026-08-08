@@ -11,6 +11,7 @@ import 'package:tawai/ui/widgets/components/editable_cover.dart';
 import 'package:tawai/ui/widgets/components/media_uploader.dart';
 import 'package:tawai/ui/widgets/dialog/identify_dialog.dart';
 import 'package:tawai/utils/bridge_service.dart';
+import 'package:tawai/utils/rinf_service.dart';
 import 'package:tawai/utils/io_service.dart';
 
 const _audioExtensions = [
@@ -46,6 +47,8 @@ class _TagEditorDialog extends StatefulWidget {
 
 class _TagEditorDialogState extends State<_TagEditorDialog> {
   String? _path;
+  String? _filename;
+  Uint8List? _fileBytes;
   bool _loading = false;
   bool _applying = false;
   String? _error;
@@ -98,20 +101,36 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
 
   Future<UploadMediaResult> _handleUpload(UploadedMediaFile file) async {
     final path = file.path;
-    if (path == null) {
+    if (path != null) {
+      final error = await _readTagsForPath(path);
+      if (!mounted) {
+        return const UploadMediaResult(success: false, error: 'Dialog closed.');
+      }
+      if (error != null) {
+        return UploadMediaResult(success: false, error: error);
+      }
+      setState(() => _path = path);
+      return const UploadMediaResult(success: true);
+    }
+    final bytes = file.bytes;
+    final name = file.name;
+    if (bytes == null) {
       return const UploadMediaResult(
         success: false,
         error: 'File path is not available on this platform.',
       );
     }
-    final error = await _readTagsForPath(path);
+    final error = await _readTagsForBytes(name, bytes);
     if (!mounted) {
       return const UploadMediaResult(success: false, error: 'Dialog closed.');
     }
     if (error != null) {
       return UploadMediaResult(success: false, error: error);
     }
-    setState(() => _path = path);
+    setState(() {
+      _filename = name;
+      _fileBytes = bytes;
+    });
     return const UploadMediaResult(success: true);
   }
 
@@ -180,32 +199,12 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
 
   Future<String?> _readTagsForPath(String path) async {
     try {
-      final response = await BridgeService.instance.readFileTags(path);
+      final response = await RinfService.instance.readFileTags(path);
       if (!mounted) return 'Tag editor is not available on this platform.';
-      if (response == null) {
-        return 'Tag editor is not available on this platform.';
-      }
       if (response.error != null) {
         return response.error;
       }
-      setState(() {
-        _tags = response;
-        _selectedCover = null;
-        _coverUrl = null;
-      });
-      _titleCtrl.text = response.title;
-      _artistCtrl.text = response.artist;
-      _albumCtrl.text = response.album;
-      _albumArtistCtrl.text = response.albumArtist;
-      _genreCtrl.text = response.genres.join(', ');
-      _trackCtrl.text = response.trackNumber > 0
-          ? response.trackNumber.toString()
-          : '';
-      _discCtrl.text = response.discNumber > 0
-          ? response.discNumber.toString()
-          : '';
-      _yearCtrl.text = response.releaseDate ?? '';
-      _lyricsCtrl.text = response.lyrics ?? '';
+      _applyTagResponse(response);
       return null;
     } catch (e) {
       if (!mounted) return null;
@@ -213,8 +212,51 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
     }
   }
 
+  Future<String?> _readTagsForBytes(String filename, Uint8List bytes) async {
+    try {
+      final response = await BridgeService.instance.readFileTagsBytes(
+        filename,
+        bytes,
+      );
+      if (!mounted) return 'Tag editor is not available on this platform.';
+      if (response == null) {
+        return 'Tag editor is not available on this platform.';
+      }
+      if (response.error != null) {
+        return response.error;
+      }
+      _applyTagResponse(response);
+      return null;
+    } catch (e) {
+      if (!mounted) return null;
+      return e.toString();
+    }
+  }
+
+  void _applyTagResponse(ReadFileTagsResponse response) {
+    setState(() {
+      _tags = response;
+      _selectedCover = null;
+      _coverUrl = null;
+    });
+    _titleCtrl.text = response.title;
+    _artistCtrl.text = response.artist;
+    _albumCtrl.text = response.album;
+    _albumArtistCtrl.text = response.albumArtist;
+    _genreCtrl.text = response.genres.join(', ');
+    _trackCtrl.text = response.trackNumber > 0
+        ? response.trackNumber.toString()
+        : '';
+    _discCtrl.text = response.discNumber > 0
+        ? response.discNumber.toString()
+        : '';
+    _yearCtrl.text = response.releaseDate ?? '';
+    _lyricsCtrl.text = response.lyrics ?? '';
+  }
+
   Future<void> _apply() async {
-    if (_path == null || _tags == null) return;
+    if (_tags == null) return;
+    if (_path == null && (_filename == null || _fileBytes == null)) return;
     setState(() => _applying = true);
     try {
       var cover = _selectedCover;
@@ -237,43 +279,92 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
           return;
         }
       }
-      final result = await BridgeService.instance.writeFileTags(
-        path: _path!,
-        title: _titleCtrl.text,
-        artist: _artistCtrl.text,
-        album: _albumCtrl.text,
-        albumArtist: _albumArtistCtrl.text,
-        genres: _genreCtrl.text
-            .split(RegExp(r'[,;/]'))
-            .map((s) => s.trim())
-            .where((s) => s.isNotEmpty)
-            .toList(),
-        trackNumber: int.tryParse(_trackCtrl.text) ?? 0,
-        discNumber: int.tryParse(_discCtrl.text) ?? 0,
-        releaseDate: _yearCtrl.text.isNotEmpty ? _yearCtrl.text : null,
-        lyrics: _lyricsCtrl.text.isNotEmpty ? _lyricsCtrl.text : null,
-        cover: cover,
-      );
-      if (!mounted) return;
-      if (result == null) {
-        AppSnackBar.show(
-          context,
-          'Tag editor is not available on this platform.',
-          type: SnackType.error,
+      final genres = _genreCtrl.text
+          .split(RegExp(r'[,;/]'))
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      final trackNumber = int.tryParse(_trackCtrl.text) ?? 0;
+      final discNumber = int.tryParse(_discCtrl.text) ?? 0;
+      final releaseDate = _yearCtrl.text.isNotEmpty ? _yearCtrl.text : null;
+      final lyrics = _lyricsCtrl.text.isNotEmpty ? _lyricsCtrl.text : null;
+
+      if (_fileBytes != null) {
+        final result = await BridgeService.instance.writeFileTagsBytes(
+          filename: _filename!,
+          bytes: _fileBytes!,
+          title: _titleCtrl.text,
+          artist: _artistCtrl.text,
+          album: _albumCtrl.text,
+          albumArtist: _albumArtistCtrl.text,
+          genres: genres,
+          trackNumber: trackNumber,
+          discNumber: discNumber,
+          releaseDate: releaseDate,
+          lyrics: lyrics,
+          cover: cover,
         );
-      } else if (result.success) {
-        AppSnackBar.show(
-          context,
-          'Tags applied successfully.',
-          type: SnackType.success,
-        );
-        Navigator.of(context).pop();
+        if (!mounted) return;
+        if (result == null) {
+          AppSnackBar.show(
+            context,
+            'Tag editor is not available on this platform.',
+            type: SnackType.error,
+          );
+        } else if (result.success && result.bytes != null) {
+          await IOServiceFactory.create().downloadBytes(
+            _filename!,
+            result.bytes!,
+          );
+          if (!mounted) return;
+          AppSnackBar.show(
+            context,
+            'Tags applied. The edited file is being downloaded.',
+            type: SnackType.success,
+          );
+          Navigator.of(context).pop();
+        } else {
+          AppSnackBar.show(
+            context,
+            result.error ?? 'Failed to apply tags.',
+            type: SnackType.error,
+          );
+        }
       } else {
-        AppSnackBar.show(
-          context,
-          result.error ?? 'Failed to apply tags.',
-          type: SnackType.error,
+        final result = await BridgeService.instance.writeFileTags(
+          path: _path!,
+          title: _titleCtrl.text,
+          artist: _artistCtrl.text,
+          album: _albumCtrl.text,
+          albumArtist: _albumArtistCtrl.text,
+          genres: genres,
+          trackNumber: trackNumber,
+          discNumber: discNumber,
+          releaseDate: releaseDate,
+          lyrics: lyrics,
+          cover: cover,
         );
+        if (!mounted) return;
+        if (result == null) {
+          AppSnackBar.show(
+            context,
+            'Tag editor is not available on this platform.',
+            type: SnackType.error,
+          );
+        } else if (result.success) {
+          AppSnackBar.show(
+            context,
+            'Tags applied successfully.',
+            type: SnackType.success,
+          );
+          Navigator.of(context).pop();
+        } else {
+          AppSnackBar.show(
+            context,
+            result.error ?? 'Failed to apply tags.',
+            type: SnackType.error,
+          );
+        }
       }
     } finally {
       if (mounted) setState(() => _applying = false);
@@ -281,8 +372,8 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
   }
 
   Widget _buildFileName() {
-    if (_path == null) return const SizedBox.shrink();
-    final name = _path!.split(Platform.pathSeparator).last;
+    final name = _filename ?? (_path?.split(Platform.pathSeparator).last);
+    if (name == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: AppTheme.spaceSM),
       child: Row(
@@ -363,9 +454,8 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
         ? AppTheme.dialogWidthDesktop
         : AppTheme.dialogWidthMobile;
 
-    final header = _path == null
-        ? 'Tag Editor'
-        : 'Edit Tags — ${_path!.split(Platform.pathSeparator).last}';
+    final fileName = _filename ?? (_path?.split(Platform.pathSeparator).last);
+    final header = fileName == null ? 'Tag Editor' : 'Edit Tags — $fileName';
 
     return AlertDialog(
       titlePadding: EdgeInsets.fromLTRB(
@@ -423,7 +513,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
   }
 
   Widget _buildBody(ColorScheme colors, TextTheme textTheme) {
-    if (_path == null) {
+    if (_path == null && _filename == null) {
       return _buildFilePicker();
     }
     if (_loading) {
@@ -450,6 +540,8 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
             onPressed: () {
               setState(() {
                 _path = null;
+                _filename = null;
+                _fileBytes = null;
                 _error = null;
                 _tags = null;
               });

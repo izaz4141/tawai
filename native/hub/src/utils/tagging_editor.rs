@@ -269,3 +269,95 @@ pub async fn handle_write_file_tags(_context: Arc<AppContext>) {
         }
     }
 }
+
+pub async fn handle_read_file_tags_bytes(_context: Arc<AppContext>) {
+    use signals::metadata::*;
+    let receiver = ReadFileTagsBytesRequest::get_dart_signal_receiver();
+    while let Some(signal_pack) = receiver.recv().await {
+        let msg = signal_pack.message;
+
+        match audio::tags::read_audio_tags_from_bytes(&msg.filename, &msg.bytes) {
+            Ok((tag, duration_secs, _sample_rate, _bitrate)) => {
+                ReadFileTagsResponse {
+                    id: msg.id,
+                    title: tag.title,
+                    artist: tag.artist,
+                    album: tag.album,
+                    album_artist: tag.album_artist,
+                    genres: tag.genres,
+                    track_number: tag.track_number,
+                    disc_number: tag.disc_number,
+                    release_date: tag.release_date,
+                    lyrics: tag.lyrics,
+                    cover: tag.cover,
+                    duration_secs,
+                    error: None,
+                }
+                .send_signal_to_dart();
+            }
+            Err(e) => {
+                logger::error(&format!("read_audio_tags_from_bytes failed: {e}"));
+                ReadFileTagsResponse {
+                    id: msg.id,
+                    title: String::new(),
+                    artist: String::new(),
+                    album: String::new(),
+                    album_artist: String::new(),
+                    genres: vec![],
+                    track_number: 0,
+                    disc_number: 0,
+                    release_date: None,
+                    lyrics: None,
+                    cover: None,
+                    duration_secs: 0.0,
+                    error: Some(e.to_string()),
+                }
+                .send_signal_to_dart();
+            }
+        }
+    }
+}
+
+pub async fn handle_write_file_tags_bytes(_context: Arc<AppContext>) {
+    use signals::metadata::*;
+    let receiver = WriteFileTagsBytesRequest::get_dart_signal_receiver();
+    while let Some(signal_pack) = receiver.recv().await {
+        let msg = signal_pack.message;
+
+        let tag = audio::tags::AudioTag {
+            title: msg.title,
+            artist: msg.artist,
+            album: msg.album,
+            album_artist: msg.album_artist,
+            genres: msg.genres,
+            track_number: msg.track_number,
+            disc_number: msg.disc_number,
+            release_date: msg.release_date,
+            lyrics: msg.lyrics,
+            cover: msg.cover,
+            ..Default::default()
+        };
+
+        match audio::tags::write_audio_tags_to_bytes(&msg.filename, &msg.bytes, &tag) {
+            Ok(new_bytes) => {
+                WriteFileTagsBytesResponse {
+                    id: msg.id,
+                    success: true,
+                    bytes: new_bytes,
+                    error: None,
+                }
+                .send_signal_to_dart();
+            }
+            Err(e) => {
+                logger::error(&format!("write_audio_tags_to_bytes failed: {e}"));
+                WriteFileTagsBytesResponse {
+                    id: msg.id,
+                    success: false,
+                    bytes: vec![],
+                    error: Some(e.to_string()),
+                }
+                .send_signal_to_dart();
+            }
+        }
+    }
+}

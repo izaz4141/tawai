@@ -123,6 +123,9 @@ class NativeIOService implements IOService {
   }
 
   @override
+  Future<void> downloadBytes(String name, Uint8List bytes) async {}
+
+  @override
   String? getCookie(String name) {
     throw UnsupportedError('Theres no cookie in native app.');
   }

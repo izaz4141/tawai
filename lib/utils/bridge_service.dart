@@ -792,6 +792,62 @@ class BridgeService {
     );
   }
 
+  Future<ReadFileTagsResponse?> readFileTagsBytes(
+    String filename,
+    Uint8List bytes,
+  ) {
+    if (_isRemote)
+      return APIService.instance.readFileTagsBytes(filename, bytes);
+    return RinfService.instance.readFileTagsBytes(filename, bytes);
+  }
+
+  Future<({bool success, Uint8List? bytes, String? error})?>
+  writeFileTagsBytes({
+    required String filename,
+    required Uint8List bytes,
+    required String title,
+    required String artist,
+    required String album,
+    required String albumArtist,
+    required List<String> genres,
+    required int trackNumber,
+    required int discNumber,
+    String? releaseDate,
+    String? lyrics,
+    List<int>? cover,
+  }) {
+    if (_isRemote) {
+      return APIService.instance.writeFileTagsBytes(
+        filename: filename,
+        bytes: bytes,
+        title: title,
+        artist: artist,
+        album: album,
+        albumArtist: albumArtist,
+        genres: genres,
+        trackNumber: trackNumber,
+        discNumber: discNumber,
+        releaseDate: releaseDate,
+        lyrics: lyrics,
+        cover: cover,
+      );
+    }
+    return RinfService.instance.writeFileTagsBytes(
+      filename: filename,
+      bytes: bytes,
+      title: title,
+      artist: artist,
+      album: album,
+      albumArtist: albumArtist,
+      genres: genres,
+      trackNumber: trackNumber,
+      discNumber: discNumber,
+      releaseDate: releaseDate,
+      lyrics: lyrics,
+      cover: cover,
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Tagging (local-only)
   // ---------------------------------------------------------------------------

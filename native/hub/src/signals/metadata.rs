@@ -369,6 +369,38 @@ pub struct WriteFileTagsResponse {
     pub error: Option<String>,
 }
 
+#[derive(Deserialize, DartSignal)]
+pub struct ReadFileTagsBytesRequest {
+    pub id: String,
+    pub filename: String,
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Deserialize, DartSignal)]
+pub struct WriteFileTagsBytesRequest {
+    pub id: String,
+    pub filename: String,
+    pub bytes: Vec<u8>,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub album_artist: String,
+    pub genres: Vec<String>,
+    pub track_number: i32,
+    pub disc_number: i32,
+    pub release_date: Option<String>,
+    pub lyrics: Option<String>,
+    pub cover: Option<Vec<u8>>,
+}
+
+#[derive(Serialize, RustSignal)]
+pub struct WriteFileTagsBytesResponse {
+    pub id: String,
+    pub success: bool,
+    pub bytes: Vec<u8>,
+    pub error: Option<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Naming format preview
 // ---------------------------------------------------------------------------

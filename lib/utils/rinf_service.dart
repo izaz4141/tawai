@@ -923,6 +923,64 @@ class RinfService {
     return (success: signal.message.success, error: signal.message.error);
   }
 
+  Future<ReadFileTagsResponse> readFileTagsBytes(
+    String filename,
+    Uint8List bytes,
+  ) async {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final stream = ReadFileTagsResponse.rustSignalStream.where(
+      (s) => s.message.id == id,
+    );
+    ReadFileTagsBytesRequest(
+      id: id,
+      filename: filename,
+      bytes: bytes,
+    ).sendSignalToRust();
+    return (await stream.first).message;
+  }
+
+  Future<({bool success, Uint8List? bytes, String? error})> writeFileTagsBytes({
+    required String filename,
+    required Uint8List bytes,
+    required String title,
+    required String artist,
+    required String album,
+    required String albumArtist,
+    required List<String> genres,
+    required int trackNumber,
+    required int discNumber,
+    String? releaseDate,
+    String? lyrics,
+    List<int>? cover,
+  }) async {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final stream = WriteFileTagsBytesResponse.rustSignalStream.where(
+      (s) => s.message.id == id,
+    );
+    WriteFileTagsBytesRequest(
+      id: id,
+      filename: filename,
+      bytes: bytes,
+      title: title,
+      artist: artist,
+      album: album,
+      albumArtist: albumArtist,
+      genres: genres,
+      trackNumber: trackNumber,
+      discNumber: discNumber,
+      releaseDate: releaseDate,
+      lyrics: lyrics,
+      cover: cover,
+    ).sendSignalToRust();
+    final signal = await stream.first;
+    final result = signal.message;
+    return (
+      success: result.success,
+      bytes: result.success ? Uint8List.fromList(result.bytes) : null,
+      error: result.error,
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Tagging
   // ---------------------------------------------------------------------------

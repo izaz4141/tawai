@@ -2135,6 +2135,115 @@ class APIService {
     }
   }
 
+  Future<ReadFileTagsResponse?> readFileTagsBytes(
+    String filename,
+    Uint8List bytes,
+  ) async {
+    try {
+      final request =
+          http.MultipartRequest(
+              'POST',
+              Uri.parse('$baseUrl/api/tawai/library/identify/tags/read-bytes'),
+            )
+            ..headers.addAll(_authHeaders())
+            ..fields['filename'] = filename
+            ..files.add(
+              http.MultipartFile.fromBytes('file', bytes, filename: filename),
+            );
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
+      if (response.statusCode != 200) return null;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return ReadFileTagsResponse(
+        id: '',
+        title: data['title'] as String? ?? '',
+        artist: data['artist'] as String? ?? '',
+        album: data['album'] as String? ?? '',
+        albumArtist: data['album_artist'] as String? ?? '',
+        genres:
+            (data['genres'] as List<dynamic>?)
+                ?.map((e) => e as String)
+                .toList() ??
+            [],
+        trackNumber: (data['track_number'] as num?)?.toInt() ?? 0,
+        discNumber: (data['disc_number'] as num?)?.toInt() ?? 0,
+        releaseDate: data['release_date'] as String?,
+        lyrics: data['lyrics'] as String?,
+        cover: data['cover'] != null
+            ? base64Decode(data['cover'] as String)
+            : null,
+        durationSecs: (data['duration_secs'] as num?)?.toDouble() ?? 0.0,
+        error: data['error'] as String?,
+      );
+    } catch (e) {
+      log('readFileTagsBytes error: $e', isError: true);
+      return null;
+    }
+  }
+
+  Future<({bool success, Uint8List? bytes, String? error})?>
+  writeFileTagsBytes({
+    required String filename,
+    required Uint8List bytes,
+    required String title,
+    required String artist,
+    required String album,
+    required String albumArtist,
+    required List<String> genres,
+    required int trackNumber,
+    required int discNumber,
+    String? releaseDate,
+    String? lyrics,
+    List<int>? cover,
+  }) async {
+    try {
+      final request =
+          http.MultipartRequest(
+              'POST',
+              Uri.parse('$baseUrl/api/tawai/library/identify/tags/write-bytes'),
+            )
+            ..headers.addAll(_authHeaders())
+            ..fields.addAll({
+              'filename': filename,
+              'title': title,
+              'artist': artist,
+              'album': album,
+              'album_artist': albumArtist,
+              'track_number': trackNumber.toString(),
+              'disc_number': discNumber.toString(),
+              for (final g in genres) 'genres': g,
+            })
+            ..files.add(
+              http.MultipartFile.fromBytes('file', bytes, filename: filename),
+            );
+      if (releaseDate != null && releaseDate.isNotEmpty) {
+        request.fields['release_date'] = releaseDate;
+      }
+      if (lyrics != null && lyrics.isNotEmpty) {
+        request.fields['lyrics'] = lyrics;
+      }
+      if (cover != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes('cover', cover, filename: 'cover'),
+        );
+      }
+      final streamed = await request.send();
+      final response = await http.Response.fromStream(streamed);
+      if (response.statusCode == 200) {
+        return (success: true, bytes: response.bodyBytes, error: null);
+      }
+      final data = jsonDecode(response.body);
+      return (
+        success: false,
+        bytes: null,
+        error: data['error'] as String? ?? 'HTTP ${response.statusCode}',
+      );
+    } catch (e) {
+      log('writeFileTagsBytes error: $e', isError: true);
+      return (success: false, bytes: null, error: e.toString());
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Naming format preview
   // ---------------------------------------------------------------------------

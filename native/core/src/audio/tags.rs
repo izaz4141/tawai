@@ -1,8 +1,11 @@
 use anyhow::Result;
 use lofty::config::WriteOptions;
 use lofty::file::AudioFile;
+use lofty::file::FileType;
+use lofty::file::TaggedFile;
 use lofty::file::TaggedFileExt;
 use lofty::picture::{MimeType, Picture, PictureType};
+use lofty::probe::Probe;
 use lofty::read_from_path;
 use lofty::tag::Accessor;
 use lofty::tag::ItemKey;
@@ -132,6 +135,38 @@ pub fn parse_gain_db(s: &str) -> Option<f64> {
 
 pub fn read_audio_tags(path: &Path) -> Result<(AudioTag, f64, Option<u32>, Option<u32>)> {
     let tagged_file = read_from_path(path)?;
+    let file_stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("Unknown");
+    Ok(extract_audio_tags(&tagged_file, file_stem))
+}
+
+/// Read tags from an audio file held entirely in memory.
+pub fn read_audio_tags_from_bytes(
+    filename: &str,
+    bytes: &[u8],
+) -> Result<(AudioTag, f64, Option<u32>, Option<u32>)> {
+    let probe = match Probe::new(Cursor::new(bytes)).guess_file_type() {
+        Ok(probe) => probe,
+        Err(_) => {
+            let file_type = FileType::from_path(filename)
+                .ok_or_else(|| anyhow::anyhow!("Unknown file type for {filename}"))?;
+            Probe::new(Cursor::new(bytes)).set_file_type(file_type)
+        }
+    };
+    let tagged_file = probe.read()?;
+    let file_stem = Path::new(filename)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("Unknown");
+    Ok(extract_audio_tags(&tagged_file, file_stem))
+}
+
+fn extract_audio_tags(
+    tagged_file: &TaggedFile,
+    file_stem: &str,
+) -> (AudioTag, f64, Option<u32>, Option<u32>) {
     let properties = tagged_file.properties();
     let tags = tagged_file.tags();
 
@@ -268,12 +303,8 @@ pub fn read_audio_tags(path: &Path) -> Result<(AudioTag, f64, Option<u32>, Optio
         }
     }
 
-    let file_name = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("Unknown");
     if result.title.is_empty() {
-        result.title = file_name.to_string();
+        result.title = file_stem.to_string();
     }
     if result.artist.is_empty() {
         result.artist = "Unknown Artist".to_string();
@@ -293,14 +324,40 @@ pub fn read_audio_tags(path: &Path) -> Result<(AudioTag, f64, Option<u32>, Optio
         result.album_artist_sort = derive_sort_name(&result.album_artist);
     }
 
-    Ok((result, duration_secs, sample_rate, bitrate))
+    (result, duration_secs, sample_rate, bitrate)
 }
 
 /// Write tags to an audio file using lofty.
 /// Writes all metadata fields from the provided `AudioTag`.
 pub fn write_audio_tags(path: &Path, audio_tag: &AudioTag) -> Result<()> {
     let mut tagged_file = read_from_path(path)?;
+    apply_audio_tag(&mut tagged_file, audio_tag)?;
+    tagged_file.save_to_path(path, WriteOptions::default())?;
+    Ok(())
+}
 
+/// Apply tags to an audio file held entirely in memory, returning the modified bytes.
+pub fn write_audio_tags_to_bytes(
+    filename: &str,
+    bytes: &[u8],
+    audio_tag: &AudioTag,
+) -> Result<Vec<u8>> {
+    let probe = match Probe::new(Cursor::new(bytes)).guess_file_type() {
+        Ok(probe) => probe,
+        Err(_) => {
+            let file_type = FileType::from_path(filename)
+                .ok_or_else(|| anyhow::anyhow!("Unknown file type for {filename}"))?;
+            Probe::new(Cursor::new(bytes)).set_file_type(file_type)
+        }
+    };
+    let mut tagged_file = probe.read()?;
+    apply_audio_tag(&mut tagged_file, audio_tag)?;
+    let mut output = Cursor::new(Vec::new());
+    tagged_file.save_to(&mut output, WriteOptions::default())?;
+    Ok(output.into_inner())
+}
+
+fn apply_audio_tag(tagged_file: &mut TaggedFile, audio_tag: &AudioTag) -> Result<()> {
     let tag = if let Some(tag) = tagged_file.primary_tag_mut() {
         tag
     } else {
@@ -394,7 +451,6 @@ pub fn write_audio_tags(path: &Path, audio_tag: &AudioTag) -> Result<()> {
         tag.push_picture(picture);
     }
 
-    tagged_file.save_to_path(path, WriteOptions::default())?;
     Ok(())
 }
 

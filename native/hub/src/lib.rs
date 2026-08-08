@@ -128,6 +128,12 @@ async fn main() {
     spawn(utils::tagging_editor::handle_write_file_tags(
         context.clone(),
     ));
+    spawn(utils::tagging_editor::handle_read_file_tags_bytes(
+        context.clone(),
+    ));
+    spawn(utils::tagging_editor::handle_write_file_tags_bytes(
+        context.clone(),
+    ));
     spawn(utils::tagging_editor::handle_list_download_folder_tracks(
         context.clone(),
     ));

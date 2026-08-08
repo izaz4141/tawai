@@ -126,6 +126,22 @@ class WasmIOService implements IOService {
   }
 
   @override
+  Future<void> downloadBytes(String name, Uint8List bytes) async {
+    final blob = html.Blob(
+      [bytes.toJS].toJS,
+      html.BlobPropertyBag(type: 'application/octet-stream'),
+    );
+    final url = html.URL.createObjectURL(blob);
+    final anchor = html.HTMLAnchorElement()
+      ..href = url
+      ..download = name;
+    html.document.body?.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    html.URL.revokeObjectURL(url);
+  }
+
+  @override
   String? getCookie(String name) {
     final String rawCookies = html.window.document.cookie;
     if (rawCookies.isEmpty) return null;

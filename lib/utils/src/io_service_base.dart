@@ -30,4 +30,8 @@ abstract class IOService {
   /// App-scoped temporary cache directory. Contents may be cleared by the
   /// system at any time. Not supported on web/wasm.
   Future<String> getTempDir();
+
+  /// Triggers a platform download of [bytes] under the name [name].
+  /// Only meaningful on web/wasm; no-op on platforms that write in place.
+  Future<void> downloadBytes(String name, Uint8List bytes);
 }
