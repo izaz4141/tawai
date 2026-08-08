@@ -28,8 +28,8 @@ pub async fn handle_report_playback(
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
     let user = match account::get_user_by_id(db.pool(), &user_id, &mk).await {
-        Ok(Some(u)) => u,
-        _ => {
+        Ok(u) => u,
+        Err(_) => {
             return (
                 axum::http::StatusCode::UNAUTHORIZED,
                 Json(ReportPlaybackResponse {

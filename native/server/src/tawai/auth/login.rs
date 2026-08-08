@@ -47,20 +47,13 @@ pub async fn handle_login(
         let db = state.context.db().await;
         let mk = state.context.master_key.read().await.clone();
         match tawai_core::db::account::get_user_by_id(db.pool(), &claims.sub, &mk).await {
-            Ok(Some(user)) => {
+            Ok(user) => {
                 authorized = true;
                 logged_in_user = Some(user);
             }
-            Ok(None) => {
-                logger::error(&format!(
-                    "[Login] JWT valid for '{}' but user not found in DB",
-                    claims.sub
-                ));
-                return (StatusCode::INTERNAL_SERVER_ERROR,).into_response();
-            }
             Err(e) => {
                 logger::error(&format!(
-                    "[Login] DB error resolving JWT subject '{}': {}",
+                    "[Login] Failed resolving JWT subject '{}': {}",
                     claims.sub, e
                 ));
                 return (StatusCode::INTERNAL_SERVER_ERROR,).into_response();
@@ -74,29 +67,25 @@ pub async fn handle_login(
         let mk = state.context.master_key.read().await.clone();
         match tawai_core::db::account::get_user_by_username(db.pool(), supplied_username, &mk).await
         {
-            Ok(Some(user)) => {
-                match security::validate_password(&user.password_hash, supplied_password) {
-                    Ok(true) => {
-                        authorized = true;
-                        logged_in_user = Some(user);
-                    }
-                    Ok(false) => {}
-                    Err(e) => {
-                        logger::error(&format!(
-                            "[Login] Password check error for '{}': {}",
-                            supplied_username, e
-                        ));
-                        return (StatusCode::INTERNAL_SERVER_ERROR,).into_response();
-                    }
+            Ok(user) => match security::validate_password(&user.password_hash, supplied_password) {
+                Ok(true) => {
+                    authorized = true;
+                    logged_in_user = Some(user);
                 }
-            }
-            Ok(None) => {}
+                Ok(false) => {}
+                Err(e) => {
+                    logger::error(&format!(
+                        "[Login] Password check error for '{}': {}",
+                        supplied_username, e
+                    ));
+                    return (StatusCode::INTERNAL_SERVER_ERROR,).into_response();
+                }
+            },
             Err(e) => {
-                logger::error(&format!(
-                    "[Login] DB error looking up '{}': {}",
+                logger::debug(&format!(
+                    "[Login] Failed looking up '{}': {}",
                     supplied_username, e
                 ));
-                return (StatusCode::INTERNAL_SERVER_ERROR,).into_response();
             }
         }
     }

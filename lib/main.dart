@@ -75,6 +75,7 @@ Future<void> main() async {
           final accounts = users
               .map(
                 (u) => Account(
+                  id: u.id,
                   host: '127.0.0.1',
                   port: SettingsManager.serverPort.value,
                   username: u.username,

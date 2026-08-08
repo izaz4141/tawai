@@ -28,7 +28,7 @@ pub async fn handle_scan_library(context: Arc<AppContext>) {
 
         let db = context.db().await;
         let mk = context.master_key.read().await.clone();
-        let Ok(Some(user)) = account::get_user_by_id(db.pool(), &msg.user_id, &mk).await else {
+        let Ok(user) = account::get_user_by_id(db.pool(), &msg.user_id, &mk).await else {
             context.scan_running.store(false, Ordering::SeqCst);
             logger::error(&format!("Cant find user with id: {}", msg.user_id));
             ScanLibraryResponse {
@@ -132,7 +132,7 @@ pub async fn handle_scan_source(context: Arc<AppContext>) {
 
         let db = context.db().await;
         let mk = context.master_key.read().await.clone();
-        let Ok(Some(user)) = account::get_user_by_id(db.pool(), &msg.user_id, &mk).await else {
+        let Ok(user) = account::get_user_by_id(db.pool(), &msg.user_id, &mk).await else {
             logger::error(&format!("Cant find user with id: {}", msg.user_id));
             ScanSourceResponse {
                 id,

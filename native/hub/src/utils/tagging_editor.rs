@@ -60,8 +60,8 @@ pub async fn handle_apply_identification(context: Arc<AppContext>) {
 
         let user = match tawai_core::db::account::get_user_by_id(db.pool(), &msg.user_id, &mk).await
         {
-            Ok(Some(u)) => u,
-            _ => {
+            Ok(u) => u,
+            Err(_) => {
                 logger::error(&format!(
                     "apply_identification: user not found: {}",
                     msg.user_id

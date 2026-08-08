@@ -76,9 +76,9 @@ class BridgeService {
     })
   >
   updateAccount({
-    required String currentUsername,
-    required String currentPassword,
-    required String targetUsername,
+    required String operatorUserId,
+    required String operatorPassword,
+    required String targetUserId,
     String? newUsername,
     String? newPassword,
     String? newDisplayName,
@@ -86,8 +86,9 @@ class BridgeService {
   }) async {
     if (_isRemote) {
       return APIService.instance.updateAccount(
-        currentPassword: currentPassword,
-        targetUsername: targetUsername,
+        operatorUserId: operatorUserId,
+        operatorPassword: operatorPassword,
+        targetUserId: targetUserId,
         newUsername: newUsername,
         newPassword: newPassword,
         newDisplayName: newDisplayName,
@@ -95,9 +96,9 @@ class BridgeService {
       );
     }
     return RinfService.instance.updateAccount(
-      currentUsername: currentUsername,
-      currentPassword: currentPassword,
-      targetUsername: targetUsername,
+      operatorUserId: operatorUserId,
+      operatorPassword: operatorPassword,
+      targetUserId: targetUserId,
       newUsername: newUsername,
       newPassword: newPassword,
       newDisplayName: newDisplayName,

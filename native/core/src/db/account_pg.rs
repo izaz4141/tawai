@@ -108,7 +108,7 @@ pub async fn get_user_by_username(
     pool: &PgPool,
     username: &str,
     master_key: &str,
-) -> Result<Option<crate::signals::User>> {
+) -> Result<crate::signals::User> {
     use crate::signals::User;
     let row: Option<(String, String, String, String, String, String, String, String)> = sqlx::query_as(
             &format!(
@@ -136,7 +136,7 @@ pub async fn get_user_by_username(
             } else {
                 api_key
             };
-            Ok(Some(User {
+            Ok(User {
                 id,
                 username,
                 display_name,
@@ -145,9 +145,9 @@ pub async fn get_user_by_username(
                 role,
                 created_at,
                 updated_at,
-            }))
+            })
         }
-        None => Ok(None),
+        None => anyhow::bail!("user not found"),
     }
 }
 
@@ -180,7 +180,7 @@ pub async fn get_user_by_id(
     pool: &PgPool,
     user_id: &str,
     master_key: &str,
-) -> Result<Option<crate::signals::User>> {
+) -> Result<crate::signals::User> {
     use crate::signals::User;
     let row: Option<(String, String, String, String, String, String, String, String)> = sqlx::query_as(
             &format!(
@@ -208,7 +208,7 @@ pub async fn get_user_by_id(
             } else {
                 api_key
             };
-            Ok(Some(User {
+            Ok(User {
                 id,
                 username,
                 display_name,
@@ -217,9 +217,9 @@ pub async fn get_user_by_id(
                 role,
                 created_at,
                 updated_at,
-            }))
+            })
         }
-        None => Ok(None),
+        None => anyhow::bail!("user not found"),
     }
 }
 

@@ -3,6 +3,7 @@ use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::{Extension, Json};
 use tawai_core::signals::account::{ListUsersResponse, UserListItem};
+use tawai_core::utils::account::list_users;
 
 #[utoipa::path(
     get,
@@ -18,10 +19,9 @@ pub async fn handle_list_users(
     Extension(_username): Extension<String>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
+    let mk = state.context.master_key.read().await.clone();
 
-    let users = tawai_core::db::account::get_all_users(db.pool())
-        .await
-        .unwrap_or_default();
+    let users = list_users(&db, &mk, false).await.unwrap_or_default();
 
     let response = ListUsersResponse {
         id: String::new(),

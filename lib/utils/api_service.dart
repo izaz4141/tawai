@@ -1538,8 +1538,9 @@ class APIService {
     })
   >
   updateAccount({
-    required String currentPassword,
-    required String targetUsername,
+    required String operatorUserId,
+    required String operatorPassword,
+    required String targetUserId,
     String? newUsername,
     String? newPassword,
     String? newDisplayName,
@@ -1548,14 +1549,11 @@ class APIService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/account/update'),
-        headers: _authHeaders(
-          extra: {
-            'Content-Type': 'application/json',
-            'X-Password': currentPassword,
-          },
-        ),
+        headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
         body: jsonEncode({
-          'target_username': targetUsername,
+          'operator_user_id': operatorUserId,
+          'operator_password': operatorPassword,
+          'target_user_id': targetUserId,
           'new_username': newUsername,
           'new_password': newPassword,
           'display_name': newDisplayName,
@@ -1570,8 +1568,7 @@ class APIService {
         return (
           success: true,
           userId: data['user_id'] as String? ?? '',
-          username:
-              data['username'] as String? ?? newUsername ?? targetUsername,
+          username: data['username'] as String? ?? newUsername ?? '',
           displayName: data['display_name'] as String? ?? '',
           role: data['role'] as String? ?? 'user',
           apiKey: data['api_key'] as String? ?? '',
@@ -1587,7 +1584,7 @@ class APIService {
     return (
       success: false,
       userId: '',
-      username: newUsername ?? targetUsername,
+      username: newUsername ?? '',
       displayName: '',
       role: 'user',
       apiKey: '',

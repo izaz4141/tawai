@@ -95,8 +95,8 @@ pub async fn handle_apply_identification(
     let mk = state.context.master_key.read().await.clone();
 
     let user = match account::get_user_by_id(db.pool(), &user_id, &mk).await {
-        Ok(Some(u)) => u,
-        _ => {
+        Ok(u) => u,
+        Err(_) => {
             return (
                 StatusCode::UNAUTHORIZED,
                 Json(ApplyIdentificationResponse {

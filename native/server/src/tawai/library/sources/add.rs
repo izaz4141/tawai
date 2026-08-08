@@ -23,8 +23,8 @@ pub async fn handle_add_source(
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
     let user = match account::get_user_by_id(db.pool(), &user_id, &mk).await {
-        Ok(Some(u)) => u,
-        _ => return axum::http::StatusCode::UNAUTHORIZED.into_response(),
+        Ok(u) => u,
+        Err(_) => return axum::http::StatusCode::UNAUTHORIZED.into_response(),
     };
 
     match library_source::add_source(

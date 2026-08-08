@@ -32,8 +32,8 @@ pub async fn handle_verify_password(
     };
 
     let valid = match account::get_user_by_id(db.pool(), &user_id, &mk).await {
-        Ok(Some(user)) => security::validate_password(&user.password_hash, password).unwrap_or(false),
-        _ => false,
+        Ok(user) => security::validate_password(&user.password_hash, password).unwrap_or(false),
+        Err(_) => false,
     };
 
     if valid {

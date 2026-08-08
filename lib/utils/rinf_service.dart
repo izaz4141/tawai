@@ -976,9 +976,9 @@ class RinfService {
     })
   >
   updateAccount({
-    required String currentUsername,
-    required String currentPassword,
-    required String targetUsername,
+    required String operatorUserId,
+    required String operatorPassword,
+    required String targetUserId,
     String? newUsername,
     String? newPassword,
     String? newDisplayName,
@@ -990,9 +990,9 @@ class RinfService {
     );
     UpdateAccountRequest(
       id: id,
-      username: currentUsername,
-      currentPassword: currentPassword,
-      targetUsername: targetUsername,
+      operatorUserId: operatorUserId,
+      operatorPassword: operatorPassword,
+      targetUserId: targetUserId,
       newUsername: newUsername,
       newPassword: newPassword,
       displayName: newDisplayName,

@@ -23,8 +23,8 @@ pub async fn handle_login(context: Arc<AppContext>) {
         let db = context.db().await;
         let (user_id, username) =
             match account::get_user_by_username(db.pool(), &msg.iuser, &mk).await {
-                Ok(Some(u)) => (u.id, u.username),
-                _ => (String::new(), msg.iuser.clone()),
+                Ok(u) => (u.id, u.username),
+                Err(_) => (String::new(), msg.iuser.clone()),
             };
 
         LoginResult {

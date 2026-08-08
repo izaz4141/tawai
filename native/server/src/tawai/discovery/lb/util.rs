@@ -15,8 +15,8 @@ pub async fn resolve_lb_user(
     let mk = state.context.master_key.read().await.clone();
 
     let user = match account::get_user_by_id(db.pool(), user_id, &mk).await {
-        Ok(Some(u)) => u,
-        _ => return Err(axum::http::StatusCode::UNAUTHORIZED.into_response()),
+        Ok(u) => u,
+        Err(_) => return Err(axum::http::StatusCode::UNAUTHORIZED.into_response()),
     };
 
     let token = match history::get_listenbrainz_token(db.pool(), &user.id, &mk).await {

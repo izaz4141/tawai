@@ -3,16 +3,8 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use tawai_core::db::account;
 use tawai_core::signals::account::{CreateAccountRequest, CreateAccountResponse};
-use tawai_core::utils::{encryption, helper, logger, security};
-
-fn sanitize_role(role: Option<&str>) -> &'static str {
-    match role {
-        Some("admin") => "admin",
-        _ => "user",
-    }
-}
+use tawai_core::utils::account::{AccountError, create_user};
 
 #[utoipa::path(
     post,
@@ -34,97 +26,39 @@ pub async fn handle_create_account(
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
 
-    let admin = account::get_user_by_username(db.pool(), &payload.admin_username, &mk)
-        .await
-        .unwrap_or(None);
-
-    let is_admin = match &admin {
-        Some(u) => {
-            u.role == "admin"
-                && security::validate_password(&u.password_hash, &payload.admin_password)
-                    .unwrap_or(false)
-        }
-        None => false,
-    };
-
-    if !is_admin {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(CreateAccountResponse {
-                id: payload.id,
-                success: false,
-                user_id: String::new(),
-                username: payload.username,
-                display_name: String::new(),
-                role: String::new(),
-                api_key: String::new(),
-            }),
-        )
-            .into_response();
-    }
-
-    let taken = account::get_user_by_username(db.pool(), &payload.username, &mk)
-        .await
-        .unwrap_or(None)
-        .is_some();
-    if taken {
-        return (
-            StatusCode::CONFLICT,
-            Json(CreateAccountResponse {
-                id: payload.id,
-                success: false,
-                user_id: String::new(),
-                username: payload.username,
-                display_name: String::new(),
-                role: String::new(),
-                api_key: String::new(),
-            }),
-        )
-            .into_response();
-    }
-
-    let salt = security::generate_salt();
-    let hash = match security::hash_password(&payload.password, &salt) {
-        Ok(h) => h,
-        Err(e) => {
-            logger::error(&format!("Failed to hash password: {}", e));
-            return (StatusCode::INTERNAL_SERVER_ERROR,).into_response();
-        }
-    };
-
-    let api_key = uuid::Uuid::new_v4().to_string();
-    let encrypted = encryption::encrypt(&api_key, &mk).unwrap_or_else(|_| api_key.clone());
-    let api_key_hash = helper::sha256_hex(&api_key);
-    let display_name = payload.display_name.clone().unwrap_or_default();
-    let role = sanitize_role(payload.role.as_deref());
-
-    match account::create_user(
-        db.pool(),
-        &payload.username,
-        &display_name,
-        &hash,
-        &encrypted,
-        &api_key_hash,
-        role,
-    )
-    .await
-    {
-        Ok(user_id) => (
-            StatusCode::OK,
-            Json(CreateAccountResponse {
-                id: payload.id,
-                success: true,
-                user_id,
-                username: payload.username,
-                display_name,
-                role: role.to_string(),
-                api_key,
-            }),
-        )
-            .into_response(),
-        Err(e) => {
-            logger::error(&format!("Failed to create user: {}", e));
-            (StatusCode::INTERNAL_SERVER_ERROR,).into_response()
-        }
+    match create_user(&db, &mk, &payload).await {
+        Ok(response) => (StatusCode::OK, Json(response)).into_response(),
+        Err(e) => match e.downcast_ref::<AccountError>() {
+            Some(AccountError::Unauthorized) => (
+                StatusCode::UNAUTHORIZED,
+                Json(CreateAccountResponse {
+                    id: payload.id,
+                    success: false,
+                    user_id: String::new(),
+                    username: payload.username,
+                    display_name: String::new(),
+                    role: String::new(),
+                    api_key: String::new(),
+                }),
+            )
+                .into_response(),
+            Some(AccountError::Conflict) => (
+                StatusCode::CONFLICT,
+                Json(CreateAccountResponse {
+                    id: payload.id,
+                    success: false,
+                    user_id: String::new(),
+                    username: payload.username,
+                    display_name: String::new(),
+                    role: String::new(),
+                    api_key: String::new(),
+                }),
+            )
+                .into_response(),
+            _ => {
+                tawai_core::utils::logger::error(&format!("Failed to create user: {}", e));
+                (StatusCode::INTERNAL_SERVER_ERROR,).into_response()
+            }
+        },
     }
 }

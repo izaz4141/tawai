@@ -9,7 +9,7 @@ class Account {
   final String apiKey;
 
   Account({
-    String? id,
+    required this.id,
     required this.host,
     required this.port,
     required this.username,
@@ -17,12 +17,11 @@ class Account {
     String? label,
     this.role = 'user',
     this.apiKey = '',
-  }) : id = id ?? username,
-       label = label ?? host;
+  }) : label = label ?? host;
 
   static Account fromJson(Map<String, dynamic> json) {
     return Account(
-      id: json['id'] as String?,
+      id: json['id'] as String,
       host: json['host'] ?? '127.0.0.1',
       port: json['port'] ?? 8181,
       username: json['username'] ?? '',

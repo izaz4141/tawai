@@ -1,9 +1,8 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
+use axum::{extract::State, http::StatusCode, response::IntoResponse};
+use axum_extra::extract::{
+    CookieJar,
+    cookie::{Cookie, SameSite},
 };
-use axum_extra::extract::{CookieJar, cookie::{Cookie, SameSite}};
 use time::Duration as TimeDuration;
 
 use crate::server::SharedState;
@@ -35,9 +34,6 @@ fn remove_jwt_cookie(jar: CookieJar) -> CookieJar {
         (status = 401, description = "Unauthorized")
     )
 )]
-pub async fn handle_logout(
-    State(_state): State<SharedState>,
-    jar: CookieJar,
-) -> impl IntoResponse {
+pub async fn handle_logout(State(_state): State<SharedState>, jar: CookieJar) -> impl IntoResponse {
     (remove_jwt_cookie(jar), StatusCode::OK).into_response()
 }

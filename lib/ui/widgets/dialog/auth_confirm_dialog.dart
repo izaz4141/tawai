@@ -28,8 +28,7 @@ class _AuthConfirmDialogState extends State<AuthConfirmDialog> {
     final password = _passwordCtrl.text;
     if (password.isEmpty) return;
 
-    final userId =
-        widget.userId ?? SettingsManager.currentUser.value?.id ?? '';
+    final userId = widget.userId ?? SettingsManager.currentUser.value?.id ?? '';
 
     setState(() {
       _isVerifying = true;

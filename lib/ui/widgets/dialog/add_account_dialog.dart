@@ -394,7 +394,7 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
 
     if (!_isLocalHost && !_isEdit) {
       account = Account(
-        id: _capturedId.isEmpty ? account.username : _capturedId,
+        id: _capturedId,
         host: account.host,
         port: account.port,
         username: _capturedUsername.isEmpty
@@ -459,9 +459,9 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
     result;
     if (_isEdit) {
       result = await BridgeService.instance.updateAccount(
-        currentUsername: SettingsManager.currentUser.value?.username ?? '',
-        currentPassword: adminPassword,
-        targetUsername: widget.initialAccount!.username,
+        operatorUserId: SettingsManager.currentUser.value?.id ?? '',
+        operatorPassword: adminPassword,
+        targetUserId: widget.initialAccount!.id,
         newUsername: _usernameCtrl.text,
         newPassword: _passwordCtrl.text,
         newDisplayName: _displayNameCtrl.text,

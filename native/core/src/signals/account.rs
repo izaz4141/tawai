@@ -63,9 +63,9 @@ pub struct ListUsersResponse {
 pub struct UpdateAccountRequest {
     #[serde(default)]
     pub id: String,
-    pub username: String,
-    pub current_password: String,
-    pub target_username: String,
+    pub operator_user_id: String,
+    pub operator_password: String,
+    pub target_user_id: String,
     pub new_username: Option<String>,
     pub new_password: Option<String>,
     pub display_name: Option<String>,

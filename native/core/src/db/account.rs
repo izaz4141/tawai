@@ -124,7 +124,7 @@ pub async fn get_user_by_id(
     pool: &DatabasePool,
     user_id: &str,
     master_key: &str,
-) -> anyhow::Result<Option<crate::signals::User>> {
+) -> anyhow::Result<crate::signals::User> {
     match pool {
         DatabasePool::Sqlite(p) => super::account_sq::get_user_by_id(p, user_id, master_key).await,
         DatabasePool::Postgres(p) => {
@@ -137,7 +137,7 @@ pub async fn get_user_by_username(
     pool: &DatabasePool,
     username: &str,
     master_key: &str,
-) -> anyhow::Result<Option<crate::signals::User>> {
+) -> anyhow::Result<crate::signals::User> {
     match pool {
         DatabasePool::Sqlite(p) => {
             super::account_sq::get_user_by_username(p, username, master_key).await
