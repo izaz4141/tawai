@@ -5,6 +5,7 @@ import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
+import 'package:tawai/ui/widgets/components/password_text_field.dart';
 import 'package:tawai/ui/widgets/dialog/auth_confirm_dialog.dart';
 import 'package:tawai/utils/helper.dart';
 
@@ -30,6 +31,7 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
   final _usernameCtrl = TextEditingController();
   final _displayNameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  final _confirmPasswordCtrl = TextEditingController();
   final _labelCtrl = TextEditingController();
 
   String _role = 'user';
@@ -44,6 +46,17 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
   String _capturedRole = 'user';
 
   bool get _isEdit => widget.initialAccount != null;
+
+  bool get _showConfirmPassword => !_isEdit || _passwordCtrl.text.isNotEmpty;
+
+  void _onPasswordChanged(String _) {
+    setState(() {});
+  }
+
+  String? _validateConfirmPassword(String? v) {
+    if (v == null || v.isEmpty) return "Required";
+    return v == _passwordCtrl.text ? null : "Passwords do not match";
+  }
 
   bool get _isLocalHost => widget.manageUsers || isLocalHost(_hostCtrl.text);
 
@@ -78,6 +91,7 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
     _usernameCtrl.dispose();
     _displayNameCtrl.dispose();
     _passwordCtrl.dispose();
+    _confirmPasswordCtrl.dispose();
     _labelCtrl.dispose();
     super.dispose();
   }
@@ -230,21 +244,21 @@ class _AddAccountDialogState extends State<AddAccountDialog> {
                 ],
               ),
               const SizedBox(height: AppTheme.spaceSM),
-              TextFormField(
+              PasswordTextField(
                 controller: _passwordCtrl,
-                keyboardType: TextInputType.visiblePassword,
-                style: textTheme.bodyMedium,
-                decoration: InputDecoration(
-                  labelText: "Password",
-                  labelStyle: textTheme.bodyMedium?.copyWith(
-                    color: colors.onSurface,
-                  ),
-                ),
-                obscureText: true,
                 validator: _isEdit
                     ? null
                     : (v) => v?.isNotEmpty == true ? null : "Required",
+                onChanged: _onPasswordChanged,
               ),
+              if (_showConfirmPassword) ...[
+                const SizedBox(height: AppTheme.spaceSM),
+                PasswordTextField(
+                  controller: _confirmPasswordCtrl,
+                  labelText: "Confirm Password",
+                  validator: _validateConfirmPassword,
+                ),
+              ],
               if (_isAdmin) ...[
                 const SizedBox(height: AppTheme.spaceSM),
                 DropdownButtonFormField<String>(
