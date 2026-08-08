@@ -90,18 +90,27 @@ async fn get_library_stats_sq(
     };
 
     let format_rows = sqlx::query(
-        r#"SELECT
+        r#"WITH track_files AS (
+               SELECT
+                   t.file_path,
+                   SUBSTR(
+                       t.file_path,
+                       LENGTH(RTRIM(t.file_path, REPLACE(REPLACE(t.file_path, '/', ''), '\', ''))) + 1
+                   ) AS filename
+               FROM tracks t
+               JOIN library_sources ls ON t.source_id = ls.id
+               WHERE ls.source_type NOT LIKE 'recommendation:%'
+           )
+           SELECT
                LOWER(
                  CASE
-                   WHEN INSTR(t.file_path, '.') > 0
-                     THEN SUBSTR(t.file_path, INSTR(t.file_path, '.') + 1)
+                   WHEN INSTR(filename, '.') > 0
+                     THEN SUBSTR(filename, LENGTH(RTRIM(filename, REPLACE(filename, '.', ''))) + 1)
                    ELSE 'unknown'
                  END
                ) AS ext,
                COUNT(*) as cnt
-           FROM tracks t
-           JOIN library_sources ls ON t.source_id = ls.id
-           WHERE ls.source_type NOT LIKE 'recommendation:%'
+           FROM track_files
            GROUP BY ext
            ORDER BY cnt DESC"#,
     )
@@ -491,18 +500,27 @@ async fn get_library_stats_pg(
     };
 
     let format_rows = sqlx::query(
-        r#"SELECT
+        r#"WITH track_files AS (
+               SELECT
+                   t.file_path,
+                   SUBSTR(
+                       t.file_path,
+                       LENGTH(RTRIM(t.file_path, REPLACE(REPLACE(t.file_path, '/', ''), '\', ''))) + 1
+                   ) AS filename
+               FROM tracks t
+               JOIN library_sources ls ON t.source_id = ls.id
+               WHERE ls.source_type NOT LIKE 'recommendation:%'
+           )
+           SELECT
                LOWER(
                  CASE
-                   WHEN POSITION('.' IN t.file_path) > 0
-                     THEN SUBSTR(t.file_path, POSITION('.' IN t.file_path) + 1)
+                   WHEN POSITION('.' IN filename) > 0
+                     THEN SUBSTR(filename, LENGTH(RTRIM(filename, REPLACE(filename, '.', ''))) + 1)
                    ELSE 'unknown'
                  END
                ) AS ext,
                COUNT(*)::bigint as cnt
-           FROM tracks t
-           JOIN library_sources ls ON t.source_id = ls.id
-           WHERE ls.source_type NOT LIKE 'recommendation:%'
+           FROM track_files
            GROUP BY ext
            ORDER BY cnt DESC"#,
     )

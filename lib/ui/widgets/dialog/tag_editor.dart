@@ -8,6 +8,7 @@ import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/widgets/components/editable_cover.dart';
+import 'package:tawai/ui/widgets/components/media_uploader.dart';
 import 'package:tawai/ui/widgets/dialog/identify_dialog.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/io_service.dart';
@@ -95,14 +96,23 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
     super.dispose();
   }
 
-  Future<void> _pickFile() async {
-    final result = await IOServiceFactory.create().pickFile(
-      allowedExtensions: _audioExtensions,
-    );
-    final path = result?.path;
-    if (path == null) return;
+  Future<UploadMediaResult> _handleUpload(UploadedMediaFile file) async {
+    final path = file.path;
+    if (path == null) {
+      return const UploadMediaResult(
+        success: false,
+        error: 'File path is not available on this platform.',
+      );
+    }
+    final error = await _readTagsForPath(path);
+    if (!mounted) {
+      return const UploadMediaResult(success: false, error: 'Dialog closed.');
+    }
+    if (error != null) {
+      return UploadMediaResult(success: false, error: error);
+    }
     setState(() => _path = path);
-    _loadTags();
+    return const UploadMediaResult(success: true);
   }
 
   Future<void> _pickCover() async {
@@ -160,28 +170,28 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
       _loading = true;
       _error = null;
     });
+    final error = await _readTagsForPath(_path!);
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _error = error;
+    });
+  }
+
+  Future<String?> _readTagsForPath(String path) async {
     try {
-      final response = await BridgeService.instance.readFileTags(_path!);
-      if (!mounted) return;
+      final response = await BridgeService.instance.readFileTags(path);
+      if (!mounted) return 'Tag editor is not available on this platform.';
       if (response == null) {
-        setState(() {
-          _error = 'Tag editor is not available on this platform.';
-          _loading = false;
-        });
-        return;
+        return 'Tag editor is not available on this platform.';
       }
       if (response.error != null) {
-        setState(() {
-          _error = response.error;
-          _loading = false;
-        });
-        return;
+        return response.error;
       }
       setState(() {
         _tags = response;
         _selectedCover = null;
         _coverUrl = null;
-        _loading = false;
       });
       _titleCtrl.text = response.title;
       _artistCtrl.text = response.artist;
@@ -196,12 +206,10 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
           : '';
       _yearCtrl.text = response.releaseDate ?? '';
       _lyricsCtrl.text = response.lyrics ?? '';
+      return null;
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
+      if (!mounted) return null;
+      return e.toString();
     }
   }
 
@@ -496,30 +504,12 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
   }
 
   Widget _buildFilePicker() {
-    final textTheme = Theme.of(context).textTheme;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.audiotrack,
-            size: 64,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(height: AppTheme.spaceMD),
-          Text(
-            'Select an audio file to edit its tags.',
-            style: textTheme.bodyMedium,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppTheme.spaceLG),
-          FilledButton.icon(
-            onPressed: _pickFile,
-            icon: const Icon(Icons.file_open),
-            label: const Text('Select Audio File'),
-          ),
-        ],
-      ),
+    return MediaUploader(
+      allowedExtensions: _audioExtensions,
+      limit: 1,
+      hintText: 'Select an audio file to edit its tags.',
+      pickLabel: 'Select Audio File',
+      onUpload: _handleUpload,
     );
   }
 }

@@ -350,7 +350,7 @@ class _StatsPageState extends State<StatsPage>
                   children: s.formatBreakdown
                       .map(
                         (f) => _buildBarRow(
-                          '.${f.format}',
+                          f.format == 'unknown' ? f.format : '.${f.format}',
                           f.count,
                           maxFormatCount,
                           colors,

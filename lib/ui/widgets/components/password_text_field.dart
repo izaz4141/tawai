@@ -33,9 +33,7 @@ class _PasswordTextFieldState extends State<PasswordTextField> {
       onChanged: widget.onChanged,
       decoration: InputDecoration(
         labelText: widget.labelText,
-        labelStyle: textTheme.bodyMedium?.copyWith(
-          color: colors.onSurface,
-        ),
+        labelStyle: textTheme.bodyMedium?.copyWith(color: colors.onSurface),
         suffixIcon: IconButton(
           icon: Icon(
             _obscure ? Icons.visibility_off : Icons.visibility,
