@@ -78,6 +78,11 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
     await _loadSources();
   }
 
+  Future<void> _syncRecommendations(String includedKeys) async {
+    await BridgeService.instance.syncRecs(includedKeys: includedKeys);
+    if (mounted) await _loadSources();
+  }
+
   Future<void> _showForceRescanDialog() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -551,6 +556,7 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                         'included_recommendations',
                         updated.join(','),
                       );
+                      unawaited(_syncRecommendations(updated.join(',')));
                     },
                   ),
               ],

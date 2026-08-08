@@ -37,6 +37,43 @@ pub async fn add_source(
 }
 
 pub async fn remove_source(pool: &SqlitePool, source_id: &str) -> Result<bool> {
+    let source = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
+        "SELECT id, source_type, url, name, owner_id, access_rule, last_sync_at, created_at, updated_at FROM library_sources WHERE id = ?",
+    )
+    .bind(source_id)
+    .fetch_optional(pool)
+    .await?;
+
+    let Some((_, source_type, _, name, owner_id, _, _, _, _)) = source else {
+        return Ok(false);
+    };
+
+    super::library_sq::delete_tracks_by_source_id(pool, source_id).await?;
+
+    if source_type.starts_with("recommendation:") {
+        let collection_ids: Vec<String> = sqlx::query_scalar(
+            "SELECT id FROM collections WHERE name = ? AND user_id = ? AND is_smart = 0",
+        )
+        .bind(&name)
+        .bind(&owner_id)
+        .fetch_all(pool)
+        .await?;
+        for collection_id in &collection_ids {
+            let remaining: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM collection_tracks WHERE collection_id = ?",
+            )
+            .bind(collection_id)
+            .fetch_one(pool)
+            .await?;
+            if remaining == 0 {
+                sqlx::query("DELETE FROM collections WHERE id = ?")
+                    .bind(collection_id)
+                    .execute(pool)
+                    .await?;
+            }
+        }
+    }
+
     let rows = sqlx::query("DELETE FROM library_sources WHERE id = ?")
         .bind(source_id)
         .execute(pool)

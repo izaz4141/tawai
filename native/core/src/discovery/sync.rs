@@ -266,30 +266,6 @@ async fn sync_one_source(
 }
 
 pub async fn sync_recs(params: SyncRecsParams<'_>) -> SyncRecsResult {
-    let token =
-        match history::get_listenbrainz_token(params.pool, params.user_id, params.master_key).await
-        {
-            Some(t) => t,
-            None => {
-                return SyncRecsResult {
-                    error: Some("ListenBrainz token not configured".to_string()),
-                    ..Default::default()
-                };
-            }
-        };
-
-    let validated = match listenbrainz::validate_token(params.client, &token).await {
-        Ok(v) if v.valid => v,
-        _ => {
-            return SyncRecsResult {
-                error: Some("Invalid ListenBrainz token".to_string()),
-                ..Default::default()
-            };
-        }
-    };
-
-    let user_name = validated.user_name.unwrap_or_default();
-
     let active_keys: HashSet<String> = params
         .included_keys
         .split(',')
@@ -315,6 +291,50 @@ pub async fn sync_recs(params: SyncRecsParams<'_>) -> SyncRecsResult {
 
     let mut result = SyncRecsResult::default();
 
+    for source_type in existing_sources.keys() {
+        if let Some(source) = existing_sources.get(source_type) {
+            if !active_keys.contains(source_type) {
+                if let Err(e) = library_source::remove_source(params.pool, &source.id).await {
+                    crate::utils::logger::error(&format!(
+                        "failed to remove source {}: {}",
+                        source_type, e
+                    ));
+                } else {
+                    result.removed_sources.push(source.name.clone());
+                }
+            }
+        }
+    }
+
+    if active_keys.is_empty() {
+        result.success = true;
+        return result;
+    }
+
+    let token =
+        match history::get_listenbrainz_token(params.pool, params.user_id, params.master_key).await
+        {
+            Some(t) => t,
+            None => {
+                return SyncRecsResult {
+                    error: Some("ListenBrainz token not configured".to_string()),
+                    ..Default::default()
+                };
+            }
+        };
+
+    let validated = match listenbrainz::validate_token(params.client, &token).await {
+        Ok(v) if v.valid => v,
+        _ => {
+            return SyncRecsResult {
+                error: Some("Invalid ListenBrainz token".to_string()),
+                ..Default::default()
+            };
+        }
+    };
+
+    let user_name = validated.user_name.unwrap_or_default();
+
     let discovery_collection_id = match library::find_or_create_collection(
         params.pool,
         "Discovery",
@@ -331,21 +351,6 @@ pub async fn sync_recs(params: SyncRecsParams<'_>) -> SyncRecsResult {
             };
         }
     };
-
-    for source_type in existing_sources.keys() {
-        if let Some(source) = existing_sources.get(source_type) {
-            if !active_keys.contains(source_type) {
-                if let Err(e) = library_source::remove_source(params.pool, &source.id).await {
-                    crate::utils::logger::error(&format!(
-                        "failed to remove source {}: {}",
-                        source_type, e
-                    ));
-                } else {
-                    result.removed_sources.push(source.name.clone());
-                }
-            }
-        }
-    }
 
     for active_key in &active_keys {
         let cat = match RecommendationSource::from_key(active_key) {

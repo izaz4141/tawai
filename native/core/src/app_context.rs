@@ -468,9 +468,6 @@ impl AppContext {
                             )
                             .await
                             .unwrap_or_default();
-                            if included.is_empty() {
-                                continue;
-                            }
                             let _ = sync_recs(SyncRecsParams {
                                 pool,
                                 client: &sync_client,

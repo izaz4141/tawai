@@ -565,6 +565,12 @@ pub async fn delete_tracks_by_source_id(pool: &SqlitePool, source_id: &str) -> R
         .bind(source_id)
         .fetch_all(pool)
         .await?);
+        ids.extend(sqlx::query_scalar::<_, String>(
+            "SELECT DISTINCT artist_id FROM track_artists WHERE track_id IN (SELECT id FROM tracks WHERE source_id = ?)",
+        )
+        .bind(source_id)
+        .fetch_all(pool)
+        .await?);
         ids.sort();
         ids.dedup();
         ids
@@ -638,6 +644,10 @@ pub async fn delete_tracks_by_source_id(pool: &SqlitePool, source_id: &str) -> R
                 .await?;
         }
     }
+
+    sqlx::query("DELETE FROM genres WHERE id NOT IN (SELECT DISTINCT genre_id FROM track_genres)")
+        .execute(pool)
+        .await?;
 
     Ok(())
 }
