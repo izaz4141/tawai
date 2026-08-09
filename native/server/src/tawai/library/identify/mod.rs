@@ -13,7 +13,7 @@ use axum::{
     routing::{get, post},
 };
 
-const MAX_BYTES_UPLOAD: usize = 64 * 1024 * 1024;
+const MAX_BYTES_UPLOAD: usize = 200 * 1024 * 1024;
 
 pub fn create_library_identify_router() -> Router<SharedState> {
     Router::new()

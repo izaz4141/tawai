@@ -7,7 +7,9 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use mime::Mime;
+use tawai_core::audio::dash_manifest::build_dash_manifest;
 use tawai_core::audio::ffmpeg;
+use tawai_core::audio::ffmpeg::{DASH_BITRATES, DASH_SEGMENT_DURATION_SECS};
 use tawai_core::db::library;
 use tower_http::services::ServeFile;
 
@@ -47,18 +49,13 @@ fn is_valid_dash_file(name: &str) -> bool {
     false
 }
 
-/// Ensure DASH segments for `track_id` exist in `dir` and are up to date with
-/// the source file, generating them via ffmpeg when missing or stale.
-/// Concurrent requests for the same track are serialized by a per-track lock.
-async fn ensure_dash_generated(
+/// Serialize concurrent generation of artifacts for the same track. Different
+/// tracks (and the manifest, which needs no generation) proceed in parallel.
+async fn with_track_lock<T>(
     state: &SharedState,
     track_id: &str,
-    source_path: &str,
-    dir: &str,
-) -> anyhow::Result<()> {
-    if ffmpeg::dash_cache_fresh(source_path, dir).await? {
-        return Ok(());
-    }
+    fut: impl std::future::Future<Output = anyhow::Result<T>>,
+) -> anyhow::Result<T> {
     let lock = {
         let mut map = state.dash_generation_locks.lock().unwrap();
         map.entry(track_id.to_string())
@@ -66,32 +63,70 @@ async fn ensure_dash_generated(
             .clone()
     };
     let _guard = lock.lock().await;
-    if ffmpeg::dash_cache_fresh(source_path, dir).await? {
-        return Ok(());
-    }
-    ffmpeg::generate_dash_segments(source_path, dir).await
+    fut.await
 }
 
-/// The ffmpeg DASH template attribute values emitted by
-/// `tawai_core::audio::ffmpeg::generate_dash_segments`. Relative segment URLs
-/// resolve against the MPD base URI without the `?token=` query, so the token
-/// must be embedded here for segment requests to authenticate.
-const INIT_TEMPLATE: &str = "init-$Bandwidth$.m4s";
-const MEDIA_TEMPLATE: &str = "seg-$Bandwidth$-$Number$.m4s";
+/// Ensure `init-<bandwidth>.m4s` for `track` exists in `dir` and is up to
+/// date with the source file, transcoding it (plus segment 1) on demand.
+async fn ensure_dash_init_generated(
+    state: &SharedState,
+    track_id: &str,
+    source_path: &str,
+    dir: &str,
+    bitrate_kbps: u32,
+) -> anyhow::Result<()> {
+    let artifact = format!("{}/init-{}.m4s", dir, bitrate_kbps * 1000);
+    if ffmpeg::dash_file_fresh(source_path, &artifact).await? {
+        return Ok(());
+    }
+    with_track_lock(state, track_id, async {
+        if ffmpeg::dash_file_fresh(source_path, &artifact).await? {
+            return Ok(());
+        }
+        ffmpeg::generate_dash_segment(source_path, dir, bitrate_kbps, 1, 0.0).await
+    })
+    .await
+}
 
-/// Serve `manifest.mpd` with the validated `token` embedded into the segment
-/// template URLs so DASH clients authenticate every init/segment request.
-async fn serve_manifest(dir: &str, token: &str) -> Result<Response, ()> {
-    let manifest = format!("{}/manifest.mpd", dir);
-    let mut body = match tokio::fs::read(&manifest).await {
-        Ok(b) => String::from_utf8(b).map_err(|_| ())?,
-        Err(_) => return Err(()),
-    };
-    let init = format!("{}?token={}", INIT_TEMPLATE, token);
-    let media = format!("{}?token={}", MEDIA_TEMPLATE, token);
-    body = body
-        .replace(INIT_TEMPLATE, &init)
-        .replace(MEDIA_TEMPLATE, &media);
+/// Ensure `seg-<bandwidth>-<number>.m4s` for `track` exists in `dir` and is
+/// up to date with the source file, transcoding just that slice on demand.
+async fn ensure_dash_segment_generated(
+    state: &SharedState,
+    track_id: &str,
+    source_path: &str,
+    dir: &str,
+    bitrate_kbps: u32,
+    segment_number: u32,
+) -> anyhow::Result<()> {
+    let artifact = format!("{}/seg-{}-{}.m4s", dir, bitrate_kbps * 1000, segment_number);
+    if ffmpeg::dash_file_fresh(source_path, &artifact).await? {
+        return Ok(());
+    }
+    let start_secs = (segment_number - 1) as f64 * DASH_SEGMENT_DURATION_SECS as f64;
+    with_track_lock(state, track_id, async {
+        if ffmpeg::dash_file_fresh(source_path, &artifact).await? {
+            return Ok(());
+        }
+        ffmpeg::generate_dash_segment(source_path, dir, bitrate_kbps, segment_number, start_secs)
+            .await
+    })
+    .await
+}
+
+/// Serve a static VOD manifest with the validated `token` embedded into the
+/// segment template URLs so DASH clients authenticate every init/segment
+/// request. The manifest is generated from the track's known duration, so the
+/// player knows the full length (and can seek anywhere) from the start.
+fn serve_manifest(duration_secs: Option<f64>, token: &str) -> Response {
+    let body = build_dash_manifest(duration_secs)
+        .replace(
+            "init-$Bandwidth$.m4s",
+            &format!("init-$Bandwidth$.m4s?token={}", token),
+        )
+        .replace(
+            "seg-$Bandwidth$-$Number$.m4s",
+            &format!("seg-$Bandwidth$-$Number$.m4s?token={}", token),
+        );
 
     let mut response = (
         [(header::CONTENT_TYPE, "application/dash+xml")],
@@ -101,7 +136,27 @@ async fn serve_manifest(dir: &str, token: &str) -> Result<Response, ()> {
     response
         .headers_mut()
         .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    Ok(response)
+    response
+}
+
+/// Parse the bitrate in kbps from an `init-<bw>.m4s` or `seg-<bw>-<n>.m4s`
+/// file name.
+fn parse_bandwidth(file: &str) -> Option<u32> {
+    let digits = file
+        .strip_prefix("init-")
+        .or_else(|| file.strip_prefix("seg-"))?;
+    let digits = digits.split('-').next()?;
+    let digits = digits.strip_suffix(".m4s").unwrap_or(digits);
+    let bandwidth: u64 = digits.parse().ok()?;
+    Some((bandwidth / 1000) as u32)
+}
+
+/// Parse the 1-based segment number from a `seg-<bw>-<n>.m4s` file name.
+fn parse_segment_number(file: &str) -> Option<u32> {
+    let rest = file.strip_prefix("seg-")?;
+    let idx = rest.rfind('-')?;
+    let num = rest[idx + 1..].strip_suffix(".m4s")?;
+    num.parse().ok()
 }
 
 #[utoipa::path(
@@ -149,19 +204,51 @@ pub async fn handle_dash_file(
         return (StatusCode::NOT_FOUND, Body::empty()).into_response();
     }
 
+    if file == "manifest.mpd" {
+        return serve_manifest(track.duration_secs, &token);
+    }
+
     let cfg = state.context.cfg().await;
     let dir = crate::server::dash_cache_dir_for_track(&cfg, &track.id);
 
-    if let Err(e) = ensure_dash_generated(&state, &track.id, &track.file_path, &dir).await {
-        tawai_core::utils::logger::error(&format!("dash generation failed: {}", e));
-        return (StatusCode::INTERNAL_SERVER_ERROR, Body::empty()).into_response();
-    }
+    let bitrate_kbps = match parse_bandwidth(&file) {
+        Some(bw) if DASH_BITRATES.contains(&bw) => bw,
+        _ => return (StatusCode::NOT_FOUND, Body::empty()).into_response(),
+    };
 
-    if file == "manifest.mpd" {
-        return match serve_manifest(&dir, &token).await {
-            Ok(response) => response,
-            Err(_) => (StatusCode::NOT_FOUND, Body::empty()).into_response(),
-        };
+    if file.starts_with("init-") {
+        if let Err(e) =
+            ensure_dash_init_generated(&state, &track.id, &track.file_path, &dir, bitrate_kbps)
+                .await
+        {
+            tawai_core::utils::logger::error(&format!("dash init generation failed: {}", e));
+            return (StatusCode::INTERNAL_SERVER_ERROR, Body::empty()).into_response();
+        }
+    } else if let Some(number) = parse_segment_number(&file) {
+        if number < 1 {
+            return (StatusCode::NOT_FOUND, Body::empty()).into_response();
+        }
+        if let Some(duration) = track.duration_secs {
+            let start_secs = (number - 1) as f64 * DASH_SEGMENT_DURATION_SECS as f64;
+            if start_secs >= duration {
+                return (StatusCode::NOT_FOUND, Body::empty()).into_response();
+            }
+        }
+        if let Err(e) = ensure_dash_segment_generated(
+            &state,
+            &track.id,
+            &track.file_path,
+            &dir,
+            bitrate_kbps,
+            number,
+        )
+        .await
+        {
+            tawai_core::utils::logger::error(&format!("dash segment generation failed: {}", e));
+            return (StatusCode::INTERNAL_SERVER_ERROR, Body::empty()).into_response();
+        }
+    } else {
+        return (StatusCode::NOT_FOUND, Body::empty()).into_response();
     }
 
     let path = format!("{}/{}", dir, file);

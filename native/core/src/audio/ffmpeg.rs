@@ -12,43 +12,85 @@ pub const DASH_SEGMENT_DURATION_SECS: u32 = 6;
 /// Default adaptive bitrate ladder (kbps) for DASH representations.
 pub const DASH_BITRATES: &[u32] = &[128, 192, 256, 320];
 
-/// Transcode a local audio file into fMP4 (CMAF) DASH segments plus an MPD
-/// manifest written flat into `out_dir`.
+/// Transcode one `DASH_SEGMENT_DURATION_SECS`-second slice of `source_path`
+/// at `bitrate_kbps` into a single fMP4 (CMAF) DASH media segment plus its
+/// init segment.
 ///
-/// A single ffmpeg pass decodes the source once and encodes one
-/// representation per bitrate in [`DASH_BITRATES`], all grouped into a single
-/// audio `AdaptationSet`. On success `out_dir` contains `manifest.mpd`,
-/// `init-<bandwidth>.m4s` and `seg-<bandwidth>-<number>.m4s` files.
-///
-/// Stale files in `out_dir` are removed before running, so this is safe to
-/// re-invoke to regenerate a cached representation set.
-pub async fn generate_dash_segments(source_path: &str, out_dir: &str) -> anyhow::Result<()> {
-    if fs::try_exists(out_dir).await.unwrap_or(false) {
-        fs::remove_dir_all(out_dir).await?;
+/// The slice covers `[start_secs, start_secs + DASH_SEGMENT_DURATION_SECS)`.
+/// On success `out_dir` contains `init-<bandwidth>.m4s` and
+/// `seg-<bandwidth>-<number>.m4s`. The init segment is identical for every
+/// segment of a representation, so it is (re)written on each call. Work
+/// happens in a temporary subdirectory and is renamed into place, so a
+/// partial or failed run never leaves a corrupt artifact behind.
+pub async fn generate_dash_segment(
+    source_path: &str,
+    out_dir: &str,
+    bitrate_kbps: u32,
+    segment_number: u32,
+    start_secs: f64,
+) -> anyhow::Result<()> {
+    if !fs::try_exists(out_dir).await.unwrap_or(false) {
+        fs::create_dir_all(out_dir).await?;
     }
-    fs::create_dir_all(out_dir).await?;
 
-    let manifest = format!("{}/manifest.mpd", out_dir);
+    let bandwidth = bitrate_kbps * 1000;
+    let work_dir = format!("{}/.work-{}", out_dir, segment_number);
+    if fs::try_exists(&work_dir).await.unwrap_or(false) {
+        fs::remove_dir_all(&work_dir).await?;
+    }
+    fs::create_dir_all(&work_dir).await?;
+
+    let result = transcode_dash_slice(
+        source_path,
+        &work_dir,
+        out_dir,
+        bitrate_kbps,
+        segment_number,
+        start_secs,
+    )
+    .await;
+    let _ = fs::remove_dir_all(&work_dir).await;
+    result
+}
+
+/// Run the per-slice ffmpeg transcode inside `work_dir`, renaming the produced
+/// artifacts into `out_dir`. `work_dir` is always removed by the caller, so a
+/// failed run never leaves a partial slice behind.
+async fn transcode_dash_slice(
+    source_path: &str,
+    work_dir: &str,
+    out_dir: &str,
+    bitrate_kbps: u32,
+    segment_number: u32,
+    start_secs: f64,
+) -> anyhow::Result<()> {
+    let bandwidth = bitrate_kbps * 1000;
+    let init_name = format!("init-{}.m4s", bandwidth);
+    let media_name = format!("seg-{}-$Number$.m4s", bandwidth);
+    let manifest = format!("{}/manifest.mpd", work_dir);
+
     let mut cmd = Command::new("ffmpeg");
     cmd.arg("-y")
         .arg("-hide_banner")
         .arg("-loglevel")
         .arg("error")
+        .arg("-ss")
+        .arg(format!("{:.6}", start_secs))
         .arg("-i")
-        .arg(source_path);
-    for _ in DASH_BITRATES {
-        cmd.arg("-map").arg("0:a:0");
-    }
-    cmd.arg("-c:a")
+        .arg(source_path)
+        .arg("-map")
+        .arg("0:a:0")
+        .arg("-t")
+        .arg(DASH_SEGMENT_DURATION_SECS.to_string())
+        .arg("-c:a")
         .arg("aac")
         .arg("-ac")
         .arg("2")
         .arg("-ar")
-        .arg("48000");
-    for (i, bitrate) in DASH_BITRATES.iter().enumerate() {
-        cmd.arg(format!("-b:a:{}", i)).arg(format!("{}k", bitrate));
-    }
-    cmd.arg("-seg_duration")
+        .arg("48000")
+        .arg("-b:a")
+        .arg(format!("{}k", bitrate_kbps))
+        .arg("-seg_duration")
         .arg(DASH_SEGMENT_DURATION_SECS.to_string())
         .arg("-use_timeline")
         .arg("0")
@@ -57,9 +99,9 @@ pub async fn generate_dash_segments(source_path: &str, out_dir: &str) -> anyhow:
         .arg("-adaptation_sets")
         .arg("id=0,streams=a")
         .arg("-init_seg_name")
-        .arg("init-$Bandwidth$.m4s")
+        .arg(&init_name)
         .arg("-media_seg_name")
-        .arg("seg-$Bandwidth$-$Number$.m4s")
+        .arg(&media_name)
         .arg("-f")
         .arg("dash")
         .arg(&manifest)
@@ -88,18 +130,27 @@ pub async fn generate_dash_segments(source_path: &str, out_dir: &str) -> anyhow:
             buf.trim().to_string()
         };
         anyhow::bail!(
-            "ffmpeg DASH generation failed for {}: {}",
+            "ffmpeg DASH segment generation failed for {}: {}",
             source_path,
             detail
         );
     }
 
-    if !fs::try_exists(&manifest).await.unwrap_or(false) {
+    let seg_src = format!("{}/seg-{}-1.m4s", work_dir, bandwidth);
+    let seg_dst = format!("{}/seg-{}-{}.m4s", out_dir, bandwidth, segment_number);
+    if !fs::try_exists(&seg_src).await.unwrap_or(false) {
         anyhow::bail!(
-            "ffmpeg DASH generation produced no manifest for {}",
+            "ffmpeg DASH segment generation produced no segment for {}",
             source_path
         );
     }
+    fs::rename(&seg_src, &seg_dst).await?;
+    let init_src = format!("{}/{}", work_dir, init_name);
+    let init_dst = format!("{}/{}", out_dir, init_name);
+    if fs::try_exists(&init_src).await.unwrap_or(false) {
+        let _ = fs::rename(&init_src, &init_dst).await;
+    }
+
     Ok(())
 }
 
@@ -114,23 +165,23 @@ async fn file_mtime_ms(path: &str) -> Option<u128> {
         .map(|d| d.as_millis())
 }
 
-/// Whether the DASH cache at `out_dir` is valid for `source_path`.
+/// Whether the DASH artifact at `artifact_path` is up to date for
+/// `source_path`.
 ///
-/// Returns `false` when the manifest is missing or the source file has been
-/// modified more recently than the cached manifest (stale). When the source
-/// metadata cannot be read (e.g. file deleted or on an unreachable mount) the
-/// cache is assumed fresh rather than destroyed; the missing-source case is
-/// handled separately by `cache::cleanup_dash_cache` at init.
-pub async fn dash_cache_fresh(source_path: &str, out_dir: &str) -> anyhow::Result<bool> {
-    let manifest = format!("{}/manifest.mpd", out_dir);
-    if !fs::try_exists(&manifest).await.unwrap_or(false) {
+/// Returns `false` when the artifact is missing or the source file has been
+/// modified more recently than the artifact (stale). When the source metadata
+/// cannot be read (e.g. file deleted or on an unreachable mount) the artifact
+/// is assumed fresh rather than destroyed; the missing-source case is handled
+/// separately by `cache::cleanup_dash_cache` at init.
+pub async fn dash_file_fresh(source_path: &str, artifact_path: &str) -> anyhow::Result<bool> {
+    if !fs::try_exists(artifact_path).await.unwrap_or(false) {
         return Ok(false);
     }
     match (
         file_mtime_ms(source_path).await,
-        file_mtime_ms(&manifest).await,
+        file_mtime_ms(artifact_path).await,
     ) {
-        (Some(source_mtime), Some(manifest_mtime)) => Ok(source_mtime <= manifest_mtime),
+        (Some(source_mtime), Some(artifact_mtime)) => Ok(source_mtime <= artifact_mtime),
         _ => Ok(true),
     }
 }
