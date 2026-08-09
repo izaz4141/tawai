@@ -145,6 +145,9 @@ async fn transcode_dash_slice(
         );
     }
     fs::rename(&seg_src, &seg_dst).await?;
+    if segment_number > 1 {
+        patch_segment_tfdt(&seg_dst, segment_number).await?;
+    }
     let init_src = format!("{}/{}", work_dir, init_name);
     let init_dst = format!("{}/{}", out_dir, init_name);
     if fs::try_exists(&init_src).await.unwrap_or(false) {
@@ -152,6 +155,90 @@ async fn transcode_dash_slice(
     }
 
     Ok(())
+}
+
+/// Rewrite the `tfdt` box (`moof`/`traf`/`tfdt` -> `baseMediaDecodeTime`) of a
+/// DASH media segment so it carries the segment's absolute position.
+///
+/// Every segment is transcoded independently, so ffmpeg normalizes
+/// `baseMediaDecodeTime` to 0 and moves the start offset into the init
+/// segment's edit list. Players fetch the init segment only once, so all
+/// segments then read as zero-based and the presentation timeline is broken
+/// (seeking hangs / playback stalls at segment boundaries). Rewriting the value
+/// to `(segment_number - 1) * DASH_SEGMENT_DURATION_SECS` seconds in the track
+/// timescale (48000) produces a continuous timeline identical to a single full
+/// transcode. The patch is in-place and does not change the file size.
+async fn patch_segment_tfdt(path: &str, segment_number: u32) -> anyhow::Result<()> {
+    const TRACK_TIMESCALE: u64 = 48000;
+    let delta = (segment_number as u64 - 1) * DASH_SEGMENT_DURATION_SECS as u64 * TRACK_TIMESCALE;
+    let mut data = fs::read(path).await?;
+
+    let be_u32 = |b: &[u8]| -> anyhow::Result<u32> {
+        Ok(u32::from_be_bytes(
+            b.try_into()
+                .map_err(|_| anyhow::anyhow!("short box size"))?,
+        ))
+    };
+    let be_u64 = |b: &[u8]| -> anyhow::Result<u64> {
+        Ok(u64::from_be_bytes(
+            b.try_into()
+                .map_err(|_| anyhow::anyhow!("short tfdt value"))?,
+        ))
+    };
+
+    let mut pos = 0usize;
+    while pos + 8 <= data.len() {
+        let size = be_u32(&data[pos..pos + 4])? as usize;
+        if size < 8 || pos + size > data.len() {
+            break;
+        }
+        if &data[pos + 4..pos + 8] == b"moof" {
+            let (moof_start, moof_end) = (pos + 8, pos + size);
+            let mut p = moof_start;
+            while p + 8 <= moof_end {
+                let size2 = be_u32(&data[p..p + 4])? as usize;
+                if size2 < 8 || p + size2 > moof_end {
+                    break;
+                }
+                if &data[p + 4..p + 8] == b"traf" {
+                    let (traf_start, traf_end) = (p + 8, p + size2);
+                    let mut q = traf_start;
+                    while q + 8 <= traf_end {
+                        let size3 = be_u32(&data[q..q + 4])? as usize;
+                        if size3 < 8 || q + size3 > traf_end {
+                            break;
+                        }
+                        if &data[q + 4..q + 8] == b"tfdt" && size3 >= 12 {
+                            let version = data[q + 8];
+                            if version == 1 && size3 >= 20 {
+                                let current = be_u64(&data[q + 12..q + 20])?;
+                                data[q + 12..q + 20]
+                                    .copy_from_slice(&(current + delta).to_be_bytes());
+                            } else if version == 0 && size3 >= 16 {
+                                let current = be_u32(&data[q + 12..q + 16])?;
+                                data[q + 12..q + 16]
+                                    .copy_from_slice(&(current + delta as u32).to_be_bytes());
+                            } else {
+                                anyhow::bail!(
+                                    "unsupported tfdt box (version={}, size={}) in {}",
+                                    version,
+                                    size3,
+                                    path
+                                );
+                            }
+                            fs::write(path, data).await?;
+                            return Ok(());
+                        }
+                        q += size3;
+                    }
+                }
+                p += size2;
+            }
+        }
+        pos += size;
+    }
+
+    anyhow::bail!("no tfdt box found in {}", path);
 }
 
 async fn file_mtime_ms(path: &str) -> Option<u128> {
