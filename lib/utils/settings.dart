@@ -140,14 +140,6 @@ class SettingsManager {
     attachAutoSave();
   }
 
-  static const List<String> deviceOnlyKeys = [
-    'playback_volume',
-    'current_user',
-    'require_login',
-    'check_nightly',
-    'accounts',
-  ];
-
   static Future<void> _applyFromJson(
     Map<String, dynamic> json, {
     bool fromBackend = false,
@@ -531,6 +523,9 @@ class SettingsManager {
       );
       currentUserId.value = account.id;
       isLoggedIn.value = true;
+    }
+    if (!kIsWeb) {
+      await RinfService.instance.saveConfig({'current_user': account.id});
     }
     await loadFromBackend();
     SystemService().refreshVersions();

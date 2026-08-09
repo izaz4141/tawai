@@ -11,6 +11,7 @@ import 'package:tawai/utils/platform_service.dart';
 import 'package:tawai/utils/bindings_json.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/utils/logger.dart';
+import 'package:tawai/utils/rinf_service.dart';
 import 'package:tawai/utils/system_service.dart';
 import 'package:tawai/models/fs.dart';
 import 'package:tawai/models/user.dart';
@@ -169,6 +170,11 @@ class APIService {
           if (userData != null) {
             SettingsManager.currentUser.value = User.fromJson(userData);
             SettingsManager.currentUserId.value = userData['id'] ?? '';
+          }
+          if (!kIsWeb) {
+            await RinfService.instance.saveConfig({
+              'current_user': SettingsManager.currentUserId.value ?? '',
+            });
           }
           await SettingsManager.loadFromBackend();
           await SettingsManager.loadAllUserSettings();

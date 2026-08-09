@@ -157,7 +157,33 @@ Future<void> main() async {
 
 Future<void> _resolveCurrentUser() async {
   final savedId = SettingsManager.currentUserId.value;
-  if (savedId != null) {
+  if (savedId != null && savedId.isNotEmpty) {
+    Account? account;
+    for (final a in SettingsManager.accounts.value) {
+      if (a.id == savedId) {
+        account = a;
+        break;
+      }
+    }
+    if (account != null && !isLocalHost(account.host)) {
+      SettingsManager.serverHost.value = account.host;
+      SettingsManager.serverPort.value = account.port;
+      SettingsManager.currentUser.value = User(
+        id: account.id,
+        username: account.username,
+        displayName: account.displayName,
+        apiKey: account.apiKey,
+        role: account.role,
+      );
+      SettingsManager.currentUserId.value = account.id;
+      if (!SettingsManager.requireLogin.value && account.apiKey.isNotEmpty) {
+        SettingsManager.isLoggedIn.value = true;
+      }
+      await SettingsManager.loadFromBackend();
+      SettingsManager.attachAutoSave();
+      APIService.instance.restartPolling();
+      return;
+    }
     final user = await RinfService.instance.getUserById(savedId);
     if (user.found) {
       SettingsManager.currentUser.value = User(
