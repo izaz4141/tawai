@@ -104,11 +104,9 @@ class _TawaiState extends State<Tawai> {
                                 );
                               }
                               return ValueListenableBuilder<String?>(
-                                valueListenable:
-                                    SettingsManager.currentUserId,
-                                builder: (context, userId, _) => HomePage(
-                                  key: ValueKey(userId),
-                                ),
+                                valueListenable: SettingsManager.currentUserId,
+                                builder: (context, userId, _) =>
+                                    HomePage(key: ValueKey(userId)),
                               );
                             },
                           );
