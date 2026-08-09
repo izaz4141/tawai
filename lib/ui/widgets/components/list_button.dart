@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 
 import 'package:tawai/ui/theme/app_theme.dart';
 
+enum ListButtonType { icon, text, iconText }
+
 class ListButton extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback? onPressed;
   final Widget? leading;
-  final Widget trailing;
+  final ListButtonType type;
+  final IconData? icon;
+  final String? label;
   final bool enabled;
 
   const ListButton({
@@ -16,9 +20,33 @@ class ListButton extends StatelessWidget {
     required this.subtitle,
     this.onPressed,
     this.leading,
-    required this.trailing,
+    this.type = ListButtonType.iconText,
+    this.icon,
+    this.label,
     this.enabled = true,
   });
+
+  Widget _buildButton(BuildContext context) {
+    final onPressed = enabled ? this.onPressed : null;
+    switch (type) {
+      case ListButtonType.icon:
+        return IconButton.filledTonal(
+          onPressed: onPressed,
+          icon: Icon(icon, size: AppTheme.iconMD * AppTheme.iconScale(context)),
+        );
+      case ListButtonType.text:
+        return OutlinedButton(
+          onPressed: onPressed,
+          child: Text(label ?? 'Configure'),
+        );
+      case ListButtonType.iconText:
+        return OutlinedButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon, size: AppTheme.iconMD * AppTheme.iconScale(context)),
+          label: Text(label ?? 'Configure'),
+        );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +80,10 @@ class ListButton extends StatelessWidget {
         width: 250 * AppTheme.spaceScale(context),
         child: Opacity(
           opacity: enabled ? 1.0 : 0.4,
-          child: AbsorbPointer(absorbing: !enabled, child: trailing),
+          child: AbsorbPointer(
+            absorbing: !enabled,
+            child: _buildButton(context),
+          ),
         ),
       ),
     );

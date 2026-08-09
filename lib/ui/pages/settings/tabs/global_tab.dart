@@ -103,10 +103,8 @@ class SettingsGlobalTab extends StatelessWidget {
               subtitle: path.isEmpty ? 'Not set' : path,
               enabled: true,
               onPressed: pick,
-              trailing: OutlinedButton(
-                onPressed: pick,
-                child: const Text('Browse'),
-              ),
+              type: ListButtonType.text,
+              label: 'Browse',
             );
           },
         ),
@@ -159,172 +157,81 @@ class SettingsGlobalTab extends StatelessWidget {
               context: context,
               builder: (ctx) => const PermissionDialog(),
             ),
-            trailing: OutlinedButton(
-              onPressed: () => showDialog(
-                context: context,
-                builder: (ctx) => const PermissionDialog(),
-              ),
-              child: const Text('Manage'),
-            ),
+            type: ListButtonType.text,
+            label: 'Manage',
           ),
           SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
         ],
-        ListenableBuilder(
-          listenable: SystemService().slskdVersion,
-          builder: (context, _) {
-            final available = SystemService().slskdVersion.value != null;
-            return ListButton(
-              title: 'slskd',
-              subtitle: 'Configure slskd connection',
-              leading: Icon(Icons.wifi),
-              enabled: available,
-              onPressed: available
-                  ? () => showConnectServiceDialog(
-                      context: context,
-                      inputs: [
-                        (
-                          'slskd URL',
-                          'Your slskd server URL',
-                          false,
-                          SettingsManager.slskdUrl.value,
-                        ),
-                        (
-                          'slskd API Key',
-                          'Stored encrypted server-side; blank keeps the existing key',
-                          true,
-                          '',
-                        ),
-                      ],
-                      test: (values) async {
-                        final res = await BridgeService.instance.testConnection(
-                          'slskd',
-                        );
-                        return res.success
-                            ? 'Connected! v${res.version ?? '?'}'
-                            : res.error ?? 'Connection failed';
-                      },
-                      onConfirm: (values) async {
-                        SettingsManager.slskdUrl.value = values[0];
-                        await SettingsManager.saveSlskdApiKey(values[1]);
-                        SystemService().checkServiceAvailability();
-                      },
-                    )
-                  : null,
-              trailing: OutlinedButton(
-                onPressed: available
-                    ? () => showConnectServiceDialog(
-                        context: context,
-                        inputs: [
-                          (
-                            'slskd URL',
-                            'Your slskd server URL',
-                            false,
-                            SettingsManager.slskdUrl.value,
-                          ),
-                          (
-                            'slskd API Key',
-                            'Stored encrypted server-side; blank keeps the existing key',
-                            true,
-                            '',
-                          ),
-                        ],
-                        test: (values) async {
-                          final res = await BridgeService.instance
-                              .testConnection('slskd');
-                          return res.success
-                              ? 'Connected! v${res.version ?? '?'}'
-                              : res.error ?? 'Connection failed';
-                        },
-                        onConfirm: (values) async {
-                          SettingsManager.slskdUrl.value = values[0];
-                          await SettingsManager.saveSlskdApiKey(values[1]);
-                          SystemService().checkServiceAvailability();
-                        },
-                      )
-                    : null,
-                child: const Text('Configure'),
+        ListButton(
+          title: 'slskd',
+          subtitle: 'Configure slskd connection',
+          onPressed: () => showConnectServiceDialog(
+            context: context,
+            inputs: [
+              (
+                'slskd URL',
+                'Your slskd server URL',
+                false,
+                SettingsManager.slskdUrl.value,
               ),
-            );
-          },
+              (
+                'slskd API Key',
+                'Stored encrypted server-side; blank keeps the existing key',
+                true,
+                '',
+              ),
+            ],
+            test: (values) async {
+              final res = await BridgeService.instance.testConnection('slskd');
+              return res.success
+                  ? 'Connected! v${res.version ?? '?'}'
+                  : res.error ?? 'Connection failed';
+            },
+            onConfirm: (values) async {
+              SettingsManager.slskdUrl.value = values[0];
+              await SettingsManager.saveSlskdApiKey(values[1]);
+              SystemService().checkServiceAvailability();
+            },
+          ),
+          type: ListButtonType.text,
+          label: 'Configure',
         ),
         SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
-        ListenableBuilder(
-          listenable: SystemService().nadekodonVersion,
-          builder: (context, _) {
-            final available = SystemService().nadekodonVersion.value != null;
-            return ListButton(
-              title: 'Nadekodon (YouTube)',
-              subtitle: 'Configure nadekodon connection',
-              leading: Icon(Icons.video_library),
-              enabled: available,
-              onPressed: available
-                  ? () => showConnectServiceDialog(
-                      context: context,
-                      inputs: [
-                        (
-                          'Nadekodon URL',
-                          'Your nadekodon server URL',
-                          false,
-                          SettingsManager.nadekodonUrl.value,
-                        ),
-                        (
-                          'Nadekodon API Key',
-                          'Stored encrypted server-side; blank keeps the existing key',
-                          true,
-                          '',
-                        ),
-                      ],
-                      test: (values) async {
-                        final res = await BridgeService.instance.testConnection(
-                          'nadekodon',
-                        );
-                        return res.success
-                            ? 'Connected! v${res.version ?? '?'}'
-                            : res.error ?? 'Connection failed';
-                      },
-                      onConfirm: (values) async {
-                        SettingsManager.nadekodonUrl.value = values[0];
-                        await SettingsManager.saveNadekodonApiKey(values[1]);
-                        SystemService().checkServiceAvailability();
-                      },
-                    )
-                  : null,
-              trailing: OutlinedButton(
-                onPressed: available
-                    ? () => showConnectServiceDialog(
-                        context: context,
-                        inputs: [
-                          (
-                            'Nadekodon URL',
-                            'Your nadekodon server URL',
-                            false,
-                            SettingsManager.nadekodonUrl.value,
-                          ),
-                          (
-                            'Nadekodon API Key',
-                            'Stored encrypted server-side; blank keeps the existing key',
-                            true,
-                            '',
-                          ),
-                        ],
-                        test: (values) async {
-                          final res = await BridgeService.instance
-                              .testConnection('nadekodon');
-                          return res.success
-                              ? 'Connected! v${res.version ?? '?'}'
-                              : res.error ?? 'Connection failed';
-                        },
-                        onConfirm: (values) async {
-                          SettingsManager.nadekodonUrl.value = values[0];
-                          await SettingsManager.saveNadekodonApiKey(values[1]);
-                          SystemService().checkServiceAvailability();
-                        },
-                      )
-                    : null,
-                child: const Text('Configure'),
+        ListButton(
+          title: 'Nadekodon (YouTube)',
+          subtitle: 'Configure nadekodon connection',
+          onPressed: () => showConnectServiceDialog(
+            context: context,
+            inputs: [
+              (
+                'Nadekodon URL',
+                'Your nadekodon server URL',
+                false,
+                SettingsManager.nadekodonUrl.value,
               ),
-            );
-          },
+              (
+                'Nadekodon API Key',
+                'Stored encrypted server-side; blank keeps the existing key',
+                true,
+                '',
+              ),
+            ],
+            test: (values) async {
+              final res = await BridgeService.instance.testConnection(
+                'nadekodon',
+              );
+              return res.success
+                  ? 'Connected! v${res.version ?? '?'}'
+                  : res.error ?? 'Connection failed';
+            },
+            onConfirm: (values) async {
+              SettingsManager.nadekodonUrl.value = values[0];
+              await SettingsManager.saveNadekodonApiKey(values[1]);
+              SystemService().checkServiceAvailability();
+            },
+          ),
+          type: ListButtonType.text,
+          label: 'Configure',
         ),
       ],
     );
