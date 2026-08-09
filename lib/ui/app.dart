@@ -103,7 +103,13 @@ class _TawaiState extends State<Tawai> {
                                   },
                                 );
                               }
-                              return const HomePage();
+                              return ValueListenableBuilder<String?>(
+                                valueListenable:
+                                    SettingsManager.currentUserId,
+                                builder: (context, userId, _) => HomePage(
+                                  key: ValueKey(userId),
+                                ),
+                              );
                             },
                           );
                         },
