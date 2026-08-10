@@ -6,6 +6,7 @@ import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/ui/pages/library/subpages/album/album_header.dart';
 import 'package:tawai/ui/widgets/components/track_list_tile.dart';
+import 'package:tawai/ui/widgets/mini_player.dart';
 
 class AlbumDetailPage extends StatefulWidget {
   const AlbumDetailPage({super.key, required this.album});
@@ -71,8 +72,11 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
               onRefresh: _loadTracks,
               child: ListView.builder(
                 physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: _tracks.length + 2,
+                itemCount: _tracks.length + 3,
                 itemBuilder: (context, index) {
+                  if (index == _tracks.length + 2) {
+                    return const MiniPlayerSpacer();
+                  }
                   if (index == 0) {
                     return AlbumHeader(
                       album: widget.album,

@@ -4,6 +4,7 @@ import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/pages/library/subpages/playlist/playlist_header.dart';
 import 'package:tawai/ui/widgets/components/track_list_tile.dart';
+import 'package:tawai/ui/widgets/mini_player.dart';
 import 'package:tawai/utils/bridge_service.dart';
 
 class PlaylistDetailPage extends StatefulWidget {
@@ -46,8 +47,11 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
               onRefresh: _load,
               child: ListView.builder(
                 physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: _tracks.length + 1,
+                itemCount: _tracks.length + 2,
                 itemBuilder: (context, index) {
+                  if (index == _tracks.length + 1) {
+                    return const MiniPlayerSpacer();
+                  }
                   if (index == 0) {
                     return Column(
                       children: [

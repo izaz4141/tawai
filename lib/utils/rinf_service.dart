@@ -1365,6 +1365,7 @@ class RinfService {
 
   Future<BatchRenameApplyResponse?> batchRenameApply({
     required List<String> filePaths,
+    required List<String> trackIds,
     required String pattern,
   }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
@@ -1374,6 +1375,7 @@ class RinfService {
     BatchRenameApplyRequest(
       id: id,
       filePaths: filePaths,
+      trackIds: trackIds,
       pattern: pattern,
     ).sendSignalToRust();
     final signal = await stream.first;

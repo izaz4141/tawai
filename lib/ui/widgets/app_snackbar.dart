@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/mini_player.dart';
 
 enum SnackType { success, error, info }
 
@@ -131,78 +132,86 @@ class _OverlaySnackState extends State<_OverlaySnack>
 
   @override
   Widget build(BuildContext context) {
-    final bottomPadding =
-        MediaQuery.of(context).padding.bottom + AppTheme.spaceXXL;
     final textTheme = Theme.of(context).textTheme;
     final colors = Theme.of(context).colorScheme;
 
-    return Positioned(
-      bottom: bottomPadding,
-      left: 0,
-      right: 0,
-      child: IgnorePointer(
-        ignoring: false,
-        child: Center(
-          child: SlideTransition(
-            position: _offsetAnim,
-            child: FadeTransition(
-              opacity: _fadeAnim,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 320),
-                child: Material(
-                  color: Colors.transparent,
-                  child: Container(
-                    margin: EdgeInsets.symmetric(
-                      horizontal:
-                          AppTheme.spaceMD * AppTheme.spaceScale(context),
-                    ),
-                    padding: EdgeInsets.symmetric(
-                      horizontal:
-                          AppTheme.spaceMD * AppTheme.spaceScale(context),
-                      vertical: AppTheme.spaceMD * AppTheme.spaceScale(context),
-                    ),
-                    decoration: BoxDecoration(
-                      color: widget.bgColor,
-                      borderRadius: BorderRadius.circular(
-                        AppTheme.radiusLG * AppTheme.radiusScale(context),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: colors.shadow.withAlpha(51),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
+    return ValueListenableBuilder<double>(
+      valueListenable: miniPlayerInset,
+      builder: (context, inset, _) {
+        final bottomPadding =
+            MediaQuery.of(context).padding.bottom + AppTheme.spaceXXL + inset;
+        return Positioned(
+          bottom: bottomPadding,
+          left: 0,
+          right: 0,
+          child: IgnorePointer(
+            ignoring: false,
+            child: Center(
+              child: SlideTransition(
+                position: _offsetAnim,
+                child: FadeTransition(
+                  opacity: _fadeAnim,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 320),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: Container(
+                        margin: EdgeInsets.symmetric(
+                          horizontal:
+                              AppTheme.spaceMD * AppTheme.spaceScale(context),
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          widget.icon,
-                          color: widget.fgColor,
-                          size: AppTheme.iconSM * AppTheme.iconScale(context),
+                        padding: EdgeInsets.symmetric(
+                          horizontal:
+                              AppTheme.spaceMD * AppTheme.spaceScale(context),
+                          vertical:
+                              AppTheme.spaceMD * AppTheme.spaceScale(context),
                         ),
-                        SizedBox(
-                          width:
-                              AppTheme.spaceSM * AppTheme.spaceScale(context),
-                        ),
-                        Flexible(
-                          child: Text(
-                            widget.message,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: widget.fgColor,
-                            ),
+                        decoration: BoxDecoration(
+                          color: widget.bgColor,
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusLG * AppTheme.radiusScale(context),
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: colors.shadow.withAlpha(51),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
-                      ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              widget.icon,
+                              color: widget.fgColor,
+                              size:
+                                  AppTheme.iconSM * AppTheme.iconScale(context),
+                            ),
+                            SizedBox(
+                              width:
+                                  AppTheme.spaceSM *
+                                  AppTheme.spaceScale(context),
+                            ),
+                            Flexible(
+                              child: Text(
+                                widget.message,
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: widget.fgColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

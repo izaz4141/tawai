@@ -24,6 +24,7 @@ pub struct BatchRenamePreviewResponse {
 pub struct BatchRenameApplyRequest {
     pub id: String,
     pub file_paths: Vec<String>,
+    pub track_ids: Vec<String>,
     pub pattern: String,
 }
 
@@ -52,6 +53,7 @@ pub struct CheckNamingConventionResponse {
 pub struct RenamePreview {
     pub file_path: String,
     pub expected_path: String,
+    pub track_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]
@@ -67,6 +69,7 @@ impl From<tawai_core::signals::tools::RenamePreview> for RenamePreview {
         Self {
             file_path: r.file_path,
             expected_path: r.expected_path,
+            track_id: r.track_id,
         }
     }
 }

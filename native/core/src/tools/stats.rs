@@ -6,7 +6,7 @@ use sqlx::{Row, SqlitePool};
 use crate::audio::tags::AudioTag;
 use crate::db::database::DatabasePool;
 use crate::signals::tools::{DecadeEntry, FormatEntry, LibraryStats};
-use crate::tools::rename::format_naming_pattern;
+use crate::tools::rename::expected_path_from_root;
 
 pub async fn get_library_stats(
     pool: &DatabasePool,
@@ -199,10 +199,11 @@ async fn get_library_stats_sq(
                           COALESCE(a.title, '') AS album_title,
                           t.track_num, t.disc_num, a.date, a.disambiguation,
                           COALESCE(ar.name, '') AS album_artist,
-                          a.total_discs
+                          a.total_discs, ls.url AS source_url
                    FROM tracks t
                    JOIN albums a ON t.album_id = a.id
-                   JOIN artists ar ON t.artist_id = ar.id"#,
+                   JOIN artists ar ON t.artist_id = ar.id
+                   JOIN library_sources ls ON t.source_id = ls.id"#,
             )
             .fetch_all(pool)
             .await?;
@@ -211,9 +212,12 @@ async fn get_library_stats_sq(
                 .iter()
                 .filter(|row| {
                     let file_path: String = row.get("file_path");
-                    let path = Path::new(&file_path);
-                    let parent = path.parent().unwrap_or(Path::new("."));
-                    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("mp3");
+                    let source_url: String = row.get("source_url");
+                    let ext = Path::new(&file_path)
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("mp3")
+                        .to_string();
 
                     let tag = AudioTag {
                         title: row.get("title"),
@@ -242,9 +246,8 @@ async fn get_library_stats_sq(
                         track_peak: None,
                     };
 
-                    let new_name = format_naming_pattern(pattern, &tag);
-                    let expected_path = parent.join(format!("{}.{}", new_name, ext));
-                    expected_path.to_string_lossy() == file_path.as_str()
+                    expected_path_from_root(&source_url, pattern, &tag, &ext).to_string_lossy()
+                        == file_path.as_str()
                 })
                 .count() as f64;
 
@@ -609,10 +612,11 @@ async fn get_library_stats_pg(
                           COALESCE(a.title, '') AS album_title,
                           t.track_num, t.disc_num, a.date, a.disambiguation,
                           COALESCE(ar.name, '') AS album_artist,
-                          a.total_discs
+                          a.total_discs, ls.url AS source_url
                    FROM tracks t
                    JOIN albums a ON t.album_id = a.id
-                   JOIN artists ar ON t.artist_id = ar.id"#,
+                   JOIN artists ar ON t.artist_id = ar.id
+                   JOIN library_sources ls ON t.source_id = ls.id"#,
             )
             .fetch_all(pool)
             .await?;
@@ -621,9 +625,12 @@ async fn get_library_stats_pg(
                 .iter()
                 .filter(|row| {
                     let file_path: String = row.get("file_path");
-                    let path = Path::new(&file_path);
-                    let parent = path.parent().unwrap_or(Path::new("."));
-                    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("mp3");
+                    let source_url: String = row.get("source_url");
+                    let ext = Path::new(&file_path)
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("mp3")
+                        .to_string();
 
                     let tag = AudioTag {
                         title: row.get("title"),
@@ -652,9 +659,8 @@ async fn get_library_stats_pg(
                         track_peak: None,
                     };
 
-                    let new_name = format_naming_pattern(pattern, &tag);
-                    let expected_path = parent.join(format!("{}.{}", new_name, ext));
-                    expected_path.to_string_lossy() == file_path.as_str()
+                    expected_path_from_root(&source_url, pattern, &tag, &ext).to_string_lossy()
+                        == file_path.as_str()
                 })
                 .count() as f64;
 

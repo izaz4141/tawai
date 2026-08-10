@@ -3,6 +3,7 @@ import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/components/track_action_sheet.dart';
+import 'package:tawai/ui/widgets/mini_player.dart';
 import 'package:tawai/utils/helper.dart';
 
 class LibraryHistoryTab extends StatelessWidget {
@@ -30,8 +31,9 @@ class LibraryHistoryTab extends StatelessWidget {
     }
     return ListView.builder(
       physics: const AlwaysScrollableScrollPhysics(),
-      itemCount: history.length,
+      itemCount: history.length + 1,
       itemBuilder: (context, index) {
+        if (index == history.length) return const MiniPlayerSpacer();
         final r = history[index];
         final isJellyfin = r.source == 'jellyfin';
         return ListTile(

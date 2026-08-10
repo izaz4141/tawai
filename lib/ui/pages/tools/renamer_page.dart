@@ -116,10 +116,14 @@ class _RenamerPageState extends State<RenamerPage> {
     final selectedPaths = _selectedIndices
         .map((i) => _previews[i].filePath)
         .toList();
+    final selectedTrackIds = _selectedIndices
+        .map((i) => _previews[i].trackId)
+        .toList();
 
     try {
       await BridgeService.instance.batchRenameApply(
         filePaths: selectedPaths,
+        trackIds: selectedTrackIds,
         pattern: _patternController.text,
       );
       if (!mounted) return;

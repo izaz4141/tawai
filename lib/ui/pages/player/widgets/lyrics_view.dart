@@ -6,14 +6,14 @@ import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/lyrics_parser.dart';
 import 'package:tawai/utils/settings.dart';
 
-class LyricsPage extends StatefulWidget {
-  const LyricsPage({super.key});
+class LyricsView extends StatefulWidget {
+  const LyricsView({super.key});
 
   @override
-  State<LyricsPage> createState() => _LyricsPageState();
+  State<LyricsView> createState() => _LyricsViewState();
 }
 
-class _LyricsPageState extends State<LyricsPage> {
+class _LyricsViewState extends State<LyricsView> {
   final ScrollController _scrollController = ScrollController();
 
   ParsedLyrics? _parsedLyrics;
@@ -153,39 +153,35 @@ class _LyricsPageState extends State<LyricsPage> {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final track = _currentTrack;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(track?.title ?? 'Lyrics'), centerTitle: true),
-      body: ValueListenableBuilder(
-        valueListenable: PlaybackService.instance.queue,
-        builder: (context, q, _) {
-          final current = q.currentTrack;
-          if (current == null) return _buildEmpty('No track playing');
+    return ValueListenableBuilder(
+      valueListenable: PlaybackService.instance.queue,
+      builder: (context, q, _) {
+        final current = q.currentTrack;
+        if (current == null) return _buildEmpty('No track playing');
 
-          if (_isLoading) {
-            return const Center(child: CircularProgressIndicator());
+        if (_isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (_error != null) {
+          return _buildError(textTheme);
+        }
+
+        final parsed = _parsedLyrics;
+        if (parsed == null || parsed.lines.isEmpty) {
+          if (parsed?.instrumental == true) {
+            return _buildEmpty('Instrumental');
           }
+          return _buildEmpty('No lyrics found');
+        }
 
-          if (_error != null) {
-            return _buildError(textTheme);
-          }
+        if (parsed.synced) {
+          return _buildSynced(parsed, textTheme);
+        }
 
-          final parsed = _parsedLyrics;
-          if (parsed == null || parsed.lines.isEmpty) {
-            if (parsed?.instrumental == true) {
-              return _buildEmpty('Instrumental');
-            }
-            return _buildEmpty('No lyrics found');
-          }
-
-          if (parsed.synced) {
-            return _buildSynced(parsed, textTheme);
-          }
-
-          return _buildUnsynced(parsed, textTheme);
-        },
-      ),
+        return _buildUnsynced(parsed, textTheme);
+      },
     );
   }
 

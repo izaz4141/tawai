@@ -49,6 +49,7 @@ class PlaybackService {
   );
   final position = ValueNotifier<Duration>(Duration.zero);
   final duration = ValueNotifier<Duration>(Duration.zero);
+  final buffered = ValueNotifier<Duration>(Duration.zero);
   final volume = ValueNotifier<double>(1.0);
   final queue = ValueNotifier<QueueState>(QueueState());
   final shuffleModeEnabled = ValueNotifier<bool>(false);
@@ -73,6 +74,7 @@ class PlaybackService {
   late StreamSubscription<PlayerState> _playerStateSub;
   late StreamSubscription<Duration> _positionSub;
   late StreamSubscription<Duration?> _durationSub;
+  late StreamSubscription<Duration> _bufferedSub;
 
   double _userVolume = 1.0;
   late VoidCallback _replayGainEnabledSub;
@@ -94,6 +96,9 @@ class PlaybackService {
     _durationSub = _player.durationStream.listen((dur) {
       duration.value = dur ?? Duration.zero;
     });
+    _bufferedSub = _player.bufferedPositionStream.listen((b) {
+      buffered.value = b;
+    });
     _userVolume = SettingsManager.playbackVolume.value;
     volume.value = _userVolume;
     _player.setVolume(_userVolume);
@@ -111,11 +116,13 @@ class PlaybackService {
     _playerStateSub.cancel();
     _positionSub.cancel();
     _durationSub.cancel();
+    _bufferedSub.cancel();
     SettingsManager.replayGainEnabled.removeListener(_replayGainEnabledSub);
     SettingsManager.replayGainPreamp.removeListener(_replayGainPreampSub);
     playerState.dispose();
     position.dispose();
     duration.dispose();
+    buffered.dispose();
     volume.dispose();
     queue.dispose();
     shuffleModeEnabled.dispose();

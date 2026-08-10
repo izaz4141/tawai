@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/pages/player/widgets/queue_view.dart';
 import 'package:tawai/ui/widgets/components/sheet.dart';
 
 class QueueSheet extends StatelessWidget {
@@ -51,63 +52,13 @@ class QueueSheet extends StatelessWidget {
             ),
           ),
           bodyBuilder: (scrollCtrl) {
-            if (items.isEmpty) {
-              return const Center(child: Text('Queue is empty'));
-            }
-            return ReorderableListView.builder(
+            return QueueView(
+              items: items,
+              currentIndex: currentIdx,
               scrollController: scrollCtrl,
-              itemCount: items.length,
-              onReorderItem: (from, to) =>
-                  PlaybackService.instance.moveQueueItem(from, to),
-              itemBuilder: (context, index) {
-                final track = items[index].track;
-                final isCurrent = index == currentIdx;
-                return Container(
-                  key: ValueKey('${track.id}-$index'),
-                  decoration: isCurrent
-                      ? BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.08),
-                          border: Border(
-                            left: BorderSide(
-                              color: Theme.of(context).colorScheme.primary,
-                              width: 3,
-                            ),
-                          ),
-                        )
-                      : null,
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: ListTile(
-                      leading: IconButton(
-                        icon: Icon(
-                          Icons.close,
-                          size: AppTheme.iconSM * AppTheme.iconScale(context),
-                        ),
-                        onPressed: () =>
-                            PlaybackService.instance.removeFromQueue(index),
-                      ),
-                      title: Text(
-                        track.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: isCurrent
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                        ),
-                      ),
-                      subtitle: Text(
-                        track.artistsString,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      onTap: () => PlaybackService.instance.playTrackAt(index),
-                    ),
-                  ),
-                );
-              },
+              onRemove: PlaybackService.instance.removeFromQueue,
+              onReorder: PlaybackService.instance.moveQueueItem,
+              onTap: PlaybackService.instance.playTrackAt,
             );
           },
         );

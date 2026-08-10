@@ -975,16 +975,19 @@ class BridgeService {
 
   Future<BatchRenameApplyResponse?> batchRenameApply({
     required List<String> filePaths,
+    required List<String> trackIds,
     required String pattern,
   }) async {
     if (_isRemote) {
       return APIService.instance.batchRenameApply(
         filePaths: filePaths,
+        trackIds: trackIds,
         pattern: pattern,
       );
     }
     return RinfService.instance.batchRenameApply(
       filePaths: filePaths,
+      trackIds: trackIds,
       pattern: pattern,
     );
   }

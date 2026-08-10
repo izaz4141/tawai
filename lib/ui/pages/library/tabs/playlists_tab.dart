@@ -3,6 +3,7 @@ import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/pages/library/subpages/playlist/playlist_detail_page.dart';
 import 'package:tawai/ui/widgets/components/alphabet_index_scroller.dart';
+import 'package:tawai/ui/widgets/mini_player.dart';
 
 class LibraryPlaylistsTab extends StatelessWidget {
   const LibraryPlaylistsTab({
@@ -43,9 +44,12 @@ class LibraryPlaylistsTab extends StatelessWidget {
         padding: EdgeInsets.only(right: AlphabetIndexScroller.kStripWidth),
         controller: scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: playlists.length + 1,
+        itemCount: playlists.length + 2,
         itemBuilder: (context, index) {
           if (index == 0) return _buildHeader(context);
+          if (index == playlists.length + 1) {
+            return const MiniPlayerSpacer();
+          }
           final p = playlists[index - 1];
           return ListTile(
             leading: Icon(p.isSmart ? Icons.auto_awesome : Icons.playlist_play),

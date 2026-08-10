@@ -3,6 +3,7 @@ import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/components/track_list_tile.dart';
 import 'package:tawai/ui/widgets/components/alphabet_index_scroller.dart';
+import 'package:tawai/ui/widgets/mini_player.dart';
 
 class LibraryTracksTab extends StatelessWidget {
   const LibraryTracksTab({
@@ -38,8 +39,9 @@ class LibraryTracksTab extends StatelessWidget {
         padding: EdgeInsets.only(right: AlphabetIndexScroller.kStripWidth),
         controller: scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: tracks.length,
+        itemCount: tracks.length + 1,
         itemBuilder: (context, index) {
+          if (index == tracks.length) return const MiniPlayerSpacer();
           return TrackListTile(track: tracks[index], index: index);
         },
       ),

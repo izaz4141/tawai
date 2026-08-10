@@ -191,6 +191,20 @@ fn get_naming_var_value(var: &str, tag: &AudioTag) -> String {
     }
 }
 
+/// Compute the full destination path for a file rooted at the library source
+/// directory. The naming pattern may contain subdirectories (`/`), so the
+/// result is joined to the source root instead of the file's current parent,
+/// which would otherwise duplicate the directory hierarchy.
+pub(crate) fn expected_path_from_root(
+    source_root: &str,
+    pattern: &str,
+    tag: &AudioTag,
+    ext: &str,
+) -> PathBuf {
+    let new_name = format_naming_pattern(pattern, tag);
+    Path::new(source_root).join(format!("{}.{}", new_name, ext))
+}
+
 /// Rename an audio file based on a naming pattern.
 /// Creates parent directories if they don't exist.
 /// Returns the new file path.
@@ -258,59 +272,50 @@ pub fn move_file_into_source(
     Ok(new_path)
 }
 
-pub async fn batch_rename_preview(
-    file_paths: &[String],
-    pattern: &str,
-) -> Result<Vec<RenamePreview>> {
-    let mut results = Vec::new();
-
-    for path_str in file_paths {
-        let path = Path::new(path_str);
-        match crate::audio::tags::read_audio_tags(path) {
-            Ok((tag, _duration, _track_num, _disc_num)) => {
-                let parent = path.parent().unwrap_or(Path::new("."));
-                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("mp3");
-                let new_name = format_naming_pattern(pattern, &tag);
-                let expected_path = parent.join(format!("{}.{}", new_name, ext));
-                results.push(RenamePreview {
-                    file_path: path_str.clone(),
-                    expected_path: expected_path.to_string_lossy().to_string(),
-                });
-            }
-            Err(e) => {
-                results.push(RenamePreview {
-                    file_path: path_str.clone(),
-                    expected_path: format!("<error: {}>", e),
-                });
-            }
-        }
-    }
-
-    Ok(results)
-}
-
 /// Apply a batch rename.
+///
+/// The naming pattern is rooted at each track's library source directory so
+/// that subdirectories in the pattern are not appended to the file's current
+/// parent (which would nest them twice). Files without a matching source row
+/// fall back to renaming in place relative to their current parent.
 pub async fn batch_rename_apply(
+    pool: &DatabasePool,
     file_paths: &[String],
+    track_ids: &[String],
     pattern: &str,
 ) -> Result<Vec<RenamePreview>> {
     let mut results = Vec::new();
 
-    for path_str in file_paths {
+    for (i, path_str) in file_paths.iter().enumerate() {
         let path = Path::new(path_str);
         match crate::audio::tags::read_audio_tags(path) {
             Ok((tag, _duration, _track_num, _disc_num)) => {
-                match rename_audio_file(path, pattern, &tag) {
+                let track_id = track_ids.get(i).map(|s| s.as_str()).unwrap_or("");
+                let result = if !track_id.is_empty() {
+                    match crate::db::library_source::get_source_info_by_track_id(pool, track_id)
+                        .await
+                    {
+                        Ok(Some(info)) => {
+                            move_file_into_source(path, &info.url, Some(pattern), &tag)
+                        }
+                        _ => rename_audio_file(path, pattern, &tag),
+                    }
+                } else {
+                    rename_audio_file(path, pattern, &tag)
+                };
+                match result {
                     Ok(new_path) => {
                         results.push(RenamePreview {
                             file_path: path_str.clone(),
                             expected_path: new_path.to_string_lossy().to_string(),
+                            track_id: track_id.to_string(),
                         });
                     }
                     Err(e) => {
                         results.push(RenamePreview {
                             file_path: path_str.clone(),
                             expected_path: format!("<error: {}>", e),
+                            track_id: track_id.to_string(),
                         });
                     }
                 }
@@ -319,6 +324,7 @@ pub async fn batch_rename_apply(
                 results.push(RenamePreview {
                     file_path: path_str.clone(),
                     expected_path: format!("<error: {}>", e),
+                    track_id: track_ids.get(i).cloned().unwrap_or_default(),
                 });
             }
         }
@@ -328,7 +334,7 @@ pub async fn batch_rename_apply(
 }
 
 /// Preview renaming using database metadata (fast, no file I/O).
-pub async fn batch_rename_preview_from_db(
+pub async fn batch_rename_preview(
     pool: &DatabasePool,
     source_id: Option<&str>,
     pattern: &str,
@@ -346,11 +352,11 @@ async fn preview_from_db_sq(
 ) -> Result<Vec<RenamePreview>> {
     let rows = if let Some(sid) = source_id {
         sqlx::query(
-            r#"SELECT t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
+            r#"SELECT t.id AS track_id, t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
                       COALESCE(a.title, '') AS album_title,
                       t.track_num, t.disc_num, a.date, a.disambiguation,
                       COALESCE(ar.name, '') AS album_artist,
-                      a.total_discs
+                      a.total_discs, ls.url AS source_url
                FROM tracks t
                JOIN albums a ON t.album_id = a.id
                JOIN artists ar ON t.artist_id = ar.id
@@ -363,11 +369,11 @@ async fn preview_from_db_sq(
         .await?
     } else {
         sqlx::query(
-            r#"SELECT t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
+            r#"SELECT t.id AS track_id, t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
                       COALESCE(a.title, '') AS album_title,
                       t.track_num, t.disc_num, a.date, a.disambiguation,
                       COALESCE(ar.name, '') AS album_artist,
-                      a.total_discs
+                      a.total_discs, ls.url AS source_url
                FROM tracks t
                JOIN albums a ON t.album_id = a.id
                JOIN artists ar ON t.artist_id = ar.id
@@ -382,9 +388,13 @@ async fn preview_from_db_sq(
     let mut previews = Vec::new();
     for row in rows {
         let file_path: String = row.get("file_path");
-        let path = Path::new(&file_path);
-        let parent = path.parent().unwrap_or(Path::new("."));
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("mp3");
+        let track_id: String = row.get("track_id");
+        let source_url: String = row.get("source_url");
+        let ext = Path::new(&file_path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("mp3")
+            .to_string();
 
         let tag = AudioTag {
             title: row.get("title"),
@@ -413,11 +423,11 @@ async fn preview_from_db_sq(
             track_peak: None,
         };
 
-        let new_name = format_naming_pattern(pattern, &tag);
-        let expected_path = parent.join(format!("{}.{}", new_name, ext));
+        let expected_path = expected_path_from_root(&source_url, pattern, &tag, &ext);
         previews.push(RenamePreview {
             file_path,
             expected_path: expected_path.to_string_lossy().to_string(),
+            track_id,
         });
     }
 
@@ -431,11 +441,11 @@ async fn preview_from_db_pg(
 ) -> Result<Vec<RenamePreview>> {
     let rows = if let Some(sid) = source_id {
         sqlx::query(
-            r#"SELECT t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
+            r#"SELECT t.id AS track_id, t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
                       COALESCE(a.title, '') AS album_title,
                       t.track_num, t.disc_num, a.date, a.disambiguation,
                       COALESCE(ar.name, '') AS album_artist,
-                      a.total_discs
+                      a.total_discs, ls.url AS source_url
                FROM tracks t
                JOIN albums a ON t.album_id = a.id
                JOIN artists ar ON t.artist_id = ar.id
@@ -449,11 +459,11 @@ async fn preview_from_db_pg(
         .await?
     } else {
         sqlx::query(
-            r#"SELECT t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
+            r#"SELECT t.id AS track_id, t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
                       COALESCE(a.title, '') AS album_title,
                       t.track_num, t.disc_num, a.date, a.disambiguation,
                       COALESCE(ar.name, '') AS album_artist,
-                      a.total_discs
+                      a.total_discs, ls.url AS source_url
                FROM tracks t
                JOIN albums a ON t.album_id = a.id
                JOIN artists ar ON t.artist_id = ar.id
@@ -468,9 +478,13 @@ async fn preview_from_db_pg(
     let mut previews = Vec::new();
     for row in rows {
         let file_path: String = row.get("file_path");
-        let path = Path::new(&file_path);
-        let parent = path.parent().unwrap_or(Path::new("."));
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("mp3");
+        let track_id: String = row.get("track_id");
+        let source_url: String = row.get("source_url");
+        let ext = Path::new(&file_path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("mp3")
+            .to_string();
 
         let tag = AudioTag {
             title: row.get("title"),
@@ -499,11 +513,11 @@ async fn preview_from_db_pg(
             track_peak: None,
         };
 
-        let new_name = format_naming_pattern(pattern, &tag);
-        let expected_path = parent.join(format!("{}.{}", new_name, ext));
+        let expected_path = expected_path_from_root(&source_url, pattern, &tag, &ext);
         previews.push(RenamePreview {
             file_path,
             expected_path: expected_path.to_string_lossy().to_string(),
+            track_id,
         });
     }
 
@@ -533,7 +547,7 @@ async fn check_naming_convention_sq(
                       COALESCE(a.title, '') AS album_title,
                       t.track_num, t.disc_num, a.date, a.disambiguation,
                       COALESCE(ar.name, '') AS album_artist,
-                      a.total_discs
+                      a.total_discs, ls.url AS source_url
                FROM tracks t
                JOIN albums a ON t.album_id = a.id
                JOIN artists ar ON t.artist_id = ar.id
@@ -551,7 +565,7 @@ async fn check_naming_convention_sq(
                       COALESCE(a.title, '') AS album_title,
                       t.track_num, t.disc_num, a.date, a.disambiguation,
                       COALESCE(ar.name, '') AS album_artist,
-                      a.total_discs
+                      a.total_discs, ls.url AS source_url
                FROM tracks t
                JOIN albums a ON t.album_id = a.id
                JOIN artists ar ON t.artist_id = ar.id
@@ -567,11 +581,11 @@ async fn check_naming_convention_sq(
 
     for row in rows {
         let file_path: String = row.get("file_path");
-        let path = Path::new(&file_path);
-        let file_stem = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
+        let source_url: String = row.get("source_url");
+        let ext = Path::new(&file_path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("mp3")
             .to_string();
 
         let tag = AudioTag {
@@ -602,12 +616,17 @@ async fn check_naming_convention_sq(
         };
 
         let expected_name = format_naming_pattern(pattern, &tag);
+        let expected_path = expected_path_from_root(&source_url, pattern, &tag, &ext);
 
-        if file_stem != expected_name {
+        if expected_path.to_string_lossy() != file_path {
+            let file_name = Path::new(&file_path)
+                .strip_prefix(&source_url)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| file_path.clone());
             violations.push(NamingViolation {
                 file_path: file_path.clone(),
-                file_name: file_stem,
-                expected_name,
+                file_name,
+                expected_name: format!("{}.{}", expected_name, ext),
                 track_id: row.get("id"),
             });
         }
@@ -627,7 +646,7 @@ async fn check_naming_convention_pg(
                       COALESCE(a.title, '') AS album_title,
                       t.track_num, t.disc_num, a.date, a.disambiguation,
                       COALESCE(ar.name, '') AS album_artist,
-                      a.total_discs
+                      a.total_discs, ls.url AS source_url
                FROM tracks t
                JOIN albums a ON t.album_id = a.id
                JOIN artists ar ON t.artist_id = ar.id
@@ -645,7 +664,7 @@ async fn check_naming_convention_pg(
                       COALESCE(a.title, '') AS album_title,
                       t.track_num, t.disc_num, a.date, a.disambiguation,
                       COALESCE(ar.name, '') AS album_artist,
-                      a.total_discs
+                      a.total_discs, ls.url AS source_url
                FROM tracks t
                JOIN albums a ON t.album_id = a.id
                JOIN artists ar ON t.artist_id = ar.id
@@ -661,11 +680,11 @@ async fn check_naming_convention_pg(
 
     for row in rows {
         let file_path: String = row.get("file_path");
-        let path = Path::new(&file_path);
-        let file_stem = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
+        let source_url: String = row.get("source_url");
+        let ext = Path::new(&file_path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("mp3")
             .to_string();
 
         let tag = AudioTag {
@@ -696,16 +715,214 @@ async fn check_naming_convention_pg(
         };
 
         let expected_name = format_naming_pattern(pattern, &tag);
+        let expected_path = expected_path_from_root(&source_url, pattern, &tag, &ext);
 
-        if file_stem != expected_name {
+        if expected_path.to_string_lossy() != file_path {
+            let file_name = Path::new(&file_path)
+                .strip_prefix(&source_url)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| file_path.clone());
             violations.push(NamingViolation {
                 file_path: file_path.clone(),
-                file_name: file_stem,
-                expected_name,
+                file_name,
+                expected_name: format!("{}.{}", expected_name, ext),
                 track_id: row.get("id"),
             });
         }
     }
 
     Ok(violations)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const DEFAULT_PATTERN: &str = "{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}";
+
+    fn tag(
+        title: &str,
+        artist: &str,
+        album_artist: &str,
+        album: &str,
+        track: i32,
+        disc: i32,
+        total_discs: i32,
+        artists: &[&str],
+    ) -> AudioTag {
+        AudioTag {
+            title: title.to_string(),
+            artist: artist.to_string(),
+            artist_sort: String::new(),
+            artists: artists.iter().map(|s| s.to_string()).collect(),
+            album: album.to_string(),
+            album_artist: album_artist.to_string(),
+            album_artist_sort: String::new(),
+            album_artists: vec![],
+            genres: vec![],
+            release_date: Some("2024-01-01".to_string()),
+            track_number: track,
+            disc_number: disc,
+            mbid_recording: None,
+            mbid_artist: None,
+            mbid_release_artist: None,
+            mbid_release: None,
+            acoust_id: None,
+            acoust_id_fingerprint: None,
+            lyrics: None,
+            cover: None,
+            album_disambiguation: None,
+            total_discs,
+            track_gain: None,
+            track_peak: None,
+        }
+    }
+
+    #[test]
+    fn default_pattern_all_fields_set() {
+        let t = tag(
+            "Title",
+            "Some Artist",
+            "Album Artist",
+            "Album",
+            7,
+            2,
+            2,
+            &["Some Artist"],
+        );
+        assert_eq!(
+            format_naming_pattern(DEFAULT_PATTERN, &t),
+            "Album Artist/Album/02-07 Some Artist - Title"
+        );
+    }
+
+    #[test]
+    fn default_pattern_no_album_artist() {
+        let t = tag(
+            "Title",
+            "Some Artist",
+            "",
+            "Album",
+            7,
+            2,
+            2,
+            &["Some Artist"],
+        );
+        assert_eq!(
+            format_naming_pattern(DEFAULT_PATTERN, &t),
+            "Some Artist/02-Title"
+        );
+    }
+
+    #[test]
+    fn default_pattern_single_disc() {
+        let t = tag(
+            "Title",
+            "Some Artist",
+            "Album Artist",
+            "Album",
+            7,
+            1,
+            1,
+            &["Some Artist"],
+        );
+        assert_eq!(
+            format_naming_pattern(DEFAULT_PATTERN, &t),
+            "Album Artist/Album/07 Some Artist - Title"
+        );
+    }
+
+    #[test]
+    fn default_pattern_single_artist_album() {
+        let t = tag(
+            "Title",
+            "Album Artist",
+            "Album Artist",
+            "Album",
+            7,
+            1,
+            1,
+            &["Album Artist"],
+        );
+        assert_eq!(
+            format_naming_pattern(DEFAULT_PATTERN, &t),
+            "Album Artist/Album/07 Title"
+        );
+    }
+
+    #[test]
+    fn simple_variables() {
+        let t = tag("Title", "Artist", "", "Album", 3, 1, 1, &["Artist"]);
+        assert_eq!(format_naming_pattern("{album}/{title}", &t), "Album/Title");
+    }
+
+    #[test]
+    fn sanitize_path_chars() {
+        let t = tag("A:Title", "Art\\ist", "", "Album", 3, 1, 1, &[]);
+        assert_eq!(
+            format_naming_pattern("{artist} {title}", &t),
+            "Art_ist A_Title"
+        );
+    }
+
+    #[test]
+    fn literal_pipe_in_suffix() {
+        let t = tag("Title", "Artist", "", "Album", 3, 1, 1, &["Artist"]);
+        assert_eq!(
+            format_naming_pattern("{artist?{title}| \\| ok}", &t),
+            "Title | ok"
+        );
+    }
+
+    #[test]
+    fn numeric_compare_false() {
+        let t = tag("Title", "Artist", "", "Album", 3, 1, 1, &["Artist"]);
+        assert_eq!(
+            format_naming_pattern("{total_discs>1?{disc_padded}|-}{title}", &t),
+            "Title"
+        );
+    }
+
+    #[test]
+    fn numeric_compare_true() {
+        let t = tag("Title", "Artist", "", "Album", 3, 2, 2, &["Artist"]);
+        assert_eq!(
+            format_naming_pattern("{total_discs>1?{disc_padded}|-}{title}", &t),
+            "02-Title"
+        );
+    }
+
+    #[test]
+    fn fallback_recursion() {
+        let t = tag("Title", "Artist", "", "Album", 3, 1, 1, &["Artist"]);
+        assert_eq!(
+            format_naming_pattern("{album_artist??{artist}}/", &t),
+            "Artist/"
+        );
+        let t2 = tag("Title", "Artist", "AA", "Album", 3, 1, 1, &["Artist"]);
+        assert_eq!(
+            format_naming_pattern("{album_artist??{artist}}/", &t2),
+            "AA/"
+        );
+    }
+
+    #[test]
+    fn expected_path_rooted_at_source_no_duplication() {
+        let t = tag(
+            "Title",
+            "Some Artist",
+            "Album Artist",
+            "Album",
+            7,
+            2,
+            2,
+            &["Some Artist"],
+        );
+        let path = expected_path_from_root("/music", DEFAULT_PATTERN, &t, "flac");
+        assert_eq!(
+            path.to_string_lossy(),
+            "/music/Album Artist/Album/02-07 Some Artist - Title.flac"
+        );
+        assert!(!path.to_string_lossy().contains("Album Artist/Album/Album"));
+    }
 }

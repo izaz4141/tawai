@@ -18,17 +18,13 @@ pub async fn handle_batch_rename_preview(
     State(state): State<SharedState>,
     Json(body): Json<BatchRenamePreviewRequest>,
 ) -> impl IntoResponse {
-    let result = if body.source_id.is_some() || body.file_paths.is_empty() {
-        let db = state.context.db().await;
-        tawai_core::tools::rename::batch_rename_preview_from_db(
-            db.pool(),
-            body.source_id.as_deref(),
-            &body.pattern,
-        )
-        .await
-    } else {
-        tawai_core::tools::rename::batch_rename_preview(&body.file_paths, &body.pattern).await
-    };
+    let db = state.context.db().await;
+    let result = tawai_core::tools::rename::batch_rename_preview(
+        db.pool(),
+        body.source_id.as_deref(),
+        &body.pattern,
+    )
+    .await;
     match result {
         Ok(previews) => Json(BatchRenamePreviewResponse {
             id: body.id,
@@ -55,7 +51,15 @@ pub async fn handle_batch_rename_apply(
     State(state): State<SharedState>,
     Json(body): Json<BatchRenameApplyRequest>,
 ) -> impl IntoResponse {
-    match tawai_core::tools::rename::batch_rename_apply(&body.file_paths, &body.pattern).await {
+    let db = state.context.db().await;
+    match tawai_core::tools::rename::batch_rename_apply(
+        db.pool(),
+        &body.file_paths,
+        &body.track_ids,
+        &body.pattern,
+    )
+    .await
+    {
         Ok(results) => Json(BatchRenameApplyResponse {
             id: body.id,
             results,

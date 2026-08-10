@@ -5,6 +5,7 @@ import 'package:tawai/ui/pages/search/search_types.dart';
 import 'package:tawai/utils/helper.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/ui/pages/search/widgets/search_result_tile.dart';
+import 'package:tawai/ui/widgets/mini_player.dart';
 import 'package:tawai/ui/pages/search/modals/release_picker_dialog.dart';
 import 'package:tawai/ui/pages/search/modals/track_picker_dialog.dart';
 
@@ -204,8 +205,9 @@ class _EnhancedSearchViewState extends State<EnhancedSearchView> {
       return const Center(child: Text('No results.'));
     }
     return ListView.builder(
-      itemCount: entries.length,
+      itemCount: entries.length + 1,
       itemBuilder: (context, index) {
+        if (index == entries.length) return const MiniPlayerSpacer();
         final entry = entries[index];
         return SearchResultTile(
           entry: entry,
@@ -276,11 +278,16 @@ class _EnhancedSearchViewState extends State<EnhancedSearchView> {
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppTheme.spaceMD,
                   ),
-                  itemCount: widget.recordings.length,
-                  itemBuilder: (_, i) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppTheme.spaceXS),
-                    child: _buildRecordingCard(widget.recordings[i]),
-                  ),
+                  itemCount: widget.recordings.length + 1,
+                  itemBuilder: (_, i) {
+                    if (i == widget.recordings.length) {
+                      return const MiniPlayerSpacer();
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: AppTheme.spaceXS),
+                      child: _buildRecordingCard(widget.recordings[i]),
+                    );
+                  },
                 ),
         ),
       ],

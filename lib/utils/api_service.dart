@@ -2322,6 +2322,7 @@ class APIService {
             (e) => RenamePreview(
               filePath: e['file_path'] as String,
               expectedPath: e['expected_path'] as String,
+              trackId: e['track_id'] as String? ?? '',
             ),
           )
           .toList();
@@ -2338,21 +2339,27 @@ class APIService {
 
   Future<BatchRenameApplyResponse?> batchRenameApply({
     required List<String> filePaths,
+    required List<String> trackIds,
     required String pattern,
   }) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/tools/rename-apply'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'file_paths': filePaths, 'pattern': pattern}),
+        body: jsonEncode({
+          'file_paths': filePaths,
+          'track_ids': trackIds,
+          'pattern': pattern,
+        }),
       );
       if (response.statusCode != 200) return null;
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final results = (data['previews'] as List<dynamic>)
+      final results = (data['results'] as List<dynamic>)
           .map(
             (e) => RenamePreview(
               filePath: e['file_path'] as String,
               expectedPath: e['expected_path'] as String,
+              trackId: e['track_id'] as String? ?? '',
             ),
           )
           .toList();

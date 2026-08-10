@@ -8,6 +8,22 @@ import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/components/cover_image.dart';
 import 'package:tawai/ui/widgets/components/playback_button.dart';
 import 'package:tawai/ui/widgets/components/volume_button.dart';
+import 'package:tawai/ui/widgets/components/seek_bar.dart';
+
+const double kMiniPlayerHeight = 96;
+final ValueNotifier<double> miniPlayerInset = ValueNotifier(0);
+
+class MiniPlayerSpacer extends StatelessWidget {
+  const MiniPlayerSpacer({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<double>(
+      valueListenable: miniPlayerInset,
+      builder: (context, inset, _) => SizedBox(height: inset),
+    );
+  }
+}
 
 class MiniPlayer extends StatefulWidget {
   const MiniPlayer({super.key});
@@ -17,52 +33,73 @@ class MiniPlayer extends StatefulWidget {
 }
 
 class _MiniPlayerState extends State<MiniPlayer> {
-  double _hDrag = 0;
-  double _vDrag = 0;
+  Offset _drag = Offset.zero;
+  Axis? _dragAxis;
 
-  void _onHorizontalDragUpdate(DragUpdateDetails d) {
-    _hDrag = (_hDrag + d.delta.dx).clamp(-300, 300);
+  void _syncInset(bool visible) {
+    final value = visible ? kMiniPlayerHeight : 0.0;
+    if (miniPlayerInset.value == value) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (miniPlayerInset.value != value) {
+        miniPlayerInset.value = value;
+      }
+    });
+  }
+
+  void _onPanUpdate(DragUpdateDetails d) {
+    _drag += d.delta;
+    if (_dragAxis == null && (_drag.dx.abs() > 8 || _drag.dy.abs() > 8)) {
+      _dragAxis = _drag.dx.abs() >= _drag.dy.abs()
+          ? Axis.horizontal
+          : Axis.vertical;
+    }
     setState(() {});
   }
 
-  void _onHorizontalDragEnd(DragEndDetails d) {
-    const threshold = 100.0;
-    if (_hDrag.abs() > threshold) {
+  void _onPanEnd(DragEndDetails d) {
+    final axis = _dragAxis;
+    if (axis == Axis.horizontal && _drag.dx.abs() > 100) {
       final ps = PlaybackService.instance;
-      if (_hDrag.isNegative) {
+      if (_drag.dx.isNegative) {
         ps.playNext();
       } else {
         ps.playPrevious();
       }
+    } else if (axis == Axis.vertical) {
+      if (_drag.dy < -30) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PlayerPage()),
+        );
+      } else if (_drag.dy > 30) {
+        PlaybackService.instance.clearQueue();
+      }
     }
-    _hDrag = 0;
+    _drag = Offset.zero;
+    _dragAxis = null;
     setState(() {});
   }
 
-  void _onVerticalDragUpdate(DragUpdateDetails d) {
-    _vDrag = (_vDrag + d.delta.dy).clamp(-300, 300);
+  void _onPanCancel() {
+    _drag = Offset.zero;
+    _dragAxis = null;
     setState(() {});
   }
 
-  void _onVerticalDragEnd(DragEndDetails d) {
-    if (_vDrag < -30) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const PlayerPage()),
-      );
-    } else if (_vDrag > 30) {
-      PlaybackService.instance.clearQueue();
-    }
-    _vDrag = 0;
-    setState(() {});
+  @override
+  void dispose() {
+    _syncInset(false);
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final size = MediaQuery.of(context).size;
-    final hFrac = _hDrag / size.width;
-    final vFrac = _vDrag / size.height;
+    final dx = _dragAxis == Axis.horizontal ? _drag.dx : 0.0;
+    final dy = _dragAxis == Axis.vertical ? _drag.dy : 0.0;
+    final hFrac = dx / size.width;
+    final vFrac = dy / size.height;
 
     final ps = PlaybackService.instance;
     return ValueListenableBuilder<PlayerState>(
@@ -73,10 +110,11 @@ class _MiniPlayerState extends State<MiniPlayer> {
           valueListenable: ps.queue,
           builder: (context, q, _) {
             final track = q.currentTrack;
+            _syncInset(track != null || isLoading);
             if (track == null) {
               if (isLoading) {
                 return Container(
-                  height: 80,
+                  height: 84,
                   margin: const EdgeInsets.symmetric(
                     horizontal: 12,
                     vertical: 6,
@@ -97,12 +135,14 @@ class _MiniPlayerState extends State<MiniPlayer> {
               return const SizedBox.shrink();
             }
 
-            return AnimatedSlide(
-              offset: Offset(hFrac, vFrac),
-              duration: (_hDrag == 0 && _vDrag == 0)
+            return TweenAnimationBuilder<Offset>(
+              tween: Tween(begin: Offset.zero, end: Offset(dx, dy)),
+              duration: (_drag == Offset.zero)
                   ? const Duration(milliseconds: 200)
                   : Duration.zero,
               curve: Curves.easeOut,
+              builder: (context, offset, child) =>
+                  Transform.translate(offset: offset, child: child),
               child: Opacity(
                 opacity:
                     (1 - vFrac.abs()).clamp(0.4, 1.0) *
@@ -112,12 +152,11 @@ class _MiniPlayerState extends State<MiniPlayer> {
                     context,
                     MaterialPageRoute(builder: (_) => const PlayerPage()),
                   ),
-                  onHorizontalDragUpdate: _onHorizontalDragUpdate,
-                  onHorizontalDragEnd: _onHorizontalDragEnd,
-                  onVerticalDragUpdate: _onVerticalDragUpdate,
-                  onVerticalDragEnd: _onVerticalDragEnd,
+                  onPanUpdate: _onPanUpdate,
+                  onPanEnd: _onPanEnd,
+                  onPanCancel: _onPanCancel,
                   child: Container(
-                    height: 80,
+                    height: 84,
                     margin: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 6,
@@ -148,12 +187,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                               children: [
                                 _TopRow(track: track),
                                 const SizedBox(height: 2),
-                                Row(
-                                  children: [
-                                    Expanded(child: _SeekRow()),
-                                    _DurationLabel(),
-                                  ],
-                                ),
+                                const SeekBar(compact: true),
                               ],
                             ),
                           ),
@@ -178,14 +212,14 @@ class _CoverWithPlayPause extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: AppTheme.spaceXXL * 2.5 * AppTheme.spaceScale(context),
-      height: AppTheme.spaceXXL * 2.5 * AppTheme.spaceScale(context),
+      width: AppTheme.spaceXXL * 3 * AppTheme.spaceScale(context),
+      height: AppTheme.spaceXXL * 3 * AppTheme.spaceScale(context),
       child: Stack(
         children: [
           CoverImage(
             trackId: track.id,
-            width: AppTheme.spaceXXL * 2.5 * AppTheme.spaceScale(context),
-            height: AppTheme.spaceXXL * 2.5 * AppTheme.spaceScale(context),
+            width: AppTheme.spaceXXL * 3 * AppTheme.spaceScale(context),
+            height: AppTheme.spaceXXL * 3 * AppTheme.spaceScale(context),
             iconSize: AppTheme.iconMD * AppTheme.iconScale(context),
           ),
           const Positioned.fill(child: _PlayOverlay()),
@@ -281,85 +315,5 @@ class _TopRow extends StatelessWidget {
         const VolumeButton(iconSize: 18, popupWidth: 40, popupHeight: 124),
       ],
     );
-  }
-}
-
-class _SeekRow extends StatefulWidget {
-  @override
-  State<_SeekRow> createState() => _SeekRowState();
-}
-
-class _SeekRowState extends State<_SeekRow> {
-  bool _dragging = false;
-  double _dragValue = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    final ps = PlaybackService.instance;
-    return ValueListenableBuilder<Duration>(
-      valueListenable: ps.duration,
-      builder: (context, dur, _) {
-        return ValueListenableBuilder<Duration>(
-          valueListenable: ps.position,
-          builder: (context, pos, _) {
-            final max = dur.inMilliseconds > 0 ? dur.inMilliseconds : 1.0;
-            final value = _dragging
-                ? _dragValue
-                : (pos.inMilliseconds / max).clamp(0.0, 1.0);
-            return SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 2,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
-              ),
-              child: Material(
-                type: MaterialType.transparency,
-                child: Slider(
-                  value: value,
-                  onChanged: (v) {
-                    _dragging = true;
-                    _dragValue = v;
-                  },
-                  onChangeEnd: (v) {
-                    _dragging = false;
-                    ps.seek(Duration(milliseconds: (v * max).toInt()));
-                  },
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _DurationLabel extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final ps = PlaybackService.instance;
-    return ValueListenableBuilder<Duration>(
-      valueListenable: ps.position,
-      builder: (context, pos, _) {
-        return ValueListenableBuilder<Duration>(
-          valueListenable: ps.duration,
-          builder: (context, dur, _) {
-            return Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Text(
-                '${_fmt(pos)} / ${_fmt(dur)}',
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  String _fmt(Duration d) {
-    final min = d.inMinutes.remainder(60);
-    final sec = d.inSeconds.remainder(60);
-    return '${min.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}';
   }
 }

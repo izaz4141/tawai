@@ -45,19 +45,27 @@ class HomePage extends StatelessWidget {
                     ),
                   ),
                 ),
-                ValueListenableBuilder<int>(
-                  valueListenable: navIndexNotifier,
-                  builder: (context, selectedIndex, _) {
-                    final showPlayer = _playerPages.contains(selectedIndex);
-                    if (!showPlayer) return const SizedBox.shrink();
-                    final colors = Theme.of(context).colorScheme;
-                    return Container(
-                      color: colors.surface,
-                      child: const MiniPlayer(),
-                    );
-                  },
-                ),
               ],
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ValueListenableBuilder<int>(
+                valueListenable: navIndexNotifier,
+                builder: (context, selectedIndex, _) {
+                  final showPlayer = _playerPages.contains(selectedIndex);
+                  if (!showPlayer) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (miniPlayerInset.value != 0) {
+                        miniPlayerInset.value = 0;
+                      }
+                    });
+                    return const SizedBox.shrink();
+                  }
+                  return const MiniPlayer();
+                },
+              ),
             ),
             // Always include interactive sidebar so it can respond to swipes and hamburger menu
             const InteractiveSidebar(),

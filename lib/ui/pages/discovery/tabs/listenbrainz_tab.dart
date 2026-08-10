@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/pages/discovery/widgets/recommendation_section.dart';
+import 'package:tawai/ui/widgets/mini_player.dart';
 import 'package:tawai/utils/bridge_service.dart';
 
 class _SectionData {
@@ -152,6 +153,7 @@ class _ListenBrainzTabState extends State<ListenBrainzTab> {
             recordings: _top.recordings,
             loading: _top.loading,
           ),
+          const MiniPlayerSpacer(),
         ],
       ),
     );

@@ -3,6 +3,7 @@ import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/pages/library/subpages/artist/artist_detail_page.dart';
 import 'package:tawai/ui/widgets/components/alphabet_index_scroller.dart';
+import 'package:tawai/ui/widgets/mini_player.dart';
 
 class LibraryArtistsTab extends StatelessWidget {
   const LibraryArtistsTab({
@@ -38,8 +39,9 @@ class LibraryArtistsTab extends StatelessWidget {
         padding: EdgeInsets.only(right: AlphabetIndexScroller.kStripWidth),
         controller: scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: artists.length,
+        itemCount: artists.length + 1,
         itemBuilder: (context, index) {
+          if (index == artists.length) return const MiniPlayerSpacer();
           final a = artists[index];
           return ListTile(
             leading: CircleAvatar(

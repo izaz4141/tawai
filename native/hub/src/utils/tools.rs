@@ -84,17 +84,10 @@ pub async fn handle_batch_rename_preview(context: Arc<AppContext>) {
     let receiver = BatchRenamePreviewRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
-        let result = if msg.source_id.is_some() || msg.file_paths.is_empty() {
-            let db = context.db().await;
-            tools::rename::batch_rename_preview_from_db(
-                db.pool(),
-                msg.source_id.as_deref(),
-                &msg.pattern,
-            )
-            .await
-        } else {
-            tools::rename::batch_rename_preview(&msg.file_paths, &msg.pattern).await
-        };
+        let db = context.db().await;
+        let result =
+            tools::rename::batch_rename_preview(db.pool(), msg.source_id.as_deref(), &msg.pattern)
+                .await;
         match result {
             Ok(previews) => {
                 BatchRenamePreviewResponse {
@@ -122,7 +115,15 @@ pub async fn handle_batch_rename_apply(context: Arc<AppContext>) {
     let receiver = BatchRenameApplyRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
-        match tools::rename::batch_rename_apply(&msg.file_paths, &msg.pattern).await {
+        let db = context.db().await;
+        match tools::rename::batch_rename_apply(
+            db.pool(),
+            &msg.file_paths,
+            &msg.track_ids,
+            &msg.pattern,
+        )
+        .await
+        {
             Ok(results) => {
                 BatchRenameApplyResponse {
                     id: msg.id,

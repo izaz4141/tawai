@@ -9,6 +9,7 @@ import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/utils/logger.dart';
 import 'package:tawai/ui/widgets/app_shell.dart';
+import 'package:tawai/ui/widgets/mini_player.dart';
 import 'package:tawai/ui/pages/library/filterable_list.dart';
 import 'package:tawai/ui/pages/library/tabs/tracks_tab.dart';
 import 'package:tawai/ui/pages/library/tabs/albums_tab.dart';
@@ -313,22 +314,30 @@ class _LibraryPageState extends State<LibraryPage>
       bottom: tabBar,
       floatingActionButton:
           _tabController.index == 0 && filteredTracks.isNotEmpty
-          ? Padding(
-              padding: EdgeInsets.only(
-                right: AlphabetIndexScroller.kStripWidth,
-              ),
-              child: FloatingActionButton(
-                heroTag: 'shuffle_tracks',
-                onPressed: () {
-                  final playback = PlaybackService.instance;
-                  if (!playback.shuffleModeEnabled.value) {
-                    playback.toggleShuffle(force: true);
-                  }
-                  final randomIndex = Random().nextInt(filteredTracks.length);
-                  playback.play(filteredTracks, startIndex: randomIndex);
-                },
-                child: const Icon(Icons.shuffle),
-              ),
+          ? ValueListenableBuilder<double>(
+              valueListenable: miniPlayerInset,
+              builder: (context, inset, _) {
+                return Padding(
+                  padding: EdgeInsets.only(
+                    right: AlphabetIndexScroller.kStripWidth,
+                    bottom: inset,
+                  ),
+                  child: FloatingActionButton(
+                    heroTag: 'shuffle_tracks',
+                    onPressed: () {
+                      final playback = PlaybackService.instance;
+                      if (!playback.shuffleModeEnabled.value) {
+                        playback.toggleShuffle(force: true);
+                      }
+                      final randomIndex = Random().nextInt(
+                        filteredTracks.length,
+                      );
+                      playback.play(filteredTracks, startIndex: randomIndex);
+                    },
+                    child: const Icon(Icons.shuffle),
+                  ),
+                );
+              },
             )
           : null,
       body: Stack(
@@ -399,18 +408,23 @@ class _LibraryPageState extends State<LibraryPage>
               ),
             ],
           ),
-          Positioned(
-            right: 0,
-            top: 0,
-            bottom: 0,
-            width: AlphabetIndexScroller.kStripWidth,
-            child: _buildScroller(
-              context,
-              filteredTracks,
-              filteredAlbums,
-              filteredArtists,
-              filteredPlaylists,
-            ),
+          ValueListenableBuilder<double>(
+            valueListenable: miniPlayerInset,
+            builder: (context, inset, _) {
+              return Positioned(
+                right: 0,
+                top: 0,
+                bottom: inset,
+                width: AlphabetIndexScroller.kStripWidth,
+                child: _buildScroller(
+                  context,
+                  filteredTracks,
+                  filteredAlbums,
+                  filteredArtists,
+                  filteredPlaylists,
+                ),
+              );
+            },
           ),
         ],
       ),

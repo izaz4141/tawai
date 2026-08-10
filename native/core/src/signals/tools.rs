@@ -119,6 +119,8 @@ pub struct FindMissingMetadataResponse {
 pub struct RenamePreview {
     pub file_path: String,
     pub expected_path: String,
+    #[serde(default)]
+    pub track_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -151,6 +153,8 @@ pub struct BatchRenameApplyRequest {
     #[serde(default)]
     pub id: String,
     pub file_paths: Vec<String>,
+    #[serde(default)]
+    pub track_ids: Vec<String>,
     pub pattern: String,
 }
 
