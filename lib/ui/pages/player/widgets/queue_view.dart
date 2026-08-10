@@ -385,6 +385,7 @@ class _CurrentTrackTile extends StatelessWidget {
                     valueListenable: PlaybackService.instance.playerState,
                     builder: (context, state, _) {
                       return IconButton.filled(
+                        color: colors.onPrimary,
                         iconSize: AppTheme.iconMD * iconScale,
                         onPressed: () =>
                             PlaybackService.instance.togglePlayPause(),
