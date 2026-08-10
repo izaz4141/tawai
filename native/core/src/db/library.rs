@@ -445,6 +445,23 @@ pub async fn update_track(
     }
 }
 
+/// Persist a track's new on-disk location after a rename/move. Only the
+/// `file_path` column is touched.
+pub async fn set_track_file_path(
+    pool: &DatabasePool,
+    track_id: &str,
+    new_file_path: &str,
+) -> anyhow::Result<()> {
+    match pool {
+        DatabasePool::Sqlite(p) => {
+            super::library_sq::set_track_file_path(p, track_id, new_file_path).await
+        }
+        DatabasePool::Postgres(p) => {
+            super::library_pg::set_track_file_path(p, track_id, new_file_path).await
+        }
+    }
+}
+
 pub async fn delete_tracks_by_source_id(
     pool: &DatabasePool,
     source_id: &str,

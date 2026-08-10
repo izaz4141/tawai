@@ -1,12 +1,12 @@
-use std::path::Path;
-
 use anyhow::Result;
 use sqlx::{Row, SqlitePool};
 
-use crate::audio::tags::AudioTag;
 use crate::db::database::DatabasePool;
 use crate::signals::tools::{DecadeEntry, FormatEntry, LibraryStats};
-use crate::tools::rename::expected_path_from_root;
+use crate::tools::rename::{
+    build_audio_tag, expected_path_from_root, ext_of, rename_track_from_pg_row,
+    rename_track_from_sq_row,
+};
 
 pub async fn get_library_stats(
     pool: &DatabasePool,
@@ -195,14 +195,21 @@ async fn get_library_stats_sq(
     let naming_conformity_pct = match naming_pattern.filter(|p| !p.is_empty()) {
         Some(pattern) if total_tracks > 0 => {
             let rows = sqlx::query(
-                r#"SELECT t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
+                r#"SELECT t.id AS track_id, t.file_path, t.title,
+                          COALESCE(ar.name, '') AS artist_name,
+                          COALESCE(aa.name, '') AS album_artist,
                           COALESCE(a.title, '') AS album_title,
-                          t.track_num, t.disc_num, a.date, a.disambiguation,
-                          COALESCE(ar.name, '') AS album_artist,
-                          a.total_discs, ls.url AS source_url
+                          t.track_num, t.disc_num, a.date, a.disambiguation, a.total_discs,
+                          ls.url AS source_url,
+                          COALESCE((SELECT GROUP_CONCAT(ta2.name, '||') FROM track_artists ta1 JOIN artists ta2 ON ta1.artist_id = ta2.id WHERE ta1.track_id = t.id), '') AS track_artists,
+                          COALESCE((SELECT GROUP_CONCAT(aa2.name, '||') FROM album_artists aa1 JOIN artists aa2 ON aa1.artist_id = aa2.id WHERE aa1.album_id = a.id), '') AS album_artists,
+                          COALESCE((SELECT GROUP_CONCAT(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id), '') AS genres,
+                          t.mbid_recording, ar.mbid AS mbid_artist, a.mbid AS mbid_release,
+                          t.lyrics, t.track_gain, t.track_peak
                    FROM tracks t
                    JOIN albums a ON t.album_id = a.id
                    JOIN artists ar ON t.artist_id = ar.id
+                   LEFT JOIN artists aa ON a.artist_id = aa.id
                    JOIN library_sources ls ON t.source_id = ls.id"#,
             )
             .fetch_all(pool)
@@ -211,43 +218,16 @@ async fn get_library_stats_sq(
             let conforming = rows
                 .iter()
                 .filter(|row| {
-                    let file_path: String = row.get("file_path");
-                    let source_url: String = row.get("source_url");
-                    let ext = Path::new(&file_path)
-                        .extension()
-                        .and_then(|e| e.to_str())
-                        .unwrap_or("mp3")
-                        .to_string();
-
-                    let tag = AudioTag {
-                        title: row.get("title"),
-                        artist: row.get("artist_name"),
-                        album_artist: row.get("album_artist"),
-                        album: row.get("album_title"),
-                        track_number: row.get::<Option<i32>, _>("track_num").unwrap_or(0),
-                        disc_number: row.get::<Option<i32>, _>("disc_num").unwrap_or(1),
-                        release_date: row.get("date"),
-                        album_disambiguation: row.get("disambiguation"),
-                        total_discs: row.get::<Option<i32>, _>("total_discs").unwrap_or(0),
-                        artist_sort: String::new(),
-                        artists: vec![],
-                        album_artist_sort: String::new(),
-                        album_artists: vec![],
-                        genres: vec![],
-                        mbid_recording: None,
-                        mbid_artist: None,
-                        mbid_release_artist: None,
-                        mbid_release: None,
-                        acoust_id: None,
-                        acoust_id_fingerprint: None,
-                        lyrics: None,
-                        cover: None,
-                        track_gain: None,
-                        track_peak: None,
-                    };
-
-                    expected_path_from_root(&source_url, pattern, &tag, &ext).to_string_lossy()
-                        == file_path.as_str()
+                    let data = rename_track_from_sq_row(row);
+                    let ext = ext_of(&data.file_path);
+                    expected_path_from_root(
+                        &data.source_url,
+                        pattern,
+                        &build_audio_tag(&data),
+                        &ext,
+                    )
+                    .to_string_lossy()
+                        == data.file_path
                 })
                 .count() as f64;
 
@@ -608,14 +588,21 @@ async fn get_library_stats_pg(
     let naming_conformity_pct = match naming_pattern.filter(|p| !p.is_empty()) {
         Some(pattern) if total_tracks > 0 => {
             let rows = sqlx::query(
-                r#"SELECT t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
+                r#"SELECT t.id AS track_id, t.file_path, t.title,
+                          COALESCE(ar.name, '') AS artist_name,
+                          COALESCE(aa.name, '') AS album_artist,
                           COALESCE(a.title, '') AS album_title,
-                          t.track_num, t.disc_num, a.date, a.disambiguation,
-                          COALESCE(ar.name, '') AS album_artist,
-                          a.total_discs, ls.url AS source_url
+                          t.track_num, t.disc_num, a.date, a.disambiguation, a.total_discs,
+                          ls.url AS source_url,
+                          COALESCE((SELECT string_agg(ta2.name, '||') FROM track_artists ta1 JOIN artists ta2 ON ta1.artist_id = ta2.id WHERE ta1.track_id = t.id), '') AS track_artists,
+                          COALESCE((SELECT string_agg(aa2.name, '||') FROM album_artists aa1 JOIN artists aa2 ON aa1.artist_id = aa2.id WHERE aa1.album_id = a.id), '') AS album_artists,
+                          COALESCE((SELECT string_agg(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id), '') AS genres,
+                          t.mbid_recording, ar.mbid AS mbid_artist, a.mbid AS mbid_release,
+                          t.lyrics, t.track_gain, t.track_peak
                    FROM tracks t
                    JOIN albums a ON t.album_id = a.id
                    JOIN artists ar ON t.artist_id = ar.id
+                   LEFT JOIN artists aa ON a.artist_id = aa.id
                    JOIN library_sources ls ON t.source_id = ls.id"#,
             )
             .fetch_all(pool)
@@ -624,43 +611,16 @@ async fn get_library_stats_pg(
             let conforming = rows
                 .iter()
                 .filter(|row| {
-                    let file_path: String = row.get("file_path");
-                    let source_url: String = row.get("source_url");
-                    let ext = Path::new(&file_path)
-                        .extension()
-                        .and_then(|e| e.to_str())
-                        .unwrap_or("mp3")
-                        .to_string();
-
-                    let tag = AudioTag {
-                        title: row.get("title"),
-                        artist: row.get("artist_name"),
-                        album_artist: row.get("album_artist"),
-                        album: row.get("album_title"),
-                        track_number: row.get::<Option<i32>, _>("track_num").unwrap_or(0),
-                        disc_number: row.get::<Option<i32>, _>("disc_num").unwrap_or(1),
-                        release_date: row.get("date"),
-                        album_disambiguation: row.get("disambiguation"),
-                        total_discs: row.get::<Option<i32>, _>("total_discs").unwrap_or(0),
-                        artist_sort: String::new(),
-                        artists: vec![],
-                        album_artist_sort: String::new(),
-                        album_artists: vec![],
-                        genres: vec![],
-                        mbid_recording: None,
-                        mbid_artist: None,
-                        mbid_release_artist: None,
-                        mbid_release: None,
-                        acoust_id: None,
-                        acoust_id_fingerprint: None,
-                        lyrics: None,
-                        cover: None,
-                        track_gain: None,
-                        track_peak: None,
-                    };
-
-                    expected_path_from_root(&source_url, pattern, &tag, &ext).to_string_lossy()
-                        == file_path.as_str()
+                    let data = rename_track_from_pg_row(row);
+                    let ext = ext_of(&data.file_path);
+                    expected_path_from_root(
+                        &data.source_url,
+                        pattern,
+                        &build_audio_tag(&data),
+                        &ext,
+                    )
+                    .to_string_lossy()
+                        == data.file_path
                 })
                 .count() as f64;
 

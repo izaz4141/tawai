@@ -1112,6 +1112,17 @@ pub async fn update_track(
     Ok(())
 }
 
+/// Update a track's on-disk path. Kept lightweight on purpose: the batch rename
+/// flow only needs to persist the new location, not rewrite metadata.
+pub async fn set_track_file_path(pool: &PgPool, track_id: &str, new_file_path: &str) -> Result<()> {
+    sqlx::query("UPDATE tracks SET file_path = $1, updated_at = NOW() WHERE id = $2")
+        .bind(new_file_path)
+        .bind(track_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 async fn upsert_artist_in_tx(
     conn: &mut sqlx::PgConnection,
     name: &str,

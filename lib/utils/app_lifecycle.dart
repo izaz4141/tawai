@@ -36,7 +36,9 @@ class _AppTrayListener extends TrayListener {
 Future<void> initTray() async {
   if (kIsWeb) return;
   await trayManager.setIcon(
-    Platform.isWindows ? 'assets/icons/tawai.ico' : 'assets/icons/tawai-32.png',
+    Platform.isWindows
+        ? 'assets/icons/tawai-filled.ico'
+        : 'assets/icons/tawai-filled.svg',
   );
   if (!Platform.isLinux) {
     await trayManager.setToolTip(

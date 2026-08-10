@@ -1,9 +1,10 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use sqlx::Row;
 
-use crate::audio::tags::AudioTag;
+use crate::audio::tags::{AudioTag, derive_sort_name, parse_artists};
 use crate::db::database::DatabasePool;
 use crate::signals::tools::{NamingViolation, RenamePreview};
 
@@ -191,6 +192,25 @@ fn get_naming_var_value(var: &str, tag: &AudioTag) -> String {
     }
 }
 
+/// Compute the destination file name for `pattern`, falling back to
+/// `fallback_stem` when the formatted name is empty. Shared by preview and apply
+/// so both produce identical paths.
+fn dest_from_root(
+    source_root: &str,
+    pattern: &str,
+    tag: &AudioTag,
+    ext: &str,
+    fallback_stem: &str,
+) -> PathBuf {
+    let formatted = format_naming_pattern(pattern, tag);
+    let base = if formatted.trim().is_empty() {
+        fallback_stem
+    } else {
+        formatted.as_str()
+    };
+    Path::new(source_root).join(format!("{}.{}", base, ext))
+}
+
 /// Compute the full destination path for a file rooted at the library source
 /// directory. The naming pattern may contain subdirectories (`/`), so the
 /// result is joined to the source root instead of the file's current parent,
@@ -201,33 +221,7 @@ pub(crate) fn expected_path_from_root(
     tag: &AudioTag,
     ext: &str,
 ) -> PathBuf {
-    let new_name = format_naming_pattern(pattern, tag);
-    Path::new(source_root).join(format!("{}.{}", new_name, ext))
-}
-
-/// Rename an audio file based on a naming pattern.
-/// Creates parent directories if they don't exist.
-/// Returns the new file path.
-pub fn rename_audio_file(old_path: &Path, pattern: &str, tag: &AudioTag) -> Result<PathBuf> {
-    let ext = old_path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("mp3");
-    let dir = old_path.parent().unwrap_or(Path::new("."));
-    let new_name = format_naming_pattern(pattern, tag);
-    let new_path = dir.join(format!("{}.{}", new_name, ext));
-
-    if new_path == old_path {
-        return Ok(new_path);
-    }
-
-    if let Some(parent) = new_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-
-    std::fs::rename(old_path, &new_path)?;
-
-    Ok(new_path)
+    dest_from_root(source_root, pattern, tag, ext, "track")
 }
 
 /// Move (and rename) an audio file into `source_url`, rooting the naming
@@ -249,19 +243,12 @@ pub fn move_file_into_source(
     let stem = old_path
         .file_stem()
         .and_then(|s| s.to_str())
-        .unwrap_or("track");
-    let base_name = match pattern {
-        Some(p) => {
-            let formatted = format_naming_pattern(p, tag);
-            if formatted.trim().is_empty() {
-                stem.to_string()
-            } else {
-                formatted
-            }
-        }
-        None => stem.to_string(),
+        .unwrap_or("track")
+        .to_string();
+    let new_path = match pattern {
+        Some(p) => dest_from_root(source_url, p, tag, &ext, &stem),
+        None => Path::new(source_url).join(format!("{}.{}", stem, ext)),
     };
-    let new_path = Path::new(source_url).join(format!("{}.{}", base_name, ext));
     if new_path == old_path {
         return Ok(new_path);
     }
@@ -274,59 +261,64 @@ pub fn move_file_into_source(
 
 /// Apply a batch rename.
 ///
-/// The naming pattern is rooted at each track's library source directory so
-/// that subdirectories in the pattern are not appended to the file's current
-/// parent (which would nest them twice). Files without a matching source row
-/// fall back to renaming in place relative to their current parent.
+/// The naming pattern is rooted at each track's library source directory using
+/// the same database metadata as [`batch_rename_preview`], so preview and apply
+/// agree. Only tracks with a matching database record are renamed; anything
+/// else produces an `<error: ...>` entry.
 pub async fn batch_rename_apply(
     pool: &DatabasePool,
     file_paths: &[String],
     track_ids: &[String],
     pattern: &str,
 ) -> Result<Vec<RenamePreview>> {
-    let mut results = Vec::new();
+    let ids: Vec<String> = track_ids
+        .iter()
+        .filter(|s| !s.is_empty())
+        .cloned()
+        .collect();
+    let rows = match pool {
+        DatabasePool::Sqlite(p) => fetch_rename_tracks_by_ids_sq(p, &ids).await?,
+        DatabasePool::Postgres(p) => fetch_rename_tracks_by_ids_pg(p, &ids).await?,
+    };
+    let by_id: HashMap<String, RenameTrackDb> =
+        rows.into_iter().map(|r| (r.track_id.clone(), r)).collect();
 
+    let mut results = Vec::new();
     for (i, path_str) in file_paths.iter().enumerate() {
+        let track_id = track_ids.get(i).map(String::as_str).unwrap_or("");
         let path = Path::new(path_str);
-        match crate::audio::tags::read_audio_tags(path) {
-            Ok((tag, _duration, _track_num, _disc_num)) => {
-                let track_id = track_ids.get(i).map(|s| s.as_str()).unwrap_or("");
-                let result = if !track_id.is_empty() {
-                    match crate::db::library_source::get_source_info_by_track_id(pool, track_id)
-                        .await
-                    {
-                        Ok(Some(info)) => {
-                            move_file_into_source(path, &info.url, Some(pattern), &tag)
-                        }
-                        _ => rename_audio_file(path, pattern, &tag),
-                    }
-                } else {
-                    rename_audio_file(path, pattern, &tag)
-                };
-                match result {
-                    Ok(new_path) => {
-                        results.push(RenamePreview {
-                            file_path: path_str.clone(),
-                            expected_path: new_path.to_string_lossy().to_string(),
-                            track_id: track_id.to_string(),
-                        });
-                    }
-                    Err(e) => {
-                        results.push(RenamePreview {
-                            file_path: path_str.clone(),
-                            expected_path: format!("<error: {}>", e),
-                            track_id: track_id.to_string(),
-                        });
-                    }
-                }
+        let result = match by_id.get(track_id) {
+            Some(row) => {
+                let tag = build_audio_tag(row);
+                move_file_into_source(path, &row.source_url, Some(pattern), &tag)
             }
-            Err(e) => {
+            None => Err(anyhow::anyhow!("no database record for track")),
+        };
+        match result {
+            Ok(new_path) => {
+                if let Err(e) = crate::db::library::set_track_file_path(
+                    pool,
+                    track_id,
+                    &new_path.to_string_lossy(),
+                )
+                .await
+                {
+                    crate::utils::logger::warn(&format!(
+                        "failed to persist new path for track {}: {e}",
+                        track_id
+                    ));
+                }
                 results.push(RenamePreview {
                     file_path: path_str.clone(),
-                    expected_path: format!("<error: {}>", e),
-                    track_id: track_ids.get(i).cloned().unwrap_or_default(),
+                    expected_path: new_path.to_string_lossy().to_string(),
+                    track_id: track_id.to_string(),
                 });
             }
+            Err(e) => results.push(RenamePreview {
+                file_path: path_str.clone(),
+                expected_path: format!("<error: {}>", e),
+                track_id: track_id.to_string(),
+            }),
         }
     }
 
@@ -339,189 +331,11 @@ pub async fn batch_rename_preview(
     source_id: Option<&str>,
     pattern: &str,
 ) -> Result<Vec<RenamePreview>> {
-    match pool {
-        DatabasePool::Sqlite(p) => preview_from_db_sq(p, source_id, pattern).await,
-        DatabasePool::Postgres(p) => preview_from_db_pg(p, source_id, pattern).await,
-    }
-}
-
-async fn preview_from_db_sq(
-    pool: &sqlx::SqlitePool,
-    source_id: Option<&str>,
-    pattern: &str,
-) -> Result<Vec<RenamePreview>> {
-    let rows = if let Some(sid) = source_id {
-        sqlx::query(
-            r#"SELECT t.id AS track_id, t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
-                      COALESCE(a.title, '') AS album_title,
-                      t.track_num, t.disc_num, a.date, a.disambiguation,
-                      COALESCE(ar.name, '') AS album_artist,
-                      a.total_discs, ls.url AS source_url
-               FROM tracks t
-               JOIN albums a ON t.album_id = a.id
-               JOIN artists ar ON t.artist_id = ar.id
-               JOIN library_sources ls ON t.source_id = ls.id
-               WHERE t.source_id = ? AND ls.source_type NOT LIKE 'recommendation:%'
-               ORDER BY t.file_path"#,
-        )
-        .bind(sid)
-        .fetch_all(pool)
-        .await?
-    } else {
-        sqlx::query(
-            r#"SELECT t.id AS track_id, t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
-                      COALESCE(a.title, '') AS album_title,
-                      t.track_num, t.disc_num, a.date, a.disambiguation,
-                      COALESCE(ar.name, '') AS album_artist,
-                      a.total_discs, ls.url AS source_url
-               FROM tracks t
-               JOIN albums a ON t.album_id = a.id
-               JOIN artists ar ON t.artist_id = ar.id
-               JOIN library_sources ls ON t.source_id = ls.id
-               WHERE ls.source_type NOT LIKE 'recommendation:%'
-               ORDER BY t.file_path"#,
-        )
-        .fetch_all(pool)
-        .await?
+    let rows = match pool {
+        DatabasePool::Sqlite(p) => fetch_rename_tracks_sq(p, source_id).await?,
+        DatabasePool::Postgres(p) => fetch_rename_tracks_pg(p, source_id).await?,
     };
-
-    let mut previews = Vec::new();
-    for row in rows {
-        let file_path: String = row.get("file_path");
-        let track_id: String = row.get("track_id");
-        let source_url: String = row.get("source_url");
-        let ext = Path::new(&file_path)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("mp3")
-            .to_string();
-
-        let tag = AudioTag {
-            title: row.get("title"),
-            artist: row.get("artist_name"),
-            album_artist: row.get("album_artist"),
-            album: row.get("album_title"),
-            track_number: row.get::<Option<i32>, _>("track_num").unwrap_or(0),
-            disc_number: row.get::<Option<i32>, _>("disc_num").unwrap_or(1),
-            release_date: row.get("date"),
-            album_disambiguation: row.get("disambiguation"),
-            total_discs: row.get::<Option<i32>, _>("total_discs").unwrap_or(0),
-            artist_sort: String::new(),
-            artists: vec![],
-            album_artist_sort: String::new(),
-            album_artists: vec![],
-            genres: vec![],
-            mbid_recording: None,
-            mbid_artist: None,
-            mbid_release_artist: None,
-            mbid_release: None,
-            acoust_id: None,
-            acoust_id_fingerprint: None,
-            lyrics: None,
-            cover: None,
-            track_gain: None,
-            track_peak: None,
-        };
-
-        let expected_path = expected_path_from_root(&source_url, pattern, &tag, &ext);
-        previews.push(RenamePreview {
-            file_path,
-            expected_path: expected_path.to_string_lossy().to_string(),
-            track_id,
-        });
-    }
-
-    Ok(previews)
-}
-
-async fn preview_from_db_pg(
-    pool: &sqlx::PgPool,
-    source_id: Option<&str>,
-    pattern: &str,
-) -> Result<Vec<RenamePreview>> {
-    let rows = if let Some(sid) = source_id {
-        sqlx::query(
-            r#"SELECT t.id AS track_id, t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
-                      COALESCE(a.title, '') AS album_title,
-                      t.track_num, t.disc_num, a.date, a.disambiguation,
-                      COALESCE(ar.name, '') AS album_artist,
-                      a.total_discs, ls.url AS source_url
-               FROM tracks t
-               JOIN albums a ON t.album_id = a.id
-               JOIN artists ar ON t.artist_id = ar.id
-               JOIN library_sources ls ON t.source_id = ls.id
-               WHERE t.source_id = $1
-                 AND ls.source_type NOT LIKE 'recommendation:%'
-               ORDER BY t.file_path"#,
-        )
-        .bind(sid)
-        .fetch_all(pool)
-        .await?
-    } else {
-        sqlx::query(
-            r#"SELECT t.id AS track_id, t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
-                      COALESCE(a.title, '') AS album_title,
-                      t.track_num, t.disc_num, a.date, a.disambiguation,
-                      COALESCE(ar.name, '') AS album_artist,
-                      a.total_discs, ls.url AS source_url
-               FROM tracks t
-               JOIN albums a ON t.album_id = a.id
-               JOIN artists ar ON t.artist_id = ar.id
-               JOIN library_sources ls ON t.source_id = ls.id
-               WHERE ls.source_type NOT LIKE 'recommendation:%'
-               ORDER BY t.file_path"#,
-        )
-        .fetch_all(pool)
-        .await?
-    };
-
-    let mut previews = Vec::new();
-    for row in rows {
-        let file_path: String = row.get("file_path");
-        let track_id: String = row.get("track_id");
-        let source_url: String = row.get("source_url");
-        let ext = Path::new(&file_path)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("mp3")
-            .to_string();
-
-        let tag = AudioTag {
-            title: row.get("title"),
-            artist: row.get("artist_name"),
-            album_artist: row.get("album_artist"),
-            album: row.get("album_title"),
-            track_number: row.get::<Option<i32>, _>("track_num").unwrap_or(0),
-            disc_number: row.get::<Option<i32>, _>("disc_num").unwrap_or(1),
-            release_date: row.get("date"),
-            album_disambiguation: row.get("disambiguation"),
-            total_discs: row.get::<Option<i32>, _>("total_discs").unwrap_or(0),
-            artist_sort: String::new(),
-            artists: vec![],
-            album_artist_sort: String::new(),
-            album_artists: vec![],
-            genres: vec![],
-            mbid_recording: None,
-            mbid_artist: None,
-            mbid_release_artist: None,
-            mbid_release: None,
-            acoust_id: None,
-            acoust_id_fingerprint: None,
-            lyrics: None,
-            cover: None,
-            track_gain: None,
-            track_peak: None,
-        };
-
-        let expected_path = expected_path_from_root(&source_url, pattern, &tag, &ext);
-        previews.push(RenamePreview {
-            file_path,
-            expected_path: expected_path.to_string_lossy().to_string(),
-            track_id,
-        });
-    }
-
-    Ok(previews)
+    Ok(build_previews(rows, pattern))
 }
 
 /// Check which files in the library don't follow the naming convention.
@@ -530,208 +344,320 @@ pub async fn check_naming_convention(
     source_id: Option<&str>,
     pattern: &str,
 ) -> Result<Vec<NamingViolation>> {
-    match pool {
-        DatabasePool::Sqlite(p) => check_naming_convention_sq(p, source_id, pattern).await,
-        DatabasePool::Postgres(p) => check_naming_convention_pg(p, source_id, pattern).await,
-    }
+    let rows = match pool {
+        DatabasePool::Sqlite(p) => fetch_rename_tracks_sq(p, source_id).await?,
+        DatabasePool::Postgres(p) => fetch_rename_tracks_pg(p, source_id).await?,
+    };
+    Ok(build_violations(rows, pattern))
 }
 
-async fn check_naming_convention_sq(
+/// Naming-relevant track data loaded from the database. Built once per row and
+/// shared by preview, apply, and convention checks so all three use the same
+/// `AudioTag`.
+#[derive(Debug, Clone)]
+pub(crate) struct RenameTrackDb {
+    pub track_id: String,
+    pub file_path: String,
+    pub source_url: String,
+    pub title: String,
+    pub artist: String,
+    pub album_artist: String,
+    pub album: String,
+    pub track_number: i32,
+    pub disc_number: i32,
+    pub release_date: Option<String>,
+    pub album_disambiguation: Option<String>,
+    pub total_discs: i32,
+    pub track_artists: Vec<String>,
+    pub album_artists: Vec<String>,
+    pub genres: Vec<String>,
+    pub mbid_recording: Option<String>,
+    pub mbid_artist: Option<String>,
+    pub mbid_release: Option<String>,
+    pub lyrics: Option<String>,
+    pub track_gain: Option<f64>,
+    pub track_peak: Option<f64>,
+}
+
+/// Build an `AudioTag` from database metadata, mirroring how tags are read from
+/// files (see `extract_audio_tags`) so rename preview and apply produce the
+/// same names. `{album_artist}` resolves to the album's artist and
+/// `{multi_artist}` reflects the track's full artist list.
+pub(crate) fn build_audio_tag(row: &RenameTrackDb) -> AudioTag {
+    let mut tag = AudioTag {
+        title: row.title.clone(),
+        artist: row.artist.clone(),
+        artists: row.track_artists.clone(),
+        album: row.album.clone(),
+        album_artist: row.album_artist.clone(),
+        album_artists: row.album_artists.clone(),
+        genres: row.genres.clone(),
+        release_date: row.release_date.clone(),
+        track_number: row.track_number,
+        disc_number: row.disc_number,
+        mbid_recording: row.mbid_recording.clone(),
+        mbid_artist: row.mbid_artist.clone(),
+        mbid_release: row.mbid_release.clone(),
+        lyrics: row.lyrics.clone(),
+        album_disambiguation: row.album_disambiguation.clone(),
+        total_discs: row.total_discs,
+        track_gain: row.track_gain,
+        track_peak: row.track_peak,
+        ..Default::default()
+    };
+    if tag.artists.is_empty() {
+        tag.artists = parse_artists(&tag.artist);
+    }
+    if tag.album_artists.is_empty() {
+        tag.album_artists = parse_artists(&tag.album_artist);
+    }
+    if tag.artist_sort.is_empty() {
+        tag.artist_sort = derive_sort_name(&tag.artist);
+    }
+    if tag.album_artist_sort.is_empty() {
+        tag.album_artist_sort = derive_sort_name(&tag.album_artist);
+    }
+    tag
+}
+
+fn split_pipe_list(s: Option<String>) -> Vec<String> {
+    s.map(|v| {
+        v.split("||")
+            .filter(|x| !x.is_empty())
+            .map(|x| x.to_string())
+            .collect()
+    })
+    .unwrap_or_default()
+}
+
+pub(crate) fn ext_of(path: &str) -> String {
+    Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("mp3")
+        .to_string()
+}
+
+fn stem_of(path: &str) -> String {
+    Path::new(path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("track")
+        .to_string()
+}
+
+fn build_previews(rows: Vec<RenameTrackDb>, pattern: &str) -> Vec<RenamePreview> {
+    rows.into_iter()
+        .map(|row| {
+            let ext = ext_of(&row.file_path);
+            let fallback = stem_of(&row.file_path);
+            let expected_path = dest_from_root(
+                &row.source_url,
+                pattern,
+                &build_audio_tag(&row),
+                &ext,
+                &fallback,
+            );
+            RenamePreview {
+                file_path: row.file_path,
+                expected_path: expected_path.to_string_lossy().to_string(),
+                track_id: row.track_id,
+            }
+        })
+        .collect()
+}
+
+fn build_violations(rows: Vec<RenameTrackDb>, pattern: &str) -> Vec<NamingViolation> {
+    let mut violations = Vec::new();
+    for row in rows {
+        let tag = build_audio_tag(&row);
+        let ext = ext_of(&row.file_path);
+        let fallback = stem_of(&row.file_path);
+        let expected_name = format_naming_pattern(pattern, &tag);
+        let expected_path = dest_from_root(&row.source_url, pattern, &tag, &ext, &fallback);
+
+        if expected_path.to_string_lossy() != row.file_path {
+            let file_name = Path::new(&row.file_path)
+                .strip_prefix(&row.source_url)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| row.file_path.clone());
+            violations.push(NamingViolation {
+                file_path: row.file_path,
+                file_name,
+                expected_name: format!("{}.{}", expected_name, ext),
+                track_id: row.track_id,
+            });
+        }
+    }
+    violations
+}
+
+const SQ_RENAME_TRACK_SELECT: &str = r#"SELECT t.id AS track_id, t.file_path, t.title,
+    COALESCE(ar.name, '') AS artist_name,
+    COALESCE(aa.name, '') AS album_artist,
+    COALESCE(a.title, '') AS album_title,
+    t.track_num, t.disc_num, a.date, a.disambiguation, a.total_discs,
+    ls.url AS source_url,
+    COALESCE((SELECT GROUP_CONCAT(ta2.name, '||') FROM track_artists ta1 JOIN artists ta2 ON ta1.artist_id = ta2.id WHERE ta1.track_id = t.id), '') AS track_artists,
+    COALESCE((SELECT GROUP_CONCAT(aa2.name, '||') FROM album_artists aa1 JOIN artists aa2 ON aa1.artist_id = aa2.id WHERE aa1.album_id = a.id), '') AS album_artists,
+    COALESCE((SELECT GROUP_CONCAT(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id), '') AS genres,
+    t.mbid_recording, ar.mbid AS mbid_artist, a.mbid AS mbid_release,
+    t.lyrics, t.track_gain, t.track_peak
+    FROM tracks t
+    JOIN albums a ON t.album_id = a.id
+    JOIN artists ar ON t.artist_id = ar.id
+    LEFT JOIN artists aa ON a.artist_id = aa.id
+    JOIN library_sources ls ON t.source_id = ls.id"#;
+
+const PG_RENAME_TRACK_SELECT: &str = r#"SELECT t.id AS track_id, t.file_path, t.title,
+    COALESCE(ar.name, '') AS artist_name,
+    COALESCE(aa.name, '') AS album_artist,
+    COALESCE(a.title, '') AS album_title,
+    t.track_num, t.disc_num, a.date, a.disambiguation, a.total_discs,
+    ls.url AS source_url,
+    COALESCE((SELECT string_agg(ta2.name, '||') FROM track_artists ta1 JOIN artists ta2 ON ta1.artist_id = ta2.id WHERE ta1.track_id = t.id), '') AS track_artists,
+    COALESCE((SELECT string_agg(aa2.name, '||') FROM album_artists aa1 JOIN artists aa2 ON aa1.artist_id = aa2.id WHERE aa1.album_id = a.id), '') AS album_artists,
+    COALESCE((SELECT string_agg(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id), '') AS genres,
+    t.mbid_recording, ar.mbid AS mbid_artist, a.mbid AS mbid_release,
+    t.lyrics, t.track_gain, t.track_peak
+    FROM tracks t
+    JOIN albums a ON t.album_id = a.id
+    JOIN artists ar ON t.artist_id = ar.id
+    LEFT JOIN artists aa ON a.artist_id = aa.id
+    JOIN library_sources ls ON t.source_id = ls.id"#;
+
+async fn fetch_rename_tracks_sq(
     pool: &sqlx::SqlitePool,
     source_id: Option<&str>,
-    pattern: &str,
-) -> Result<Vec<NamingViolation>> {
+) -> Result<Vec<RenameTrackDb>> {
     let rows = if let Some(sid) = source_id {
-        sqlx::query(
-            r#"SELECT t.id, t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
-                      COALESCE(a.title, '') AS album_title,
-                      t.track_num, t.disc_num, a.date, a.disambiguation,
-                      COALESCE(ar.name, '') AS album_artist,
-                      a.total_discs, ls.url AS source_url
-               FROM tracks t
-               JOIN albums a ON t.album_id = a.id
-               JOIN artists ar ON t.artist_id = ar.id
-               JOIN library_sources ls ON t.source_id = ls.id
-               WHERE t.source_id = ?
-                 AND ls.source_type NOT LIKE 'recommendation:%'
-               ORDER BY t.file_path"#,
-        )
+        sqlx::query(&format!(
+            "{SQ_RENAME_TRACK_SELECT} WHERE t.source_id = ? AND ls.source_type NOT LIKE 'recommendation:%' ORDER BY t.file_path"
+        ))
         .bind(sid)
         .fetch_all(pool)
         .await?
     } else {
-        sqlx::query(
-            r#"SELECT t.id, t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
-                      COALESCE(a.title, '') AS album_title,
-                      t.track_num, t.disc_num, a.date, a.disambiguation,
-                      COALESCE(ar.name, '') AS album_artist,
-                      a.total_discs, ls.url AS source_url
-               FROM tracks t
-               JOIN albums a ON t.album_id = a.id
-               JOIN artists ar ON t.artist_id = ar.id
-               JOIN library_sources ls ON t.source_id = ls.id
-               WHERE ls.source_type NOT LIKE 'recommendation:%'
-               ORDER BY t.file_path"#,
-        )
+        sqlx::query(&format!(
+            "{SQ_RENAME_TRACK_SELECT} WHERE ls.source_type NOT LIKE 'recommendation:%' ORDER BY t.file_path"
+        ))
         .fetch_all(pool)
         .await?
     };
-
-    let mut violations = Vec::new();
-
-    for row in rows {
-        let file_path: String = row.get("file_path");
-        let source_url: String = row.get("source_url");
-        let ext = Path::new(&file_path)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("mp3")
-            .to_string();
-
-        let tag = AudioTag {
-            title: row.get("title"),
-            artist: row.get("artist_name"),
-            album_artist: row.get("album_artist"),
-            album: row.get("album_title"),
-            track_number: row.get::<Option<i32>, _>("track_num").unwrap_or(0),
-            disc_number: row.get::<Option<i32>, _>("disc_num").unwrap_or(1),
-            release_date: row.get("date"),
-            album_disambiguation: row.get("disambiguation"),
-            total_discs: row.get::<Option<i32>, _>("total_discs").unwrap_or(0),
-            artist_sort: String::new(),
-            artists: vec![],
-            album_artist_sort: String::new(),
-            album_artists: vec![],
-            genres: vec![],
-            mbid_recording: None,
-            mbid_artist: None,
-            mbid_release_artist: None,
-            mbid_release: None,
-            acoust_id: None,
-            acoust_id_fingerprint: None,
-            lyrics: None,
-            cover: None,
-            track_gain: None,
-            track_peak: None,
-        };
-
-        let expected_name = format_naming_pattern(pattern, &tag);
-        let expected_path = expected_path_from_root(&source_url, pattern, &tag, &ext);
-
-        if expected_path.to_string_lossy() != file_path {
-            let file_name = Path::new(&file_path)
-                .strip_prefix(&source_url)
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|_| file_path.clone());
-            violations.push(NamingViolation {
-                file_path: file_path.clone(),
-                file_name,
-                expected_name: format!("{}.{}", expected_name, ext),
-                track_id: row.get("id"),
-            });
-        }
-    }
-
-    Ok(violations)
+    Ok(rows.iter().map(rename_track_from_sq_row).collect())
 }
 
-async fn check_naming_convention_pg(
+async fn fetch_rename_tracks_pg(
     pool: &sqlx::PgPool,
     source_id: Option<&str>,
-    pattern: &str,
-) -> Result<Vec<NamingViolation>> {
+) -> Result<Vec<RenameTrackDb>> {
     let rows = if let Some(sid) = source_id {
-        sqlx::query(
-            r#"SELECT t.id, t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
-                      COALESCE(a.title, '') AS album_title,
-                      t.track_num, t.disc_num, a.date, a.disambiguation,
-                      COALESCE(ar.name, '') AS album_artist,
-                      a.total_discs, ls.url AS source_url
-               FROM tracks t
-               JOIN albums a ON t.album_id = a.id
-               JOIN artists ar ON t.artist_id = ar.id
-               JOIN library_sources ls ON t.source_id = ls.id
-               WHERE t.source_id = $1
-                 AND ls.source_type NOT LIKE 'recommendation:%'
-               ORDER BY t.file_path"#,
-        )
+        sqlx::query(&format!(
+            "{PG_RENAME_TRACK_SELECT} WHERE t.source_id = $1 AND ls.source_type NOT LIKE 'recommendation:%' ORDER BY t.file_path"
+        ))
         .bind(sid)
         .fetch_all(pool)
         .await?
     } else {
-        sqlx::query(
-            r#"SELECT t.id, t.file_path, t.title, COALESCE(ar.name, '') AS artist_name,
-                      COALESCE(a.title, '') AS album_title,
-                      t.track_num, t.disc_num, a.date, a.disambiguation,
-                      COALESCE(ar.name, '') AS album_artist,
-                      a.total_discs, ls.url AS source_url
-               FROM tracks t
-               JOIN albums a ON t.album_id = a.id
-               JOIN artists ar ON t.artist_id = ar.id
-               JOIN library_sources ls ON t.source_id = ls.id
-               WHERE ls.source_type NOT LIKE 'recommendation:%'
-               ORDER BY t.file_path"#,
-        )
+        sqlx::query(&format!(
+            "{PG_RENAME_TRACK_SELECT} WHERE ls.source_type NOT LIKE 'recommendation:%' ORDER BY t.file_path"
+        ))
         .fetch_all(pool)
         .await?
     };
+    Ok(rows.iter().map(rename_track_from_pg_row).collect())
+}
 
-    let mut violations = Vec::new();
-
-    for row in rows {
-        let file_path: String = row.get("file_path");
-        let source_url: String = row.get("source_url");
-        let ext = Path::new(&file_path)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("mp3")
-            .to_string();
-
-        let tag = AudioTag {
-            title: row.get("title"),
-            artist: row.get("artist_name"),
-            album_artist: row.get("album_artist"),
-            album: row.get("album_title"),
-            track_number: row.get::<Option<i32>, _>("track_num").unwrap_or(0),
-            disc_number: row.get::<Option<i32>, _>("disc_num").unwrap_or(1),
-            release_date: row.get("date"),
-            album_disambiguation: row.get("disambiguation"),
-            total_discs: row.get::<Option<i32>, _>("total_discs").unwrap_or(0),
-            artist_sort: String::new(),
-            artists: vec![],
-            album_artist_sort: String::new(),
-            album_artists: vec![],
-            genres: vec![],
-            mbid_recording: None,
-            mbid_artist: None,
-            mbid_release_artist: None,
-            mbid_release: None,
-            acoust_id: None,
-            acoust_id_fingerprint: None,
-            lyrics: None,
-            cover: None,
-            track_gain: None,
-            track_peak: None,
-        };
-
-        let expected_name = format_naming_pattern(pattern, &tag);
-        let expected_path = expected_path_from_root(&source_url, pattern, &tag, &ext);
-
-        if expected_path.to_string_lossy() != file_path {
-            let file_name = Path::new(&file_path)
-                .strip_prefix(&source_url)
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|_| file_path.clone());
-            violations.push(NamingViolation {
-                file_path: file_path.clone(),
-                file_name,
-                expected_name: format!("{}.{}", expected_name, ext),
-                track_id: row.get("id"),
-            });
-        }
+async fn fetch_rename_tracks_by_ids_sq(
+    pool: &sqlx::SqlitePool,
+    track_ids: &[String],
+) -> Result<Vec<RenameTrackDb>> {
+    if track_ids.is_empty() {
+        return Ok(Vec::new());
     }
+    let placeholders: Vec<String> = track_ids.iter().map(|_| "?".to_string()).collect();
+    let sql = format!(
+        "{SQ_RENAME_TRACK_SELECT} WHERE t.id IN ({})",
+        placeholders.join(",")
+    );
+    let mut query = sqlx::query(&sql);
+    for id in track_ids {
+        query = query.bind(id);
+    }
+    let rows = query.fetch_all(pool).await?;
+    Ok(rows.iter().map(rename_track_from_sq_row).collect())
+}
 
-    Ok(violations)
+async fn fetch_rename_tracks_by_ids_pg(
+    pool: &sqlx::PgPool,
+    track_ids: &[String],
+) -> Result<Vec<RenameTrackDb>> {
+    if track_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let placeholders: Vec<String> = (1..=track_ids.len()).map(|i| format!("${i}")).collect();
+    let sql = format!(
+        "{PG_RENAME_TRACK_SELECT} WHERE t.id IN ({})",
+        placeholders.join(",")
+    );
+    let mut query = sqlx::query(&sql);
+    for id in track_ids {
+        query = query.bind(id);
+    }
+    let rows = query.fetch_all(pool).await?;
+    Ok(rows.iter().map(rename_track_from_pg_row).collect())
+}
+
+pub(crate) fn rename_track_from_sq_row(row: &sqlx::sqlite::SqliteRow) -> RenameTrackDb {
+    RenameTrackDb {
+        track_id: row.get("track_id"),
+        file_path: row.get("file_path"),
+        source_url: row.get("source_url"),
+        title: row.get("title"),
+        artist: row.get("artist_name"),
+        album_artist: row.get("album_artist"),
+        album: row.get("album_title"),
+        track_number: row.get::<Option<i32>, _>("track_num").unwrap_or(0),
+        disc_number: row.get::<Option<i32>, _>("disc_num").unwrap_or(1),
+        release_date: row.get("date"),
+        album_disambiguation: row.get("disambiguation"),
+        total_discs: row.get::<Option<i32>, _>("total_discs").unwrap_or(0),
+        track_artists: split_pipe_list(row.get("track_artists")),
+        album_artists: split_pipe_list(row.get("album_artists")),
+        genres: split_pipe_list(row.get("genres")),
+        mbid_recording: row.get("mbid_recording"),
+        mbid_artist: row.get("mbid_artist"),
+        mbid_release: row.get("mbid_release"),
+        lyrics: row.get("lyrics"),
+        track_gain: row.get("track_gain"),
+        track_peak: row.get("track_peak"),
+    }
+}
+
+pub(crate) fn rename_track_from_pg_row(row: &sqlx::postgres::PgRow) -> RenameTrackDb {
+    RenameTrackDb {
+        track_id: row.get("track_id"),
+        file_path: row.get("file_path"),
+        source_url: row.get("source_url"),
+        title: row.get("title"),
+        artist: row.get("artist_name"),
+        album_artist: row.get("album_artist"),
+        album: row.get("album_title"),
+        track_number: row.get::<Option<i32>, _>("track_num").unwrap_or(0),
+        disc_number: row.get::<Option<i32>, _>("disc_num").unwrap_or(1),
+        release_date: row.get("date"),
+        album_disambiguation: row.get("disambiguation"),
+        total_discs: row.get::<Option<i32>, _>("total_discs").unwrap_or(0),
+        track_artists: split_pipe_list(row.get("track_artists")),
+        album_artists: split_pipe_list(row.get("album_artists")),
+        genres: split_pipe_list(row.get("genres")),
+        mbid_recording: row.get("mbid_recording"),
+        mbid_artist: row.get("mbid_artist"),
+        mbid_release: row.get("mbid_release"),
+        lyrics: row.get("lyrics"),
+        track_gain: row.get("track_gain"),
+        track_peak: row.get("track_peak"),
+    }
 }
 
 #[cfg(test)]
@@ -924,5 +850,69 @@ mod tests {
             "/music/Album Artist/Album/02-07 Some Artist - Title.flac"
         );
         assert!(!path.to_string_lossy().contains("Album Artist/Album/Album"));
+    }
+
+    fn rename_track(artist: &str, album_artist: &str, track_artists: &[&str]) -> RenameTrackDb {
+        RenameTrackDb {
+            track_id: "t1".to_string(),
+            file_path: "/music/raw.mp3".to_string(),
+            source_url: "/music".to_string(),
+            title: "Title".to_string(),
+            artist: artist.to_string(),
+            album_artist: album_artist.to_string(),
+            album: "Album".to_string(),
+            track_number: 7,
+            disc_number: 1,
+            release_date: Some("2024-01-01".to_string()),
+            album_disambiguation: None,
+            total_discs: 1,
+            track_artists: track_artists.iter().map(|s| s.to_string()).collect(),
+            album_artists: vec![],
+            genres: vec![],
+            mbid_recording: None,
+            mbid_artist: None,
+            mbid_release: None,
+            lyrics: None,
+            track_gain: None,
+            track_peak: None,
+        }
+    }
+
+    #[test]
+    fn build_audio_tag_uses_album_artist_and_track_artists() {
+        let row = rename_track(
+            "Main Artist",
+            "Album Owner",
+            &["Main Artist", "Feat Artist"],
+        );
+        let tag = build_audio_tag(&row);
+        assert_eq!(tag.album_artist, "Album Owner");
+        assert_eq!(tag.artist, "Main Artist");
+        assert_eq!(tag.artists.len(), 2);
+        assert_eq!(tag.album_artist_sort, derive_sort_name("Album Owner"));
+        assert_eq!(tag.artist_sort, derive_sort_name("Main Artist"));
+
+        let multi = format_naming_pattern("{multi_artist?{artist}| - }{title}", &tag);
+        assert_eq!(multi, "Main Artist - Title");
+    }
+
+    #[test]
+    fn build_audio_tag_falls_back_to_parse_artists() {
+        let row = rename_track("Main Artist feat. Guest", "", &[]);
+        let tag = build_audio_tag(&row);
+        assert_eq!(tag.album_artist, "");
+        assert_eq!(tag.artists.len(), 3);
+        assert_eq!(
+            format_naming_pattern("{album_artist??{artist}}/", &tag),
+            "Main Artist feat. Guest/"
+        );
+    }
+
+    #[test]
+    fn dest_from_root_empty_name_uses_fallback_stem() {
+        let row = rename_track("Artist", "", &["Artist"]);
+        let tag = build_audio_tag(&row);
+        let path = dest_from_root("/music", "{album_artist}", &tag, "flac", "raw");
+        assert_eq!(path.to_string_lossy(), "/music/raw.flac");
     }
 }
