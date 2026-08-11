@@ -4,8 +4,8 @@ use axum::{
     response::IntoResponse,
 };
 use tawai_core::db::library;
+use tawai_core::signals::library::ListTracksResponse;
 
-use super::list::TracksResponse;
 use crate::server::SharedState;
 
 #[utoipa::path(
@@ -17,7 +17,7 @@ use crate::server::SharedState;
         ("source_id" = String, Path, description = "Library source ID"),
     ),
     responses(
-        (status = 200, description = "List of tracks from source", body = TracksResponse),
+        (status = 200, description = "List of tracks from source", body = ListTracksResponse),
     )
 )]
 pub async fn handle_list_tracks_by_source(
@@ -26,12 +26,19 @@ pub async fn handle_list_tracks_by_source(
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     match library::list_tracks_by_source(db.pool(), &source_id).await {
-        Ok(tracks) => Json(TracksResponse { tracks }).into_response(),
+        Ok(tracks) => Json(ListTracksResponse {
+            id: String::new(),
+            tracks,
+        })
+        .into_response(),
         Err(e) => {
             tawai_core::utils::logger::error(&format!("list_tracks_by_source failed: {e}"));
             (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                Json(TracksResponse { tracks: vec![] }),
+                Json(ListTracksResponse {
+                    id: String::new(),
+                    tracks: vec![],
+                }),
             )
                 .into_response()
         }

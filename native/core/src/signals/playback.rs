@@ -66,6 +66,7 @@ pub struct ReportPlaybackResponse {
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct GetHistoryRequest {
+    #[serde(default)]
     pub id: String,
     #[serde(default)]
     pub user_id: String,

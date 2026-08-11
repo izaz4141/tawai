@@ -7,24 +7,16 @@ use axum::{
     },
 };
 use futures::stream::{self, Stream, StreamExt};
-use serde::Deserialize;
 use std::convert::Infallible;
 use std::sync::atomic::Ordering;
-use tawai_core::signals::library::ScanProgress;
+use tawai_core::signals::library::{ScanProgress, ScanSourceRequest};
 use tawai_core::{
     db::{account, library_source},
     utils::logger,
 };
 use tokio_stream::wrappers::WatchStream;
-use utoipa::ToSchema;
 
 use crate::server::SharedState;
-
-#[derive(Deserialize, ToSchema)]
-pub struct ScanSourceQuery {
-    pub source_id: String,
-    pub force: Option<bool>,
-}
 
 fn sse_event(progress: ScanProgress) -> Result<Event, Infallible> {
     Ok(Event::default().json_data(progress).unwrap())
@@ -45,7 +37,7 @@ fn error_stream(msg: String) -> Sse<impl Stream<Item = Result<Event, Infallible>
     path = "/api/tawai/library/scan/source",
     tags = ["tawai.library"],
     security(("ApiKeyAuth" = [])),
-    request_body = ScanSourceQuery,
+    request_body = ScanSourceRequest,
     responses(
         (status = 200, description = "SSE stream of scan progress for a single source"),
     )
@@ -53,9 +45,9 @@ fn error_stream(msg: String) -> Sse<impl Stream<Item = Result<Event, Infallible>
 pub async fn handle_scan_source(
     State(state): State<SharedState>,
     Extension(user_id): Extension<String>,
-    Json(query): Json<ScanSourceQuery>,
+    Json(query): Json<ScanSourceRequest>,
 ) -> impl IntoResponse {
-    let force = query.force.unwrap_or(false);
+    let force = query.force;
 
     if state.context.scan_running.swap(true, Ordering::SeqCst) {
         return error_stream("A scan is already in progress".to_string()).into_response();

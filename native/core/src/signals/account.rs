@@ -10,6 +10,14 @@ pub struct UserListItem {
     pub api_key: String,
 }
 
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApiKeyResponse {
+    pub api_key: String,
+    pub access_token: String,
+    pub csrf_token: String,
+    pub expires_in: u64,
+}
+
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct GetUserByUsernameRequest {
     #[serde(default)]

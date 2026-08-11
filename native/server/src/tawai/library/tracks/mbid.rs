@@ -3,16 +3,10 @@ use axum::{
     extract::{Path, State},
     response::IntoResponse,
 };
-use serde::Serialize;
 use tawai_core::db::library;
-use utoipa::ToSchema;
+use tawai_core::signals::library::GetAlbumMbidResponse;
 
 use crate::server::SharedState;
-
-#[derive(Serialize, ToSchema)]
-pub struct MbidResponse {
-    pub mbid: Option<String>,
-}
 
 #[utoipa::path(
     get,
@@ -23,7 +17,7 @@ pub struct MbidResponse {
         ("album_id" = String, Path, description = "Album ID"),
     ),
     responses(
-        (status = 200, description = "Album MBID", body = MbidResponse),
+        (status = 200, description = "Album MBID", body = GetAlbumMbidResponse),
     )
 )]
 pub async fn handle_get_album_mbid(
@@ -32,12 +26,19 @@ pub async fn handle_get_album_mbid(
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     match library::get_album_mbid(db.pool(), &album_id).await {
-        Ok(mbid) => Json(MbidResponse { mbid }).into_response(),
+        Ok(mbid) => Json(GetAlbumMbidResponse {
+            id: String::new(),
+            mbid,
+        })
+        .into_response(),
         Err(e) => {
             tawai_core::utils::logger::error(&format!("get_album_mbid failed: {e}"));
             (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                Json(MbidResponse { mbid: None }),
+                Json(GetAlbumMbidResponse {
+                    id: String::new(),
+                    mbid: None,
+                }),
             )
                 .into_response()
         }

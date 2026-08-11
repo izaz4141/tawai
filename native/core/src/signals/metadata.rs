@@ -96,7 +96,8 @@ pub struct GetReleaseTracksResponse {
 pub struct FingerprintTrackRequest {
     #[serde(default)]
     pub id: String,
-    pub track_id: String,
+    #[serde(default)]
+    pub track_id: Option<String>,
     pub file_path: Option<String>,
 }
 
@@ -104,7 +105,7 @@ pub struct FingerprintTrackRequest {
 pub struct FingerprintTrackResponse {
     #[serde(default)]
     pub id: String,
-    pub track_id: String,
+    pub track_id: Option<String>,
     pub recording: Option<RecordingInfo>,
 }
 

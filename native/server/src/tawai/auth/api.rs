@@ -4,16 +4,7 @@ use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::{Extension, Json};
 use axum_extra::extract::CookieJar;
-use serde::Serialize;
-use utoipa::ToSchema;
-
-#[derive(Serialize, ToSchema)]
-pub struct ApiKeyResponse {
-    pub api_key: String,
-    pub access_token: String,
-    pub csrf_token: String,
-    pub expires_in: u64,
-}
+use tawai_core::signals::account::ApiKeyResponse;
 
 #[utoipa::path(
     get,

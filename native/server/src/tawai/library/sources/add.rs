@@ -3,22 +3,15 @@ use axum::{
     extract::{Extension, State},
     response::IntoResponse,
 };
-use serde::Deserialize;
 use tawai_core::db::{account, library_source};
+use tawai_core::signals::library::{AddLibrarySourceRequest, AddLibrarySourceResponse};
 
 use crate::server::SharedState;
-
-#[derive(Deserialize)]
-pub struct AddSourcePayload {
-    pub url: String,
-    pub name: String,
-    pub source_type: String,
-}
 
 pub async fn handle_add_source(
     State(state): State<SharedState>,
     Extension(user_id): Extension<String>,
-    Json(payload): Json<AddSourcePayload>,
+    Json(payload): Json<AddLibrarySourceRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
@@ -37,10 +30,23 @@ pub async fn handle_add_source(
     )
     .await
     {
-        Ok(source_id) => Json(serde_json::json!({ "source_id": source_id })).into_response(),
+        Ok(source_id) => Json(AddLibrarySourceResponse {
+            id: payload.id,
+            source_id,
+            success: true,
+        })
+        .into_response(),
         Err(e) => {
             tawai_core::utils::logger::error(&format!("add source failed: {}", e));
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(AddLibrarySourceResponse {
+                    id: payload.id,
+                    source_id: String::new(),
+                    success: false,
+                }),
+            )
+                .into_response()
         }
     }
 }

@@ -11,7 +11,8 @@ use crate::signals::crypt::{
     DecryptRequest, DecryptResponse, EncryptRequest, EncryptResponse, NewApiKey, RequestNewApiKey,
 };
 use crate::signals::server::{
-    InitConfig, InitConfigResponse, SaveConfigRequest, SaveConfigResponse, StartServer,
+    GetGlobalSettingsRequest, GlobalSettingsResponse, InitConfig, InitConfigResponse,
+    SaveConfigRequest, SaveConfigResponse, StartServer,
 };
 use crate::utils::logger;
 use axum::{Router, routing::get};
@@ -149,6 +150,19 @@ pub async fn handle_init_config(context: Arc<AppContext>) {
                 .send_signal_to_dart();
             }
         }
+    }
+}
+
+pub async fn handle_get_global_settings(context: Arc<AppContext>) {
+    let receiver = GetGlobalSettingsRequest::get_dart_signal_receiver();
+    while let Some(signal_pack) = receiver.recv().await {
+        let msg = signal_pack.message;
+        let settings_json = serde_json::to_string(&context.client_config().await).ok();
+        GlobalSettingsResponse {
+            id: msg.id,
+            settings_json,
+        }
+        .send_signal_to_dart();
     }
 }
 

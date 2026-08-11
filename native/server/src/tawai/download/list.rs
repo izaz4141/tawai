@@ -4,16 +4,10 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use serde::Deserialize;
 use tawai_core::db;
-use tawai_core::signals::ListDownloadsResponse;
+use tawai_core::signals::{ListDownloadsRequest, ListDownloadsResponse};
 
 use crate::server::SharedState;
-
-#[derive(Debug, Deserialize)]
-pub struct ListDownloadParams {
-    pub source: Option<String>,
-}
 
 #[utoipa::path(
     get,
@@ -31,7 +25,7 @@ pub struct ListDownloadParams {
 pub async fn handle_list_downloads(
     State(state): State<SharedState>,
     Extension(user_id): Extension<String>,
-    Query(params): Query<ListDownloadParams>,
+    Query(params): Query<ListDownloadsRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
 

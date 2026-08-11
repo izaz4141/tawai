@@ -2,7 +2,7 @@ use rinf::{DartSignal, RustSignal};
 use std::sync::Arc;
 
 use tawai_core::app_context::AppContext;
-use tawai_core::utils::version::{get_latest_version, get_local_version};
+use tawai_core::utils::version::{compare_versions, get_latest_version, get_local_version};
 
 use crate::signals;
 
@@ -71,5 +71,16 @@ pub async fn handle_get_latest_version(context: Arc<AppContext>) {
                 .send_signal_to_dart();
             }
         }
+    }
+}
+
+pub async fn handle_compare_versions(_context: Arc<AppContext>) {
+    let receiver = signals::version::CompareVersionsRequest::get_dart_signal_receiver();
+
+    while let Some(signal_pack) = receiver.recv().await {
+        let msg = signal_pack.message;
+
+        let latest = compare_versions(&msg.versions);
+        signals::version::CompareVersionsResponse { id: msg.id, latest }.send_signal_to_dart();
     }
 }

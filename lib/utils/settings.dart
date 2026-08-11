@@ -169,8 +169,6 @@ class SettingsManager {
     nadekodonUrl.value = json['nadekodon_url'] ?? '';
     desiredAudioQuality.value = json['desired_audio_quality'] ?? 'best';
     defaultDownloadSource.value = json['default_download_source'] ?? 'slskd';
-    if (defaultDownloadSource.value == 'ytdlp')
-      defaultDownloadSource.value = 'slskd';
 
     if (!fromBackend) {
       if (json['playback_volume'] is num) {
@@ -209,16 +207,9 @@ class SettingsManager {
   };
 
   static Future<void> reloadConfig() async {
-    if (PlatformService().isRemote) return await loadFromBackend();
-
-    final result = await RinfService.instance.initConfig(configPath);
-    final data = result.settings;
+    final data = await BridgeService.instance.getGlobalSettings();
     if (data != null) {
-      serverHost.value =
-          data['server_host'] ?? (defaults['server_host'] ?? '127.0.0.1');
-      serverPort.value =
-          data['server_port'] ?? (defaults['server_port'] ?? 8181);
-      await _applyFromJson(data);
+      await _applyFromJson(data, fromBackend: true);
     }
   }
 

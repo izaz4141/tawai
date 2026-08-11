@@ -3,10 +3,9 @@ use axum::{
     extract::{Extension, State},
     response::IntoResponse,
 };
-use serde::Serialize;
 use serde_json::Value;
+use tawai_core::signals::user_settings::GlobalSettingsResponse;
 use tawai_core::utils::config::{PRIVATE_CONFIG_KEYS, strip_keys};
-use utoipa::ToSchema;
 
 use crate::server::SharedState;
 
@@ -19,12 +18,6 @@ const DEVICE_ONLY_KEYS: &[&str] = &[
     "check_nightly",
     "accounts",
 ];
-
-#[derive(Serialize, ToSchema)]
-pub struct GlobalSettingsResponse {
-    #[serde(flatten)]
-    pub settings: Value,
-}
 
 #[utoipa::path(
     get,
@@ -46,7 +39,7 @@ pub async fn handle_get_global_settings(
             map.remove(*key);
         }
     }
-    Json(settings)
+    Json(GlobalSettingsResponse { settings })
 }
 
 #[utoipa::path(

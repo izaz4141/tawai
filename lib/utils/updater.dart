@@ -34,7 +34,7 @@ Future<VersionInfo?> checkForUpdate({bool checkNightly = false}) async {
       return null;
     }
 
-    final compareResult = await APIService.instance.compareVersions([
+    final compareResult = await BridgeService.instance.compareVersions([
       latestVersion.version!,
       "${currentVersion.version}+${currentVersion.buildNumber}",
     ]);

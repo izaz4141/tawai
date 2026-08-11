@@ -24,7 +24,8 @@ pub struct DecryptRequest {
     #[serde(default)]
     pub id: String,
     pub encrypted_key: String,
-    pub master_key: String,
+    #[serde(default)]
+    pub master_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]

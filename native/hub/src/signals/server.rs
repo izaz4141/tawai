@@ -36,6 +36,17 @@ pub struct InitConfigResponse {
     pub is_first_run: bool,
 }
 
+#[derive(Serialize, RustSignal)]
+pub struct GlobalSettingsResponse {
+    pub id: String,
+    pub settings_json: Option<String>,
+}
+
+#[derive(Deserialize, DartSignal)]
+pub struct GetGlobalSettingsRequest {
+    pub id: String,
+}
+
 #[derive(Deserialize, DartSignal)]
 pub struct SaveConfigRequest {
     pub id: String,

@@ -1,6 +1,19 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use utoipa::ToSchema;
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct GlobalSettingsResponse {
+    #[serde(flatten)]
+    pub settings: Value,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct GetGlobalSettingsRequest {
+    #[serde(default)]
+    pub id: String,
+}
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct SetUserSettingRequest {

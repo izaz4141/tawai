@@ -44,6 +44,7 @@ pub struct DownloadRecord {
 pub struct ListDownloadsRequest {
     #[serde(default)]
     pub id: String,
+    #[serde(default)]
     pub user_id: String,
     pub source: Option<String>,
 }

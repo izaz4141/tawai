@@ -1,27 +1,13 @@
 use axum::{Json, extract::State, response::IntoResponse};
-use serde::Deserialize;
 use tawai_core::audio::tags::AudioTag;
+use tawai_core::signals::metadata::{FormatNamingPreviewRequest, FormatNamingPreviewResponse};
 use tawai_core::tools::rename::format_naming_pattern;
 
 use crate::server::SharedState;
 
-#[derive(Deserialize)]
-pub struct FormatNamingPreviewBody {
-    pub pattern: String,
-    pub title: String,
-    pub artist: String,
-    pub album_artist: String,
-    pub album: String,
-    pub release_date: Option<String>,
-    pub track_number: i32,
-    pub disc_number: i32,
-    pub album_disambiguation: Option<String>,
-    pub total_discs: i32,
-}
-
 pub async fn handle_format_naming_preview(
     State(_state): State<SharedState>,
-    Json(body): Json<FormatNamingPreviewBody>,
+    Json(body): Json<FormatNamingPreviewRequest>,
 ) -> impl IntoResponse {
     let tag = AudioTag {
         title: body.title,
@@ -37,5 +23,8 @@ pub async fn handle_format_naming_preview(
     };
 
     let result = format_naming_pattern(&body.pattern, &tag);
-    Json(serde_json::json!({ "result": result }))
+    Json(FormatNamingPreviewResponse {
+        id: body.id,
+        result,
+    })
 }

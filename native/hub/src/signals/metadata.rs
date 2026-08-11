@@ -227,7 +227,7 @@ pub struct ApplyIdentificationResponse {
 #[derive(Deserialize, DartSignal)]
 pub struct FingerprintTrackRequest {
     pub id: String,
-    pub track_id: String,
+    pub track_id: Option<String>,
     /// When set, fingerprint the audio file at this path directly instead of
     /// looking up a stored fingerprint by track id (download-folder flow).
     pub file_path: Option<String>,
@@ -236,7 +236,7 @@ pub struct FingerprintTrackRequest {
 #[derive(Serialize, RustSignal)]
 pub struct FingerprintTrackResponse {
     pub id: String,
-    pub track_id: String,
+    pub track_id: Option<String>,
     pub recording: Option<RecordingInfo>,
 }
 

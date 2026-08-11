@@ -446,6 +446,13 @@ class BridgeService {
     );
   }
 
+  Future<String?> compareVersions(List<String> versions) async {
+    if (_isRemote) {
+      return APIService.instance.compareVersions(versions);
+    }
+    return RinfService.instance.compareVersions(versions);
+  }
+
   Future<String?> getInfo(String sourceType, String url) async {
     if (_isRemote) {
       return APIService.instance.getInfo(sourceType, url);
@@ -473,6 +480,11 @@ class BridgeService {
       SettingsManager.configPath,
     );
     return result.settings;
+  }
+
+  Future<Map<String, dynamic>?> getGlobalSettings() async {
+    if (_isRemote) return APIService.instance.getSettings();
+    return RinfService.instance.getGlobalSettings();
   }
 
   Future<bool> saveSettings(Map<String, dynamic> settings) async {
@@ -736,7 +748,7 @@ class BridgeService {
   // ---------------------------------------------------------------------------
 
   Future<RecordingInfo?> fingerprintTrack(
-    String trackId, {
+    String? trackId, {
     String? filePath,
   }) async {
     return _isRemote

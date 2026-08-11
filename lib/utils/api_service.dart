@@ -55,6 +55,8 @@ class APIService {
     return headers;
   }
 
+  String _newId() => DateTime.now().microsecondsSinceEpoch.toString();
+
   Future<void> init() async {
     if (kIsWeb) {
       final success = await login(username: '', password: '');
@@ -469,7 +471,7 @@ class APIService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/version/compare'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'versions': versions}),
+        body: jsonEncode({'id': _newId(), 'versions': versions}),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -489,7 +491,7 @@ class APIService {
   playTrack(String? trackId, {TrackInfo? track}) async {
     try {
       final body = {
-        'id': DateTime.now().microsecondsSinceEpoch.toString(),
+        'id': _newId(),
         'track_id': trackId,
         if (track != null) 'track': track.toJson(),
       };
@@ -520,10 +522,7 @@ class APIService {
 
   Future<PreviewTrackResponse> previewTrack(TrackInfo track) async {
     try {
-      final body = <String, dynamic>{
-        'id': DateTime.now().microsecondsSinceEpoch.toString(),
-        'track': track.toJson(),
-      };
+      final body = <String, dynamic>{'id': _newId(), 'track': track.toJson()};
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/playback/preview'),
         headers: {..._authHeaders(), 'Content-Type': 'application/json'},
@@ -579,6 +578,8 @@ class APIService {
         Uri.parse('$baseUrl/api/tawai/discovery/lb/report'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
         body: jsonEncode({
+          'id': _newId(),
+          'user_id': SettingsManager.currentUserId.value ?? '',
           'track_id': trackId,
           'played_at': playedAt,
           'source': source,
@@ -736,7 +737,11 @@ class APIService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/library/playlists'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'name': name}),
+        body: jsonEncode({
+          'id': _newId(),
+          'user_id': SettingsManager.currentUserId.value ?? '',
+          'name': name,
+        }),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -790,7 +795,11 @@ class APIService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/library/playlists/$playlistId/tracks'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'track_id': trackId}),
+        body: jsonEncode({
+          'id': _newId(),
+          'playlist_id': playlistId,
+          'track_id': trackId,
+        }),
       );
       return response.statusCode == 200;
     } catch (e) {
@@ -827,7 +836,11 @@ class APIService {
           '$baseUrl/api/tawai/library/playlists/$playlistId/tracks/reorder',
         ),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'track_ids': trackIds}),
+        body: jsonEncode({
+          'id': _newId(),
+          'playlist_id': playlistId,
+          'track_ids': trackIds,
+        }),
       );
       return response.statusCode == 200;
     } catch (e) {
@@ -877,11 +890,14 @@ class APIService {
 
   Future<List<DownloadRecord>> pollDownloads() async {
     try {
-      final id = DateTime.now().microsecondsSinceEpoch.toString();
+      final id = _newId();
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/download/poll'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'id': id}),
+        body: jsonEncode({
+          'id': id,
+          'user_id': SettingsManager.currentUserId.value ?? '',
+        }),
       );
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -918,7 +934,11 @@ class APIService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/download/search'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'source_type': sourceType, 'query': query}),
+        body: jsonEncode({
+          'id': _newId(),
+          'source_type': sourceType,
+          'query': query,
+        }),
       );
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -961,6 +981,7 @@ class APIService {
   }) async {
     try {
       final body = <String, dynamic>{
+        'id': _newId(),
         'source_type': sourceType,
         'url': url,
         'dest': dest,
@@ -998,6 +1019,7 @@ class APIService {
   }) async {
     try {
       final body = <String, dynamic>{
+        'id': _newId(),
         'source_type': sourceType,
         'download_id': downloadId,
       };
@@ -1029,6 +1051,7 @@ class APIService {
         Uri.parse('$baseUrl/api/tawai/download/test-connection'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
         body: jsonEncode({
+          'id': _newId(),
           'source_type': sourceType,
           'url': url,
           'token': token,
@@ -1062,7 +1085,11 @@ class APIService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/download/get-info'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'source_type': sourceType, 'url': url}),
+        body: jsonEncode({
+          'id': _newId(),
+          'source_type': sourceType,
+          'url': url,
+        }),
       );
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -1088,7 +1115,8 @@ class APIService {
           : Uri.parse('$baseUrl/api/tawai/library/identify/unidentified');
       final response = await http.get(uri, headers: _authHeaders());
       if (response.statusCode == 200) {
-        final list = jsonDecode(response.body) as List<dynamic>;
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final list = body['tracks'] as List<dynamic>;
         return list.map((e) {
           final m = e as Map<String, dynamic>;
           return TrackInfoJson.fromJson(m);
@@ -1107,7 +1135,8 @@ class APIService {
       );
       final response = await http.get(uri, headers: _authHeaders());
       if (response.statusCode == 200) {
-        final list = jsonDecode(response.body) as List<dynamic>;
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final list = body['tracks'] as List<dynamic>;
         return list.map((e) {
           final m = e as Map<String, dynamic>;
           return TrackInfoJson.fromJson(m);
@@ -1162,7 +1191,8 @@ class APIService {
         headers: _authHeaders(),
       );
       if (response.statusCode == 200) {
-        final list = jsonDecode(response.body) as List<dynamic>;
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final list = body['candidates'] as List<dynamic>;
         return list.map((e) {
           final m = e as Map<String, dynamic>;
           return MatchCandidate(
@@ -1188,12 +1218,13 @@ class APIService {
     try {
       final response = await http.get(
         Uri.parse(
-          '$baseUrl/api/tawai/identify/mb/search?q=${Uri.encodeQueryComponent(query)}',
+          '$baseUrl/api/tawai/identify/mb/search?query=${Uri.encodeQueryComponent(query)}',
         ),
         headers: _authHeaders(),
       );
       if (response.statusCode == 200) {
-        final list = jsonDecode(response.body) as List<dynamic>;
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final list = body['recordings'] as List<dynamic>;
         return list.map((e) {
           final m = e as Map<String, dynamic>;
           return RecordingInfo(
@@ -1260,9 +1291,9 @@ class APIService {
         }).toList();
         return GetReleaseTracksResponse(
           id: '',
-          releaseId: json['id'] as String? ?? releaseId,
-          releaseTitle: json['title'] as String? ?? '',
-          releaseDate: json['date'] as String?,
+          releaseId: json['release_id'] as String? ?? releaseId,
+          releaseTitle: json['release_title'] as String? ?? '',
+          releaseDate: json['release_date'] as String?,
           artist: json['artist'] as String? ?? '',
           artistId: json['artist_id'] as String?,
           tracks: tracksList,
@@ -1289,7 +1320,10 @@ class APIService {
         headers: _authHeaders(),
       );
       if (response.statusCode == 200) {
-        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final recording = body['recording'];
+        if (recording == null) return null;
+        final json = recording as Map<String, dynamic>;
         return RecordingInfo(
           id: json['id'] as String,
           title: json['title'] as String,
@@ -1356,6 +1390,7 @@ class APIService {
   }) async {
     try {
       final body = <String, dynamic>{
+        'id': _newId(),
         'track_id': trackId,
         'title': title,
         'artist': artist,
@@ -1402,21 +1437,18 @@ class APIService {
   }
 
   Future<RecordingInfo?> fingerprintTrack(
-    String trackId, {
+    String? trackId, {
     String? filePath,
   }) async {
     try {
-      if (filePath != null) {
-        final response = await http.post(
-          Uri.parse('$baseUrl/api/tawai/identify/mb/fingerprint'),
-          headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-          body: jsonEncode({'file_path': filePath}),
-        );
-        return _parseFingerprintResponse(response);
-      }
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/tawai/identify/mb/track/$trackId/fingerprint'),
-        headers: _authHeaders(),
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/tawai/identify/mb/fingerprint'),
+        headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
+        body: jsonEncode({
+          'id': _newId(),
+          'track_id': trackId,
+          'file_path': filePath,
+        }),
       );
       return _parseFingerprintResponse(response);
     } catch (e) {
@@ -1429,6 +1461,12 @@ class APIService {
     if (response.statusCode != 200) return null;
     final json = jsonDecode(response.body);
     if (json == null) return null;
+    final recording = json['recording'];
+    if (recording == null) return null;
+    return _parseRecordingInfo(recording as Map<String, dynamic>);
+  }
+
+  RecordingInfo _parseRecordingInfo(Map<String, dynamic> json) {
     return RecordingInfo(
       id: json['id'] as String,
       title: json['title'] as String,
@@ -1569,6 +1607,7 @@ class APIService {
         Uri.parse('$baseUrl/api/tawai/account/update'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
         body: jsonEncode({
+          'id': _newId(),
           'operator_user_id': operatorUserId,
           'operator_password': operatorPassword,
           'target_user_id': targetUserId,
@@ -1630,14 +1669,10 @@ class APIService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/account/create'),
-        headers: _authHeaders(
-          extra: {
-            'Content-Type': 'application/json',
-            'X-Password': adminPassword,
-          },
-        ),
+        headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
         body: jsonEncode({
           'admin_username': adminUsername,
+          'admin_password': adminPassword,
           'username': username,
           'password': password,
           'display_name': displayName,
@@ -1711,14 +1746,10 @@ class APIService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/account/delete'),
-        headers: _authHeaders(
-          extra: {
-            'Content-Type': 'application/json',
-            'X-Password': adminPassword,
-          },
-        ),
+        headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
         body: jsonEncode({
           'admin_username': adminUsername,
+          'admin_password': adminPassword,
           'target_username': targetUsername,
         }),
       );
@@ -1763,7 +1794,7 @@ class APIService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/auth/encrypt'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'plain_key': plainText}),
+        body: jsonEncode({'id': _newId(), 'plain_key': plainText}),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -1780,7 +1811,7 @@ class APIService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/auth/decrypt'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'encrypted_key': encryptedText}),
+        body: jsonEncode({'id': _newId(), 'encrypted_key': encryptedText}),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -1865,7 +1896,13 @@ class APIService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/library/sources'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'url': url, 'name': name, 'source_type': sourceType}),
+        body: jsonEncode({
+          'id': _newId(),
+          'user_id': SettingsManager.currentUserId.value ?? '',
+          'url': url,
+          'name': name,
+          'source_type': sourceType,
+        }),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -1896,7 +1933,7 @@ class APIService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/library/sources/test-jellyfin'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'url': url}),
+        body: jsonEncode({'id': _newId(), 'url': url}),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -1924,7 +1961,7 @@ class APIService {
   Future<({bool started, String? error})> scanLibrary({
     required bool force,
   }) async {
-    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final id = _newId();
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/library/scan'),
@@ -1950,7 +1987,7 @@ class APIService {
   // ---------------------------------------------------------------------------
 
   Future<({bool running, ScanProgressSignal? progress})> getScanStatus() async {
-    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final id = _newId();
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/library/scan/status'),
@@ -2002,7 +2039,12 @@ class APIService {
             ..headers.addAll(
               _authHeaders(extra: {'Content-Type': 'application/json'}),
             )
-            ..body = jsonEncode({'source_id': sourceId, 'force': force});
+            ..body = jsonEncode({
+              'id': _newId(),
+              'user_id': SettingsManager.currentUserId.value ?? '',
+              'source_id': sourceId,
+              'force': force,
+            });
       final streamed = await client.send(request);
       if (streamed.statusCode != 200) {
         client.close();
@@ -2071,7 +2113,7 @@ class APIService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/library/identify/tags/read'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'path': path}),
+        body: jsonEncode({'id': _newId(), 'path': path}),
       );
       if (response.statusCode != 200) return null;
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -2117,6 +2159,7 @@ class APIService {
   }) async {
     try {
       final body = <String, dynamic>{
+        'id': _newId(),
         'path': path,
         'title': title,
         'artist': artist,
@@ -2164,6 +2207,7 @@ class APIService {
               Uri.parse('$baseUrl/api/tawai/library/identify/tags/read-bytes'),
             )
             ..headers.addAll(_authHeaders())
+            ..fields['id'] = _newId()
             ..fields['filename'] = filename
             ..files.add(
               http.MultipartFile.fromBytes('file', bytes, filename: filename),
@@ -2222,6 +2266,7 @@ class APIService {
             )
             ..headers.addAll(_authHeaders())
             ..fields.addAll({
+              'id': _newId(),
               'filename': filename,
               'title': title,
               'artist': artist,
@@ -2283,6 +2328,7 @@ class APIService {
         Uri.parse('$baseUrl/api/tawai/tools/format-naming-preview'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
         body: jsonEncode({
+          'id': _newId(),
           'pattern': pattern,
           'title': title,
           'artist': artist,
@@ -2318,6 +2364,7 @@ class APIService {
   }) async {
     try {
       final body = <String, dynamic>{
+        'id': _newId(),
         'file_paths': filePaths,
         'pattern': pattern,
       };
@@ -2359,6 +2406,7 @@ class APIService {
         Uri.parse('$baseUrl/api/tawai/tools/rename-apply'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
         body: jsonEncode({
+          'id': _newId(),
           'file_paths': filePaths,
           'track_ids': trackIds,
           'pattern': pattern,
@@ -2395,6 +2443,7 @@ class APIService {
         Uri.parse('$baseUrl/api/tawai/tools/check-convention'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
         body: jsonEncode({
+          'id': _newId(),
           'pattern': pattern,
           if (sourceId != null) 'source_id': sourceId,
         }),
@@ -2436,6 +2485,7 @@ class APIService {
         Uri.parse('$baseUrl/api/tawai/tools/missing-metadata'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
         body: jsonEncode({
+          'id': _newId(),
           'check_title': checkTitle,
           'check_artist': checkArtist,
           'check_album': checkAlbum,
@@ -2564,6 +2614,7 @@ class APIService {
         Uri.parse('$baseUrl/api/tawai/tools/write-lyrics'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
         body: jsonEncode({
+          'id': _newId(),
           'track_id': trackId,
           'lyrics': lyrics,
           'synced': synced,
@@ -2595,7 +2646,12 @@ class APIService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/tools/romajize-lyrics'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'lyrics': lyrics, 'synced': synced, 'lang': ?lang}),
+        body: jsonEncode({
+          'id': _newId(),
+          'lyrics': lyrics,
+          'synced': synced,
+          'lang': ?lang,
+        }),
       );
       if (response.statusCode != 200) return null;
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -2628,6 +2684,7 @@ class APIService {
         Uri.parse('$baseUrl/api/tawai/tools/find-duplicates'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
         body: jsonEncode({
+          'id': _newId(),
           'check_fingerprint': checkFingerprint,
           'check_mbid': checkMbid,
           'check_file_size_duration': checkFileSizeDuration,
@@ -2684,7 +2741,7 @@ class APIService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/discovery/lb/now-playing'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'track_id': trackId}),
+        body: jsonEncode({'id': _newId(), 'track_id': trackId}),
       );
       return response.statusCode == 200;
     } catch (e) {
@@ -2718,7 +2775,7 @@ class APIService {
       };
       final endpoint = isPlaylist ? '/playlist' : '/recommendations';
       final params = <String, String>{};
-      params['type'] = recType;
+      params['rec_type'] = recType;
       if (isPlaylist && index != null) params['index'] = index.toString();
       if (!isPlaylist) {
         if (count != null) params['count'] = count.toString();
@@ -2729,24 +2786,14 @@ class APIService {
       ).replace(queryParameters: params);
       final response = await http.get(uri, headers: _authHeaders());
       if (response.statusCode == 200) {
-        if (isPlaylist) {
-          final obj = jsonDecode(response.body) as Map<String, dynamic>;
-          final list = obj['recordings'] as List<dynamic>;
-          return (
-            recordings: _parseDiscoveryList(list),
-            playlistTitle: obj['playlist_title'] as String?,
-            playlistId: obj['playlist_id'] as String?,
-            playlistCount: obj['playlist_count'] as int?,
-          );
-        } else {
-          final list = jsonDecode(response.body) as List<dynamic>;
-          return (
-            recordings: _parseDiscoveryList(list),
-            playlistTitle: null,
-            playlistId: null,
-            playlistCount: null,
-          );
-        }
+        final obj = jsonDecode(response.body) as Map<String, dynamic>;
+        final list = obj['recommendations'] as List<dynamic>;
+        return (
+          recordings: _parseDiscoveryList(list),
+          playlistTitle: obj['playlist_title'] as String?,
+          playlistId: obj['playlist_id'] as String?,
+          playlistCount: obj['playlist_count'] as int?,
+        );
       }
     } catch (e) {
       log('getLBRecommendations error: $e', isError: true);
@@ -2787,7 +2834,7 @@ class APIService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/discovery/lb/validate'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'token': token}),
+        body: jsonEncode({'id': _newId(), 'token': token}),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -2823,7 +2870,11 @@ class APIService {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/discovery/sync-recs'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'user_id': userId, 'included_keys': includedKeys}),
+        body: jsonEncode({
+          'id': _newId(),
+          'user_id': userId,
+          'included_keys': includedKeys,
+        }),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;

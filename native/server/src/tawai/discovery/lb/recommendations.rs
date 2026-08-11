@@ -3,23 +3,15 @@ use axum::{
     extract::{Extension, Query, State},
     response::IntoResponse,
 };
-use serde::Deserialize;
 use tawai_core::discovery::listenbrainz;
-use tawai_core::signals::discovery::DiscoveryRecording;
+use tawai_core::signals::discovery::{
+    DiscoveryRecording, GetLBRecommendationsRequest, GetLBRecommendationsResponse,
+};
 use tawai_core::tools::duplicates;
-use utoipa::ToSchema;
 
 use crate::server::SharedState;
 
 use super::util;
-
-#[derive(Deserialize, ToSchema)]
-pub struct RecommendationsQuery {
-    #[serde(rename = "type")]
-    pub rec_type: String,
-    pub count: Option<i32>,
-    pub offset: Option<i32>,
-}
 
 #[utoipa::path(
     get,
@@ -27,12 +19,13 @@ pub struct RecommendationsQuery {
     tags = ["tawai.discovery"],
     security(("ApiKeyAuth" = [])),
     params(
-        ("type" = String, Query, description = "Recommendation type: top, raw, or similar"),
+        ("rec_type" = String, Query, description = "Recommendation type: top, raw, or similar"),
         ("count" = Option<i32>, Query, description = "Number of recommendations"),
         ("offset" = Option<i32>, Query, description = "Offset for pagination"),
+        ("index" = Option<u32>, Query, description = "Index for pagination"),
     ),
     responses(
-        (status = 200, description = "Recommendations", body = Vec<DiscoveryRecording>),
+        (status = 200, description = "Recommendations", body = GetLBRecommendationsResponse),
         (status = 401, description = "Unauthorized"),
         (status = 500, description = "Server error")
     )
@@ -40,32 +33,40 @@ pub struct RecommendationsQuery {
 pub async fn handle_get_recommendations(
     State(state): State<SharedState>,
     Extension(user_id): Extension<String>,
-    Query(query): Query<RecommendationsQuery>,
+    Query(query): Query<GetLBRecommendationsRequest>,
 ) -> impl IntoResponse {
     let (token, user_name) = match util::resolve_lb_user(&state, &user_id).await {
         Ok(ok) => ok,
         Err(err) => return err,
     };
 
-    let result =
-        match query.rec_type.as_str() {
-            "top" | "raw" | "similar" => {
-                listenbrainz::fetch_recommendations(
-                    state.context.client(),
-                    &token,
-                    &user_name,
-                    &query.rec_type,
-                    query.count,
-                    query.offset,
-                )
-                .await
-            }
-            other => return (
-                axum::http::StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({"error": format!("unknown recommendation type: {other}")})),
+    let result = match query.rec_type.as_str() {
+        "top" | "raw" | "similar" => {
+            listenbrainz::fetch_recommendations(
+                state.context.client(),
+                &token,
+                &user_name,
+                &query.rec_type,
+                query.count,
+                query.offset,
             )
-                .into_response(),
-        };
+            .await
+        }
+        other => {
+            return (
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(GetLBRecommendationsResponse {
+                    id: String::new(),
+                    recommendations: vec![],
+                    playlist_title: None,
+                    playlist_id: None,
+                    playlist_count: None,
+                    error: Some(format!("unknown recommendation type: {other}")),
+                }),
+            )
+                .into_response();
+        }
+    };
 
     match result {
         Ok(recs) => {
@@ -78,11 +79,29 @@ pub async fn handle_get_recommendations(
                         .await
                         .unwrap_or(false);
             }
-            (axum::http::StatusCode::OK, Json(disc)).into_response()
+            (
+                axum::http::StatusCode::OK,
+                Json(GetLBRecommendationsResponse {
+                    id: String::new(),
+                    recommendations: disc,
+                    playlist_title: None,
+                    playlist_id: None,
+                    playlist_count: None,
+                    error: None,
+                }),
+            )
+                .into_response()
         }
         Err(e) => (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
+            Json(GetLBRecommendationsResponse {
+                id: String::new(),
+                recommendations: vec![],
+                playlist_title: None,
+                playlist_id: None,
+                playlist_count: None,
+                error: Some(e.to_string()),
+            }),
         )
             .into_response(),
     }

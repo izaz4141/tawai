@@ -1,39 +1,41 @@
 use axum::{Json, extract::Query, response::IntoResponse};
-use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
-
-#[derive(Deserialize, IntoParams)]
-pub struct VersionCurrentQuery {
-    pub app: String,
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct VersionCurrentResponse {
-    pub version: String,
-}
+use tawai_core::signals::version::{GetCurrentVersionRequest, GetCurrentVersionResponse};
 
 #[utoipa::path(
     get,
     path = "/api/tawai/version/current",
     tags = ["tawai.version"],
     security(("ApiKeyAuth" = [])),
-    params(VersionCurrentQuery),
+    params(
+        ("app" = String, Query, description = "App identifier"),
+    ),
     responses(
-        (status = 200, description = "Current version", body = VersionCurrentResponse),
-        (status = 400, description = "Invalid request"),
-        (status = 404, description = "App not found")
+        (status = 200, description = "Current version", body = GetCurrentVersionResponse),
     )
 )]
 pub async fn handle_version_current(
-    Query(params): Query<VersionCurrentQuery>,
+    Query(params): Query<GetCurrentVersionRequest>,
 ) -> impl IntoResponse {
     let app = &params.app;
 
     match tawai_core::utils::version::get_local_version(app).await {
-        Ok(version) => Json(VersionCurrentResponse { version: version }).into_response(),
+        Ok(version) => Json(GetCurrentVersionResponse {
+            id: String::new(),
+            version: Some(version),
+            error: None,
+        })
+        .into_response(),
         Err(e) => {
             tawai_core::utils::logger::error(&format!("Cant get local {}: {:#?}", &app, &e));
-            (axum::http::StatusCode::NOT_FOUND, e).into_response()
+            (
+                axum::http::StatusCode::NOT_FOUND,
+                Json(GetCurrentVersionResponse {
+                    id: String::new(),
+                    version: None,
+                    error: Some(e),
+                }),
+            )
+                .into_response()
         }
     }
 }

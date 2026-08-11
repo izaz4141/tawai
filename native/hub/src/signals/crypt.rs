@@ -16,6 +16,15 @@ pub struct NewApiKey {
     pub master_key: String,
 }
 
+#[derive(Serialize, RustSignal)]
+pub struct ApiKeyResponse {
+    pub id: String,
+    pub api_key: String,
+    pub access_token: String,
+    pub csrf_token: String,
+    pub expires_in: u64,
+}
+
 #[derive(Deserialize, DartSignal)]
 pub struct DecryptRequest {
     pub id: String,

@@ -61,6 +61,7 @@ pub struct PlaylistInfo {
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct ListTracksRequest {
+    #[serde(default)]
     pub id: String,
     pub album_id: Option<String>,
 }
@@ -73,6 +74,7 @@ pub struct ListTracksResponse {
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct ListAlbumsRequest {
+    #[serde(default)]
     pub id: String,
     pub artist_id: Option<String>,
 }
@@ -85,6 +87,7 @@ pub struct ListAlbumsResponse {
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct ListArtistsRequest {
+    #[serde(default)]
     pub id: String,
 }
 
@@ -96,6 +99,7 @@ pub struct ListArtistsResponse {
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct ListPlaylistsRequest {
+    #[serde(default)]
     pub id: String,
 }
 
@@ -327,6 +331,7 @@ pub struct MatchCandidate {
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct ListUnidentifiedTracksRequest {
+    #[serde(default)]
     pub id: String,
     pub source_id: Option<String>,
 }
@@ -352,6 +357,7 @@ pub struct IdentifySingleTrackResponse {
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct SearchMusicBrainzRequest {
+    #[serde(default)]
     pub id: String,
     pub query: String,
 }

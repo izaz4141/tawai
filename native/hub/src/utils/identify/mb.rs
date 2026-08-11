@@ -209,8 +209,8 @@ pub async fn handle_fingerprint_track(context: Arc<AppContext>) {
                     continue;
                 }
             }
-        } else {
-            match library::lookup_fingerprint_by_id(db.pool(), &msg.track_id).await {
+        } else if let Some(track_id) = msg.track_id.as_deref() {
+            match library::lookup_fingerprint_by_id(db.pool(), track_id).await {
                 Ok(Some(v)) => v,
                 _ => {
                     FingerprintTrackResponse {
@@ -222,6 +222,14 @@ pub async fn handle_fingerprint_track(context: Arc<AppContext>) {
                     continue;
                 }
             }
+        } else {
+            FingerprintTrackResponse {
+                id: msg.id,
+                track_id: msg.track_id,
+                recording: None,
+            }
+            .send_signal_to_dart();
+            continue;
         };
 
         let recording = match musicbrainz::lookup_by_fingerprint(

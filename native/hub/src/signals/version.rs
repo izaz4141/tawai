@@ -32,3 +32,15 @@ pub struct GetLatestVersionResponse {
     pub published_at: Option<String>,
     pub error: Option<String>,
 }
+
+#[derive(Deserialize, DartSignal)]
+pub struct CompareVersionsRequest {
+    pub id: String,
+    pub versions: Vec<String>,
+}
+
+#[derive(Serialize, RustSignal)]
+pub struct CompareVersionsResponse {
+    pub id: String,
+    pub latest: Option<String>,
+}

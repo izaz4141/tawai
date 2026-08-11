@@ -18,9 +18,5 @@ pub fn create_mb_router() -> Router<SharedState> {
             get(release::handle_get_release_tracks),
         )
         .route("/track/{id}", get(track::handle_identify_track))
-        .route(
-            "/track/{id}/fingerprint",
-            get(track::handle_fingerprint_track),
-        )
-        .route("/fingerprint", post(track::handle_fingerprint_path))
+        .route("/fingerprint", post(track::handle_fingerprint_track))
 }

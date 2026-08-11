@@ -1,16 +1,5 @@
 use axum::{Json, response::IntoResponse};
-use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
-
-#[derive(Deserialize, ToSchema)]
-pub struct CompareVersionsRequest {
-    pub versions: Vec<String>,
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct CompareVersionsResponse {
-    pub latest: Option<String>,
-}
+use tawai_core::signals::version::{CompareVersionsRequest, CompareVersionsResponse};
 
 #[utoipa::path(
     post,
@@ -26,5 +15,8 @@ pub async fn handle_compare_versions(
     Json(payload): Json<CompareVersionsRequest>,
 ) -> impl IntoResponse {
     let latest = tawai_core::utils::version::compare_versions(&payload.versions);
-    Json(CompareVersionsResponse { latest: latest })
+    Json(CompareVersionsResponse {
+        id: payload.id,
+        latest,
+    })
 }

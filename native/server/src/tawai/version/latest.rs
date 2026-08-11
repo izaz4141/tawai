@@ -1,41 +1,30 @@
 use crate::server::SharedState;
+use axum::Json;
 use axum::{
-    extract::{Json, Query, State},
+    extract::{Query, State},
+    http::StatusCode,
     response::IntoResponse,
 };
-use serde::Deserialize;
-use tawai_core::utils::version::VersionInfo;
-use utoipa::IntoParams;
-
-#[derive(Deserialize, IntoParams)]
-#[into_params(parameter_in = Query)]
-pub struct VersionLatestQuery {
-    pub owner: String,
-    pub repo: String,
-    #[serde(default)]
-    pub nightly: bool,
-    #[serde(default = "default_true")]
-    pub atomic: bool,
-}
-
-fn default_true() -> bool {
-    true
-}
+use tawai_core::signals::version::{GetLatestVersionRequest, GetLatestVersionResponse};
 
 #[utoipa::path(
     get,
     path = "/api/tawai/version/latest",
     tags = ["tawai.version"],
     security(("ApiKeyAuth" = [])),
-    params(VersionLatestQuery),
+    params(
+        ("owner" = String, Query, description = "Repository owner"),
+        ("repo" = String, Query, description = "Repository name"),
+        ("nightly" = bool, Query, description = "Check nightly releases"),
+        ("atomic" = bool, Query, description = "Use Atom feed"),
+    ),
     responses(
-        (status = 200, description = "Latest version info", body = VersionInfo),
-        (status = 400, description = "Invalid request")
+        (status = 200, description = "Latest version info", body = GetLatestVersionResponse),
     )
 )]
 pub async fn handle_version_latest(
     State(state): State<SharedState>,
-    Query(params): Query<VersionLatestQuery>,
+    Query(params): Query<GetLatestVersionRequest>,
 ) -> impl IntoResponse {
     let repo_owner = params.owner;
     let repo_name = params.repo;
@@ -51,13 +40,32 @@ pub async fn handle_version_latest(
     )
     .await
     {
-        Ok(info) => Json(info).into_response(),
+        Ok(info) => Json(GetLatestVersionResponse {
+            id: String::new(),
+            version: Some(info.version),
+            tag_name: Some(info.tag_name),
+            release_notes: Some(info.release_notes),
+            published_at: Some(info.published_at),
+            error: info.error,
+        })
+        .into_response(),
         Err(e) => {
             tawai_core::utils::logger::error(&format!(
                 "Error getting latest {}/{}: {:#?}",
                 &repo_owner, &repo_name, &e
             ));
-            (axum::http::StatusCode::BAD_REQUEST, e.to_string()).into_response()
+            (
+                StatusCode::BAD_REQUEST,
+                Json(GetLatestVersionResponse {
+                    id: String::new(),
+                    version: None,
+                    tag_name: None,
+                    release_notes: None,
+                    published_at: None,
+                    error: Some(e),
+                }),
+            )
+                .into_response()
         }
     }
 }

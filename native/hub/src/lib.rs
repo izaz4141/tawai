@@ -25,6 +25,7 @@ async fn main() {
     spawn(utils::server::start_server_listener(context.clone()));
     spawn(utils::server::handle_init_config(context.clone()));
     spawn(utils::server::handle_save_config(context.clone()));
+    spawn(utils::server::handle_get_global_settings(context.clone()));
 
     // Encryption / API key handlers
     spawn(utils::server::handle_api_key_generation(context.clone()));
@@ -204,6 +205,7 @@ async fn main() {
     // Version handlers
     spawn(utils::version::handle_get_current_version(context.clone()));
     spawn(utils::version::handle_get_latest_version(context.clone()));
+    spawn(utils::version::handle_compare_versions(context.clone()));
 
     dart_shutdown().await;
 }

@@ -6,19 +6,15 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use serde::Deserialize;
 use tawai_core::{
     db::{account, library},
-    signals::library::{ApplyIdentificationRequest, ApplyIdentificationResponse, TrackInfo},
+    signals::library::{
+        ApplyIdentificationRequest, ApplyIdentificationResponse, ListDownloadFolderTracksResponse,
+        ListUnidentifiedTracksRequest, ListUnidentifiedTracksResponse,
+    },
 };
-use utoipa::ToSchema;
 
 use crate::server::SharedState;
-
-#[derive(Deserialize, ToSchema)]
-pub struct UnidentifiedQuery {
-    pub source_id: Option<String>,
-}
 
 #[utoipa::path(
     get,
@@ -26,7 +22,7 @@ pub struct UnidentifiedQuery {
     tags = ["tawai.library"],
     security(("ApiKeyAuth" = [])),
     responses(
-        (status = 200, description = "Tracks read from the download folder", body = Vec<TrackInfo>),
+        (status = 200, description = "Tracks read from the download folder", body = ListDownloadFolderTracksResponse),
     )
 )]
 pub async fn handle_list_download_folder_tracks(
@@ -42,7 +38,11 @@ pub async fn handle_list_download_folder_tracks(
 
     let tracks = tawai_core::utils::identify::list_download_folder_tracks(Path::new(&folder))
         .unwrap_or_default();
-    Json(tracks).into_response()
+    Json(ListDownloadFolderTracksResponse {
+        id: String::new(),
+        tracks,
+    })
+    .into_response()
 }
 
 #[utoipa::path(
@@ -54,21 +54,28 @@ pub async fn handle_list_download_folder_tracks(
         ("source_id" = Option<String>, Query, description = "Filter by library source ID"),
     ),
     responses(
-        (status = 200, description = "List of tracks without MBID or album MBID", body = Vec<TrackInfo>),
+        (status = 200, description = "List of tracks without MBID or album MBID", body = ListUnidentifiedTracksResponse),
     )
 )]
 pub async fn handle_list_unidentified(
     State(state): State<SharedState>,
-    Query(query): Query<UnidentifiedQuery>,
+    Query(query): Query<ListUnidentifiedTracksRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     match library::list_unidentified_tracks(db.pool(), query.source_id.as_deref()).await {
-        Ok(tracks) => Json(tracks).into_response(),
+        Ok(tracks) => Json(ListUnidentifiedTracksResponse {
+            id: String::new(),
+            tracks,
+        })
+        .into_response(),
         Err(e) => {
             tawai_core::utils::logger::error(&format!("list_unidentified failed: {e}"));
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(Vec::<TrackInfo>::new()),
+                Json(ListUnidentifiedTracksResponse {
+                    id: String::new(),
+                    tracks: vec![],
+                }),
             )
                 .into_response()
         }

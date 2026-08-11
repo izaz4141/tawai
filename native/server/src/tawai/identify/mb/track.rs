@@ -4,22 +4,15 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use serde::Deserialize;
 use tawai_core::{
     audio,
     db::library,
     metadata::musicbrainz,
-    signals::library::{MatchCandidate, TrackInfo},
-    signals::metadata::RecordingInfo,
+    signals::library::{IdentifySingleTrackResponse, MatchCandidate},
+    signals::metadata::{FingerprintTrackRequest, FingerprintTrackResponse, RecordingInfo},
 };
-use utoipa::ToSchema;
 
 use crate::server::SharedState;
-
-#[derive(Deserialize, ToSchema)]
-pub struct FingerprintPathBody {
-    pub file_path: String,
-}
 
 #[utoipa::path(
     get,
@@ -30,7 +23,7 @@ pub struct FingerprintPathBody {
         ("id" = String, Path, description = "Track ID"),
     ),
     responses(
-        (status = 200, description = "Identify candidates", body = Vec<MatchCandidate>),
+        (status = 200, description = "Identify candidates", body = IdentifySingleTrackResponse),
         (status = 404, description = "Track not found"),
     )
 )]
@@ -106,32 +99,12 @@ pub async fn handle_identify_track(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    Json(candidates).into_response()
-}
-
-pub async fn handle_fingerprint_track(
-    State(state): State<SharedState>,
-    Path(id): Path<String>,
-) -> impl IntoResponse {
-    let db = state.context.db().await;
-
-    let (fingerprint, duration) = match library::lookup_fingerprint_by_id(db.pool(), &id).await {
-        Ok(Some(v)) => v,
-        _ => return Json(None::<tawai_core::signals::metadata::RecordingInfo>).into_response(),
-    };
-
-    let info =
-        match musicbrainz::lookup_by_fingerprint(state.context.client(), &fingerprint, duration)
-            .await
-        {
-            Ok(info) => info,
-            Err(e) => {
-                tawai_core::utils::logger::debug(&format!("AcoustID lookup failed: {e}"));
-                return Json(None::<tawai_core::signals::metadata::RecordingInfo>).into_response();
-            }
-        };
-
-    Json(Some(info)).into_response()
+    Json(IdentifySingleTrackResponse {
+        id: String::new(),
+        track_id: id,
+        candidates,
+    })
+    .into_response()
 }
 
 #[utoipa::path(
@@ -139,34 +112,68 @@ pub async fn handle_fingerprint_track(
     path = "/api/tawai/identify/mb/fingerprint",
     tags = ["tawai.identify"],
     security(("ApiKeyAuth" = [])),
-    request_body = FingerprintPathBody,
+    request_body = FingerprintTrackRequest,
     responses(
-        (status = 200, description = "Fingerprint lookup result", body = Option<RecordingInfo>),
+        (status = 200, description = "Fingerprint lookup result", body = FingerprintTrackResponse),
     )
 )]
-pub async fn handle_fingerprint_path(
+pub async fn handle_fingerprint_track(
     State(state): State<SharedState>,
-    Json(body): Json<FingerprintPathBody>,
+    Json(body): Json<FingerprintTrackRequest>,
 ) -> impl IntoResponse {
-    let path = std::path::Path::new(&body.file_path);
-    let (fingerprint, duration) = match audio::fingerprint::compute_fingerprint(path) {
-        Ok(fp) => (fp.fingerprint, fp.duration),
-        Err(e) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({
-                    "error": format!("compute_fingerprint failed: {e}")
-                })),
-            )
-                .into_response();
+    let db = state.context.db().await;
+
+    let (fingerprint, duration) = if let Some(file_path) = body.file_path.as_deref() {
+        let path = std::path::Path::new(file_path);
+        match audio::fingerprint::compute_fingerprint(path) {
+            Ok(fp) => (fp.fingerprint, fp.duration),
+            Err(e) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({
+                        "error": format!("compute_fingerprint failed: {e}")
+                    })),
+                )
+                    .into_response();
+            }
         }
+    } else if let Some(track_id) = body.track_id.as_deref() {
+        match library::lookup_fingerprint_by_id(db.pool(), track_id).await {
+            Ok(Some(v)) => v,
+            _ => {
+                return Json(FingerprintTrackResponse {
+                    id: body.id,
+                    track_id: body.track_id,
+                    recording: None,
+                })
+                .into_response();
+            }
+        }
+    } else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "Either file_path or track_id is required"
+            })),
+        )
+            .into_response();
     };
 
-    match musicbrainz::lookup_by_fingerprint(state.context.client(), &fingerprint, duration).await {
-        Ok(info) => Json(Some(info)).into_response(),
-        Err(e) => {
-            tawai_core::utils::logger::debug(&format!("AcoustID lookup failed: {e}"));
-            Json(None::<tawai_core::signals::metadata::RecordingInfo>).into_response()
-        }
-    }
+    let recording =
+        match musicbrainz::lookup_by_fingerprint(state.context.client(), &fingerprint, duration)
+            .await
+        {
+            Ok(info) => Some(info),
+            Err(e) => {
+                tawai_core::utils::logger::debug(&format!("AcoustID lookup failed: {e}"));
+                None
+            }
+        };
+
+    Json(FingerprintTrackResponse {
+        id: body.id,
+        track_id: body.track_id,
+        recording,
+    })
+    .into_response()
 }

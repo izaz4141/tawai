@@ -521,6 +521,16 @@ class RinfService {
     );
   }
 
+  Future<String?> compareVersions(List<String> versions) async {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final stream = CompareVersionsResponse.rustSignalStream.where(
+      (s) => s.message.id == id,
+    );
+    CompareVersionsRequest(id: id, versions: versions).sendSignalToRust();
+    final signal = await stream.first;
+    return signal.message.latest;
+  }
+
   Future<({bool success, String info, String? error})> getInfo(
     String sourceType,
     String url,
@@ -1206,6 +1216,22 @@ class RinfService {
     );
   }
 
+  Future<Map<String, dynamic>?> getGlobalSettings() async {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final stream = GlobalSettingsResponse.rustSignalStream.where(
+      (s) => s.message.id == id,
+    );
+    GetGlobalSettingsRequest(id: id).sendSignalToRust();
+    final signal = await stream.first;
+    final json = signal.message.settingsJson;
+    if (json != null && json.isNotEmpty) {
+      try {
+        return jsonDecode(json) as Map<String, dynamic>;
+      } catch (_) {}
+    }
+    return null;
+  }
+
   Future<({bool success, String? error})> saveConfig(
     Map<String, dynamic> settings,
   ) async {
@@ -1229,7 +1255,7 @@ class RinfService {
   // ---------------------------------------------------------------------------
 
   Future<RecordingInfo?> fingerprintTrack(
-    String trackId, {
+    String? trackId, {
     String? filePath,
   }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
