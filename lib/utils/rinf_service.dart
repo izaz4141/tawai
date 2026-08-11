@@ -449,8 +449,12 @@ class RinfService {
   }
 
   Future<({bool success, String? version, String? error})> testConnection(
-    String sourceType,
-  ) async {
+    String sourceType, {
+    String? url,
+    String? token,
+    String? username,
+    String? password,
+  }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = DownloadTestConnectionResponse.rustSignalStream.where(
       (s) => s.message.id == id,
@@ -458,6 +462,10 @@ class RinfService {
     DownloadTestConnectionRequest(
       id: id,
       sourceType: sourceType,
+      url: url,
+      token: token,
+      username: username,
+      password: password,
     ).sendSignalToRust();
     final signal = await stream.first;
     return (

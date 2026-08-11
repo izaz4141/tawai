@@ -377,12 +377,28 @@ class BridgeService {
   }
 
   Future<({bool success, String? version, String? error})> testConnection(
-    String sourceType,
-  ) async {
+    String sourceType, {
+    String? url,
+    String? token,
+    String? username,
+    String? password,
+  }) async {
     if (_isRemote) {
-      return APIService.instance.testConnection(sourceType);
+      return APIService.instance.testConnection(
+        sourceType,
+        url: url,
+        token: token,
+        username: username,
+        password: password,
+      );
     }
-    return RinfService.instance.testConnection(sourceType);
+    return RinfService.instance.testConnection(
+      sourceType,
+      url: url,
+      token: token,
+      username: username,
+      password: password,
+    );
   }
 
   Future<String?> getCurrentVersion(String app) async {

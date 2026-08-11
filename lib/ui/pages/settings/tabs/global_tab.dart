@@ -175,14 +175,18 @@ class SettingsGlobalTab extends StatelessWidget {
                 SettingsManager.slskdUrl.value,
               ),
               (
-                'slskd API Key',
-                'Stored encrypted server-side; blank keeps the existing key',
+                'slskd Token',
+                'Stored encrypted server-side; blank keeps the existing token',
                 true,
                 '',
               ),
             ],
             test: (values) async {
-              final res = await BridgeService.instance.testConnection('slskd');
+              final res = await BridgeService.instance.testConnection(
+                'slskd',
+                url: values[0],
+                token: values[1],
+              );
               return res.success
                   ? 'Connected! v${res.version ?? '?'}'
                   : res.error ?? 'Connection failed';
@@ -210,8 +214,8 @@ class SettingsGlobalTab extends StatelessWidget {
                 SettingsManager.nadekodonUrl.value,
               ),
               (
-                'Nadekodon API Key',
-                'Stored encrypted server-side; blank keeps the existing key',
+                'Nadekodon Token',
+                'Stored encrypted server-side; blank keeps the existing token',
                 true,
                 '',
               ),
@@ -219,6 +223,8 @@ class SettingsGlobalTab extends StatelessWidget {
             test: (values) async {
               final res = await BridgeService.instance.testConnection(
                 'nadekodon',
+                url: values[0],
+                token: values[1],
               );
               return res.success
                   ? 'Connected! v${res.version ?? '?'}'

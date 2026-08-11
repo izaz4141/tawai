@@ -7,7 +7,7 @@ use reqwest::Client;
 use serde_json::Value;
 
 use crate::db::database::DatabasePool;
-use crate::signals::download::{DlListResponse, DlSearchResponse};
+use crate::signals::download::{DlListResponse, DlSearchResponse, DownloadTestConnectionRequest};
 use crate::utils::config::AppConfig;
 
 pub enum DownloadClient {
@@ -104,10 +104,50 @@ impl DownloadClient {
         }
     }
 
-    pub async fn test_connection(&self) -> Result<String> {
-        match self {
-            DownloadClient::Nadekodon(c) => c.test_connection().await,
-            DownloadClient::Slskd(c) => c.test_connection().await,
+    pub async fn test_connection(
+        request: &DownloadTestConnectionRequest,
+        cfg: &AppConfig,
+        http: &reqwest::Client,
+    ) -> Result<String> {
+        match request.source_type.as_str() {
+            "slskd" => {
+                let url = request
+                    .url
+                    .clone()
+                    .filter(|s| !s.is_empty())
+                    .or_else(|| cfg.value["slskd_url"].as_str().map(String::from))
+                    .ok_or_else(|| anyhow::anyhow!("slskd_url not configured"))?;
+                let token = request
+                    .token
+                    .clone()
+                    .filter(|s| !s.is_empty())
+                    .or_else(|| cfg.value["slskd_api_key"].as_str().map(String::from))
+                    .unwrap_or_default();
+                slskd::SlskdClient::new(url, token, http.clone())
+                    .test_connection()
+                    .await
+            }
+            "nadekodon" => {
+                let url = request
+                    .url
+                    .clone()
+                    .filter(|s| !s.is_empty())
+                    .or_else(|| cfg.value["nadekodon_url"].as_str().map(String::from))
+                    .ok_or_else(|| anyhow::anyhow!("nadekodon_url not configured"))?;
+                let token = request
+                    .token
+                    .clone()
+                    .filter(|s| !s.is_empty())
+                    .or_else(|| cfg.value["nadekodon_api_key"].as_str().map(String::from))
+                    .unwrap_or_default();
+                nadekodon::NadekodonClient::new(url, token, http.clone())
+                    .test_connection()
+                    .await
+            }
+            _ => Err(anyhow::anyhow!(
+                "unknown download source type: {}",
+                request.source_type
+            )),
         }
     }
 

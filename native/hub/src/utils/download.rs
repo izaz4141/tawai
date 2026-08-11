@@ -494,20 +494,18 @@ pub async fn handle_download_test_connection(context: Arc<AppContext>) {
     let receiver = signals::download::DownloadTestConnectionRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
-        let client = match client_from_type(&msg.source_type, &context).await {
-            Ok(c) => c,
-            Err(e) => {
-                signals::download::DownloadTestConnectionResponse {
-                    id: msg.id,
-                    success: false,
-                    version: None,
-                    error: Some(e),
-                }
-                .send_signal_to_dart();
-                continue;
-            }
+        let cfg = context.cfg().await;
+        let request = tawai_core::signals::download::DownloadTestConnectionRequest {
+            id: msg.id.clone(),
+            source_type: msg.source_type.clone(),
+            url: msg.url.clone(),
+            token: msg.token.clone(),
+            username: msg.username.clone(),
+            password: msg.password.clone(),
         };
-        match client.test_connection().await {
+        let result = DownloadClient::test_connection(&request, &cfg, context.client()).await;
+
+        match result {
             Ok(version) => {
                 signals::download::DownloadTestConnectionResponse {
                     id: msg.id,

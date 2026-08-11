@@ -1018,26 +1018,38 @@ class APIService {
   }
 
   Future<({bool success, String? version, String? error})> testConnection(
-    String sourceType,
-  ) async {
+    String sourceType, {
+    String? url,
+    String? token,
+    String? username,
+    String? password,
+  }) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/download/test-connection'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({'source_type': sourceType}),
+        body: jsonEncode({
+          'source_type': sourceType,
+          'url': url,
+          'token': token,
+          'username': username,
+          'password': password,
+        }),
       );
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      final error = json["error"] as String?;
       if (response.statusCode == 200) {
-        final json = jsonDecode(response.body) as Map<String, dynamic>;
         return (
           success: json['success'] as bool,
           version: json['version'] as String?,
-          error: json['error'] as String?,
+          error: error,
         );
       }
       return (
         success: false,
         version: null,
-        error: 'HTTP ${response.statusCode}',
+        error:
+            'HTTP ${response.statusCode} ${error != null ? (": ", error) : ""}',
       );
     } catch (e) {
       log('testConnection error: $e', isError: true);

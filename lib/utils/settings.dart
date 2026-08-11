@@ -497,10 +497,8 @@ class SettingsManager {
         currentUserId.value = user.userId;
       }
 
-      await saveAll();
       await reloadConfig();
-      serverHost.value = account.host;
-      serverPort.value = account.port;
+      await saveAll();
       await loadAllUserSettings();
 
       APIService.isOnline.value = false;

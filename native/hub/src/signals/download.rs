@@ -195,6 +195,10 @@ pub struct DownloadSearchResponse {
 pub struct DownloadTestConnectionRequest {
     pub id: String,
     pub source_type: String,
+    pub url: Option<String>,
+    pub token: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
 }
 
 #[derive(Serialize, RustSignal)]
