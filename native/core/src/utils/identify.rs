@@ -19,10 +19,10 @@ pub struct ApplyIdentificationParams {
     pub file_path: Option<String>,
     /// When set, the library source to move the (download-folder) file into.
     pub target_source_id: Option<String>,
-    pub title: String,
-    pub artist: String,
+    pub title: Option<String>,
+    pub artist: Option<String>,
     pub artist_mbid: Option<String>,
-    pub album: String,
+    pub album: Option<String>,
     pub album_mbid: Option<String>,
     pub album_disambiguation: Option<String>,
     pub release_date: Option<String>,
@@ -31,7 +31,7 @@ pub struct ApplyIdentificationParams {
     pub mbid_recording: Option<String>,
     pub lyrics: Option<String>,
     pub cover_bytes: Option<Vec<u8>>,
-    pub total_discs: i32,
+    pub total_discs: Option<i32>,
 }
 
 /// Result of applying an identification.
@@ -93,72 +93,74 @@ pub async fn apply_identification(
         ));
     }
 
-    let (title, artist, album, track_num, disc_num, mbid_recording, lyrics) = match &track {
-        Some(t) => {
-            let title = if params.title.is_empty() && !t.title.is_empty() {
-                t.title.clone()
-            } else {
-                params.title.clone()
-            };
-            let artist = if params.artist.is_empty() && !t.artists_string.is_empty() {
-                t.artists_string.clone()
-            } else {
-                params.artist.clone()
-            };
-            let album = if params.album.is_empty() && !t.album_title.is_empty() {
-                t.album_title.clone()
-            } else {
-                params.album.clone()
-            };
-            let track_num = params.track_num.or(t.track_num);
-            let disc_num = params.disc_num.or(t.disc_num);
-            let mbid_recording = params
-                .mbid_recording
-                .clone()
-                .or_else(|| t.mbid_recording.clone());
-            let lyrics = params.lyrics.clone().or_else(|| t.lyrics.clone());
-            (
-                title,
-                artist,
-                album,
-                track_num,
-                disc_num,
-                mbid_recording,
-                lyrics,
-            )
-        }
-        None => (
-            params.title.clone(),
-            params.artist.clone(),
-            params.album.clone(),
-            params.track_num,
-            params.disc_num,
-            params.mbid_recording.clone(),
-            params.lyrics.clone(),
-        ),
-    };
+    // Start from the file's current on-disk tags. Only the explicitly provided
+    // params override them; every omitted field keeps its existing value.
+    let mut tag = audio::tags::read_audio_tags(Path::new(&file_path))?.0;
 
-    let write_tag = audio::tags::AudioTag {
-        title: title.clone(),
-        artist: artist.clone(),
-        album: album.clone(),
-        album_artist: artist.clone(),
-        album_disambiguation: params.album_disambiguation.clone(),
-        release_date: params.release_date.clone(),
-        track_number: track_num.unwrap_or(0),
-        disc_number: disc_num.unwrap_or(1),
-        mbid_recording: mbid_recording.clone(),
-        mbid_artist: params.artist_mbid.clone(),
-        mbid_release: params.album_mbid.clone(),
-        mbid_release_artist: params.artist_mbid.clone(),
-        lyrics: lyrics.clone(),
-        cover: params.cover_bytes.clone(),
-        total_discs: params.total_discs,
-        ..Default::default()
-    };
+    if let Some(v) = params.title.as_deref() {
+        if !v.is_empty() {
+            tag.title = v.to_string();
+        }
+    }
+    if let Some(v) = params.artist.as_deref() {
+        if !v.is_empty() {
+            tag.artist = v.to_string();
+            tag.album_artist = v.to_string();
+        }
+    }
+    if let Some(v) = params.album.as_deref() {
+        if !v.is_empty() {
+            tag.album = v.to_string();
+        }
+    }
+    if let Some(v) = &params.artist_mbid {
+        if !v.is_empty() {
+            tag.mbid_artist = Some(v.clone());
+            tag.mbid_release_artist = Some(v.clone());
+        }
+    }
+    if let Some(v) = &params.album_mbid {
+        if !v.is_empty() {
+            tag.mbid_release = Some(v.clone());
+        }
+    }
+    if let Some(v) = &params.album_disambiguation {
+        if !v.is_empty() {
+            tag.album_disambiguation = Some(v.clone());
+        }
+    }
+    if let Some(v) = &params.release_date {
+        if !v.is_empty() {
+            tag.release_date = Some(v.clone());
+        }
+    }
+    if let Some(v) = params.track_num {
+        tag.track_number = v;
+    }
+    if let Some(v) = params.disc_num {
+        tag.disc_number = v;
+    }
+    if let Some(v) = &params.mbid_recording {
+        if !v.is_empty() {
+            tag.mbid_recording = Some(v.clone());
+        }
+    }
+    if let Some(v) = &params.lyrics {
+        if !v.is_empty() {
+            tag.lyrics = Some(v.clone());
+        }
+    }
+    if let Some(v) = &params.cover_bytes {
+        if !v.is_empty() {
+            tag.cover = Some(v.clone());
+        }
+    }
+    if let Some(v) = params.total_discs {
+        tag.total_discs = v;
+    }
 
     let file_path = PathBuf::from(&file_path);
-    audio::tags::write_audio_tags(&file_path, &write_tag)?;
+    audio::tags::write_audio_tags(&file_path, &tag)?;
 
     if let Some(cover_bytes) = &params.cover_bytes {
         if let Some(track) = &track {
@@ -174,13 +176,13 @@ pub async fn apply_identification(
 
     let new_file_path = if download_folder {
         Some(
-            move_file_into_source(&file_path, &source.url, pattern.as_deref(), &write_tag)?
+            move_file_into_source(&file_path, &source.url, pattern.as_deref(), &tag)?
                 .to_string_lossy()
                 .to_string(),
         )
     } else if let Some(pattern) = pattern {
         Some(
-            move_file_into_source(&file_path, &source.url, Some(&pattern), &write_tag)?
+            move_file_into_source(&file_path, &source.url, Some(&pattern), &tag)?
                 .to_string_lossy()
                 .to_string(),
         )
@@ -189,8 +191,43 @@ pub async fn apply_identification(
     };
 
     if !download_folder {
-        let artist_pairs = [(artist.clone(), params.artist_mbid.clone())];
-        let album_artist_pairs = [(artist.clone(), params.artist_mbid.clone())];
+        let track_row = track.as_ref().expect("library flow always has a track row");
+        let title = params
+            .title
+            .as_deref()
+            .filter(|v| !v.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| track_row.title.clone());
+        let artist = params
+            .artist
+            .as_deref()
+            .filter(|v| !v.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| track_row.artists_string.clone());
+        let album = params
+            .album
+            .as_deref()
+            .filter(|v| !v.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| track_row.album_title.clone());
+        let artist_mbid = params
+            .artist_mbid
+            .clone()
+            .or_else(|| track_row.artist_mbid.clone());
+        let album_mbid = params
+            .album_mbid
+            .clone()
+            .or_else(|| track_row.album_mbid.clone());
+        let track_num = params.track_num.or(track_row.track_num);
+        let disc_num = params.disc_num.or(track_row.disc_num);
+        let mbid_recording = params
+            .mbid_recording
+            .clone()
+            .or_else(|| track_row.mbid_recording.clone());
+        let lyrics = params.lyrics.clone().or_else(|| track_row.lyrics.clone());
+
+        let artist_pairs = [(artist.clone(), artist_mbid.clone())];
+        let album_artist_pairs = [(artist.clone(), artist_mbid.clone())];
         library::update_track(
             pool,
             &params.track_id,
@@ -198,7 +235,7 @@ pub async fn apply_identification(
             &artist_pairs,
             &album,
             &album_artist_pairs,
-            params.album_mbid.as_deref(),
+            album_mbid.as_deref(),
             params.release_date.clone(),
             track_num,
             disc_num,
@@ -207,7 +244,7 @@ pub async fn apply_identification(
             params.cover_bytes.as_deref(),
             new_file_path.as_deref(),
             params.album_disambiguation.clone(),
-            params.total_discs,
+            params.total_discs.unwrap_or(0),
         )
         .await?;
     }

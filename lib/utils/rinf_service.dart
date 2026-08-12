@@ -845,10 +845,10 @@ class RinfService {
   applyIdentification({
     required String userId,
     required String trackId,
-    required String title,
-    required String artist,
+    String? title,
+    String? artist,
     String? artistMbid,
-    required String album,
+    String? album,
     String? albumMbid,
     String? albumDisambiguation,
     String? releaseDate,
@@ -857,7 +857,7 @@ class RinfService {
     String? mbidRecording,
     String? lyrics,
     List<int>? coverBytes,
-    int totalDiscs = 0,
+    int? totalDiscs,
     String? filePath,
     String? targetSourceId,
   }) async {

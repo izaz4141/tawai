@@ -196,10 +196,10 @@ pub struct ApplyIdentificationRequest {
     pub file_path: Option<String>,
     /// When set, the library source to move the (download-folder) file into.
     pub target_source_id: Option<String>,
-    pub title: String,
-    pub artist: String,
+    pub title: Option<String>,
+    pub artist: Option<String>,
     pub artist_mbid: Option<String>,
-    pub album: String,
+    pub album: Option<String>,
     pub album_mbid: Option<String>,
     pub album_disambiguation: Option<String>,
     pub release_date: Option<String>,
@@ -208,7 +208,7 @@ pub struct ApplyIdentificationRequest {
     pub mbid_recording: Option<String>,
     pub lyrics: Option<String>,
     pub cover_bytes: Option<Vec<u8>>,
-    pub total_discs: i32,
+    pub total_discs: Option<i32>,
 }
 
 #[derive(Serialize, RustSignal)]

@@ -1372,10 +1372,10 @@ class APIService {
   applyIdentification({
     String? userId,
     required String trackId,
-    required String title,
-    required String artist,
+    String? title,
+    String? artist,
     String? artistMbid,
-    required String album,
+    String? album,
     String? albumMbid,
     String? albumDisambiguation,
     String? releaseDate,
@@ -1384,18 +1384,19 @@ class APIService {
     String? mbidRecording,
     String? lyrics,
     List<int>? coverBytes,
-    int totalDiscs = 0,
+    int? totalDiscs,
     String? filePath,
     String? targetSourceId,
   }) async {
     try {
       final body = <String, dynamic>{
         'id': _newId(),
+        'user_id': userId ?? SettingsManager.currentUserId.value ?? '',
         'track_id': trackId,
-        'title': title,
-        'artist': artist,
-        'album': album,
       };
+      if (title != null) body['title'] = title;
+      if (artist != null) body['artist'] = artist;
+      if (album != null) body['album'] = album;
       if (artistMbid != null) body['artist_mbid'] = artistMbid;
       if (albumMbid != null) body['album_mbid'] = albumMbid;
       if (albumDisambiguation != null) {
@@ -1407,9 +1408,10 @@ class APIService {
       if (mbidRecording != null) body['mbid_recording'] = mbidRecording;
       if (lyrics != null) body['lyrics'] = lyrics;
       if (coverBytes != null) body['cover_bytes'] = base64Encode(coverBytes);
-      if (totalDiscs > 0) body['total_discs'] = totalDiscs;
+      if (totalDiscs != null && totalDiscs > 0)
+        body['total_discs'] = totalDiscs;
       if (filePath != null) body['file_path'] = filePath;
-      if (targetSourceId != null) body['source_id'] = targetSourceId;
+      if (targetSourceId != null) body['target_source_id'] = targetSourceId;
 
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/library/identify/apply'),
