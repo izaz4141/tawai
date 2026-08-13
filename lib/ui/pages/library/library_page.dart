@@ -324,15 +324,18 @@ class _LibraryPageState extends State<LibraryPage>
                   ),
                   child: FloatingActionButton(
                     heroTag: 'shuffle_tracks',
-                    onPressed: () {
+                    onPressed: () async {
                       final playback = PlaybackService.instance;
-                      if (!playback.shuffleModeEnabled.value) {
-                        playback.toggleShuffle(force: true);
-                      }
                       final randomIndex = Random().nextInt(
                         filteredTracks.length,
                       );
-                      playback.play(filteredTracks, startIndex: randomIndex);
+                      final started = await playback.play(
+                        filteredTracks,
+                        startIndex: randomIndex,
+                      );
+                      if (started) {
+                        playback.toggleShuffle(force: true);
+                      }
                     },
                     child: const Icon(Icons.shuffle),
                   ),

@@ -183,7 +183,7 @@ class PlaybackService {
       await _player.setAudioSource(_buildSource(item.track, item.source!));
       await _applyEffectiveVolume();
       _beginTrack(syntheticTrack);
-      await _player.play();
+      _startPlayback();
     });
   }
 
@@ -243,7 +243,7 @@ class PlaybackService {
       _sourceGeneration++;
       await _player.setAudioSource(_buildSource(track, cache));
       await _applyEffectiveVolume();
-      await _player.play();
+      _startPlayback();
       return true;
     });
   }
@@ -468,12 +468,20 @@ class PlaybackService {
     if (playerState.value.playing) {
       await _player.pause();
     } else {
-      await _player.play();
+      _startPlayback();
     }
   }
 
+  void _startPlayback() {
+    unawaited(
+      _player.play().catchError((Object e, StackTrace st) {
+        log('play failed: $e', isError: true);
+      }),
+    );
+  }
+
   Future<void> resume() async {
-    await _player.play();
+    _startPlayback();
   }
 
   Future<void> pause() async {
@@ -544,7 +552,7 @@ class PlaybackService {
         case LoopMode.one:
           _beginTrack(q.currentTrack!);
           await _player.seek(Duration.zero);
-          await _player.play();
+          _startPlayback();
           return;
         case LoopMode.all:
           final next = (q.currentIndex + 1) % q.items.length;
@@ -593,7 +601,7 @@ class PlaybackService {
     _sourceGeneration++;
     _beginTrack(item.track);
     if (autoPlay) {
-      await _player.play();
+      _startPlayback();
     }
     unawaited(_prefetchWindow());
     return true;
@@ -762,7 +770,7 @@ class PlaybackService {
       position.value = saved.position;
     }
     if (ok && saved.playing) {
-      await _player.play();
+      _startPlayback();
     }
   }
 
