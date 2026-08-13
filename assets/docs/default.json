@@ -7,6 +7,7 @@
   "desired_audio_quality": "best",
   "nadekodon_api_key": "",
   "nadekodon_url": "",
+  "naming_pattern": "{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}",
   "playback_volume": 1.0,
   "require_login": false,
   "retreat_to_tray": true,

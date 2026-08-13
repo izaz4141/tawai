@@ -169,6 +169,10 @@ class SettingsManager {
     nadekodonUrl.value = json['nadekodon_url'] ?? '';
     desiredAudioQuality.value = json['desired_audio_quality'] ?? 'best';
     defaultDownloadSource.value = json['default_download_source'] ?? 'slskd';
+    namingPattern.value =
+        json['naming_pattern'] ??
+        defaults['naming_pattern'] ??
+        '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}';
 
     if (!fromBackend) {
       if (json['playback_volume'] is num) {
@@ -203,6 +207,7 @@ class SettingsManager {
     'desired_audio_quality': desiredAudioQuality.value,
     'default_download_source': defaultDownloadSource.value,
     'playback_volume': playbackVolume.value,
+    'naming_pattern': namingPattern.value,
     'accounts': accounts.value.map((e) => e.toJson()).toList(),
   };
 
