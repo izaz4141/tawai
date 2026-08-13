@@ -1,6 +1,40 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+// --- Generic download record / list ---
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct DownloadRecord {
+    pub id: String,
+    pub source: String,
+    pub source_id: String,
+    pub url: String,
+    pub dest_path: String,
+    pub filename: String,
+    pub total_size: i64,
+    pub downloaded: i64,
+    pub state: String,
+    pub error: String,
+    pub added_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct ListDownloadsRequest {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub user_id: String,
+    pub source: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ListDownloadsResponse {
+    #[serde(default)]
+    pub id: String,
+    pub downloads: Vec<DownloadRecord>,
+}
+
 // --- generic download client types ---
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -226,5 +260,5 @@ pub struct DownloadsPollRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct DownloadsPollResponse {
     pub id: String,
-    pub downloads: Vec<crate::signals::DownloadRecord>,
+    pub downloads: Vec<DownloadRecord>,
 }

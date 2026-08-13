@@ -1,5 +1,5 @@
 use crate::db::database::DatabasePool;
-use crate::signals::DownloadRecord;
+use crate::signals::download::DownloadRecord;
 
 pub async fn insert_download(
     pool: &DatabasePool,

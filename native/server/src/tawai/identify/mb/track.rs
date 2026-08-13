@@ -8,7 +8,7 @@ use tawai_core::{
     audio,
     db::library,
     metadata::musicbrainz,
-    signals::library::{IdentifySingleTrackResponse, MatchCandidate},
+    signals::identify::{IdentifySingleTrackResponse, MatchCandidate},
     signals::metadata::{FingerprintTrackRequest, FingerprintTrackResponse, RecordingInfo},
 };
 

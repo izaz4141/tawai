@@ -5,7 +5,7 @@ use axum::{
     response::IntoResponse,
 };
 use tawai_core::db;
-use tawai_core::signals::{ListDownloadsRequest, ListDownloadsResponse};
+use tawai_core::signals::download::{ListDownloadsRequest, ListDownloadsResponse};
 
 use crate::server::SharedState;
 

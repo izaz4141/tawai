@@ -258,8 +258,6 @@ class APIService {
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        _jwt = data['access_token'] as String? ?? '';
-        _csrfToken = data['csrf_token'] as String? ?? '';
         final newKey = data['api_key'] as String? ?? '';
         final user = SettingsManager.currentUser.value;
         if (user != null && newKey.isNotEmpty) {

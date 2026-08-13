@@ -228,9 +228,9 @@ pub async fn handle_delete_account(context: Arc<AppContext>) {
     }
 }
 
-pub async fn handle_verify_current_password(context: Arc<AppContext>) {
+pub async fn handle_verify_password(context: Arc<AppContext>) {
     use signals::account::*;
-    let receiver = VerifyCurrentPasswordRequest::get_dart_signal_receiver();
+    let receiver = VerifyPasswordRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
@@ -238,6 +238,6 @@ pub async fn handle_verify_current_password(context: Arc<AppContext>) {
 
         let valid = caccount::verify_current_password(&db, &mk, &msg.user_id, &msg.password).await;
 
-        VerifyCurrentPasswordResponse { id: msg.id, valid }.send_signal_to_dart();
+        VerifyPasswordResponse { id: msg.id, valid }.send_signal_to_dart();
     }
 }

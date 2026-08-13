@@ -35,10 +35,7 @@ class _AuthConfirmDialogState extends State<AuthConfirmDialog> {
       _error = null;
     });
 
-    final valid = await BridgeService.instance.verifyCurrentPassword(
-      userId,
-      password,
-    );
+    final valid = await BridgeService.instance.verifyPassword(userId, password);
 
     if (!mounted) return;
 

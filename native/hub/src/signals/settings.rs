@@ -2,6 +2,17 @@ use rinf::{DartSignal, RustSignal};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+#[derive(Serialize, RustSignal)]
+pub struct GlobalSettingsResponse {
+    pub id: String,
+    pub settings_json: Option<String>,
+}
+
+#[derive(Deserialize, DartSignal)]
+pub struct GetGlobalSettingsRequest {
+    pub id: String,
+}
+
 #[derive(Deserialize, DartSignal)]
 pub struct SetUserSettingRequest {
     pub id: String,

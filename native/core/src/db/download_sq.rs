@@ -2,7 +2,7 @@ use anyhow::Result;
 use sqlx::{Row, SqlitePool};
 use uuid::Uuid;
 
-use crate::signals::DownloadRecord;
+use crate::signals::download::DownloadRecord;
 
 pub async fn insert_download(
     pool: &SqlitePool,

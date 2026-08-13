@@ -62,6 +62,16 @@ class RinfService {
     );
   }
 
+  Future<String> regenerateApiKey({required String userId}) async {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final stream = ApiKeyResponse.rustSignalStream.where(
+      (s) => s.message.id == id,
+    );
+    GenerateApiKeyRequest(id: id, userId: userId).sendSignalToRust();
+    final signal = await stream.first;
+    return signal.message.apiKey;
+  }
+
   Future<String?> generateMasterKey() async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = GenerateMasterKeyResponse.rustSignalStream.where(
@@ -1146,12 +1156,12 @@ class RinfService {
     return (success: signal.message.success, username: signal.message.username);
   }
 
-  Future<bool> verifyCurrentPassword(String userId, String password) async {
+  Future<bool> verifyPassword(String userId, String password) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
-    final stream = VerifyCurrentPasswordResponse.rustSignalStream.where(
+    final stream = VerifyPasswordResponse.rustSignalStream.where(
       (s) => s.message.id == id,
     );
-    VerifyCurrentPasswordRequest(
+    VerifyPasswordRequest(
       id: id,
       userId: userId,
       password: password,

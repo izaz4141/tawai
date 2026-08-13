@@ -8,10 +8,11 @@ use axum::{
 };
 use tawai_core::{
     db::{account, library},
-    signals::library::{
-        ApplyIdentificationRequest, ApplyIdentificationResponse, ListDownloadFolderTracksResponse,
-        ListUnidentifiedTracksRequest, ListUnidentifiedTracksResponse,
+    signals::identify::{
+        ApplyIdentificationRequest, ApplyIdentificationResponse, ListUnidentifiedTracksRequest,
+        ListUnidentifiedTracksResponse,
     },
+    signals::library::ListDownloadFolderTracksResponse,
 };
 
 use crate::server::SharedState;

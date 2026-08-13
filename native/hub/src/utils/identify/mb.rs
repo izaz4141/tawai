@@ -99,12 +99,12 @@ pub async fn handle_fetch_recording(context: Arc<AppContext>) {
 }
 
 pub async fn handle_identify_single_track(context: Arc<AppContext>) {
-    use signals::metadata::*;
+    use signals::identify::*;
     let receiver = IdentifySingleTrackRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mut candidates: Vec<signals::metadata::MatchCandidate> = Vec::new();
+        let mut candidates: Vec<signals::identify::MatchCandidate> = Vec::new();
 
         let (file_path, track_title, _track_artist) =
             match library::lookup_track(db.pool(), &msg.track_id).await {
@@ -129,7 +129,7 @@ pub async fn handle_identify_single_track(context: Arc<AppContext>) {
                     if !info.title.is_empty() {
                         let first_release = info.releases.first();
                         let score = if info.acoust_id.is_some() { 0.95 } else { 0.5 };
-                        candidates.push(signals::metadata::MatchCandidate {
+                        candidates.push(signals::identify::MatchCandidate {
                             score,
                             title: info.title.clone(),
                             artist: info.artist.clone(),
@@ -156,7 +156,7 @@ pub async fn handle_identify_single_track(context: Arc<AppContext>) {
             if let Some(title) = parsed_title {
                 if title != track_title || candidates.is_empty() {
                     let score = if parsed_artist.is_some() { 0.3 } else { 0.2 };
-                    candidates.push(signals::metadata::MatchCandidate {
+                    candidates.push(signals::identify::MatchCandidate {
                         score,
                         title,
                         artist: parsed_artist.unwrap_or_default(),

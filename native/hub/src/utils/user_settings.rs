@@ -9,7 +9,7 @@ use tawai_core::app_context::AppContext;
 use tawai_core::utils::encryption;
 
 pub async fn handle_set_user_setting(context: Arc<AppContext>) {
-    use signals::user_settings::*;
+    use signals::settings::*;
     let receiver = SetUserSettingRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -47,7 +47,7 @@ pub async fn handle_set_user_setting(context: Arc<AppContext>) {
 }
 
 pub async fn handle_get_user_setting(context: Arc<AppContext>) {
-    use signals::user_settings::*;
+    use signals::settings::*;
     let receiver = GetUserSettingRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -66,7 +66,7 @@ pub async fn handle_get_user_setting(context: Arc<AppContext>) {
 }
 
 pub async fn handle_get_all_user_settings(context: Arc<AppContext>) {
-    use signals::user_settings::*;
+    use signals::settings::*;
     let receiver = GetAllUserSettingsRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;

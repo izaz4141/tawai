@@ -170,11 +170,11 @@ class BridgeService {
     );
   }
 
-  Future<bool> verifyCurrentPassword(String userId, String password) async {
+  Future<bool> verifyPassword(String userId, String password) async {
     if (_isRemote) {
       return APIService.instance.verifyPassword(password);
     }
-    return RinfService.instance.verifyCurrentPassword(userId, password);
+    return RinfService.instance.verifyPassword(userId, password);
   }
 
   // ---------------------------------------------------------------------------
@@ -467,11 +467,8 @@ class BridgeService {
 
   Future<bool> regenerateApiKey({required String userId}) async {
     if (_isRemote) return APIService.instance.regenerateApiKey();
-    await RinfService.instance.requestNewApiKey(
-      masterKey: null,
-      userId: userId,
-    );
-    return true;
+    final newKey = await RinfService.instance.regenerateApiKey(userId: userId);
+    return newKey.isNotEmpty;
   }
 
   Future<Map<String, dynamic>?> getSettings() async {

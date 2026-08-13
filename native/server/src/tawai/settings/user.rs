@@ -6,7 +6,7 @@ use axum::{
     response::IntoResponse,
 };
 use tawai_core::db::user_settings;
-use tawai_core::signals::user_settings::{
+use tawai_core::signals::settings::{
     GetAllUserSettingsRequest, GetAllUserSettingsResponse, GetUserSettingRequest,
     GetUserSettingResponse, SetUserSettingRequest, SetUserSettingResponse,
 };

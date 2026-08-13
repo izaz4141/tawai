@@ -1,16 +1,15 @@
-use crate::security::create_jwt_response;
-use crate::server::{SharedState, build_jwt_cookie};
-use axum::extract::State;
+use crate::server::SharedState;
+use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use axum::{Extension, Json};
-use axum_extra::extract::CookieJar;
-use tawai_core::signals::account::ApiKeyResponse;
+use tawai_core::signals::account::{ApiKeyResponse, GenerateApiKeyRequest};
 
 #[utoipa::path(
     get,
     path = "/api/tawai/auth/generate-api",
     tags = ["tawai.auth"],
     security(("ApiKeyAuth" = [])),
+    params(("id" = String, Query, description = "Correlation id")),
     responses(
         (status = 200, description = "API key generated successfully", body = ApiKeyResponse)
     )
@@ -18,7 +17,7 @@ use tawai_core::signals::account::ApiKeyResponse;
 pub async fn handle_generate_api(
     State(state): State<SharedState>,
     Extension(user_id): Extension<String>,
-    jar: CookieJar,
+    Query(query): Query<GenerateApiKeyRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
@@ -26,14 +25,9 @@ pub async fn handle_generate_api(
         .await
         .unwrap_or_default();
 
-    let jwt_response = create_jwt_response(&state, &user_id).await.unwrap();
-    let jar = build_jwt_cookie(jar, &jwt_response);
-
-    let json_response = ApiKeyResponse {
+    Json(ApiKeyResponse {
+        id: query.id,
         api_key: new_key,
-        access_token: jwt_response.access_token,
-        csrf_token: jwt_response.csrf_token,
-        expires_in: jwt_response.expires_in,
-    };
-    (jar, Json(json_response)).into_response()
+    })
+    .into_response()
 }

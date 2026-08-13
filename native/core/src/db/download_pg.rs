@@ -2,7 +2,7 @@ use anyhow::Result;
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
-use crate::signals::DownloadRecord;
+use crate::signals::download::DownloadRecord;
 
 pub async fn insert_download(
     pool: &PgPool,

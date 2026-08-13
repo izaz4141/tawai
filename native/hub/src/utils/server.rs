@@ -7,13 +7,14 @@ use tawai_server::{
     tawai::{create_tawai_router, system::handle_status},
 };
 
+use crate::signals::account::{ApiKeyResponse, GenerateApiKeyRequest};
 use crate::signals::crypt::{
     DecryptRequest, DecryptResponse, EncryptRequest, EncryptResponse, NewApiKey, RequestNewApiKey,
 };
 use crate::signals::server::{
-    GetGlobalSettingsRequest, GlobalSettingsResponse, InitConfig, InitConfigResponse,
-    SaveConfigRequest, SaveConfigResponse, StartServer,
+    InitConfig, InitConfigResponse, SaveConfigRequest, SaveConfigResponse, StartServer,
 };
+use crate::signals::settings::{GetGlobalSettingsRequest, GlobalSettingsResponse};
 use crate::utils::logger;
 use axum::{Router, routing::get};
 use rinf::{DartSignal, RustSignal};
@@ -27,6 +28,23 @@ use tokio::{
     sync::{Notify, RwLock},
 };
 use tower_governor::GovernorLayer;
+
+pub async fn handle_generate_api_key(context: Arc<AppContext>) {
+    let receiver = GenerateApiKeyRequest::get_dart_signal_receiver();
+    while let Some(signal_pack) = receiver.recv().await {
+        let msg = signal_pack.message;
+        let db = context.db().await;
+        let mk = context.master_key.read().await.clone();
+        let api_key = account::regenerate_user_api_key(db.pool(), &msg.user_id, &mk)
+            .await
+            .unwrap_or_default();
+        ApiKeyResponse {
+            id: msg.id,
+            api_key,
+        }
+        .send_signal_to_dart();
+    }
+}
 
 pub async fn handle_api_key_generation(context: Arc<AppContext>) {
     let receiver = RequestNewApiKey::get_dart_signal_receiver();

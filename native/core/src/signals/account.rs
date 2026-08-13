@@ -1,6 +1,21 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct GenerateApiKeyRequest {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub user_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ApiKeyResponse {
+    #[serde(default)]
+    pub id: String,
+    pub api_key: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct UserListItem {
     pub id: String,
@@ -8,14 +23,6 @@ pub struct UserListItem {
     pub display_name: String,
     pub role: String,
     pub api_key: String,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct ApiKeyResponse {
-    pub api_key: String,
-    pub access_token: String,
-    pub csrf_token: String,
-    pub expires_in: u64,
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -134,7 +141,7 @@ pub struct DeleteAccountResponse {
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
-pub struct VerifyCurrentPasswordRequest {
+pub struct VerifyPasswordRequest {
     #[serde(default)]
     pub id: String,
     pub user_id: String,
@@ -142,7 +149,7 @@ pub struct VerifyCurrentPasswordRequest {
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct VerifyCurrentPasswordResponse {
+pub struct VerifyPasswordResponse {
     #[serde(default)]
     pub id: String,
     pub valid: bool,

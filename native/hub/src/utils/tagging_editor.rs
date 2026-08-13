@@ -25,7 +25,7 @@ pub async fn handle_list_download_folder_tracks(context: Arc<AppContext>) {
 }
 
 pub async fn handle_list_unidentified_tracks(context: Arc<AppContext>) {
-    use signals::metadata::*;
+    use signals::identify::*;
     let receiver = ListUnidentifiedTracksRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -51,7 +51,7 @@ pub async fn handle_list_unidentified_tracks(context: Arc<AppContext>) {
 }
 
 pub async fn handle_apply_identification(context: Arc<AppContext>) {
-    use signals::metadata::*;
+    use signals::identify::*;
     let receiver = ApplyIdentificationRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;

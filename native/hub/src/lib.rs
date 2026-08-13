@@ -28,6 +28,7 @@ async fn main() {
     spawn(utils::server::handle_get_global_settings(context.clone()));
 
     // Encryption / API key handlers
+    spawn(utils::server::handle_generate_api_key(context.clone()));
     spawn(utils::server::handle_api_key_generation(context.clone()));
     spawn(utils::server::handle_decrypt_request(context.clone()));
     spawn(utils::server::handle_encrypt_request(context.clone()));
@@ -71,9 +72,7 @@ async fn main() {
     spawn(utils::account::handle_update_account(context.clone()));
     spawn(utils::account::handle_create_account(context.clone()));
     spawn(utils::account::handle_delete_account(context.clone()));
-    spawn(utils::account::handle_verify_current_password(
-        context.clone(),
-    ));
+    spawn(utils::account::handle_verify_password(context.clone()));
 
     // Library source handlers
     spawn(utils::library_source::handle_add_library_source(

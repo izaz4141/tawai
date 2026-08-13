@@ -2,6 +2,18 @@ use rinf::{DartSignal, RustSignal, SignalPiece};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, DartSignal)]
+pub struct GenerateApiKeyRequest {
+    pub id: String,
+    pub user_id: String,
+}
+
+#[derive(Serialize, RustSignal)]
+pub struct ApiKeyResponse {
+    pub id: String,
+    pub api_key: String,
+}
+
+#[derive(Deserialize, DartSignal)]
 pub struct GetUserByUsernameRequest {
     pub id: String,
     pub username: String,
@@ -126,14 +138,14 @@ pub struct DeleteAccountResponse {
 }
 
 #[derive(Deserialize, DartSignal)]
-pub struct VerifyCurrentPasswordRequest {
+pub struct VerifyPasswordRequest {
     pub id: String,
     pub user_id: String,
     pub password: String,
 }
 
 #[derive(Serialize, RustSignal)]
-pub struct VerifyCurrentPasswordResponse {
+pub struct VerifyPasswordResponse {
     pub id: String,
     pub valid: bool,
 }

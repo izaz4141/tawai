@@ -4,7 +4,7 @@ use axum::{
     response::IntoResponse,
 };
 use serde_json::Value;
-use tawai_core::signals::user_settings::GlobalSettingsResponse;
+use tawai_core::signals::settings::GlobalSettingsResponse;
 use tawai_core::utils::config::{PRIVATE_CONFIG_KEYS, strip_keys};
 
 use crate::server::SharedState;
