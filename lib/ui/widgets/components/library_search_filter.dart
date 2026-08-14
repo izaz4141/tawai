@@ -1,27 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/pages/library/filterable_list.dart';
 import 'package:tawai/ui/pages/library/modal/library_filter_dialog.dart';
 
 class LibrarySearchFilter extends StatefulWidget {
   final int tabIndex;
-  final String query;
-  final String? selectedSource;
-  final List<String> availableSources;
+  final LibraryFilters filters;
+  final LibraryFilterOptions options;
   final bool showSearch;
+  final bool showFilter;
   final double rightPadding;
   final ValueChanged<String> onQueryChanged;
-  final ValueChanged<String?> onSourceChanged;
+  final ValueChanged<LibraryFilters> onFiltersChanged;
 
   const LibrarySearchFilter({
     super.key,
     required this.tabIndex,
-    required this.query,
-    required this.selectedSource,
-    required this.availableSources,
+    required this.filters,
+    required this.options,
     this.showSearch = true,
+    this.showFilter = true,
     this.rightPadding = 0,
     required this.onQueryChanged,
-    required this.onSourceChanged,
+    required this.onFiltersChanged,
   });
 
   @override
@@ -34,14 +35,15 @@ class _LibrarySearchFilterState extends State<LibrarySearchFilter> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: widget.query);
+    _controller = TextEditingController(text: widget.filters.query);
   }
 
   @override
   void didUpdateWidget(LibrarySearchFilter old) {
     super.didUpdateWidget(old);
-    if (widget.query != old.query && widget.query != _controller.text) {
-      _controller.text = widget.query;
+    if (widget.filters.query != old.filters.query &&
+        widget.filters.query != _controller.text) {
+      _controller.text = widget.filters.query;
     }
   }
 
@@ -69,11 +71,12 @@ class _LibrarySearchFilterState extends State<LibrarySearchFilter> {
   void _openFilterDialog() {
     LibraryFilterDialog.show(
       context,
-      selectedSource: widget.selectedSource,
-      availableSources: widget.availableSources,
-    ).then((source) {
-      if (source != widget.selectedSource && mounted) {
-        widget.onSourceChanged(source);
+      filters: widget.filters,
+      options: widget.options,
+      tabIndex: widget.tabIndex,
+    ).then((result) {
+      if (result != null && mounted) {
+        widget.onFiltersChanged(result);
       }
     });
   }
@@ -81,46 +84,79 @@ class _LibrarySearchFilterState extends State<LibrarySearchFilter> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final iconScale = AppTheme.iconScale(context);
+    final active = widget.filters.hasActiveFilters;
 
     if (!widget.showSearch) {
       return const SizedBox.shrink();
     }
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 8, 16 + widget.rightPadding, 4),
+      padding: EdgeInsets.fromLTRB(
+        AppTheme.spaceMD,
+        AppTheme.spaceXS,
+        AppTheme.spaceMD + widget.rightPadding,
+        0,
+      ),
       child: TextField(
         controller: _controller,
         onChanged: widget.onQueryChanged,
+        style: Theme.of(context).textTheme.bodySmall,
         decoration: InputDecoration(
           hintText: _hint,
-          prefixIcon: const Icon(Icons.search, size: 20),
+          prefixIcon: Padding(
+            padding: EdgeInsets.only(
+              left: AppTheme.spaceSM,
+              right: AppTheme.spaceXS,
+            ),
+            child: Icon(
+              Icons.search,
+              size: AppTheme.iconSM * iconScale,
+            ),
+          ),
+          prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
           suffixIcon: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (widget.query.isNotEmpty)
+              if (widget.filters.query.isNotEmpty)
                 IconButton(
-                  icon: const Icon(Icons.clear, size: 18),
+                  icon: Icon(
+                    Icons.clear,
+                    size: AppTheme.iconXS * iconScale,
+                  ),
+                  visualDensity: VisualDensity.compact,
                   onPressed: () {
                     _controller.clear();
                     widget.onQueryChanged('');
                   },
                 ),
-              IconButton(
-                icon: Icon(
-                  widget.selectedSource != null
-                      ? Icons.filter_list
-                      : Icons.filter_list,
-                  size: 20,
-                  color: widget.selectedSource != null ? colors.primary : null,
+              if (widget.showFilter)
+                IconButton(
+                  icon: Badge.count(
+                    count: widget.filters.activeCount,
+                    isLabelVisible: active,
+                    backgroundColor: colors.primary,
+                    textStyle: TextStyle(
+                      fontSize: AppTheme.textXS * iconScale,
+                      color: colors.onPrimary,
+                    ),
+                    child: Icon(
+                      Icons.filter_list,
+                      size: AppTheme.iconSM * iconScale,
+                      color: active ? colors.primary : null,
+                    ),
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _openFilterDialog,
                 ),
-                onPressed: _openFilterDialog,
-              ),
             ],
           ),
           isDense: true,
-          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+          contentPadding: EdgeInsets.symmetric(
+            vertical: AppTheme.spaceSM * 0.5,
+          ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+            borderRadius: BorderRadius.circular(AppTheme.radiusSM),
             borderSide: BorderSide(color: colors.outline),
           ),
           filled: true,

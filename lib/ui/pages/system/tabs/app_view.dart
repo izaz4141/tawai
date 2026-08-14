@@ -8,7 +8,6 @@ import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/pages/logs/logs_page.dart';
 import 'package:tawai/ui/pages/licenses/licenses_page.dart';
 import 'package:tawai/ui/pages/system/modal/app_update.dart';
-import 'package:tawai/ui/widgets/dialog/tag_editor.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/utils/updater.dart';
 import 'package:tawai/utils/system_service.dart';
@@ -182,14 +181,6 @@ class _SystemAppState extends State<SystemApp> {
                   MaterialPageRoute(builder: (context) => const LicensesPage()),
                 ),
               ),
-              if (!kIsWeb)
-                _buildActionButton(
-                  context,
-                  icon: Icons.edit_note,
-                  label: 'Tag Editor',
-                  tooltip: 'Edit audio file tags',
-                  onPressed: () => showTagEditorDialog(context),
-                ),
             ],
           ),
           SizedBox(height: AppTheme.spaceSM),

@@ -34,6 +34,8 @@ class _LibraryPageState extends State<LibraryPage>
   final _albumScrollController = ScrollController();
   final _artistScrollController = ScrollController();
   final _playlistScrollController = ScrollController();
+  final List<GlobalKey<RefreshIndicatorState>> _refreshKeys =
+      List.generate(5, (_) => GlobalKey<RefreshIndicatorState>());
 
   late final FilterableList<TrackInfo> _tracksFilterable;
   late final FilterableList<AlbumInfo> _albumsFilterable;
@@ -42,8 +44,7 @@ class _LibraryPageState extends State<LibraryPage>
   late final FilterableList<PlaybackRecord> _historyFilterable;
 
   bool _loading = false;
-  String _searchQuery = '';
-  String? _selectedSource;
+  LibraryFilters _filters = LibraryFilters();
   List<String> _availableSources = [];
 
   @override
@@ -59,7 +60,7 @@ class _LibraryPageState extends State<LibraryPage>
           t.title.toLowerCase().contains(q) ||
           t.artistsString.toLowerCase().contains(q) ||
           t.albumTitle.toLowerCase().contains(q),
-      matchesSource: (t, s) => t.source == s,
+      matchesFilters: _trackMatchesFilters,
       compare: (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
     );
 
@@ -67,16 +68,13 @@ class _LibraryPageState extends State<LibraryPage>
       matchesSearch: (a, q) =>
           a.title.toLowerCase().contains(q) ||
           a.artistsString.toLowerCase().contains(q),
-      matchesSource: (a, s) =>
-          _tracksFilterable.all.any((t) => t.source == s && t.albumId == a.id),
+      matchesFilters: _albumMatchesFilters,
       compare: (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
     );
 
     _artistsFilterable = FilterableList<ArtistInfo>(
       matchesSearch: (a, q) => a.name.toLowerCase().contains(q),
-      matchesSource: (a, s) => _tracksFilterable.all.any(
-        (t) => t.source == s && t.artists.any((ar) => ar.id == a.id),
-      ),
+      matchesFilters: _artistMatchesFilters,
       compare: (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
     );
 
@@ -92,7 +90,9 @@ class _LibraryPageState extends State<LibraryPage>
           r.albumTitle.toLowerCase().contains(q),
     );
 
-    _loadAll();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _refreshKeys[_tabController.index].currentState?.show();
+    });
     ScanService.instance.isScanning.addListener(_onScanStateChanged);
     SettingsManager.includedRecommendations.addListener(
       _onRecommendationSettingsChanged,
@@ -119,6 +119,81 @@ class _LibraryPageState extends State<LibraryPage>
         viewportWidth - 2 * padding - (crossAxisCount - 1) * spacing;
     final cellWidth = availableWidth / crossAxisCount;
     return cellWidth / 0.85 + spacing;
+  }
+
+  static String? _yearOf(String? date) {
+    if (date == null || date.length < 4) return null;
+    return int.tryParse(date.substring(0, 4))?.toString();
+  }
+
+  bool _trackMatchesFilters(TrackInfo t, LibraryFilters f) {
+    if (!f.hasActiveFilters) return true;
+    if (f.sources.isNotEmpty && f.sources.contains(t.source)) return true;
+    if (f.genres.isNotEmpty && t.genres.any((g) => f.genres.contains(g))) {
+      return true;
+    }
+    if (f.years.isNotEmpty && f.years.contains(_yearOf(t.releaseDate))) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _albumMatchesFilters(AlbumInfo a, LibraryFilters f) {
+    if (!f.hasActiveFilters) return true;
+    if (f.sources.isNotEmpty &&
+        _tracksFilterable.all.any(
+          (t) => t.albumId == a.id && f.sources.contains(t.source),
+        )) {
+      return true;
+    }
+    if (f.genres.isNotEmpty &&
+        _tracksFilterable.all.any(
+          (t) => t.albumId == a.id && t.genres.any((g) => f.genres.contains(g)),
+        )) {
+      return true;
+    }
+    if (f.years.isNotEmpty && f.years.contains(_yearOf(a.releaseDate))) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _artistMatchesFilters(ArtistInfo a, LibraryFilters f) {
+    if (!f.hasActiveFilters) return true;
+    final tracksOfArtist =
+        _tracksFilterable.all.where((t) => t.artists.any((ar) => ar.id == a.id));
+    if (f.sources.isNotEmpty && tracksOfArtist.any((t) => f.sources.contains(t.source))) {
+      return true;
+    }
+    if (f.genres.isNotEmpty &&
+        tracksOfArtist.any((t) => t.genres.any((g) => f.genres.contains(g)))) {
+      return true;
+    }
+    if (f.years.isNotEmpty && tracksOfArtist.any((t) => f.years.contains(_yearOf(t.releaseDate)))) {
+      return true;
+    }
+    return false;
+  }
+
+  LibraryFilterOptions get _filterOptions {
+    final genres = <String>{};
+    final years = <String>{};
+    for (final t in _tracksFilterable.all) {
+      genres.addAll(t.genres);
+      final y = _yearOf(t.releaseDate);
+      if (y != null) years.add(y);
+    }
+    for (final a in _albumsFilterable.all) {
+      final y = _yearOf(a.releaseDate);
+      if (y != null) years.add(y);
+    }
+    final genreList = genres.toList()..sort();
+    final yearList = years.toList()..sort();
+    return LibraryFilterOptions(
+      sources: List.of(_availableSources),
+      genres: genreList,
+      years: yearList,
+    );
   }
 
   Widget _buildScroller(
@@ -278,23 +353,11 @@ class _LibraryPageState extends State<LibraryPage>
     final colors = Theme.of(context).colorScheme;
     final isDesktop = AppTheme.isDesktop(context);
 
-    final filteredTracks = _tracksFilterable.filtered(
-      _searchQuery,
-      _selectedSource,
-    );
-    final filteredAlbums = _albumsFilterable.filtered(
-      _searchQuery,
-      _selectedSource,
-    );
-    final filteredArtists = _artistsFilterable.filtered(
-      _searchQuery,
-      _selectedSource,
-    );
-    final filteredPlaylists = _playlistsFilterable.filtered(
-      _searchQuery,
-      _selectedSource,
-    );
-    final filteredHistory = _historyFilterable.filtered(_searchQuery, null);
+    final filteredTracks = _tracksFilterable.filtered(_filters);
+    final filteredAlbums = _albumsFilterable.filtered(_filters);
+    final filteredArtists = _artistsFilterable.filtered(_filters);
+    final filteredPlaylists = _playlistsFilterable.filtered(_filters);
+    final filteredHistory = _historyFilterable.filtered(_filters);
 
     const labels = ['Songs', 'Albums', 'Artists', 'Playlists', 'History'];
 
@@ -349,19 +412,20 @@ class _LibraryPageState extends State<LibraryPage>
             children: [
               LibrarySearchFilter(
                 tabIndex: _tabController.index,
-                query: _searchQuery,
-                selectedSource: _selectedSource,
+                filters: _filters,
+                options: _filterOptions,
                 showSearch: _tabController.index != 4,
+                showFilter: _tabController.index <= 2,
                 rightPadding: AlphabetIndexScroller.kStripWidth,
-                availableSources: _availableSources,
-                onQueryChanged: (v) => setState(() => _searchQuery = v),
-                onSourceChanged: (v) => setState(() => _selectedSource = v),
+                onQueryChanged: (v) => setState(() => _filters.query = v),
+                onFiltersChanged: (v) => setState(() => _filters = v),
               ),
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
                   children: [
                     RefreshIndicator(
+                      key: _refreshKeys[0],
                       onRefresh: _loadAll,
                       child: LibraryTracksTab(
                         tracks: filteredTracks,
@@ -369,6 +433,7 @@ class _LibraryPageState extends State<LibraryPage>
                       ),
                     ),
                     RefreshIndicator(
+                      key: _refreshKeys[1],
                       onRefresh: _loadAll,
                       child: LibraryAlbumsTab(
                         albums: filteredAlbums,
@@ -376,6 +441,7 @@ class _LibraryPageState extends State<LibraryPage>
                       ),
                     ),
                     RefreshIndicator(
+                      key: _refreshKeys[2],
                       onRefresh: _loadAll,
                       child: LibraryArtistsTab(
                         artists: filteredArtists,
@@ -383,6 +449,7 @@ class _LibraryPageState extends State<LibraryPage>
                       ),
                     ),
                     RefreshIndicator(
+                      key: _refreshKeys[3],
                       onRefresh: _loadAll,
                       child: LibraryPlaylistsTab(
                         playlists: filteredPlaylists,
@@ -392,6 +459,7 @@ class _LibraryPageState extends State<LibraryPage>
                       ),
                     ),
                     RefreshIndicator(
+                      key: _refreshKeys[4],
                       onRefresh: () =>
                           _loadTabData(_historyFilterable, () async {
                             final userId =
