@@ -37,6 +37,7 @@ async fn main() {
 
     // Library handlers
     spawn(utils::library::handle_list_tracks(context.clone()));
+    spawn(utils::library::handle_delete_track(context.clone()));
     spawn(utils::library::handle_list_albums(context.clone()));
     spawn(utils::library::handle_list_artists(context.clone()));
     spawn(utils::library::handle_list_playlists(context.clone()));

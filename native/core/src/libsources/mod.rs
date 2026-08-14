@@ -184,6 +184,13 @@ impl SourceParser {
             SourceParser::Jellyfin(p) => p.resolve_stream_url(file_path, source_url).await,
         }
     }
+
+    pub async fn delete(&self, file_path: &str, source_url: &str) -> Result<()> {
+        match self {
+            SourceParser::Local => local::delete_file(file_path),
+            SourceParser::Jellyfin(p) => p.delete(file_path, source_url).await,
+        }
+    }
 }
 
 pub fn get_parser(source_type: &str, client: reqwest::Client) -> Option<SourceParser> {

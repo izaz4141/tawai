@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/cached_network_image.dart';
 
 /// Prompts the user for an image URL. Returns the validated `http(s)` URL or
 /// `null` if cancelled.
@@ -41,7 +42,6 @@ class _CoverUrlDialogState extends State<_CoverUrlDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return AlertDialog(
       title: const Text('Add Cover from URL'),
       content: SizedBox(
@@ -125,12 +125,12 @@ class _EditableCoverState extends State<EditableCover> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(AppTheme.radiusSM),
                 child: hasUrl
-                    ? Image.network(
-                        widget.coverUrl!,
+                    ? CachedNetworkImage(
+                        url: widget.coverUrl!,
                         width: widget.width,
                         height: widget.height,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => _placeholder(colors),
+                        placeholder: _placeholder(colors),
                       )
                     : hasBytes
                     ? Image.memory(

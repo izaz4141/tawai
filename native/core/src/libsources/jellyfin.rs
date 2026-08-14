@@ -14,7 +14,7 @@ use crate::utils::logger;
 
 const TICK_RATE: f64 = 10_000_000.0;
 const DEVICE_INFO: &str =
-    "MediaBrowser Client=\"Tawai\", Device=\"Tawai\", DeviceId=\"Tawai\", Version=\"1.0.0\"";
+    "MediaBrowser Client=\"Tawai\", Device=\"Tawai\", DeviceId=\"Tawai\", Version=\"0.0.1\"";
 
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -200,6 +200,32 @@ impl JellyfinParser {
                 Ok(map_item_to_track(item, &base_url))
             }
         }
+    }
+
+    /// Deletes the item from the Jellyfin server (`DELETE /Items/{id}`).
+    pub async fn delete(&self, file_path: &str, source_url: &str) -> Result<()> {
+        let item_id = file_path
+            .strip_prefix("jellyfin://")
+            .context("Invalid Jellyfin file path: missing jellyfin:// prefix")?;
+
+        let (base_url, token, _, _) = self.get_or_authenticate(source_url).await?;
+
+        let delete_url = format!("{}/Items/{}", base_url, item_id);
+        let auth_header = format!("{}, Token=\"{}\"", DEVICE_INFO, token);
+        let resp = self
+            .client
+            .delete(&delete_url)
+            .header("Authorization", &auth_header)
+            .send()
+            .await?;
+
+        if resp.status().is_success() {
+            return Ok(());
+        }
+
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        anyhow::bail!("Jellyfin delete failed with status {}: {}", status, text);
     }
 
     pub async fn fetch_libraries(&self, url: &str) -> Result<Vec<JellyfinLibraryInfo>> {

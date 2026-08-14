@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:tawai/src/bindings/bindings.dart';
@@ -11,6 +10,7 @@ import 'package:tawai/ui/widgets/components/cover_image.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/widgets/components/download_track_sheet.dart';
+import 'package:tawai/ui/widgets/components/track_info_sheet.dart';
 import 'package:tawai/ui/widgets/dialog/tag_editor.dart';
 import 'package:tawai/models/recommendation_source.dart';
 
@@ -110,15 +110,6 @@ class _TrackActionSheet extends StatelessWidget {
                 showTrackDownloadSheet(context, track);
               },
             ),
-          if (!kIsWeb)
-            SheetActionItem(
-              icon: Icons.edit,
-              label: 'Edit Tags',
-              onTap: () {
-                Navigator.pop(context);
-                showTagEditorDialog(context, initialPath: track.filePath);
-              },
-            ),
           if (track.albumId.isNotEmpty)
             SheetActionItem(
               icon: Icons.album,
@@ -160,6 +151,57 @@ class _TrackActionSheet extends StatelessWidget {
                     ),
                   ),
                 );
+              },
+            ),
+          SheetActionItem(
+            icon: Icons.edit,
+            label: 'Edit Tags',
+            onTap: () {
+              showTagEditorDialog(context, initialPath: track.filePath);
+            },
+          ),
+          SheetActionItem(
+            icon: Icons.info_outline,
+            label: 'Details',
+            onTap: () => showTrackInfoSheet(context, track),
+          ),
+          if (!RecommendationSource.isRecommendationSource(track.sourceType))
+            SheetActionItem(
+              icon: Icons.delete_outline,
+              label: 'Delete Track',
+              onTap: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Delete Track'),
+                    content: Text('Delete "${track.title}" from your library?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancel'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Delete'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed != true || !context.mounted) return;
+
+                final result = await BridgeService.instance.deleteTrack(
+                  track.id,
+                );
+                if (!context.mounted) return;
+
+                AppSnackBar.show(
+                  context,
+                  result.success
+                      ? 'Track deleted'
+                      : 'Failed to delete: ${result.error ?? 'Unknown error'}',
+                  type: result.success ? SnackType.success : SnackType.error,
+                );
+                Navigator.pop(context);
               },
             ),
         ],

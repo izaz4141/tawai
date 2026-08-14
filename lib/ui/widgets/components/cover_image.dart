@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:tawai/utils/bridge_service.dart';
+import 'package:tawai/utils/image_cache.dart';
 
 class CoverImage extends StatefulWidget {
   const CoverImage({
@@ -27,6 +27,7 @@ class CoverImage extends StatefulWidget {
 class _CoverImageState extends State<CoverImage> {
   Uint8List? _bytes;
   bool _loading = true;
+  int _generation = 0;
 
   @override
   void initState() {
@@ -44,24 +45,28 @@ class _CoverImageState extends State<CoverImage> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
-    Uint8List? bytes;
-    if (widget.albumId != null) {
-      bytes = await BridgeService.instance.getAlbumCover(widget.albumId!);
-    } else if (widget.trackId != null) {
-      final trackCover = await BridgeService.instance.getTrackCover(
-        widget.trackId!,
-      );
-      if (trackCover != null) {
-        bytes = trackCover;
-      }
-    }
-    if (mounted) {
+    final gen = ++_generation;
+    final cached = AppImageCache.instance.peek(
+      albumId: widget.albumId,
+      trackId: widget.trackId,
+    );
+    if (cached != null) {
       setState(() {
-        _bytes = bytes;
+        _bytes = cached;
         _loading = false;
       });
+      return;
     }
+    setState(() => _loading = true);
+    final bytes = await AppImageCache.instance.getCover(
+      albumId: widget.albumId,
+      trackId: widget.trackId,
+    );
+    if (!mounted || gen != _generation) return;
+    setState(() {
+      _bytes = bytes;
+      _loading = false;
+    });
   }
 
   @override

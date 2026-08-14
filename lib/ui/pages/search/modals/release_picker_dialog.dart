@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/cached_network_image.dart';
 
 class ReleasePickerDialog extends StatelessWidget {
   final RecordingInfo recording;
@@ -32,12 +33,13 @@ class ReleasePickerDialog extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(AppTheme.radiusSM / 2),
-                  child: Image.network(
-                    'https://coverartarchive.org/release/${release.id}/front-250.jpg',
+                  child: CachedNetworkImage(
+                    url:
+                        'https://coverartarchive.org/release/${release.id}/front-250.jpg',
                     width: AppTheme.iconXL,
                     height: AppTheme.iconXL,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
+                    placeholder: Container(
                       width: AppTheme.iconXL,
                       height: AppTheme.iconXL,
                       color: colors.surfaceContainerHighest,

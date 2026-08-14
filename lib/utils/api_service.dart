@@ -764,6 +764,27 @@ class APIService {
     }
   }
 
+  Future<({bool success, String? error})> deleteTrack(String trackId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/api/tawai/library/tracks/$trackId'),
+        headers: _authHeaders(),
+      );
+      if (response.statusCode == 200) {
+        return (success: true, error: null);
+      }
+      String? error;
+      try {
+        final data = jsonDecode(response.body);
+        error = data is Map<String, dynamic> ? data['error'] as String? : null;
+      } catch (_) {}
+      return (success: false, error: error);
+    } catch (e) {
+      log('deleteTrack error: $e', isError: true);
+      return (success: false, error: e.toString());
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Playlist tracks
   // ---------------------------------------------------------------------------

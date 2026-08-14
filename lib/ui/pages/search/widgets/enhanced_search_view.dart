@@ -8,6 +8,7 @@ import 'package:tawai/ui/pages/search/widgets/search_result_tile.dart';
 import 'package:tawai/ui/widgets/mini_player.dart';
 import 'package:tawai/ui/pages/search/modals/release_picker_dialog.dart';
 import 'package:tawai/ui/pages/search/modals/track_picker_dialog.dart';
+import 'package:tawai/ui/widgets/components/cached_network_image.dart';
 
 enum _EnhancedStep { choosingMbResult, viewingResults }
 
@@ -107,12 +108,12 @@ class _EnhancedSearchViewState extends State<EnhancedSearchView> {
     if (rec.cover != null) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(AppTheme.radiusSM),
-        child: Image.network(
-          rec.cover!,
+        child: CachedNetworkImage(
+          url: rec.cover!,
           width: AppTheme.iconXL,
           height: AppTheme.iconXL,
           fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => Container(
+          placeholder: Container(
             width: AppTheme.iconXL,
             height: AppTheme.iconXL,
             color: colors.surfaceContainerHighest,

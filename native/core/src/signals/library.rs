@@ -73,6 +73,21 @@ pub struct ListTracksResponse {
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct DeleteTrackRequest {
+    pub id: String,
+    #[serde(default)]
+    pub user_id: String,
+    pub track_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct DeleteTrackResponse {
+    pub id: String,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct ListAlbumsRequest {
     #[serde(default)]
     pub id: String,

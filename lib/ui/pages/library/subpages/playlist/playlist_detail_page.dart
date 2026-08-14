@@ -24,6 +24,17 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   void initState() {
     super.initState();
     _load();
+    BridgeService.libraryChanged.addListener(_onLibraryChanged);
+  }
+
+  @override
+  void dispose() {
+    BridgeService.libraryChanged.removeListener(_onLibraryChanged);
+    super.dispose();
+  }
+
+  void _onLibraryChanged() {
+    if (mounted) _load();
   }
 
   Future<void> _load() async {

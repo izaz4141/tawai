@@ -9,9 +9,9 @@ class LibraryFilters {
     Set<String>? sources,
     Set<String>? genres,
     Set<String>? years,
-  })  : sources = sources ?? {},
-        genres = genres ?? {},
-        years = years ?? {};
+  }) : sources = sources ?? {},
+       genres = genres ?? {},
+       years = years ?? {};
 
   bool get hasActiveFilters =>
       sources.isNotEmpty || genres.isNotEmpty || years.isNotEmpty;

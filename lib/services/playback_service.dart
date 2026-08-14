@@ -401,6 +401,17 @@ class PlaybackService {
     });
   }
 
+  /// Removes every queued occurrence of a track (e.g. after it is deleted
+  /// from the library). If the currently playing track is removed, playback
+  /// advances to the next one.
+  Future<void> removeTrackFromQueue(String trackId) async {
+    while (true) {
+      final idx = queue.value.items.indexWhere((i) => i.track.id == trackId);
+      if (idx < 0) break;
+      await removeFromQueue(idx);
+    }
+  }
+
   Future<void> moveQueueItem(int from, int to) async {
     final q = queue.value;
     if (from < 0 || from >= q.items.length || to < 0 || to >= q.items.length) {

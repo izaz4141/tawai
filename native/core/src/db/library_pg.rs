@@ -514,6 +514,25 @@ pub async fn track_exists_by_fingerprint(
     Ok(track_id)
 }
 
+pub async fn fingerprint_paths_of(
+    pool: &PgPool,
+    paths: &std::collections::HashSet<String>,
+) -> Result<std::collections::HashMap<String, String>> {
+    if paths.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+    let paths: Vec<String> = paths.iter().cloned().collect();
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT f.fingerprint, t.file_path FROM fingerprints f \
+         INNER JOIN tracks t ON t.id = f.track_id \
+         WHERE t.file_path = ANY($1)",
+    )
+    .bind(&paths)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().collect())
+}
+
 pub async fn insert_fingerprint(
     pool: &PgPool,
     track_id: &str,

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/track_list_tile.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/logger.dart';
 
@@ -18,9 +19,27 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
   bool _checkFileSizeDuration = true;
   bool _checkTitleArtist = false;
   bool _scanning = false;
+  bool _resolvingTracks = false;
   List<DuplicateGroup> _groups = [];
+  Map<String, TrackInfo> _trackInfos = {};
   bool _hasScanned = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    BridgeService.libraryChanged.addListener(_onLibraryChanged);
+  }
+
+  @override
+  void dispose() {
+    BridgeService.libraryChanged.removeListener(_onLibraryChanged);
+    super.dispose();
+  }
+
+  void _onLibraryChanged() {
+    if (mounted) unawaited(_resolveTracks());
+  }
 
   Future<void> _scan() async {
     setState(() {
@@ -41,7 +60,9 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
           _groups = response.groups;
           _hasScanned = true;
           _scanning = false;
+          _trackInfos = {};
         });
+        unawaited(_resolveTracks());
       } else {
         setState(() {
           _error = 'Failed to scan for duplicates';
@@ -57,6 +78,67 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
         });
       }
     }
+  }
+
+  Future<void> _resolveTracks() async {
+    final ids = <String>{
+      for (final group in _groups)
+        for (final entry in group.tracks) entry.trackId,
+    };
+    if (ids.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _trackInfos = {};
+          _resolvingTracks = false;
+        });
+      }
+      return;
+    }
+    if (mounted) setState(() => _resolvingTracks = true);
+    final results = await Future.wait(
+      ids.map(
+        (id) async => (id, await BridgeService.instance.getTrackInfo(id)),
+      ),
+    );
+    final resolved = <String, TrackInfo>{};
+    for (final (id, info) in results) {
+      if (info != null) resolved[id] = info;
+    }
+    final newGroups = <DuplicateGroup>[
+      for (final group in _groups)
+        DuplicateGroup(
+          method: group.method,
+          key: group.key,
+          confidence: group.confidence,
+          tracks: [
+            for (final entry in group.tracks)
+              if (resolved.containsKey(entry.trackId)) entry,
+          ],
+        ),
+    ].where((group) => group.tracks.isNotEmpty).toList();
+    if (!mounted) return;
+    setState(() {
+      _trackInfos = resolved;
+      _groups = newGroups;
+      _resolvingTracks = false;
+    });
+  }
+
+  List<MapEntry<String, List<DuplicateGroup>>> _methodBuckets() {
+    const order = ['file_size_duration', 'mbid', 'fingerprint', 'title_artist'];
+    final byMethod = <String, List<DuplicateGroup>>{};
+    for (final group in _groups) {
+      byMethod.putIfAbsent(group.method, () => []).add(group);
+    }
+    final buckets = <MapEntry<String, List<DuplicateGroup>>>[];
+    for (final method in order) {
+      final groups = byMethod[method];
+      if (groups != null) buckets.add(MapEntry(method, groups));
+    }
+    for (final entry in byMethod.entries) {
+      if (!order.contains(entry.key)) buckets.add(entry);
+    }
+    return buckets;
   }
 
   IconData _methodIcon(String method) {
@@ -173,15 +255,26 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
             )
           else
             Expanded(
-              child: ListView.builder(
-                padding: EdgeInsets.all(
-                  AppTheme.spaceSM * AppTheme.spaceScale(context),
-                ),
-                itemCount: _groups.length,
-                itemBuilder: (context, index) {
-                  final group = _groups[index];
-                  return _buildGroupCard(group, colors, textTheme);
-                },
+              child: Column(
+                children: [
+                  if (_resolvingTracks)
+                    const LinearProgressIndicator(minHeight: 2),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: EdgeInsets.all(
+                        AppTheme.spaceSM * AppTheme.spaceScale(context),
+                      ),
+                      itemCount: _methodBuckets().length,
+                      itemBuilder: (context, index) {
+                        return _buildMethodTile(
+                          _methodBuckets()[index],
+                          colors,
+                          textTheme,
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
         ],
@@ -271,68 +364,95 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
     );
   }
 
-  Widget _buildGroupCard(
-    DuplicateGroup group,
+  Widget _buildMethodTile(
+    MapEntry<String, List<DuplicateGroup>> bucket,
     ColorScheme colors,
     TextTheme textTheme,
   ) {
+    final groups = bucket.value;
+    final count = groups.fold<int>(
+      0,
+      (sum, group) => sum + group.tracks.length,
+    );
     return Card(
       margin: EdgeInsets.only(
         bottom: AppTheme.spaceSM * AppTheme.spaceScale(context),
       ),
       child: ExpansionTile(
-        leading: Icon(_methodIcon(group.method), color: colors.primary),
-        title: Text(
-          '${_methodLabel(group.method)} — ${group.tracks.length} tracks',
-          style: textTheme.bodyMedium,
+        initiallyExpanded: bucket.key == _methodBuckets().first.key,
+        leading: Icon(_methodIcon(bucket.key), color: colors.primary),
+        title: Text(_methodLabel(bucket.key), style: textTheme.bodyLarge),
+        subtitle: Text(
+          '$count duplicates',
+          style: textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
         ),
-        subtitle: Row(
-          children: [
-            Icon(
-              Icons.circle,
-              size: AppTheme.iconXS * AppTheme.iconScale(context),
-              color: _confidenceColor(group.confidence),
-            ),
-            SizedBox(width: AppTheme.spaceXS * AppTheme.spaceScale(context)),
-            Text(
-              '${(group.confidence * 100).toInt()}% confidence',
-              style: textTheme.bodySmall,
-            ),
+        children: [
+          for (final group in groups) ...[
+            _buildGroupCaption(group, colors, textTheme),
+            for (final entry in group.tracks)
+              _buildTrackRow(entry, colors, textTheme),
           ],
-        ),
-        children: group.tracks.map((track) {
-          return ListTile(
-            dense: true,
-            leading: Icon(
-              Icons.audiotrack,
-              size: AppTheme.iconMD * AppTheme.iconScale(context),
-              color: colors.onSurfaceVariant,
-            ),
-            title: Text(
-              track.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              '${track.artist} • ${track.album}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textTheme.bodySmall,
-            ),
-            trailing: IconButton(
-              icon: Icon(
-                Icons.delete_outline,
-                size: AppTheme.iconSM * AppTheme.iconScale(context),
-                color: colors.error,
-              ),
-              tooltip: 'Delete track',
-              onPressed: () {
-                // TODO: implement delete
-              },
-            ),
-          );
-        }).toList(),
+        ],
       ),
     );
+  }
+
+  Widget _buildGroupCaption(
+    DuplicateGroup group,
+    ColorScheme colors,
+    TextTheme textTheme,
+  ) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppTheme.spaceMD * AppTheme.spaceScale(context),
+        AppTheme.spaceSM * AppTheme.spaceScale(context),
+        AppTheme.spaceMD * AppTheme.spaceScale(context),
+        AppTheme.spaceXS * AppTheme.spaceScale(context),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.circle,
+            size: AppTheme.iconXS * AppTheme.iconScale(context),
+            color: _confidenceColor(group.confidence),
+          ),
+          SizedBox(width: AppTheme.spaceXS * AppTheme.spaceScale(context)),
+          Expanded(
+            child: Text(
+              '${(group.confidence * 100).toInt()}% confidence · ${group.tracks.length} tracks',
+              style: textTheme.labelSmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrackRow(
+    DuplicateTrackEntry entry,
+    ColorScheme colors,
+    TextTheme textTheme,
+  ) {
+    final info = _trackInfos[entry.trackId];
+    if (info == null) {
+      return ListTile(
+        dense: true,
+        leading: SizedBox(
+          width: AppTheme.spaceMD * AppTheme.spaceScale(context),
+          height: AppTheme.spaceMD * AppTheme.spaceScale(context),
+          child: Center(
+            child: SizedBox(
+              width: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+              height: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+              child: const CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+        title: Text(entry.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      );
+    }
+    return TrackListTile(track: info);
   }
 }

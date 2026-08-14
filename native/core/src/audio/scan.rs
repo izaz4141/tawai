@@ -17,21 +17,41 @@ fn send_progress(tx: &Option<tokio::sync::watch::Sender<ScanProgress>>, p: ScanP
     }
 }
 
+enum InsertOutcome {
+    Inserted { track_id: String, album_id: String },
+    Duplicate,
+    Failed,
+}
+
 async fn insert_track_to_db(
     pool: &DatabasePool,
     track: &libsources::ParsedTrack,
     source_id: &str,
     force: bool,
+    stale_fp_to_path: &mut HashMap<String, String>,
     total_new: &mut u32,
     total_duplicates: &mut u32,
-) -> String {
+) -> InsertOutcome {
     // Fingerprint-based duplicate detection within the new set
     if !force {
         if let Some(fp) = track.acoust_id_fingerprint.as_deref() {
             match library::track_exists_by_fingerprint(pool, fp).await {
                 Ok(Some(_)) => {
-                    *total_duplicates += 1;
-                    return String::new();
+                    if let Some(stale_path) = stale_fp_to_path.remove(fp) {
+                        // The existing copy is being removed this scan (its file is gone),
+                        // so adopt this file as the kept copy. remove() ensures only ONE
+                        // replacement happens — later duplicates hit the branch below.
+                        if let Err(e) = library::delete_track_by_file_path(pool, &stale_path).await
+                        {
+                            logger::error(&format!(
+                                "Failed to remove stale track '{}' before keep-one insert: {}",
+                                stale_path, e
+                            ));
+                        }
+                    } else {
+                        *total_duplicates += 1;
+                        return InsertOutcome::Duplicate;
+                    }
                 }
                 Err(e) => {
                     logger::error(&format!(
@@ -57,7 +77,7 @@ async fn insert_track_to_db(
             Ok(id) => album_artist_ids.push(id),
             Err(e) => {
                 logger::error(&format!("Failed to insert album artist '{}': {}", name, e));
-                return String::new();
+                return InsertOutcome::Failed;
             }
         }
     }
@@ -74,7 +94,7 @@ async fn insert_track_to_db(
             Ok(id) => track_artist_ids.push(id),
             Err(e) => {
                 logger::error(&format!("Failed to insert track artist '{}': {}", name, e));
-                return String::new();
+                return InsertOutcome::Failed;
             }
         }
     }
@@ -96,7 +116,7 @@ async fn insert_track_to_db(
         }
         Err(e) => {
             logger::error(&format!("Failed to insert album '{}': {}", track.album, e));
-            return String::new();
+            return InsertOutcome::Failed;
         }
     };
 
@@ -134,7 +154,7 @@ async fn insert_track_to_db(
         }
         Err(e) => {
             logger::error(&format!("Failed to insert track '{}': {}", track.title, e));
-            return String::new();
+            return InsertOutcome::Failed;
         }
     };
 
@@ -149,7 +169,7 @@ async fn insert_track_to_db(
         }
     }
 
-    album_id
+    InsertOutcome::Inserted { track_id, album_id }
 }
 
 pub async fn run_scan(
@@ -302,10 +322,31 @@ pub async fn run_scan(
     ));
 
     // -----------------------------------------------------------------------
+    // Phase 3b: Fingerprints of DB tracks that will be removed this scan.
+    // When a new file matches one of these, it is the replacement copy — keep
+    // it instead of deleting it ("keep one when all copies would be uninserted").
+    // -----------------------------------------------------------------------
+    let mut stale_fp_to_path: HashMap<String, String> =
+        match library::fingerprint_paths_of(pool, &to_delete_set).await {
+            Ok(map) => map,
+            Err(e) => {
+                logger::error(&format!("fingerprint_paths_of failed: {}", e));
+                HashMap::new()
+            }
+        };
+    if !stale_fp_to_path.is_empty() {
+        logger::info(&format!(
+            "Phase 3b complete: {} stale fingerprints will be replaced",
+            stale_fp_to_path.len()
+        ));
+    }
+
+    // -----------------------------------------------------------------------
     // Phase 4: Scan only new files (tag parsing + DB insert)
     // -----------------------------------------------------------------------
     let mut total_new: u32 = 0;
     let mut total_duplicates: u32 = 0;
+    let mut total_duplicates_deleted: u32 = 0;
     let mut total_deleted: u32 = 0;
     let mut best_covers: HashMap<String, (Vec<u8>, u32)> = HashMap::new();
     let to_scan_count = to_scan_set.len() as u32;
@@ -397,46 +438,66 @@ pub async fn run_scan(
                 },
             );
 
-            let album_id = insert_track_to_db(
+            let outcome = insert_track_to_db(
                 pool,
                 &track,
                 &source.id,
                 force,
+                &mut stale_fp_to_path,
                 &mut total_new,
                 &mut total_duplicates,
             )
             .await;
 
-            // Pick best album cover (prefer shortest side ≥ 500, then larger)
-            if !album_id.is_empty() {
-                if let Some(resized) = track.tag.cover.as_ref() {
-                    let shortest = cover_shortest;
+            match &outcome {
+                InsertOutcome::Inserted { album_id, .. } => {
+                    // Pick best album cover (prefer shortest side ≥ 500, then larger)
+                    if let Some(resized) = track.tag.cover.as_ref() {
+                        let shortest = cover_shortest;
 
-                    if !best_covers.contains_key(&album_id) {
-                        if let Ok(Some(db_cover)) = library::get_album_cover(pool, &album_id).await
-                        {
-                            if let Ok(img) = image::load_from_memory(&db_cover) {
-                                let (dw, dh) = img.dimensions();
-                                best_covers.insert(album_id.clone(), (db_cover, dw.min(dh)));
+                        if !best_covers.contains_key(album_id) {
+                            if let Ok(Some(db_cover)) =
+                                library::get_album_cover(pool, album_id).await
+                            {
+                                if let Ok(img) = image::load_from_memory(&db_cover) {
+                                    let (dw, dh) = img.dimensions();
+                                    best_covers.insert(album_id.clone(), (db_cover, dw.min(dh)));
+                                }
                             }
                         }
-                    }
 
-                    let should_replace = match best_covers.get(&album_id) {
-                        None => true,
-                        Some((_, existing_short)) => {
-                            if *existing_short >= 500 {
-                                false
-                            } else {
-                                shortest > *existing_short
+                        let should_replace = match best_covers.get(album_id) {
+                            None => true,
+                            Some((_, existing_short)) => {
+                                if *existing_short >= 500 {
+                                    false
+                                } else {
+                                    shortest > *existing_short
+                                }
                             }
-                        }
-                    };
+                        };
 
-                    if should_replace {
-                        best_covers.insert(album_id, (resized.to_vec(), shortest));
+                        if should_replace {
+                            best_covers.insert(album_id.clone(), (resized.to_vec(), shortest));
+                        }
                     }
                 }
+                InsertOutcome::Duplicate => {
+                    // A surviving copy exists (or was kept this scan) — remove this file.
+                    match parser.delete(file_path, &source.url).await {
+                        Ok(()) => {
+                            total_duplicates_deleted += 1;
+                            logger::info(&format!("Deleted duplicate file '{}'", file_path));
+                        }
+                        Err(e) => {
+                            logger::warn(&format!(
+                                "Failed to delete duplicate file '{}': {}",
+                                file_path, e
+                            ));
+                        }
+                    }
+                }
+                InsertOutcome::Failed => {}
             }
         }
     }
@@ -501,8 +562,12 @@ pub async fn run_scan(
     };
 
     logger::info(&format!(
-        "Scan complete: {} found, {} new, {} duplicates, {} deleted",
-        result.tracks_found, result.new_tracks, result.duplicates, result.deleted
+        "Scan complete: {} found, {} new, {} duplicates ({} files deleted), {} deleted",
+        result.tracks_found,
+        result.new_tracks,
+        result.duplicates,
+        total_duplicates_deleted,
+        result.deleted
     ));
 
     send_progress(

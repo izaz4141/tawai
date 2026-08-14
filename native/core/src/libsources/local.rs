@@ -84,6 +84,16 @@ pub fn scan_file(path: &Path) -> Result<ParsedTrack> {
     })
 }
 
+/// Physically removes a local audio file. Missing files are treated as
+/// already-deleted (idempotent).
+pub fn delete_file(path: &str) -> Result<()> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
 /// Cheap enumeration: walk directory and return sorted audio file paths.
 /// No tag reading, no hashing.
 pub fn enumerate_paths(url: &str) -> Result<Vec<String>> {

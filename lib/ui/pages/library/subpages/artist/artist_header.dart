@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/cached_network_image.dart';
 
 class ArtistHeader extends StatelessWidget {
   const ArtistHeader({super.key, required this.artist});
@@ -29,14 +30,14 @@ class ArtistHeader extends StatelessWidget {
                       borderRadius: BorderRadius.circular(
                         AppTheme.spaceMD * 4 * AppTheme.radiusScale(context),
                       ),
-                      child: Image.network(
-                        artist.thumbnailUrl!,
+                      child: CachedNetworkImage(
+                        url: artist.thumbnailUrl!,
                         width:
                             AppTheme.spaceMD * 8 * AppTheme.spaceScale(context),
                         height:
                             AppTheme.spaceMD * 8 * AppTheme.spaceScale(context),
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => _initial(theme),
+                        placeholder: _initial(theme),
                       ),
                     )
                   : _initial(theme),

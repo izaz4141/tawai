@@ -225,6 +225,23 @@ class RinfService {
     return signal.message.success;
   }
 
+  Future<({bool success, String? error})> deleteTrack(
+    String userId,
+    String trackId,
+  ) async {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final stream = DeleteTrackResponse.rustSignalStream.where(
+      (s) => s.message.id == id,
+    );
+    DeleteTrackRequest(
+      id: id,
+      userId: userId,
+      trackId: trackId,
+    ).sendSignalToRust();
+    final signal = await stream.first;
+    return (success: signal.message.success, error: signal.message.error);
+  }
+
   // ---------------------------------------------------------------------------
   // Playlist tracks
   // ---------------------------------------------------------------------------

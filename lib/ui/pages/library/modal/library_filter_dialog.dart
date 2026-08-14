@@ -141,8 +141,11 @@ class _LibraryFilterDialogState extends State<LibraryFilterDialog> {
           padding: const EdgeInsets.only(top: AppTheme.spaceSM),
           child: Row(
             children: [
-              Icon(icon,
-                  size: AppTheme.iconSM * iconScale, color: colors.primary),
+              Icon(
+                icon,
+                size: AppTheme.iconSM * iconScale,
+                color: colors.primary,
+              ),
               SizedBox(width: AppTheme.spaceXS),
               Text(title, style: textTheme.titleSmall),
             ],

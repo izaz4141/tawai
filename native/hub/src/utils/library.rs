@@ -22,6 +22,36 @@ pub async fn handle_list_tracks(context: Arc<AppContext>) {
     }
 }
 
+pub async fn handle_delete_track(context: Arc<AppContext>) {
+    let receiver = signals::library::DeleteTrackRequest::get_dart_signal_receiver();
+    while let Some(signal_pack) = receiver.recv().await {
+        let msg = signal_pack.message;
+        let db = context.db().await;
+        let client = context.client().clone();
+        match tawai_core::db::library::delete_track(db.pool(), &client, &msg.user_id, &msg.track_id)
+            .await
+        {
+            Ok(()) => {
+                signals::library::DeleteTrackResponse {
+                    id: msg.id,
+                    success: true,
+                    error: None,
+                }
+                .send_signal_to_dart();
+            }
+            Err(e) => {
+                logger::error(&format!("delete track failed: {}", e));
+                signals::library::DeleteTrackResponse {
+                    id: msg.id,
+                    success: false,
+                    error: Some(e.to_string()),
+                }
+                .send_signal_to_dart();
+            }
+        }
+    }
+}
+
 pub async fn handle_list_albums(context: Arc<AppContext>) {
     let receiver = signals::library::ListAlbumsRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {

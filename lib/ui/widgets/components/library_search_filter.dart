@@ -109,21 +109,18 @@ class _LibrarySearchFilterState extends State<LibrarySearchFilter> {
               left: AppTheme.spaceSM,
               right: AppTheme.spaceXS,
             ),
-            child: Icon(
-              Icons.search,
-              size: AppTheme.iconSM * iconScale,
-            ),
+            child: Icon(Icons.search, size: AppTheme.iconSM * iconScale),
           ),
-          prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 0,
+            minHeight: 0,
+          ),
           suffixIcon: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (widget.filters.query.isNotEmpty)
                 IconButton(
-                  icon: Icon(
-                    Icons.clear,
-                    size: AppTheme.iconXS * iconScale,
-                  ),
+                  icon: Icon(Icons.clear, size: AppTheme.iconXS * iconScale),
                   visualDensity: VisualDensity.compact,
                   onPressed: () {
                     _controller.clear();

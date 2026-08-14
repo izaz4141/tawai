@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/cached_network_image.dart';
 
 void showReleasePickerDialog({
   required BuildContext context,
@@ -28,12 +29,13 @@ void showReleasePickerDialog({
                   borderRadius: BorderRadius.circular(
                     AppTheme.radiusSM * AppTheme.radiusScale(context),
                   ),
-                  child: Image.network(
-                    'https://coverartarchive.org/release/${release.id}/front-250.jpg',
+                  child: CachedNetworkImage(
+                    url:
+                        'https://coverartarchive.org/release/${release.id}/front-250.jpg',
                     width: AppTheme.iconXL * AppTheme.iconScale(context),
                     height: AppTheme.iconXL * AppTheme.iconScale(context),
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
+                    placeholder: Container(
                       width: AppTheme.iconXL * AppTheme.iconScale(context),
                       height: AppTheme.iconXL * AppTheme.iconScale(context),
                       color: Theme.of(

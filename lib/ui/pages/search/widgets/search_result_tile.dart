@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/pages/search/search_types.dart';
 import 'package:tawai/utils/helper.dart';
+import 'package:tawai/ui/widgets/components/cached_network_image.dart';
 
 class SearchResultTile extends StatelessWidget {
   final SearchResultItem entry;
@@ -54,12 +55,12 @@ class SearchResultTile extends StatelessWidget {
         leading: entry.thumbnail != null
             ? ClipRRect(
                 borderRadius: BorderRadius.circular(AppTheme.radiusSM / 2),
-                child: Image.network(
-                  entry.thumbnail!,
+                child: CachedNetworkImage(
+                  url: entry.thumbnail!,
                   width: AppTheme.iconXL,
                   height: AppTheme.iconXL,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, _) => const Icon(Icons.video_file),
+                  placeholder: const Icon(Icons.video_file),
                 ),
               )
             : const Icon(Icons.video_file),

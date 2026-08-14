@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:tawai/src/bindings/bindings.dart';
+import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/utils/platform_service.dart';
 import 'package:tawai/utils/api_service.dart';
 import 'package:tawai/utils/rinf_service.dart';
@@ -12,6 +13,10 @@ class BridgeService {
   static final BridgeService _instance = BridgeService._();
   static BridgeService get instance => _instance;
   BridgeService._();
+
+  /// Incremented whenever a library mutation occurs (e.g. track deleted).
+  /// Pages showing library data listen to this to reload.
+  static final libraryChanged = ValueNotifier<int>(0);
 
   bool get _isRemote => PlatformService().isRemote;
 
@@ -215,6 +220,18 @@ class BridgeService {
     return _isRemote
         ? APIService.instance.deletePlaylist(playlistId)
         : RinfService.instance.deletePlaylist(playlistId);
+  }
+
+  Future<({bool success, String? error})> deleteTrack(String trackId) async {
+    final userId = SettingsManager.currentUserId.value ?? '';
+    final result = _isRemote
+        ? await APIService.instance.deleteTrack(trackId)
+        : await RinfService.instance.deleteTrack(userId, trackId);
+    if (result.success) {
+      libraryChanged.value++;
+      unawaited(PlaybackService.instance.removeTrackFromQueue(trackId));
+    }
+    return result;
   }
 
   // ---------------------------------------------------------------------------

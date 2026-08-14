@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +10,6 @@ import 'package:tawai/ui/widgets/components/editable_cover.dart';
 import 'package:tawai/ui/widgets/components/media_uploader.dart';
 import 'package:tawai/ui/widgets/dialog/identify_dialog.dart';
 import 'package:tawai/utils/bridge_service.dart';
-import 'package:tawai/utils/rinf_service.dart';
 import 'package:tawai/utils/io_service.dart';
 
 const _audioExtensions = [
@@ -35,6 +33,11 @@ Future<void> showTagEditorDialog(BuildContext context, {String? initialPath}) {
     context: context,
     builder: (_) => _TagEditorDialog(initialPath: initialPath),
   );
+}
+
+String _basename(String path) {
+  final idx = path.replaceAll('\\', '/').lastIndexOf('/');
+  return idx >= 0 ? path.substring(idx + 1) : path;
 }
 
 class _TagEditorDialog extends StatefulWidget {
@@ -199,8 +202,11 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
 
   Future<String?> _readTagsForPath(String path) async {
     try {
-      final response = await RinfService.instance.readFileTags(path);
+      final response = await BridgeService.instance.readFileTags(path);
       if (!mounted) return 'Tag editor is not available on this platform.';
+      if (response == null) {
+        return 'Tag editor is not available on this platform.';
+      }
       if (response.error != null) {
         return response.error;
       }
@@ -372,7 +378,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
   }
 
   Widget _buildFileName() {
-    final name = _filename ?? (_path?.split(Platform.pathSeparator).last);
+    final name = _filename ?? (_path != null ? _basename(_path!) : null);
     if (name == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: AppTheme.spaceSM),
@@ -454,7 +460,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
         ? AppTheme.dialogWidthDesktop
         : AppTheme.dialogWidthMobile;
 
-    final fileName = _filename ?? (_path?.split(Platform.pathSeparator).last);
+    final fileName = _filename ?? (_path != null ? _basename(_path!) : null);
     final header = fileName == null ? 'Tag Editor' : 'Edit Tags — $fileName';
 
     return AlertDialog(

@@ -34,8 +34,10 @@ class _LibraryPageState extends State<LibraryPage>
   final _albumScrollController = ScrollController();
   final _artistScrollController = ScrollController();
   final _playlistScrollController = ScrollController();
-  final List<GlobalKey<RefreshIndicatorState>> _refreshKeys =
-      List.generate(5, (_) => GlobalKey<RefreshIndicatorState>());
+  final List<GlobalKey<RefreshIndicatorState>> _refreshKeys = List.generate(
+    5,
+    (_) => GlobalKey<RefreshIndicatorState>(),
+  );
 
   late final FilterableList<TrackInfo> _tracksFilterable;
   late final FilterableList<AlbumInfo> _albumsFilterable;
@@ -97,11 +99,16 @@ class _LibraryPageState extends State<LibraryPage>
     SettingsManager.includedRecommendations.addListener(
       _onRecommendationSettingsChanged,
     );
+    BridgeService.libraryChanged.addListener(_onLibraryChanged);
   }
 
   @override
   void dispose() {
     ScanService.instance.isScanning.removeListener(_onScanStateChanged);
+    SettingsManager.includedRecommendations.removeListener(
+      _onRecommendationSettingsChanged,
+    );
+    BridgeService.libraryChanged.removeListener(_onLibraryChanged);
     _tabController.dispose();
     _trackScrollController.dispose();
     _albumScrollController.dispose();
@@ -160,16 +167,19 @@ class _LibraryPageState extends State<LibraryPage>
 
   bool _artistMatchesFilters(ArtistInfo a, LibraryFilters f) {
     if (!f.hasActiveFilters) return true;
-    final tracksOfArtist =
-        _tracksFilterable.all.where((t) => t.artists.any((ar) => ar.id == a.id));
-    if (f.sources.isNotEmpty && tracksOfArtist.any((t) => f.sources.contains(t.source))) {
+    final tracksOfArtist = _tracksFilterable.all.where(
+      (t) => t.artists.any((ar) => ar.id == a.id),
+    );
+    if (f.sources.isNotEmpty &&
+        tracksOfArtist.any((t) => f.sources.contains(t.source))) {
       return true;
     }
     if (f.genres.isNotEmpty &&
         tracksOfArtist.any((t) => t.genres.any((g) => f.genres.contains(g)))) {
       return true;
     }
-    if (f.years.isNotEmpty && tracksOfArtist.any((t) => f.years.contains(_yearOf(t.releaseDate)))) {
+    if (f.years.isNotEmpty &&
+        tracksOfArtist.any((t) => f.years.contains(_yearOf(t.releaseDate)))) {
       return true;
     }
     return false;
@@ -244,6 +254,12 @@ class _LibraryPageState extends State<LibraryPage>
   void _onScanStateChanged() {
     if (!ScanService.instance.isScanning.value && mounted) {
       _loadAll();
+    }
+  }
+
+  void _onLibraryChanged() {
+    if (mounted) {
+      unawaited(_loadAll());
     }
   }
 

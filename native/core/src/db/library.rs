@@ -191,6 +191,16 @@ pub async fn track_exists_by_fingerprint(
     }
 }
 
+pub async fn fingerprint_paths_of(
+    pool: &DatabasePool,
+    paths: &std::collections::HashSet<String>,
+) -> anyhow::Result<std::collections::HashMap<String, String>> {
+    match pool {
+        DatabasePool::Sqlite(p) => super::library_sq::fingerprint_paths_of(p, paths).await,
+        DatabasePool::Postgres(p) => super::library_pg::fingerprint_paths_of(p, paths).await,
+    }
+}
+
 pub async fn insert_fingerprint(
     pool: &DatabasePool,
     track_id: &str,
@@ -474,6 +484,48 @@ pub async fn delete_tracks_by_source_id(
             super::library_pg::delete_tracks_by_source_id(p, source_id).await
         }
     }
+}
+
+/// Deletes a single track after verifying the requesting user can access its
+/// source. Physical deletion happens on the source itself , then the
+/// library row (and its related rows) are removed.
+pub async fn delete_track(
+    pool: &DatabasePool,
+    client: &reqwest::Client,
+    user_id: &str,
+    track_id: &str,
+) -> anyhow::Result<()> {
+    let source = super::library_source::get_source_info_by_track_id(pool, track_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Track {} not found or has no source", track_id))?;
+
+    let role = super::account::get_user_role(pool, user_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("User {} not found", user_id))?;
+
+    if !super::library_source::can_access_source(
+        &source.owner_id,
+        user_id,
+        &role,
+        &source.access_rule,
+    ) {
+        anyhow::bail!(
+            "User {} does not have access to track {}",
+            user_id,
+            track_id
+        );
+    }
+
+    let track = lookup_track(pool, track_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Track {} not found", track_id))?;
+
+    if let Some(parser) = crate::libsources::get_parser(&source.source_type, client.clone()) {
+        parser.delete(&track.file_path, &source.url).await?;
+    }
+
+    delete_track_by_file_path(pool, &track.file_path).await?;
+    Ok(())
 }
 
 pub async fn insert_track_artists(

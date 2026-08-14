@@ -5,6 +5,7 @@ import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/pages/identify/utils/identify_helpers.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
+import 'package:tawai/ui/widgets/components/cached_network_image.dart';
 import 'package:tawai/utils/bridge_service.dart';
 
 class MusicBrainzFetchResult {
@@ -390,12 +391,12 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
               rec.cover != null
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(AppTheme.radiusSM),
-                      child: Image.network(
-                        rec.cover!,
+                      child: CachedNetworkImage(
+                        url: rec.cover!,
                         width: AppTheme.iconXL,
                         height: AppTheme.iconXL,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
+                        placeholder: Container(
                           width: AppTheme.iconXL,
                           height: AppTheme.iconXL,
                           color: colors.surfaceContainerHighest,
@@ -537,12 +538,13 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(AppTheme.radiusSM),
-                child: Image.network(
-                  'https://coverartarchive.org/release/${release.id}/front-250.jpg',
+                child: CachedNetworkImage(
+                  url:
+                      'https://coverartarchive.org/release/${release.id}/front-250.jpg',
                   width: AppTheme.iconXL,
                   height: AppTheme.iconXL,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Container(
+                  placeholder: Container(
                     width: AppTheme.iconXL,
                     height: AppTheme.iconXL,
                     color: colors.surfaceContainerHighest,

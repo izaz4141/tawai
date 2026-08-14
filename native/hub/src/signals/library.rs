@@ -13,6 +13,20 @@ pub struct ListTracksResponse {
     pub tracks: Vec<TrackInfo>,
 }
 
+#[derive(Deserialize, DartSignal)]
+pub struct DeleteTrackRequest {
+    pub id: String,
+    pub user_id: String,
+    pub track_id: String,
+}
+
+#[derive(Serialize, RustSignal)]
+pub struct DeleteTrackResponse {
+    pub id: String,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece, Default)]
 pub struct TrackInfo {
     pub id: String,

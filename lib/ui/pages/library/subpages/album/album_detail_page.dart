@@ -26,6 +26,17 @@ class _AlbumDetailPageState extends State<AlbumDetailPage> {
   void initState() {
     super.initState();
     _loadTracks();
+    BridgeService.libraryChanged.addListener(_onLibraryChanged);
+  }
+
+  @override
+  void dispose() {
+    BridgeService.libraryChanged.removeListener(_onLibraryChanged);
+    super.dispose();
+  }
+
+  void _onLibraryChanged() {
+    if (mounted) _loadTracks();
   }
 
   Future<void> _loadTracks() async {

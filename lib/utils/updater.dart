@@ -6,7 +6,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:archive/archive_io.dart';
 
-import 'package:tawai/utils/api_service.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/logger.dart';
 import 'package:tawai/utils/app_lifecycle.dart';

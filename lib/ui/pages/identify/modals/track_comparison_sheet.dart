@@ -7,6 +7,7 @@ import 'package:tawai/ui/pages/identify/models/identify_result.dart';
 import 'package:tawai/ui/pages/identify/widgets/comparison_row.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
+import 'package:tawai/ui/widgets/components/cached_network_image.dart';
 import 'package:tawai/ui/widgets/components/editable_cover.dart';
 import 'package:tawai/ui/widgets/components/sheet.dart';
 import 'package:tawai/ui/widgets/components/shimmer.dart';
@@ -682,8 +683,9 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
                   AppTheme.radiusSM * AppTheme.radiusScale(context),
                 ),
                 child: widget.album.albumMbid != null
-                    ? Image.network(
-                        'https://coverartarchive.org/release/${widget.album.albumMbid}/front-250.jpg',
+                    ? CachedNetworkImage(
+                        url:
+                            'https://coverartarchive.org/release/${widget.album.albumMbid}/front-250.jpg',
                         width:
                             AppTheme.spaceMD *
                             10 *
@@ -693,7 +695,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
                             10 *
                             AppTheme.spaceScale(context),
                         fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
+                        placeholder: Container(
                           width:
                               AppTheme.spaceMD *
                               10 *
