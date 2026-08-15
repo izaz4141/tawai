@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/widgets/app_shell.dart';
+import 'package:tawai/ui/widgets/mini_player.dart';
 import 'package:tawai/ui/pages/identify/controller/identify_controller.dart';
 import 'package:tawai/ui/pages/identify/widgets/left_panel.dart';
 import 'package:tawai/ui/pages/identify/widgets/release_picker_dialog.dart';
@@ -142,16 +143,25 @@ class _IdentifyPageState extends State<IdentifyPage> {
           body: isDesktop
               ? Row(
                   children: [
-                    SizedBox(
-                      width:
-                          AppTheme.spaceXL * 15 * AppTheme.widthScale(context),
-                      child: LeftPanel(
-                        controller: _controller,
-                        fingerprinting: fingerprinting,
-                        lookingUp: lookingUp,
-                        onFingerprint: anyLoading ? null : _onFingerprint,
-                        onLookup: anyLoading ? null : _onLookup,
-                      ),
+                    Column(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            width:
+                                AppTheme.spaceXL *
+                                15 *
+                                AppTheme.widthScale(context),
+                            child: LeftPanel(
+                              controller: _controller,
+                              fingerprinting: fingerprinting,
+                              lookingUp: lookingUp,
+                              onFingerprint: anyLoading ? null : _onFingerprint,
+                              onLookup: anyLoading ? null : _onLookup,
+                            ),
+                          ),
+                        ),
+                        const MiniPlayerSpacer(),
+                      ],
                     ),
                     Container(
                       width: 1,

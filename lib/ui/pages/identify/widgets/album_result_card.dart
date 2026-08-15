@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
+import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/ui/pages/identify/controller/identify_controller.dart';
 import 'package:tawai/ui/pages/identify/models/identify_result.dart';
 
@@ -8,7 +9,9 @@ import 'package:tawai/ui/pages/identify/utils/identify_helpers.dart';
 import 'package:tawai/ui/pages/identify/widgets/album_track_row.dart';
 import 'package:tawai/ui/pages/identify/widgets/release_picker_dialog.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/track_info_sheet.dart';
 import 'package:tawai/ui/widgets/dialog/search_lyrics.dart';
+import 'package:tawai/utils/bridge_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AlbumResultCard extends StatelessWidget {
@@ -321,17 +324,33 @@ class AlbumResultCard extends StatelessWidget {
                 _onMenuSelected(context, value, ut, remoteTrack, albumKey),
             itemBuilder: (_) => [
               PopupMenuItem(
+                value: 'play_track',
+                child: _menuItemRow(context, Icons.play_arrow, 'Play Track'),
+              ),
+              PopupMenuItem(
                 value: 'reselect_release',
                 enabled: ut.isSession || ut.mbidRecording != null,
-                child: const Text('Reselect Release'),
+                child: _menuItemRow(context, Icons.sync, 'Reselect Release'),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'search_lyrics',
-                child: Text('Search Lyrics'),
+                child: _menuItemRow(context, Icons.lyrics, 'Search Lyrics'),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
+                value: 'show_details',
+                child: _menuItemRow(
+                  context,
+                  Icons.info_outline,
+                  'Show Details',
+                ),
+              ),
+              PopupMenuItem(
                 value: 'open_browser',
-                child: Text('Open in Browser'),
+                child: _menuItemRow(
+                  context,
+                  Icons.open_in_new,
+                  'Open in Browser',
+                ),
               ),
             ],
           ),
@@ -378,6 +397,22 @@ class AlbumResultCard extends StatelessWidget {
     );
   }
 
+  Widget _menuItemRow(BuildContext context, IconData icon, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: AppTheme.iconSM * AppTheme.iconScale(context)),
+        SizedBox(width: AppTheme.spaceSM * AppTheme.spaceScale(context)),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontSize: AppTheme.textSM * AppTheme.textScale(context),
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _onMenuSelected(
     BuildContext context,
     String value,
@@ -386,11 +421,31 @@ class AlbumResultCard extends StatelessWidget {
     String albumKey,
   ) async {
     switch (value) {
+      case 'play_track':
+        PlaybackService.instance.play([
+          controller.buildTrackInfoForSelection(
+            ut,
+            album,
+            remoteTrack: remoteTrack,
+          ),
+        ]);
+        break;
       case 'reselect_release':
         await _onReselectRelease(context, ut, albumKey);
         break;
       case 'search_lyrics':
         _onSearchLyrics(context, ut, albumKey);
+        break;
+      case 'show_details':
+        final info =
+            await BridgeService.instance.getTrackInfo(ut.trackId) ??
+            controller.buildTrackInfoForSelection(
+              ut,
+              album,
+              remoteTrack: remoteTrack,
+            );
+        if (!context.mounted) return;
+        showTrackInfoSheet(context, info);
         break;
       case 'open_browser':
         final mbid = ut.isSession ? remoteTrack.id : ut.mbidRecording;

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/components/track_list_tile.dart';
+import 'package:tawai/ui/widgets/mini_player.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/logger.dart';
 
@@ -190,93 +191,112 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
           style: isDesktop ? textTheme.titleLarge : null,
         ),
       ),
-      body: Column(
+      body: Stack(
         children: [
-          _buildOptionsPanel(colors, textTheme, isDesktop),
-          const Divider(height: 1),
-          if (_scanning)
-            const Expanded(child: Center(child: CircularProgressIndicator()))
-          else if (_error != null)
-            Expanded(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    _error!,
-                    style: textTheme.bodyMedium?.copyWith(color: colors.error),
-                  ),
-                ),
-              ),
-            )
-          else if (!_hasScanned)
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.copy_all,
-                      size: AppTheme.iconXXL * AppTheme.iconScale(context),
-                      color: colors.onSurfaceVariant,
-                    ),
-                    SizedBox(
-                      height:
-                          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
-                    ),
-                    Text(
-                      'Configure options above and tap Scan',
-                      style: textTheme.bodyLarge?.copyWith(
-                        color: colors.onSurfaceVariant,
+          Column(
+            children: [
+              _buildOptionsPanel(colors, textTheme, isDesktop),
+              const Divider(height: 1),
+              if (_scanning)
+                const Expanded(
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_error != null)
+                Expanded(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        _error!,
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colors.error,
+                        ),
                       ),
                     ),
-                  ],
-                ),
-              ),
-            )
-          else if (_groups.isEmpty)
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.check_circle,
-                      size: AppTheme.iconXXL * AppTheme.iconScale(context),
-                      color: colors.primary,
-                    ),
-                    SizedBox(
-                      height:
-                          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
-                    ),
-                    Text('No duplicates found!', style: textTheme.titleMedium),
-                  ],
-                ),
-              ),
-            )
-          else
-            Expanded(
-              child: Column(
-                children: [
-                  if (_resolvingTracks)
-                    const LinearProgressIndicator(minHeight: 2),
-                  Expanded(
-                    child: ListView.builder(
-                      padding: EdgeInsets.all(
-                        AppTheme.spaceSM * AppTheme.spaceScale(context),
-                      ),
-                      itemCount: _methodBuckets().length,
-                      itemBuilder: (context, index) {
-                        return _buildMethodTile(
-                          _methodBuckets()[index],
-                          colors,
-                          textTheme,
-                        );
-                      },
+                  ),
+                )
+              else if (!_hasScanned)
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.copy_all,
+                          size: AppTheme.iconXXL * AppTheme.iconScale(context),
+                          color: colors.onSurfaceVariant,
+                        ),
+                        SizedBox(
+                          height:
+                              AppTheme.spaceSM *
+                              2 *
+                              AppTheme.spaceScale(context),
+                        ),
+                        Text(
+                          'Configure options above and tap Scan',
+                          style: textTheme.bodyLarge?.copyWith(
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
+                )
+              else if (_groups.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          size: AppTheme.iconXXL * AppTheme.iconScale(context),
+                          color: colors.primary,
+                        ),
+                        SizedBox(
+                          height:
+                              AppTheme.spaceSM *
+                              2 *
+                              AppTheme.spaceScale(context),
+                        ),
+                        Text(
+                          'No duplicates found!',
+                          style: textTheme.titleMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: Column(
+                    children: [
+                      if (_resolvingTracks)
+                        const LinearProgressIndicator(minHeight: 2),
+                      Expanded(
+                        child: ListView.builder(
+                          padding: EdgeInsets.all(
+                            AppTheme.spaceSM * AppTheme.spaceScale(context),
+                          ),
+                          itemCount: _methodBuckets().length + 1,
+                          itemBuilder: (context, index) {
+                            if (index == _methodBuckets().length) {
+                              return const MiniPlayerSpacer();
+                            }
+                            return _buildMethodTile(
+                              _methodBuckets()[index],
+                              colors,
+                              textTheme,
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const Positioned(left: 0, right: 0, bottom: 0, child: MiniPlayer()),
         ],
       ),
     );

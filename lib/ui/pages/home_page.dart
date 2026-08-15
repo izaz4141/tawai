@@ -20,7 +20,7 @@ final ValueNotifier<int> navIndexNotifier = ValueNotifier<int>(1);
 /// Whether the mini nav is expanded
 final ValueNotifier<bool> isExpandedNotifier = ValueNotifier<bool>(false);
 
-const _playerPages = {1, 2, 3};
+const _playerPages = {1, 2, 3, 4};
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
