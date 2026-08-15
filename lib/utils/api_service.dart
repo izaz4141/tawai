@@ -9,6 +9,7 @@ import 'package:tawai/utils/io_service.dart';
 import 'package:tawai/utils/platform_service.dart';
 
 import 'package:tawai/utils/bindings_json.dart';
+import 'package:tawai/utils/helper.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/utils/logger.dart';
 import 'package:tawai/utils/rinf_service.dart';
@@ -2153,9 +2154,7 @@ class APIService {
         discNumber: (data['disc_number'] as num?)?.toInt() ?? 0,
         releaseDate: data['release_date'] as String?,
         lyrics: data['lyrics'] as String?,
-        cover: data['cover'] != null
-            ? base64Decode(data['cover'] as String)
-            : null,
+        cover: decodeBytes(data['cover']),
         durationSecs: (data['duration_secs'] as num?)?.toDouble() ?? 0.0,
         error: data['error'] as String?,
       );
@@ -2192,7 +2191,7 @@ class APIService {
       };
       if (releaseDate != null) body['release_date'] = releaseDate;
       if (lyrics != null) body['lyrics'] = lyrics;
-      if (cover != null) body['cover'] = base64Encode(cover);
+      if (cover != null) body['cover'] = cover;
 
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/library/identify/tags/write'),
@@ -2252,9 +2251,7 @@ class APIService {
         discNumber: (data['disc_number'] as num?)?.toInt() ?? 0,
         releaseDate: data['release_date'] as String?,
         lyrics: data['lyrics'] as String?,
-        cover: data['cover'] != null
-            ? base64Decode(data['cover'] as String)
-            : null,
+        cover: decodeBytes(data['cover']),
         durationSecs: (data['duration_secs'] as num?)?.toDouble() ?? 0.0,
         error: data['error'] as String?,
       );

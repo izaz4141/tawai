@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 
@@ -9,6 +10,15 @@ import 'package:tawai/utils/settings.dart';
 import 'package:tawai/utils/io_service.dart';
 
 String? _cachedDeviceId;
+
+/// Decodes a JSON value into raw bytes. Accepts a JSON array of byte ints,
+/// a base64-encoded string, or null.
+Uint8List? decodeBytes(dynamic value) {
+  if (value == null) return null;
+  if (value is String) return base64Decode(value);
+  if (value is List) return Uint8List.fromList(value.cast<int>());
+  return null;
+}
 
 Future<String> _getDeviceId() async {
   if (_cachedDeviceId != null) return _cachedDeviceId!;
