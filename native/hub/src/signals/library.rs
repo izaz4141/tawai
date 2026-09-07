@@ -394,7 +394,7 @@ pub struct GetAlbumMbidResponse {
 pub struct AddLibrarySourceRequest {
     pub id: String,
     pub user_id: String,
-    pub url: String,
+    pub urls: Vec<String>,
     pub name: String,
     pub source_type: String,
 }
@@ -436,7 +436,7 @@ impl From<tawai_core::signals::library::LibrarySourceInfo> for LibrarySourceInfo
         Self {
             id: s.id,
             source_type: s.source_type,
-            url: s.url,
+            urls: s.urls,
             name: s.name,
             last_sync_at: s.last_sync_at,
             owner_id: s.owner_id,
@@ -518,7 +518,7 @@ pub struct ReorderPlaylistTracksResponse {
 pub struct LibrarySourceInfo {
     pub id: String,
     pub source_type: String,
-    pub url: String,
+    pub urls: Vec<String>,
     pub name: String,
     pub last_sync_at: Option<String>,
     pub owner_id: String,

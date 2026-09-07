@@ -13,12 +13,18 @@ import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/io_service.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/models/recommendation_source.dart';
+import 'package:tawai/ui/widgets/app_snackbar.dart';
 
 class SettingsDiscoveryTab extends StatefulWidget {
   const SettingsDiscoveryTab({super.key});
 
   @override
   State<SettingsDiscoveryTab> createState() => _SettingsDiscoveryTabState();
+}
+
+String _redactUrl(String url) {
+  final at = url.lastIndexOf('@');
+  return at >= 0 ? url.substring(at + 1) : url;
 }
 
 class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
@@ -64,7 +70,7 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
     bool anyAdded = false;
     for (final result in results) {
       final added = await ScanService.instance.addSource(
-        result.url,
+        result.urls,
         result.name,
         sourceType: result.sourceType,
       );
@@ -233,7 +239,7 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                   children: [
                     Expanded(
                       child: Text(
-                        source.name.isNotEmpty ? source.name : source.url,
+                        source.name.isNotEmpty ? source.name : (source.urls.isNotEmpty ? _redactUrl(source.urls.first) : ''),
                         style: textTheme.bodyMedium,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -264,7 +270,7 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                   ],
                 ),
                 subtitle: Text(
-                  source.url,
+                  source.urls.map(_redactUrl).join(' → '),
                   style: textTheme.bodySmall,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -578,11 +584,11 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
 }
 
 class _AddSourceResult {
-  final String url;
+  final List<String> urls;
   final String name;
   final String sourceType;
   _AddSourceResult({
-    required this.url,
+    required this.urls,
     required this.name,
     required this.sourceType,
   });
@@ -635,6 +641,9 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
     super.dispose();
   }
 
+  String _schemeOf(String host) =>
+      host.trim().startsWith('https') ? 'https' : 'http';
+
   Future<void> _pickFolder() async {
     final path = await IOServiceFactory.create().getDirectoryPath(
       context,
@@ -649,9 +658,27 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
   }
 
   Future<void> _testConnection() async {
-    final scheme = _urlCtrl.text.startsWith('https') ? 'https' : 'http';
-    final host = _urlCtrl.text.replaceAll(RegExp(r'^https?://'), '');
-    final url = '$scheme://${_usernameCtrl.text}:${_passwordCtrl.text}@$host';
+    final hosts = _urlCtrl.text
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (hosts.isEmpty) {
+      setState(() {
+        _testing = false;
+        _testError = 'No server URL provided';
+      });
+      return;
+    }
+    final urls = <String>[];
+    final labels = <String>[];
+    for (final host in hosts) {
+      final clean = host.replaceAll(RegExp(r'^https?://'), '');
+      urls.add(
+        '${_schemeOf(host)}://${_usernameCtrl.text}:${_passwordCtrl.text}@$clean',
+      );
+      labels.add(clean);
+    }
 
     setState(() {
       _testing = true;
@@ -660,54 +687,104 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
       _selectedLibraryIds = {};
     });
 
-    try {
-      final libraries = await BridgeService.instance.testJellyfinSource(url);
+    final failed = <String>[];
+    var connected = false;
+
+    for (var i = 0; i < urls.length; i++) {
+      try {
+        final libraries = await BridgeService.instance.testJellyfinSource(urls[i]);
+        if (!mounted) return;
+        if (!connected) {
+          connected = true;
+          setState(() {
+            _jellyfinLibraries = libraries;
+            _selectedLibraryIds = libraries.map((l) => l.id).toSet();
+          });
+        }
+      } catch (_) {
+        failed.add(labels[i]);
+      }
+    }
+
+    if (!mounted) return;
+
+    if (!connected) {
       setState(() {
         _testing = false;
-        _jellyfinLibraries = libraries;
-        _selectedLibraryIds = libraries.map((l) => l.id).toSet();
+        _testError = 'All servers unreachable: ${failed.join(', ')}';
       });
-    } catch (e) {
-      setState(() {
-        _testing = false;
-        _testError = e.toString();
-      });
+      AppSnackBar.show(
+        context,
+        'Unable to reach any server',
+        type: SnackType.error,
+      );
+    } else if (failed.isNotEmpty) {
+      setState(() => _testing = false);
+      AppSnackBar.show(
+        context,
+        '${failed.length} of ${urls.length} server(s) unreachable: '
+        '${failed.join(', ')}. Reachable servers act as fallbacks.',
+        type: SnackType.error,
+      );
+    } else {
+      setState(() => _testing = false);
     }
   }
 
   void _submit() {
     if (_sourceType == 'local' && _localPath.isEmpty) return;
 
-    String baseUrl;
-    String defaultName;
-    if (_sourceType == 'local') {
-      baseUrl = _localPath;
-      defaultName = _localPath.split('/').last;
-    } else {
-      final scheme = _urlCtrl.text.startsWith('https') ? 'https' : 'http';
-      final host = _urlCtrl.text.replaceAll(RegExp(r'^https?://'), '');
-      baseUrl = '$scheme://${_usernameCtrl.text}:${_passwordCtrl.text}@$host';
-      defaultName = host.split(':').first;
-    }
-
     final results = <_AddSourceResult>[];
     final name = _nameCtrl.text;
 
-    if (_sourceType == 'jellyfin' && _jellyfinLibraries.isNotEmpty) {
+    if (_sourceType == 'local') {
+      results.add(
+        _AddSourceResult(
+          urls: [_localPath],
+          name: name.isNotEmpty ? name : _localPath.split('/').last,
+          sourceType: _sourceType,
+        ),
+      );
+      if (mounted) Navigator.of(context).pop(results);
+      return;
+    }
+
+    final hosts = _urlCtrl.text
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (hosts.isEmpty) {
+      AppSnackBar.show(
+        context,
+        'Enter at least one server address',
+        type: SnackType.error,
+      );
+      return;
+    }
+    final baseUrls = [
+      for (final host in hosts)
+        '${_schemeOf(host)}://${_usernameCtrl.text}:${_passwordCtrl.text}@${host.replaceAll(RegExp(r'^https?://'), '')}',
+    ];
+    final defaultName = hosts.first.replaceAll(RegExp(r'^https?://'), '').split(':').first;
+
+    if (_jellyfinLibraries.isNotEmpty) {
       for (final lib in _jellyfinLibraries) {
         if (!_selectedLibraryIds.contains(lib.id)) continue;
-        final url = '$baseUrl?libraryId=${lib.id}';
+        final urls = [
+          for (final baseUrl in baseUrls) '$baseUrl?libraryId=${lib.id}',
+        ];
         final srcName = name.isNotEmpty
             ? '$name - ${lib.name}'
             : '$defaultName - ${lib.name}';
         results.add(
-          _AddSourceResult(url: url, name: srcName, sourceType: _sourceType),
+          _AddSourceResult(urls: urls, name: srcName, sourceType: _sourceType),
         );
       }
     } else {
       results.add(
         _AddSourceResult(
-          url: baseUrl,
+          urls: baseUrls,
           name: name.isNotEmpty ? name : defaultName,
           sourceType: _sourceType,
         ),
@@ -795,8 +872,12 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                 controller: _urlCtrl,
                 decoration: const InputDecoration(
                   labelText: 'Server URL',
-                  hintText: 'jellyfin.local:8096',
-                  helperText: 'Hostname and port of your Jellyfin server',
+                  hintText: 'https://jellyfin.local:8096, http://192.168.1.5:8096',
+                  helperText:
+                      'Multiple server URLs separated by commas. First is '
+                      'preferred (e.g. home network), the rest are used as '
+                      'fallbacks. Include http:// or https://; plain hosts '
+                      'default to http.',
                   border: OutlineInputBorder(),
                   isDense: true,
                 ),

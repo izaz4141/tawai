@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS albums (
 CREATE TABLE IF NOT EXISTS library_sources (
     id TEXT PRIMARY KEY,
     source_type TEXT NOT NULL DEFAULT 'local',
-    url TEXT NOT NULL,
+    urls TEXT NOT NULL DEFAULT '[]',
     name TEXT NOT NULL DEFAULT '',
     last_sync_at TIMESTAMPTZ,
     owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -30,16 +30,25 @@ pub async fn handle_get_track(
     let db = state.context.db().await;
     match library::lookup_track(db.pool(), &id).await {
         Ok(Some(mut t)) => {
-            let (source_type, source_url) =
+            let (source_type, urls_json) =
                 library_source::get_source_by_track_id(db.pool(), &t.id)
                     .await
                     .ok()
                     .flatten()
                     .unwrap_or_default();
+            let urls: Vec<String> = serde_json::from_str(&urls_json).unwrap_or_default();
+            let mut resolver = tawai_core::libsources::SourceUrlResolver::new();
+            let url = match resolver
+                .resolve(&urls, Some(state.context.client()), Some(&t.file_path))
+                .await
+            {
+                Ok(u) => u,
+                Err(_) => String::new(),
+            };
             let (resolved_path, _headers) = resolve_track_source(
                 &t.file_path,
                 &source_type,
-                &source_url,
+                &url,
                 state.context.client(),
             )
             .await;

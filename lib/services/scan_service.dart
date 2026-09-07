@@ -32,13 +32,13 @@ class ScanService {
   }
 
   Future<bool> addSource(
-    String url,
+    List<String> urls,
     String name, {
     String sourceType = 'local',
   }) async {
     final result = await BridgeService.instance.addLibrarySource(
       _userId,
-      url,
+      urls,
       name,
       sourceType,
     );

@@ -2,6 +2,7 @@ use anyhow::Result;
 use sqlx::{Row, SqlitePool};
 
 use crate::db::database::DatabasePool;
+use crate::libsources::SourceUrlResolver;
 use crate::signals::tools::{DecadeEntry, FormatEntry, LibraryStats};
 use crate::tools::rename::{
     build_audio_tag, expected_path_from_root, ext_of, rename_track_from_pg_row,
@@ -200,7 +201,7 @@ async fn get_library_stats_sq(
                           COALESCE(aa.name, '') AS album_artist,
                           COALESCE(a.title, '') AS album_title,
                           t.track_num, t.disc_num, a.date, a.disambiguation, a.total_discs,
-                          ls.url AS source_url,
+                          ls.urls AS source_urls,
                           COALESCE((SELECT GROUP_CONCAT(ta2.name, '||') FROM track_artists ta1 JOIN artists ta2 ON ta1.artist_id = ta2.id WHERE ta1.track_id = t.id), '') AS track_artists,
                           COALESCE((SELECT GROUP_CONCAT(aa2.name, '||') FROM album_artists aa1 JOIN artists aa2 ON aa1.artist_id = aa2.id WHERE aa1.album_id = a.id), '') AS album_artists,
                           COALESCE((SELECT GROUP_CONCAT(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id), '') AS genres,
@@ -210,26 +211,29 @@ async fn get_library_stats_sq(
                    JOIN albums a ON t.album_id = a.id
                    JOIN artists ar ON t.artist_id = ar.id
                    LEFT JOIN artists aa ON a.artist_id = aa.id
-                   JOIN library_sources ls ON t.source_id = ls.id"#,
+                   JOIN library_sources ls ON t.source_id = ls.id
+                   WHERE ls.source_type = 'local'"#,
             )
             .fetch_all(pool)
             .await?;
 
-            let conforming = rows
-                .iter()
-                .filter(|row| {
-                    let data = rename_track_from_sq_row(row);
+            let mut resolver = SourceUrlResolver::new();
+            let mut conforming = 0.0;
+            for row in rows.iter() {
+                let data = rename_track_from_sq_row(row);
+                if let Ok(root) = resolver
+                    .resolve(&data.urls, None, Some(&data.file_path))
+                    .await
+                {
                     let ext = ext_of(&data.file_path);
-                    expected_path_from_root(
-                        &data.source_url,
-                        pattern,
-                        &build_audio_tag(&data),
-                        &ext,
-                    )
-                    .to_string_lossy()
+                    if expected_path_from_root(&root, pattern, &build_audio_tag(&data), &ext)
+                        .to_string_lossy()
                         == data.file_path
-                })
-                .count() as f64;
+                    {
+                        conforming += 1.0;
+                    }
+                }
+            }
 
             Some((conforming / total_tracks as f64) * 100.0)
         }
@@ -593,7 +597,7 @@ async fn get_library_stats_pg(
                           COALESCE(aa.name, '') AS album_artist,
                           COALESCE(a.title, '') AS album_title,
                           t.track_num, t.disc_num, a.date, a.disambiguation, a.total_discs,
-                          ls.url AS source_url,
+                          ls.urls::text AS source_urls,
                           COALESCE((SELECT string_agg(ta2.name, '||') FROM track_artists ta1 JOIN artists ta2 ON ta1.artist_id = ta2.id WHERE ta1.track_id = t.id), '') AS track_artists,
                           COALESCE((SELECT string_agg(aa2.name, '||') FROM album_artists aa1 JOIN artists aa2 ON aa1.artist_id = aa2.id WHERE aa1.album_id = a.id), '') AS album_artists,
                           COALESCE((SELECT string_agg(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id), '') AS genres,
@@ -603,26 +607,29 @@ async fn get_library_stats_pg(
                    JOIN albums a ON t.album_id = a.id
                    JOIN artists ar ON t.artist_id = ar.id
                    LEFT JOIN artists aa ON a.artist_id = aa.id
-                   JOIN library_sources ls ON t.source_id = ls.id"#,
+                   JOIN library_sources ls ON t.source_id = ls.id
+                   WHERE ls.source_type = 'local'"#,
             )
             .fetch_all(pool)
             .await?;
 
-            let conforming = rows
-                .iter()
-                .filter(|row| {
-                    let data = rename_track_from_pg_row(row);
+            let mut resolver = SourceUrlResolver::new();
+            let mut conforming = 0.0;
+            for row in rows.iter() {
+                let data = rename_track_from_pg_row(row);
+                if let Ok(root) = resolver
+                    .resolve(&data.urls, None, Some(&data.file_path))
+                    .await
+                {
                     let ext = ext_of(&data.file_path);
-                    expected_path_from_root(
-                        &data.source_url,
-                        pattern,
-                        &build_audio_tag(&data),
-                        &ext,
-                    )
-                    .to_string_lossy()
+                    if expected_path_from_root(&root, pattern, &build_audio_tag(&data), &ext)
+                        .to_string_lossy()
                         == data.file_path
-                })
-                .count() as f64;
+                    {
+                        conforming += 1.0;
+                    }
+                }
+            }
 
             Some((conforming / total_tracks as f64) * 100.0)
         }

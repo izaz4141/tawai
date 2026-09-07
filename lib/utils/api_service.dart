@@ -1863,7 +1863,7 @@ class APIService {
           return LibrarySourceInfo(
             id: m['id'] as String,
             sourceType: m['source_type'] as String,
-            url: m['url'] as String,
+            urls: (m['urls'] as List<dynamic>).cast<String>(),
             name: m['name'] as String,
             lastSyncAt: m['last_sync_at'] as String?,
             ownerId: m['owner_id'] as String,
@@ -1893,7 +1893,7 @@ class APIService {
           return LibrarySourceInfo(
             id: m['id'] as String,
             sourceType: m['source_type'] as String,
-            url: m['url'] as String,
+            urls: (m['urls'] as List<dynamic>).cast<String>(),
             name: m['name'] as String,
             lastSyncAt: m['last_sync_at'] as String?,
             ownerId: m['owner_id'] as String,
@@ -1910,7 +1910,7 @@ class APIService {
   }
 
   Future<({String sourceId, bool success})> addLibrarySource(
-    String url,
+    List<String> urls,
     String name,
     String sourceType,
   ) async {
@@ -1921,7 +1921,7 @@ class APIService {
         body: jsonEncode({
           'id': _newId(),
           'user_id': SettingsManager.currentUserId.value ?? '',
-          'url': url,
+          'urls': urls,
           'name': name,
           'source_type': sourceType,
         }),

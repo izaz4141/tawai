@@ -1,10 +1,14 @@
--- Deduplicate library_sources on (source_type, url, owner_id), keeping the
--- most recently inserted row per group.
+-- Deduplicate recommendation library_sources on (source_type, owner_id),
+-- keeping the most recently inserted row per group. Non-recommendation
+-- sources are not deduplicated (they may have multiple URLs per type).
 DELETE FROM library_sources
-WHERE rowid NOT IN (
+WHERE source_type LIKE 'recommendation:%'
+  AND rowid NOT IN (
     SELECT MAX(rowid) FROM library_sources
-    GROUP BY source_type, url, owner_id
-);
+    WHERE source_type LIKE 'recommendation:%'
+    GROUP BY source_type, owner_id
+  );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_library_sources_unique
-    ON library_sources(source_type, url, owner_id);
+    ON library_sources(source_type, owner_id)
+    WHERE source_type LIKE 'recommendation:%';

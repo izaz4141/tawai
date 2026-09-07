@@ -1,6 +1,6 @@
 use crate::db::{database::DatabasePool, library, library_source};
 use crate::dclient::nadekodon;
-use crate::libsources::get_parser;
+use crate::libsources::{get_parser, SourceUrlResolver};
 use crate::signals::library::TrackInfo;
 use crate::tools::duplicates;
 use crate::utils::config::AppConfig;
@@ -16,7 +16,7 @@ pub struct PlayTrackResult {
 pub async fn resolve_track_source(
     file_path: &str,
     source_type: &str,
-    source_url: &str,
+    url: &str,
     client: &reqwest::Client,
 ) -> (String, Option<Vec<(String, String)>>) {
     if file_path.starts_with("recommendation://") {
@@ -29,7 +29,7 @@ pub async fn resolve_track_source(
         Some(p) => p,
         None => return (file_path.to_string(), None),
     };
-    match parser.resolve_stream_url(file_path, source_url).await {
+    match parser.resolve_stream_url(file_path, url).await {
         Ok((url, headers)) => (url, Some(headers)),
         Err(e) => {
             logger::error(&format!("resolve stream URL failed: {}", e));
@@ -44,13 +44,29 @@ async fn resolve_and_fallback(
     track: &TrackInfo,
     cfg: Option<&AppConfig>,
 ) -> PlayTrackResult {
-    let (source_type, source_url) = library_source::get_source_by_track_id(pool, &track.id)
+    let (source_type, urls_json) = library_source::get_source_by_track_id(pool, &track.id)
         .await
         .ok()
         .flatten()
         .unwrap_or_default();
+    let urls: Vec<String> = serde_json::from_str(&urls_json).unwrap_or_default();
+    let mut resolver = SourceUrlResolver::new();
+    let url = match resolver
+        .resolve(&urls, Some(client), Some(&track.file_path))
+        .await
+    {
+        Ok(u) => u,
+        Err(_) => {
+            return PlayTrackResult {
+                resolved_track_id: Some(track.id.clone()),
+                file_path: String::new(),
+                headers: None,
+                error: Some("No reachable source URL".to_string()),
+            };
+        }
+    };
     let (path, headers) =
-        resolve_track_source(&track.file_path, &source_type, &source_url, client).await;
+        resolve_track_source(&track.file_path, &source_type, &url, client).await;
 
     if !path.is_empty() {
         return PlayTrackResult {

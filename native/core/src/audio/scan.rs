@@ -239,12 +239,24 @@ pub async fn run_scan(
             }
         };
 
-        let paths = match parser.enumerate_paths(&source.url).await {
+        let mut resolver = libsources::SourceUrlResolver::new();
+        let url = match resolver.resolve(&source.urls, Some(&client), None).await {
+            Ok(u) => u,
+            Err(e) => {
+                logger::error(&format!(
+                    "No reachable URL for source '{}' ({:?}): {}",
+                    source.name, source.urls, e
+                ));
+                continue;
+            }
+        };
+
+        let paths = match parser.enumerate_paths(&url).await {
             Ok(p) => p,
             Err(e) => {
                 logger::error(&format!(
                     "Failed to enumerate source '{}' ({}): {}",
-                    source.name, source.url, e
+                    source.name, url, e
                 ));
                 continue;
             }
@@ -375,8 +387,20 @@ pub async fn run_scan(
             None => continue,
         };
 
+        let mut resolver = libsources::SourceUrlResolver::new();
         for file_path in &new_paths {
-            let mut track = match parser.scan_file(&source.url, file_path).await {
+            let url = match resolver
+                .resolve(&source.urls, Some(&client), Some(file_path.as_str()))
+                .await
+            {
+                Ok(u) => u,
+                Err(e) => {
+                    logger::warn(&format!("No reachable URL for '{}': {}", source.name, e));
+                    continue;
+                }
+            };
+
+            let mut track = match parser.scan_file(&url, file_path).await {
                 Ok(t) => t,
                 Err(e) => {
                     logger::warn(&format!("Failed to scan '{}': {}", file_path, e));
@@ -408,7 +432,7 @@ pub async fn run_scan(
             }
 
             if (track.track_gain.is_none() || track.track_peak.is_none())
-                && source.source_type == "local"
+                && crate::libsources::is_editable(&source.source_type)
             {
                 match ffmpeg::measure_loudness(&track.file_path).await {
                     Ok(m) => {
@@ -484,7 +508,7 @@ pub async fn run_scan(
                 }
                 InsertOutcome::Duplicate => {
                     // A surviving copy exists (or was kept this scan) — remove this file.
-                    match parser.delete(file_path, &source.url).await {
+                    match parser.delete(file_path, &url).await {
                         Ok(()) => {
                             total_duplicates_deleted += 1;
                             logger::info(&format!("Deleted duplicate file '{}'", file_path));

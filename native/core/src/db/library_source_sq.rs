@@ -10,22 +10,43 @@ fn now() -> String {
         .unwrap_or_default()
 }
 
+fn parse_urls(json: &str) -> Vec<String> {
+    serde_json::from_str(json).unwrap_or_default()
+}
+
 pub async fn add_source(
     pool: &SqlitePool,
     user_id: &str,
-    url: &str,
+    urls: &[String],
     name: &str,
     source_type: &str,
     access_rule: &str,
-) -> Result<String> {
+) -> std::result::Result<String, crate::db::library_source::AddSourceError> {
+    let existing: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id, urls FROM library_sources WHERE owner_id = ? AND source_type = ?",
+    )
+    .bind(user_id)
+    .bind(source_type)
+    .fetch_all(pool)
+    .await?;
+    for (existing_id, existing_urls_json) in existing {
+        let existing_urls = parse_urls(&existing_urls_json);
+        if urls.iter().any(|u| existing_urls.contains(u)) {
+            return Err(crate::db::library_source::AddSourceError::Duplicate {
+                source_id: existing_id,
+            });
+        }
+    }
+
     let id = Uuid::new_v4().to_string();
     let now = now();
+    let urls_json = serde_json::to_string(urls).unwrap_or_else(|_| "[]".to_string());
     sqlx::query(
-        "INSERT INTO library_sources (id, source_type, url, name, owner_id, access_rule, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO library_sources (id, source_type, urls, name, owner_id, access_rule, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&id)
     .bind(source_type)
-    .bind(url)
+    .bind(&urls_json)
     .bind(name)
     .bind(user_id)
     .bind(access_rule)
@@ -38,7 +59,7 @@ pub async fn add_source(
 
 pub async fn remove_source(pool: &SqlitePool, source_id: &str) -> Result<bool> {
     let source = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
-        "SELECT id, source_type, url, name, owner_id, access_rule, last_sync_at, created_at, updated_at FROM library_sources WHERE id = ?",
+        "SELECT id, source_type, urls, name, owner_id, access_rule, last_sync_at, created_at, updated_at FROM library_sources WHERE id = ?",
     )
     .bind(source_id)
     .fetch_optional(pool)
@@ -84,7 +105,7 @@ pub async fn remove_source(pool: &SqlitePool, source_id: &str) -> Result<bool> {
 
 pub async fn list_all_sources(pool: &SqlitePool) -> Result<Vec<LibrarySourceInfo>> {
     let rows = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
-        "SELECT id, source_type, url, name, owner_id, access_rule, last_sync_at, created_at, updated_at FROM library_sources ORDER BY created_at",
+        "SELECT id, source_type, urls, name, owner_id, access_rule, last_sync_at, created_at, updated_at FROM library_sources ORDER BY created_at",
     )
     .fetch_all(pool)
     .await?;
@@ -95,7 +116,7 @@ pub async fn list_all_sources(pool: &SqlitePool) -> Result<Vec<LibrarySourceInfo
             |(
                 id,
                 source_type,
-                url,
+                urls_json,
                 name,
                 owner_id,
                 access_rule,
@@ -106,7 +127,7 @@ pub async fn list_all_sources(pool: &SqlitePool) -> Result<Vec<LibrarySourceInfo
                 LibrarySourceInfo {
                     id,
                     source_type,
-                    url,
+                    urls: parse_urls(&urls_json),
                     name,
                     last_sync_at,
                     owner_id,
@@ -124,7 +145,7 @@ pub async fn get_source_by_id(
     source_id: &str,
 ) -> Result<Option<LibrarySourceInfo>> {
     let row = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
-        "SELECT id, source_type, url, name, owner_id, access_rule, last_sync_at, created_at, updated_at FROM library_sources WHERE id = ?",
+        "SELECT id, source_type, urls, name, owner_id, access_rule, last_sync_at, created_at, updated_at FROM library_sources WHERE id = ?",
     )
     .bind(source_id)
     .fetch_optional(pool)
@@ -133,7 +154,7 @@ pub async fn get_source_by_id(
         |(
             id,
             source_type,
-            url,
+            urls_json,
             name,
             owner_id,
             access_rule,
@@ -144,7 +165,7 @@ pub async fn get_source_by_id(
             LibrarySourceInfo {
                 id,
                 source_type,
-                url,
+                urls: parse_urls(&urls_json),
                 name,
                 last_sync_at,
                 owner_id,
@@ -161,7 +182,7 @@ pub async fn get_source_by_track_id(
     track_id: &str,
 ) -> Result<Option<(String, String)>> {
     let row = sqlx::query_as::<_, (String, String)>(
-        "SELECT ls.source_type, ls.url FROM tracks t JOIN library_sources ls ON t.source_id = ls.id WHERE t.id = ?",
+        "SELECT ls.source_type, ls.urls FROM tracks t JOIN library_sources ls ON t.source_id = ls.id WHERE t.id = ?",
     )
     .bind(track_id)
     .fetch_optional(pool)
@@ -174,7 +195,7 @@ pub async fn get_source_info_by_track_id(
     track_id: &str,
 ) -> Result<Option<LibrarySourceInfo>> {
     let row = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
-        "SELECT ls.id, ls.source_type, ls.url, ls.name, ls.owner_id, ls.access_rule, ls.last_sync_at, ls.created_at, ls.updated_at FROM tracks t JOIN library_sources ls ON t.source_id = ls.id WHERE t.id = ?",
+        "SELECT ls.id, ls.source_type, ls.urls, ls.name, ls.owner_id, ls.access_rule, ls.last_sync_at, ls.created_at, ls.updated_at FROM tracks t JOIN library_sources ls ON t.source_id = ls.id WHERE t.id = ?",
     )
     .bind(track_id)
     .fetch_optional(pool)
@@ -183,7 +204,7 @@ pub async fn get_source_info_by_track_id(
         |(
             id,
             source_type,
-            url,
+            urls_json,
             name,
             owner_id,
             access_rule,
@@ -194,7 +215,7 @@ pub async fn get_source_info_by_track_id(
             LibrarySourceInfo {
                 id,
                 source_type,
-                url,
+                urls: parse_urls(&urls_json),
                 name,
                 last_sync_at,
                 owner_id,
@@ -207,10 +228,10 @@ pub async fn get_source_info_by_track_id(
 }
 
 pub async fn get_urls_for_scan(pool: &SqlitePool) -> Result<Vec<String>> {
-    let rows = sqlx::query_scalar::<_, String>("SELECT url FROM library_sources")
+    let rows = sqlx::query_scalar::<_, String>("SELECT urls FROM library_sources")
         .fetch_all(pool)
         .await?;
-    Ok(rows)
+    Ok(rows.iter().flat_map(|json| parse_urls(json)).collect())
 }
 
 pub async fn get_source_by_url_and_owner(
@@ -220,18 +241,18 @@ pub async fn get_source_by_url_and_owner(
     owner_id: &str,
 ) -> Result<Option<LibrarySourceInfo>> {
     let row = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
-        "SELECT id, source_type, url, name, owner_id, access_rule, last_sync_at, created_at, updated_at FROM library_sources WHERE source_type = ? AND url = ? AND owner_id = ?",
+        "SELECT id, source_type, urls, name, owner_id, access_rule, last_sync_at, created_at, updated_at FROM library_sources WHERE source_type = ? AND owner_id = ? AND EXISTS (SELECT 1 FROM json_each(library_sources.urls) WHERE json_each.value = ?)",
     )
     .bind(source_type)
-    .bind(url)
     .bind(owner_id)
+    .bind(url)
     .fetch_optional(pool)
     .await?;
     Ok(row.map(
         |(
             id,
             source_type,
-            url,
+            urls_json,
             name,
             owner_id,
             access_rule,
@@ -242,7 +263,7 @@ pub async fn get_source_by_url_and_owner(
             LibrarySourceInfo {
                 id,
                 source_type,
-                url,
+                urls: parse_urls(&urls_json),
                 name,
                 last_sync_at,
                 owner_id,
@@ -257,22 +278,24 @@ pub async fn get_source_by_url_and_owner(
 pub async fn upsert_source(
     pool: &SqlitePool,
     source_type: &str,
-    url: &str,
+    urls: &[String],
     name: &str,
     owner_id: &str,
 ) -> Result<String> {
     let id = Uuid::new_v4().to_string();
     let now = now();
+    let urls_json = serde_json::to_string(urls).unwrap_or_else(|_| "[]".to_string());
     let result: String = sqlx::query_scalar(
-        "INSERT INTO library_sources (id, source_type, url, name, owner_id, access_rule, created_at, updated_at, last_sync_at)
+        "INSERT INTO library_sources (id, source_type, urls, name, owner_id, access_rule, created_at, updated_at, last_sync_at)
          VALUES (?, ?, ?, ?, ?, 'all', ?, ?, ?)
-         ON CONFLICT (source_type, url, owner_id)
-         DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at, last_sync_at = excluded.last_sync_at
+         ON CONFLICT (source_type, owner_id)
+         WHERE source_type LIKE 'recommendation:%'
+         DO UPDATE SET urls = excluded.urls, name = excluded.name, updated_at = excluded.updated_at, last_sync_at = excluded.last_sync_at
          RETURNING id",
     )
     .bind(&id)
     .bind(source_type)
-    .bind(url)
+    .bind(&urls_json)
     .bind(name)
     .bind(owner_id)
     .bind(&now)

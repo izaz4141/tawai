@@ -180,7 +180,7 @@ pub struct ScanProgress {
 pub struct LibrarySourceInfo {
     pub id: String,
     pub source_type: String,
-    pub url: String,
+    pub urls: Vec<String>,
     pub name: String,
     pub last_sync_at: Option<String>,
     pub owner_id: String,
@@ -454,7 +454,7 @@ pub struct AddLibrarySourceRequest {
     pub id: String,
     #[serde(default)]
     pub user_id: String,
-    pub url: String,
+    pub urls: Vec<String>,
     pub name: String,
     pub source_type: String,
 }

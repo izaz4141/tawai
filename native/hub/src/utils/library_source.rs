@@ -19,7 +19,7 @@ pub async fn handle_add_library_source(context: Arc<AppContext>) {
         let result = core_libsrc::add_source(
             db.pool(),
             &msg.user_id,
-            &msg.url,
+            &msg.urls,
             &msg.name,
             &msg.source_type,
             "all",

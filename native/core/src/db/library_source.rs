@@ -3,6 +3,44 @@ use anyhow::Result;
 use crate::db::database::DatabasePool;
 use crate::signals::library::LibrarySourceInfo;
 
+#[derive(Debug)]
+pub enum AddSourceError {
+    Duplicate { source_id: String },
+    Db(anyhow::Error),
+}
+
+impl std::fmt::Display for AddSourceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Duplicate { source_id } => {
+                write!(f, "duplicate source (already exists: {source_id})")
+            }
+            Self::Db(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+impl std::error::Error for AddSourceError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Duplicate { .. } => None,
+            Self::Db(e) => Some(e.as_ref()),
+        }
+    }
+}
+
+impl From<anyhow::Error> for AddSourceError {
+    fn from(e: anyhow::Error) -> Self {
+        Self::Db(e)
+    }
+}
+
+impl From<sqlx::Error> for AddSourceError {
+    fn from(e: sqlx::Error) -> Self {
+        Self::Db(e.into())
+    }
+}
+
 pub fn can_access_source(owner_id: &str, user_id: &str, role: &str, access_rule: &str) -> bool {
     if role == "admin" {
         return true;
@@ -24,18 +62,18 @@ pub fn can_access_source(owner_id: &str, user_id: &str, role: &str, access_rule:
 pub async fn add_source(
     pool: &DatabasePool,
     user_id: &str,
-    url: &str,
+    urls: &[String],
     name: &str,
     source_type: &str,
     access_rule: &str,
-) -> Result<String> {
+) -> std::result::Result<String, AddSourceError> {
     match pool {
         DatabasePool::Sqlite(p) => {
-            super::library_source_sq::add_source(p, user_id, url, name, source_type, access_rule)
+            super::library_source_sq::add_source(p, user_id, urls, name, source_type, access_rule)
                 .await
         }
         DatabasePool::Postgres(p) => {
-            super::library_source_pg::add_source(p, user_id, url, name, source_type, access_rule)
+            super::library_source_pg::add_source(p, user_id, urls, name, source_type, access_rule)
                 .await
         }
     }
@@ -56,7 +94,7 @@ pub async fn list_editable_sources(
     let accessible = list_accessible_sources(pool, user_id, role).await?;
     Ok(accessible
         .into_iter()
-        .filter(|s| !s.source_type.starts_with("recommendation:"))
+        .filter(|s| crate::libsources::is_editable(&s.source_type))
         .collect())
 }
 
@@ -147,16 +185,16 @@ pub async fn get_urls_for_scan(pool: &DatabasePool) -> Result<Vec<String>> {
 pub async fn upsert_source(
     pool: &DatabasePool,
     source_type: &str,
-    url: &str,
+    urls: &[String],
     name: &str,
     owner_id: &str,
 ) -> Result<String> {
     match pool {
         DatabasePool::Sqlite(p) => {
-            super::library_source_sq::upsert_source(p, source_type, url, name, owner_id).await
+            super::library_source_sq::upsert_source(p, source_type, urls, name, owner_id).await
         }
         DatabasePool::Postgres(p) => {
-            super::library_source_pg::upsert_source(p, source_type, url, name, owner_id).await
+            super::library_source_pg::upsert_source(p, source_type, urls, name, owner_id).await
         }
     }
 }

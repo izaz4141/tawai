@@ -6,6 +6,7 @@ use sqlx::Row;
 
 use crate::audio::tags::{AudioTag, derive_sort_name, parse_artists};
 use crate::db::database::DatabasePool;
+use crate::libsources::SourceUrlResolver;
 use crate::signals::tools::{NamingViolation, RenamePreview};
 
 /// Format a naming pattern with tag values.
@@ -224,18 +225,25 @@ pub(crate) fn expected_path_from_root(
     dest_from_root(source_root, pattern, tag, ext, "track")
 }
 
-/// Move (and rename) an audio file into `source_url`, rooting the naming
-/// pattern's subdirectories at that folder.
+/// Move (and rename) an audio file into `source_root`, rooting the naming
+/// pattern's subdirectories at that folder. Callers resolve the source root
+/// first via `SourceUrlResolver`.
 ///
 /// When `pattern` is `None` the file keeps its current stem name. When a
 /// pattern is given, `format_naming_pattern` is applied and the result is
 /// used as the file stem.
 pub fn move_file_into_source(
     old_path: &Path,
-    source_url: &str,
+    source_root: &str,
     pattern: Option<&str>,
     tag: &AudioTag,
 ) -> Result<PathBuf> {
+    if !old_path.is_file() {
+        anyhow::bail!("source file not found: {}", old_path.display());
+    }
+    if !Path::new(source_root).is_dir() {
+        anyhow::bail!("source root is not a directory: {}", source_root);
+    }
     let ext = old_path
         .extension()
         .and_then(|e| e.to_str())
@@ -246,8 +254,8 @@ pub fn move_file_into_source(
         .unwrap_or("track")
         .to_string();
     let new_path = match pattern {
-        Some(p) => dest_from_root(source_url, p, tag, &ext, &stem),
-        None => Path::new(source_url).join(format!("{}.{}", stem, ext)),
+        Some(p) => dest_from_root(source_root, p, tag, &ext, &stem),
+        None => Path::new(source_root).join(format!("{}.{}", stem, ext)),
     };
     if new_path == old_path {
         return Ok(new_path);
@@ -283,15 +291,22 @@ pub async fn batch_rename_apply(
     let by_id: HashMap<String, RenameTrackDb> =
         rows.into_iter().map(|r| (r.track_id.clone(), r)).collect();
 
+    let mut resolver = SourceUrlResolver::new();
+
     let mut results = Vec::new();
     for (i, path_str) in file_paths.iter().enumerate() {
         let track_id = track_ids.get(i).map(String::as_str).unwrap_or("");
         let path = Path::new(path_str);
         let result = match by_id.get(track_id) {
             Some(row) => {
-                let tag = build_audio_tag(row);
-                move_file_into_source(path, &row.source_url, Some(pattern), &tag)
-            }
+                    match resolver.resolve(&row.urls, None, Some(path_str.as_str())).await {
+                        Ok(root) => {
+                            let tag = build_audio_tag(row);
+                            move_file_into_source(path, &root, Some(pattern), &tag)
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
             None => Err(anyhow::anyhow!("no database record for track")),
         };
         match result {
@@ -335,7 +350,7 @@ pub async fn batch_rename_preview(
         DatabasePool::Sqlite(p) => fetch_rename_tracks_sq(p, source_id).await?,
         DatabasePool::Postgres(p) => fetch_rename_tracks_pg(p, source_id).await?,
     };
-    Ok(build_previews(rows, pattern))
+    Ok(build_previews(rows, pattern).await)
 }
 
 /// Check which files in the library don't follow the naming convention.
@@ -348,7 +363,7 @@ pub async fn check_naming_convention(
         DatabasePool::Sqlite(p) => fetch_rename_tracks_sq(p, source_id).await?,
         DatabasePool::Postgres(p) => fetch_rename_tracks_pg(p, source_id).await?,
     };
-    Ok(build_violations(rows, pattern))
+    Ok(build_violations(rows, pattern).await)
 }
 
 /// Naming-relevant track data loaded from the database. Built once per row and
@@ -358,7 +373,7 @@ pub async fn check_naming_convention(
 pub(crate) struct RenameTrackDb {
     pub track_id: String,
     pub file_path: String,
-    pub source_url: String,
+    pub urls: Vec<String>,
     pub title: String,
     pub artist: String,
     pub album_artist: String,
@@ -420,6 +435,10 @@ pub(crate) fn build_audio_tag(row: &RenameTrackDb) -> AudioTag {
     tag
 }
 
+fn parse_urls(json: &str) -> Vec<String> {
+    serde_json::from_str::<Vec<String>>(json).unwrap_or_default()
+}
+
 fn split_pipe_list(s: Option<String>) -> Vec<String> {
     s.map(|v| {
         v.split("||")
@@ -446,39 +465,50 @@ fn stem_of(path: &str) -> String {
         .to_string()
 }
 
-fn build_previews(rows: Vec<RenameTrackDb>, pattern: &str) -> Vec<RenamePreview> {
-    rows.into_iter()
-        .map(|row| {
-            let ext = ext_of(&row.file_path);
-            let fallback = stem_of(&row.file_path);
-            let expected_path = dest_from_root(
-                &row.source_url,
-                pattern,
-                &build_audio_tag(&row),
-                &ext,
-                &fallback,
-            );
-            RenamePreview {
-                file_path: row.file_path,
-                expected_path: expected_path.to_string_lossy().to_string(),
-                track_id: row.track_id,
-            }
-        })
-        .collect()
+async fn build_previews(rows: Vec<RenameTrackDb>, pattern: &str) -> Vec<RenamePreview> {
+    let mut resolver = SourceUrlResolver::new();
+    let mut previews = Vec::new();
+    for row in rows {
+        let ext = ext_of(&row.file_path);
+        let fallback = stem_of(&row.file_path);
+        let expected_path = match resolver
+            .resolve(&row.urls, None, Some(&row.file_path))
+            .await
+        {
+            Ok(root) => dest_from_root(&root, pattern, &build_audio_tag(&row), &ext, &fallback),
+            Err(_) => PathBuf::from(format!(
+                "<error: no reachable local source directory in: {:?}>",
+                row.urls
+            )),
+        };
+        previews.push(RenamePreview {
+            file_path: row.file_path,
+            expected_path: expected_path.to_string_lossy().to_string(),
+            track_id: row.track_id,
+        });
+    }
+    previews
 }
 
-fn build_violations(rows: Vec<RenameTrackDb>, pattern: &str) -> Vec<NamingViolation> {
+async fn build_violations(rows: Vec<RenameTrackDb>, pattern: &str) -> Vec<NamingViolation> {
+    let mut resolver = SourceUrlResolver::new();
     let mut violations = Vec::new();
     for row in rows {
         let tag = build_audio_tag(&row);
         let ext = ext_of(&row.file_path);
         let fallback = stem_of(&row.file_path);
         let expected_name = format_naming_pattern(pattern, &tag);
-        let expected_path = dest_from_root(&row.source_url, pattern, &tag, &ext, &fallback);
+        let Ok(root) = resolver
+            .resolve(&row.urls, None, Some(&row.file_path))
+            .await
+        else {
+            continue;
+        };
+        let expected_path = dest_from_root(&root, pattern, &tag, &ext, &fallback);
 
         if expected_path.to_string_lossy() != row.file_path {
             let file_name = Path::new(&row.file_path)
-                .strip_prefix(&row.source_url)
+                .strip_prefix(&root)
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|_| row.file_path.clone());
             violations.push(NamingViolation {
@@ -497,7 +527,7 @@ const SQ_RENAME_TRACK_SELECT: &str = r#"SELECT t.id AS track_id, t.file_path, t.
     COALESCE(aa.name, '') AS album_artist,
     COALESCE(a.title, '') AS album_title,
     t.track_num, t.disc_num, a.date, a.disambiguation, a.total_discs,
-    ls.url AS source_url,
+    ls.urls AS source_urls,
     COALESCE((SELECT GROUP_CONCAT(ta2.name, '||') FROM track_artists ta1 JOIN artists ta2 ON ta1.artist_id = ta2.id WHERE ta1.track_id = t.id), '') AS track_artists,
     COALESCE((SELECT GROUP_CONCAT(aa2.name, '||') FROM album_artists aa1 JOIN artists aa2 ON aa1.artist_id = aa2.id WHERE aa1.album_id = a.id), '') AS album_artists,
     COALESCE((SELECT GROUP_CONCAT(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id), '') AS genres,
@@ -514,7 +544,7 @@ const PG_RENAME_TRACK_SELECT: &str = r#"SELECT t.id AS track_id, t.file_path, t.
     COALESCE(aa.name, '') AS album_artist,
     COALESCE(a.title, '') AS album_title,
     t.track_num, t.disc_num, a.date, a.disambiguation, a.total_discs,
-    ls.url AS source_url,
+    ls.urls::text AS source_urls,
     COALESCE((SELECT string_agg(ta2.name, '||') FROM track_artists ta1 JOIN artists ta2 ON ta1.artist_id = ta2.id WHERE ta1.track_id = t.id), '') AS track_artists,
     COALESCE((SELECT string_agg(aa2.name, '||') FROM album_artists aa1 JOIN artists aa2 ON aa1.artist_id = aa2.id WHERE aa1.album_id = a.id), '') AS album_artists,
     COALESCE((SELECT string_agg(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id), '') AS genres,
@@ -532,14 +562,14 @@ async fn fetch_rename_tracks_sq(
 ) -> Result<Vec<RenameTrackDb>> {
     let rows = if let Some(sid) = source_id {
         sqlx::query(&format!(
-            "{SQ_RENAME_TRACK_SELECT} WHERE t.source_id = ? AND ls.source_type NOT LIKE 'recommendation:%' ORDER BY t.file_path"
+            "{SQ_RENAME_TRACK_SELECT} WHERE t.source_id = ? AND ls.source_type = 'local' ORDER BY t.file_path"
         ))
         .bind(sid)
         .fetch_all(pool)
         .await?
     } else {
         sqlx::query(&format!(
-            "{SQ_RENAME_TRACK_SELECT} WHERE ls.source_type NOT LIKE 'recommendation:%' ORDER BY t.file_path"
+            "{SQ_RENAME_TRACK_SELECT} WHERE ls.source_type = 'local' ORDER BY t.file_path"
         ))
         .fetch_all(pool)
         .await?
@@ -553,14 +583,14 @@ async fn fetch_rename_tracks_pg(
 ) -> Result<Vec<RenameTrackDb>> {
     let rows = if let Some(sid) = source_id {
         sqlx::query(&format!(
-            "{PG_RENAME_TRACK_SELECT} WHERE t.source_id = $1 AND ls.source_type NOT LIKE 'recommendation:%' ORDER BY t.file_path"
+            "{PG_RENAME_TRACK_SELECT} WHERE t.source_id = $1 AND ls.source_type = 'local' ORDER BY t.file_path"
         ))
         .bind(sid)
         .fetch_all(pool)
         .await?
     } else {
         sqlx::query(&format!(
-            "{PG_RENAME_TRACK_SELECT} WHERE ls.source_type NOT LIKE 'recommendation:%' ORDER BY t.file_path"
+            "{PG_RENAME_TRACK_SELECT} WHERE ls.source_type = 'local' ORDER BY t.file_path"
         ))
         .fetch_all(pool)
         .await?
@@ -577,7 +607,7 @@ async fn fetch_rename_tracks_by_ids_sq(
     }
     let placeholders: Vec<String> = track_ids.iter().map(|_| "?".to_string()).collect();
     let sql = format!(
-        "{SQ_RENAME_TRACK_SELECT} WHERE t.id IN ({})",
+        "{SQ_RENAME_TRACK_SELECT} WHERE t.id IN ({}) AND ls.source_type = 'local'",
         placeholders.join(",")
     );
     let mut query = sqlx::query(&sql);
@@ -597,7 +627,7 @@ async fn fetch_rename_tracks_by_ids_pg(
     }
     let placeholders: Vec<String> = (1..=track_ids.len()).map(|i| format!("${i}")).collect();
     let sql = format!(
-        "{PG_RENAME_TRACK_SELECT} WHERE t.id IN ({})",
+        "{PG_RENAME_TRACK_SELECT} WHERE t.id IN ({}) AND ls.source_type = 'local'",
         placeholders.join(",")
     );
     let mut query = sqlx::query(&sql);
@@ -612,7 +642,7 @@ pub(crate) fn rename_track_from_sq_row(row: &sqlx::sqlite::SqliteRow) -> RenameT
     RenameTrackDb {
         track_id: row.get("track_id"),
         file_path: row.get("file_path"),
-        source_url: row.get("source_url"),
+        urls: parse_urls(row.get("source_urls")),
         title: row.get("title"),
         artist: row.get("artist_name"),
         album_artist: row.get("album_artist"),
@@ -638,7 +668,7 @@ pub(crate) fn rename_track_from_pg_row(row: &sqlx::postgres::PgRow) -> RenameTra
     RenameTrackDb {
         track_id: row.get("track_id"),
         file_path: row.get("file_path"),
-        source_url: row.get("source_url"),
+        urls: parse_urls(row.get("source_urls")),
         title: row.get("title"),
         artist: row.get("artist_name"),
         album_artist: row.get("album_artist"),
@@ -856,7 +886,7 @@ mod tests {
         RenameTrackDb {
             track_id: "t1".to_string(),
             file_path: "/music/raw.mp3".to_string(),
-            source_url: "/music".to_string(),
+            urls: vec!["/music".to_string()],
             title: "Title".to_string(),
             artist: artist.to_string(),
             album_artist: album_artist.to_string(),

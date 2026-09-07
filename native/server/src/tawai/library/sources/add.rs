@@ -23,7 +23,7 @@ pub async fn handle_add_source(
     match library_source::add_source(
         db.pool(),
         &user.id,
-        &payload.url,
+        &payload.urls,
         &payload.name,
         &payload.source_type,
         "all",
@@ -38,8 +38,16 @@ pub async fn handle_add_source(
         .into_response(),
         Err(e) => {
             tawai_core::utils::logger::error(&format!("add source failed: {}", e));
+            let status = if matches!(
+                e,
+                tawai_core::db::library_source::AddSourceError::Duplicate { .. }
+            ) {
+                axum::http::StatusCode::CONFLICT
+            } else {
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            };
             (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                status,
                 Json(AddLibrarySourceResponse {
                     id: payload.id,
                     source_id: String::new(),

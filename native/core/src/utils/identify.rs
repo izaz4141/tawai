@@ -86,9 +86,9 @@ pub async fn apply_identification(
     if !library_source::can_access_source(&source.owner_id, user_id, role, &source.access_rule) {
         return Err(anyhow!("No access to the library source: {}", source.name));
     }
-    if source.source_type != "local" {
+    if !crate::libsources::is_editable(&source.source_type) {
         return Err(anyhow!(
-            "Cannot apply identification to non-local source: {}",
+            "Cannot apply identification to non-editable source: {}",
             source.source_type
         ));
     }
@@ -174,15 +174,21 @@ pub async fn apply_identification(
         .await
         .filter(|s| !s.is_empty());
 
+    let mut resolver = crate::libsources::SourceUrlResolver::new();
+    let source_root = resolver
+        .resolve(&source.urls, None, None)
+        .await
+        .map_err(|e| anyhow!("No reachable source directory for '{}': {}", source.name, e))?;
+
     let new_file_path = if download_folder {
         Some(
-            move_file_into_source(&file_path, &source.url, pattern.as_deref(), &tag)?
+            move_file_into_source(&file_path, &source_root, pattern.as_deref(), &tag)?
                 .to_string_lossy()
                 .to_string(),
         )
     } else if let Some(pattern) = pattern {
         Some(
-            move_file_into_source(&file_path, &source.url, Some(&pattern), &tag)?
+            move_file_into_source(&file_path, &source_root, Some(&pattern), &tag)?
                 .to_string_lossy()
                 .to_string(),
         )

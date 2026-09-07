@@ -417,7 +417,7 @@ pub async fn sync_recs(params: SyncRecsParams<'_>) -> SyncRecsResult {
             let source_id = match library_source::upsert_source(
                 params.pool,
                 &source_type,
-                &url,
+                &[url],
                 &display_name,
                 params.user_id,
             )

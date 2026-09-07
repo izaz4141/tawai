@@ -735,7 +735,7 @@ class RinfService {
 
   Future<({String sourceId, bool success})> addLibrarySource(
     String userId,
-    String url,
+    List<String> urls,
     String name,
     String sourceType,
   ) async {
@@ -746,7 +746,7 @@ class RinfService {
     AddLibrarySourceRequest(
       id: id,
       userId: userId,
-      url: url,
+      urls: urls,
       name: name,
       sourceType: sourceType,
     ).sendSignalToRust();

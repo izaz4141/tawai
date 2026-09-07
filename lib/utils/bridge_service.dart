@@ -588,14 +588,14 @@ class BridgeService {
 
   Future<({String sourceId, bool success})> addLibrarySource(
     String userId,
-    String url,
+    List<String> urls,
     String name,
     String sourceType,
   ) async {
     if (_isRemote) {
-      return APIService.instance.addLibrarySource(url, name, sourceType);
+      return APIService.instance.addLibrarySource(urls, name, sourceType);
     }
-    return RinfService.instance.addLibrarySource(userId, url, name, sourceType);
+    return RinfService.instance.addLibrarySource(userId, urls, name, sourceType);
   }
 
   Future<bool> removeLibrarySource(String userId, String sourceId) async {
