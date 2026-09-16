@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/utils/helper.dart';
 
-Future<String?> showNadekodonFormatPicker(
+Future<Map<String, dynamic>?> showNadekodonFormatPicker(
   BuildContext context, {
   required String infoJson,
 }) async {
@@ -29,7 +29,7 @@ Future<String?> showNadekodonFormatPicker(
     (a, b) => ((b['abr'] as num?) ?? 0).compareTo((a['abr'] as num?) ?? 0),
   );
 
-  return showDialog<String>(
+  return showDialog<Map<String, dynamic>>(
     context: context,
     builder: (ctx) {
       return SimpleDialog(
@@ -53,7 +53,7 @@ Future<String?> showNadekodonFormatPicker(
             ),
           for (final f in formats)
             SimpleDialogOption(
-              onPressed: () => Navigator.of(ctx).pop(f['format_id'] as String),
+              onPressed: () => Navigator.of(ctx).pop(f),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

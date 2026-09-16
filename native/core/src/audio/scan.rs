@@ -231,7 +231,7 @@ pub async fn run_scan(
             },
         );
 
-        let parser = match libsources::get_parser(&source.source_type, client.clone()) {
+        let parser = match libsources::get_parser(&source.source_type, client.clone(), pool) {
             Some(p) => p,
             None => {
                 logger::error(&format!("Unknown source type: {}", source.source_type));
@@ -251,7 +251,7 @@ pub async fn run_scan(
             }
         };
 
-        let paths = match parser.enumerate_paths(&url).await {
+        let paths = match parser.enumerate_paths(pool, &url).await {
             Ok(p) => p,
             Err(e) => {
                 logger::error(&format!(
@@ -382,7 +382,7 @@ pub async fn run_scan(
             continue;
         }
 
-        let parser = match libsources::get_parser(&source.source_type, client.clone()) {
+        let parser = match libsources::get_parser(&source.source_type, client.clone(), pool) {
             Some(p) => p,
             None => continue,
         };
@@ -400,7 +400,7 @@ pub async fn run_scan(
                 }
             };
 
-            let mut track = match parser.scan_file(&url, file_path).await {
+            let mut track = match parser.scan_file(pool, &url, file_path).await {
                 Ok(t) => t,
                 Err(e) => {
                     logger::warn(&format!("Failed to scan '{}': {}", file_path, e));
@@ -508,7 +508,7 @@ pub async fn run_scan(
                 }
                 InsertOutcome::Duplicate => {
                     // A surviving copy exists (or was kept this scan) — remove this file.
-                    match parser.delete(file_path, &url).await {
+                    match parser.delete(pool, file_path, &url).await {
                         Ok(()) => {
                             total_duplicates_deleted += 1;
                             logger::info(&format!("Deleted duplicate file '{}'", file_path));

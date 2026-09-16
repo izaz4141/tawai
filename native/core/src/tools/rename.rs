@@ -9,6 +9,11 @@ use crate::db::database::DatabasePool;
 use crate::libsources::SourceUrlResolver;
 use crate::signals::tools::{NamingViolation, RenamePreview};
 
+/// The default library naming pattern, used everywhere a naming schema is
+/// required but none is configured. May contain subdirectories (`/`).
+pub(crate) const DEFAULT_PATTERN: &str =
+    "{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}";
+
 /// Format a naming pattern with tag values.
 ///
 /// Variables: `{title}`, `{artist}`, `{album_artist}`, `{album}`,
@@ -196,7 +201,7 @@ fn get_naming_var_value(var: &str, tag: &AudioTag) -> String {
 /// Compute the destination file name for `pattern`, falling back to
 /// `fallback_stem` when the formatted name is empty. Shared by preview and apply
 /// so both produce identical paths.
-fn dest_from_root(
+pub(crate) fn dest_from_root(
     source_root: &str,
     pattern: &str,
     tag: &AudioTag,
@@ -693,8 +698,6 @@ pub(crate) fn rename_track_from_pg_row(row: &sqlx::postgres::PgRow) -> RenameTra
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const DEFAULT_PATTERN: &str = "{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}";
 
     fn tag(
         title: &str,

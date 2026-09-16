@@ -11,6 +11,20 @@ pub async fn lookup_track(
     }
 }
 
+pub async fn lookup_track_by_file_path(
+    pool: &DatabasePool,
+    file_path: &str,
+) -> anyhow::Result<Option<TrackInfo>> {
+    match pool {
+        DatabasePool::Sqlite(p) => {
+            super::library_sq::lookup_track_by_file_path(p, file_path).await
+        }
+        DatabasePool::Postgres(p) => {
+            super::library_pg::lookup_track_by_file_path(p, file_path).await
+        }
+    }
+}
+
 pub async fn insert_artist(
     pool: &DatabasePool,
     name: &str,
@@ -520,13 +534,15 @@ pub async fn delete_track(
         .await?
         .ok_or_else(|| anyhow::anyhow!("Track {} not found", track_id))?;
 
-    if let Some(parser) = crate::libsources::get_parser(&source.source_type, client.clone()) {
+    if let Some(parser) =
+        crate::libsources::get_parser(&source.source_type, client.clone(), pool)
+    {
         let mut resolver = crate::libsources::SourceUrlResolver::new();
         if let Ok(url) = resolver
             .resolve(&source.urls, Some(client), Some(&track.file_path))
             .await
         {
-            parser.delete(&track.file_path, &url).await?;
+            parser.delete(pool, &track.file_path, &url).await?;
         }
     }
 

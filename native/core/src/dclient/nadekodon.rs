@@ -16,9 +16,9 @@ pub struct DownloadGlance {
     pub download_type: String,
     pub name: String,
     pub dest: String,
-    pub total_size: i64,
-    pub downloaded: i64,
-    pub uploaded: i64,
+    pub total_size: Option<u64>,
+    pub downloaded: u64,
+    pub uploaded: u64,
     pub dspeed: Option<f64>,
     pub state: String,
     pub category: Option<String>,
@@ -28,7 +28,7 @@ pub struct DownloadGlance {
 pub struct ListResponse {
     pub id: String,
     pub downloads: Vec<DownloadGlance>,
-    pub total_count: i64,
+    pub total_count: u64,
     pub success: bool,
     pub error: Option<String>,
 }
@@ -48,8 +48,8 @@ pub struct DetailsResponse {
     pub name: String,
     pub url: String,
     pub dest: String,
-    pub total_size: i64,
-    pub downloaded: i64,
+    pub total_size: Option<u64>,
+    pub downloaded: u64,
     pub speed: Option<f64>,
     pub state: String,
     pub part_info: Vec<PartInfo>,
@@ -59,36 +59,56 @@ pub struct DetailsResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PartInfo {
-    pub start: i64,
-    pub end: i64,
-    pub current: i64,
+    pub start: u64,
+    pub end: u64,
+    pub current: u64,
 }
 
 const TAWAI_CATEGORY: &str = "tawai";
 
+/// All download states nadekodon can report; an empty statuses list would
+/// match nothing on nadekodon's side.
+const ALL_NADEKODON_STATES: &[&str] = &[
+    "Queued",
+    "Running",
+    "Paused",
+    "Completed",
+    "Seeding",
+    "StalledDL",
+    "StalledUP",
+    "Cancelled",
+    "Error",
+];
+
+fn all_nadekodon_states() -> Vec<String> {
+    ALL_NADEKODON_STATES
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct NadekodonApiLoginResponse {
     api_key: String,
     access_token: String,
     csrf_token: String,
-    expires_in: i64,
+    expires_in: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct NadekodonApiStatusResponse {
     status: String,
     version: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct NadekodonApiCreateRequest {
-    url: String,
+    id: String,
+    url: Option<String>,
     dest: String,
-    video_format: Option<String>,
-    audio_format: Option<String>,
+    video_format: Option<YtdlFormat>,
+    audio_format: Option<YtdlFormat>,
+    #[serde(rename = "is_ytdl")]
     is_ytdl: bool,
     cookie: Option<String>,
     user_agent: Option<String>,
@@ -96,102 +116,102 @@ pub struct NadekodonApiCreateRequest {
     category: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NadekodonApiListRequest {
-    offset_index: u64,
-    before: u64,
-    after: u64,
-    statuses: Vec<String>,
-    categories: Vec<String>,
-    search_query: Option<String>,
-    sort_by: u32,
-    ascending: bool,
+#[derive(Debug, Clone, Deserialize)]
+pub struct NadekodonApiCreateResponse {
+    download_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+pub struct NadekodonApiListRequest {
+    id: String,
+    #[serde(rename = "offset_index")]
+    offset_index: u32,
+    before: u32,
+    after: u32,
+    statuses: Vec<String>,
+    tag: Option<i32>,
+    categories: Vec<String>,
+    search_query: Option<String>,
+    sort_by: Option<i32>,
+    ascending: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NadekodonApiGlance {
     id: String,
     download_type: String,
     name: String,
     dest: String,
-    total_size: i64,
-    downloaded: i64,
-    uploaded: i64,
-    dspeed: Option<f64>,
+    total_size: Option<u64>,
+    downloaded: u64,
+    uploaded: u64,
+    dspeed: f64,
     uspeed: Option<f64>,
     state: String,
     referer: Option<String>,
-    category: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct NadekodonApiListResponse {
+    id: String,
     list: Vec<NadekodonApiGlance>,
-    total_count: i64,
-    start_index: i64,
-    categories: Vec<String>,
+    total_count: u64,
+    start_index: u64,
+    tag: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct NadekodonApiDetailResponse {
     id: String,
     name: String,
     url: String,
     dest: String,
-    total_size: i64,
-    downloaded: i64,
-    speed: Option<f64>,
+    total_size: Option<u64>,
+    downloaded: u64,
+    speed: f64,
     state: String,
     part_info: Vec<NadekodonApiPartInfo>,
-    uploaded: i64,
+    uploaded: Option<u64>,
     upload_speed: Option<f64>,
-    peers: Option<u32>,
+    peers: Option<u64>,
     ratio: Option<f64>,
-    eta: Option<f64>,
+    eta: Option<String>,
     referer: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct NadekodonApiPartInfo {
-    start: i64,
-    end: i64,
-    current: i64,
+    start: u64,
+    end: u64,
+    current: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct NadekodonApiIdRequest {
     id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct NadekodonApiDeleteRequest {
     id: String,
     delete_file: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct NadekodonApiCategory {
     name: String,
     save_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct NadekodonApiCategoryListResponse {
+    id: String,
     categories: Vec<NadekodonApiCategory>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct NadekodonApiCategoryUpdateRequest {
+    id: String,
     categories: Vec<NadekodonApiCategory>,
 }
 
@@ -209,6 +229,7 @@ pub struct YtdlSearchResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct YtdlSearchOutput {
+    pub id: String,
     pub results: Vec<YtdlSearchResult>,
     pub error: Option<String>,
 }
@@ -222,7 +243,6 @@ pub struct YtdlFormat {
     pub vcodec: Option<String>,
     pub acodec: Option<String>,
     pub note: String,
-    pub abr: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -235,8 +255,32 @@ pub struct YtdlItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct YtdlQueryOutput {
+    pub id: String,
     pub items: Vec<YtdlItem>,
     pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NadekodonApiSearchRequest {
+    id: String,
+    query: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NadekodonApiQueryRequest {
+    id: String,
+    url: String,
+}
+
+/// Deserialize a response body, including the raw text in the error so a
+/// shape mismatch is diagnosable instead of reqwest's opaque "error decoding
+/// response body".
+fn decode_body<T>(raw: &str) -> Result<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    serde_json::from_str(raw)
+        .map_err(|e| anyhow::anyhow!("nadekodon response decode failed: {e}; raw body: {raw}"))
 }
 
 pub struct NadekodonClient {
@@ -275,6 +319,10 @@ impl NadekodonClient {
         headers
     }
 
+    fn correlation_id() -> String {
+        uuid::Uuid::new_v4().to_string()
+    }
+
     pub async fn test_connection(&self) -> Result<String> {
         let url = format!("{}/api/nadeko/system/status", self.base_url);
         let resp = self.client.get(&url).send().await?;
@@ -283,7 +331,8 @@ impl NadekodonClient {
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("nadekodon health check failed {}: {}", status, text);
         }
-        let data: NadekodonApiStatusResponse = resp.json().await?;
+        let raw = resp.text().await.unwrap_or_default();
+        let data: NadekodonApiStatusResponse = decode_body(&raw)?;
         Ok(data.version)
     }
 
@@ -301,13 +350,15 @@ impl NadekodonClient {
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("nadekodon login failed {}: {}", status, text);
         }
-        let data: NadekodonApiLoginResponse = resp.json().await?;
+        let raw = resp.text().await.unwrap_or_default();
+        let data: NadekodonApiLoginResponse = decode_body(&raw)?;
         Ok(data.api_key)
     }
 
     pub async fn create_category(&self, name: &str, save_path: &str) -> Result<()> {
         let url = format!("{}/api/nadeko/download/categories", self.base_url);
         let body = NadekodonApiCategoryUpdateRequest {
+            id: Self::correlation_id(),
             categories: vec![NadekodonApiCategory {
                 name: name.to_string(),
                 save_path: Some(save_path.to_string()),
@@ -329,14 +380,19 @@ impl NadekodonClient {
     }
 
     pub async fn list_categories(&self) -> Result<Vec<NadekodonApiCategory>> {
-        let url = format!("{}/api/nadeko/download/categories", self.base_url);
+        let url = format!(
+            "{}/api/nadeko/download/categories?id={}",
+            self.base_url,
+            Self::correlation_id()
+        );
         let resp = self.client.get(&url).headers(self.headers()).send().await?;
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("nadekodon list categories failed {}: {}", status, text);
         }
-        let data: NadekodonApiCategoryListResponse = resp.json().await?;
+        let raw = resp.text().await.unwrap_or_default();
+        let data: NadekodonApiCategoryListResponse = decode_body(&raw)?;
         Ok(data.categories)
     }
 
@@ -353,12 +409,13 @@ impl NadekodonClient {
         url: &str,
         dest: &str,
         is_ytdl: bool,
-        video_format: Option<String>,
-        audio_format: Option<String>,
+        video_format: Option<YtdlFormat>,
+        audio_format: Option<YtdlFormat>,
     ) -> Result<String> {
         let api_url = format!("{}/api/nadeko/download/create", self.base_url);
         let body = NadekodonApiCreateRequest {
-            url: url.to_string(),
+            id: Self::correlation_id(),
+            url: Some(url.to_string()),
             dest: dest.to_string(),
             video_format,
             audio_format,
@@ -380,9 +437,12 @@ impl NadekodonClient {
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("nadekodon create download failed {}: {}", status, text);
         }
-        let id_value: serde_json::Value = resp.json().await?;
-        let download_id = id_value["id"].as_str().unwrap_or_default().to_string();
-        Ok(download_id)
+        let raw = resp.text().await.unwrap_or_default();
+        let data: NadekodonApiCreateResponse = decode_body(&raw)?;
+        data.download_ids
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("nadekodon create: response contained no download ids"))
     }
 
     pub async fn list_downloads(
@@ -398,14 +458,16 @@ impl NadekodonClient {
             cats.push(TAWAI_CATEGORY.to_string());
         }
         let body = NadekodonApiListRequest {
-            offset_index: offset,
-            before: limit,
-            after: 0,
+            id: Self::correlation_id(),
+            offset_index: offset as u32,
+            before: 0,
+            after: limit.saturating_sub(1) as u32,
             statuses,
+            tag: None,
             categories: cats,
             search_query: None,
-            sort_by: 0,
-            ascending: false,
+            sort_by: None,
+            ascending: None,
         };
         let resp = self
             .client
@@ -419,7 +481,10 @@ impl NadekodonClient {
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("nadekodon list downloads failed {}: {}", status, text);
         }
-        let data: NadekodonApiListResponse = resp.json().await?;
+        let raw = resp.text().await.unwrap_or_default();
+        let data: NadekodonApiListResponse = serde_json::from_str(&raw).map_err(|e| {
+            anyhow::anyhow!("nadekodon list decode failed: {e}; raw body: {raw}")
+        })?;
         let downloads = data
             .list
             .into_iter()
@@ -431,9 +496,9 @@ impl NadekodonClient {
                 total_size: g.total_size,
                 downloaded: g.downloaded,
                 uploaded: g.uploaded,
-                dspeed: g.dspeed,
+                dspeed: Some(g.dspeed),
                 state: g.state,
-                category: g.category,
+                category: None,
             })
             .collect();
         Ok(ListResponse {
@@ -456,7 +521,8 @@ impl NadekodonClient {
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("nadekodon get details failed {}: {}", status, text);
         }
-        let data: NadekodonApiDetailResponse = resp.json().await?;
+        let raw = resp.text().await.unwrap_or_default();
+        let data: NadekodonApiDetailResponse = decode_body(&raw)?;
         Ok(DetailsResponse {
             id: String::new(),
             download_id: data.id,
@@ -465,7 +531,7 @@ impl NadekodonClient {
             dest: data.dest,
             total_size: data.total_size,
             downloaded: data.downloaded,
-            speed: data.speed,
+            speed: Some(data.speed),
             state: data.state,
             part_info: data
                 .part_info
@@ -542,8 +608,8 @@ impl NadekodonClient {
         url: &str,
         dest: &str,
         is_ytdl: bool,
-        video_format: Option<String>,
-        audio_format: Option<String>,
+        video_format: Option<YtdlFormat>,
+        audio_format: Option<YtdlFormat>,
         pool: &DatabasePool,
         local_id: &str,
     ) -> Result<CreateResponse> {
@@ -563,7 +629,12 @@ impl NadekodonClient {
             sleep(Duration::from_secs(10)).await;
 
             let downloads = match self
-                .list_downloads(0, 100, vec![], vec![TAWAI_CATEGORY.to_string()])
+                .list_downloads(
+                    0,
+                    100,
+                    all_nadekodon_states(),
+                    vec![TAWAI_CATEGORY.to_string()],
+                )
                 .await
             {
                 Ok(r) => r.downloads,
@@ -592,8 +663,8 @@ impl NadekodonClient {
                 local_id,
                 tawai_state,
                 &err,
-                glance.downloaded,
-                glance.total_size,
+                glance.downloaded as i64,
+                glance.total_size.unwrap_or(0) as i64,
             )
             .await;
 
@@ -616,7 +687,10 @@ impl NadekodonClient {
 
     pub async fn search_ytdl(&self, query: &str) -> Result<YtdlSearchOutput> {
         let url = format!("{}/api/nadeko/utils/search-ytdl", self.base_url);
-        let body = serde_json::json!({ "query": query });
+        let body = NadekodonApiSearchRequest {
+            id: Self::correlation_id(),
+            query: query.to_string(),
+        };
         let resp = self
             .client
             .post(&url)
@@ -629,13 +703,17 @@ impl NadekodonClient {
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("nadekodon search-ytdl failed {}: {}", status, text);
         }
-        let data: YtdlSearchOutput = resp.json().await?;
+        let raw = resp.text().await.unwrap_or_default();
+        let data: YtdlSearchOutput = decode_body(&raw)?;
         Ok(data)
     }
 
     pub async fn query_ytdl(&self, url: &str) -> Result<YtdlQueryOutput> {
         let api_url = format!("{}/api/nadeko/utils/query-ytdl", self.base_url);
-        let body = serde_json::json!({ "url": url });
+        let body = NadekodonApiQueryRequest {
+            id: Self::correlation_id(),
+            url: url.to_string(),
+        };
         let resp = self
             .client
             .post(&api_url)
@@ -648,19 +726,22 @@ impl NadekodonClient {
             let text = resp.text().await.unwrap_or_default();
             anyhow::bail!("nadekodon query-ytdl failed {}: {}", status, text);
         }
-        let data: YtdlQueryOutput = resp.json().await?;
+        let raw = resp.text().await.unwrap_or_default();
+        let data: YtdlQueryOutput = decode_body(&raw)?;
         Ok(data)
     }
 
     pub async fn sync_downloads(&self, pool: &DatabasePool) -> Result<u32> {
         let resp = self
-            .list_downloads(0, 200, vec![], vec![TAWAI_CATEGORY.to_string()])
+            .list_downloads(
+                0,
+                200,
+                all_nadekodon_states(),
+                vec![TAWAI_CATEGORY.to_string()],
+            )
             .await?;
         let mut synced = 0;
         for glance in resp.downloads {
-            if glance.category.as_deref() != Some("tawai") {
-                continue;
-            }
             match db::download::get_download_by_source(pool, "nadekodon", &glance.id).await? {
                 Some(record) => {
                     let state = map_nadekodon_state(&glance.state);
@@ -674,8 +755,8 @@ impl NadekodonClient {
                         &record.id,
                         state,
                         &err,
-                        glance.downloaded,
-                        glance.total_size,
+                        glance.downloaded as i64,
+                        glance.total_size.unwrap_or(0) as i64,
                     )
                     .await?;
                     if is_terminal_nadekodon_state(&glance.state) {
@@ -703,12 +784,38 @@ impl NadekodonClient {
             .unwrap_or(true);
         let video_format = extra
             .as_ref()
-            .and_then(|e| e.get("video_format").and_then(|v| v.as_str()))
-            .map(String::from);
+            .and_then(|e| e.get("video_format").and_then(|v| serde_json::from_value(v.clone()).ok()))
+            .or_else(|| {
+                extra
+                    .as_ref()
+                    .and_then(|e| e.get("video_format").and_then(|v| v.as_str()))
+                    .map(|fmt_id| YtdlFormat {
+                        format_id: fmt_id.to_string(),
+                        ext: String::new(),
+                        filesize: None,
+                        url: String::new(),
+                        vcodec: None,
+                        acodec: None,
+                        note: String::new(),
+                    })
+            });
         let audio_format = extra
             .as_ref()
-            .and_then(|e| e.get("audio_format").and_then(|v| v.as_str()))
-            .map(String::from);
+            .and_then(|e| e.get("audio_format").and_then(|v| serde_json::from_value(v.clone()).ok()))
+            .or_else(|| {
+                extra
+                    .as_ref()
+                    .and_then(|e| e.get("audio_format").and_then(|v| v.as_str()))
+                    .map(|fmt_id| YtdlFormat {
+                        format_id: fmt_id.to_string(),
+                        ext: String::new(),
+                        filesize: None,
+                        url: String::new(),
+                        vcodec: None,
+                        acodec: None,
+                        note: String::new(),
+                    })
+            });
         self.create_download(url, dest, is_ytdl, video_format, audio_format)
             .await
     }
@@ -719,6 +826,11 @@ impl NadekodonClient {
         limit: u64,
         statuses: Vec<String>,
     ) -> Result<DlListResponse> {
+        let statuses = if statuses.is_empty() {
+            all_nadekodon_states()
+        } else {
+            statuses
+        };
         let resp = self
             .list_downloads(offset, limit, statuses, vec![TAWAI_CATEGORY.to_string()])
             .await?;
@@ -728,15 +840,15 @@ impl NadekodonClient {
             .map(|g| DlGlance {
                 id: g.id,
                 name: g.name,
-                total_size: g.total_size,
-                downloaded: g.downloaded,
+                total_size: g.total_size.unwrap_or(0) as i64,
+                downloaded: g.downloaded as i64,
                 state: map_nadekodon_state(&g.state).to_string(),
                 speed: g.dspeed,
             })
             .collect();
         Ok(DlListResponse {
             downloads: glances,
-            total_count: resp.total_count,
+            total_count: resp.total_count as i64,
         })
     }
 
@@ -788,12 +900,14 @@ impl NadekodonClient {
     }
 }
 
-pub async fn resolve_audio_url(
+/// Resolve the best audio format for an artist + title search via nadekodon's
+/// ytdl query. Shared by streaming and download.
+pub async fn resolve_audio_format(
     cfg: &AppConfig,
     http_client: &reqwest::Client,
     artist: &str,
     title: &str,
-) -> Result<Option<String>> {
+) -> Result<Option<YtdlFormat>> {
     let client = NadekodonClient::from_config(cfg, http_client)?;
     let search = client.search_ytdl(&format!("{} {}", artist, title)).await?;
     let first = match search.results.into_iter().next() {
@@ -805,29 +919,41 @@ pub async fn resolve_audio_url(
         return Ok(None);
     }
     let info = client.query_ytdl(info_url).await?;
-    let best = info
+    Ok(info
         .items
         .into_iter()
         .flat_map(|i| i.audios)
         .max_by(|a, b| {
-            a.abr
-                .partial_cmp(&b.abr)
+            a.filesize
+                .partial_cmp(&b.filesize)
                 .unwrap_or(std::cmp::Ordering::Equal)
-        });
-    Ok(best.map(|f| f.url))
+        }))
+}
+
+pub async fn resolve_audio_url(
+    cfg: &AppConfig,
+    http_client: &reqwest::Client,
+    artist: &str,
+    title: &str,
+) -> Result<Option<String>> {
+    Ok(resolve_audio_format(cfg, http_client, artist, title)
+        .await?
+        .map(|f| f.url))
 }
 
 pub fn map_nadekodon_state(state: &str) -> &'static str {
     match state {
-        "Queued" | "Downloading" | "Running" => "downloading",
+        "Queued" | "Downloading" | "Running" | "Seeding" | "StalledDL" | "StalledUP" => {
+            "downloading"
+        }
         "Paused" => "paused",
         "Completed" => "completed",
         "Cancelled" => "cancelled",
-        "Errored" => "error",
+        "Error" => "error",
         _ => "downloading",
     }
 }
 
 pub fn is_terminal_nadekodon_state(state: &str) -> bool {
-    matches!(state, "Completed" | "Cancelled" | "Errored")
+    matches!(state, "Completed" | "Cancelled" | "Error")
 }

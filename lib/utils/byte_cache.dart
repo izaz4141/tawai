@@ -42,6 +42,12 @@ class ByteCache {
     return bytes;
   }
 
+  void put(String key, Uint8List bytes) {
+    _inflight.remove(key);
+    _cache[key] = bytes;
+    _evictIfNeeded();
+  }
+
   void invalidate(String key) {
     _cache.remove(key);
   }

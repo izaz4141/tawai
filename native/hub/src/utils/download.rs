@@ -72,6 +72,62 @@ pub async fn handle_download_create(context: Arc<AppContext>) {
             .as_deref()
             .and_then(|s| serde_json::from_str(s).ok());
 
+        let is_recommendation_direct =
+            source_type.starts_with("recommendation:") || source_type == "preview";
+        if is_recommendation_direct {
+            let db = context.db().await;
+            let pool = db.pool();
+            let cfg = context.cfg().await;
+            let result = if let Some(parser) =
+                tawai_core::libsources::get_parser(&source_type, context.client().clone(), pool)
+            {
+                parser
+                    .download(
+                        pool,
+                        &url,
+                        &dest,
+                        context.client(),
+                        &cfg,
+                        &user_id,
+                        msg.extra.as_deref(),
+                    )
+                    .await
+            } else {
+                tawai_core::libsources::recommendation::download(
+                    pool,
+                    &url,
+                    &dest,
+                    context.client(),
+                    &cfg,
+                    &user_id,
+                    msg.extra.as_deref(),
+                )
+                .await
+            };
+            match result {
+                Ok(download_id) => {
+                    signals::download::DownloadCreateResponse {
+                        id: req_id,
+                        download_id,
+                        success: true,
+                        error: None,
+                    }
+                    .send_signal_to_dart();
+                }
+                Err(e) => {
+                    logger::error(&format!("{source_type} create failed: {e}"));
+                    signals::download::DownloadCreateResponse {
+                        id: req_id,
+                        download_id: String::new(),
+                        success: false,
+                        error: Some(e.to_string()),
+                    }
+                    .send_signal_to_dart();
+                }
+            }
+            continue;
+        }
+
         let client = match client_from_type(&source_type, &context).await {
             Ok(c) => c,
             Err(e) => {

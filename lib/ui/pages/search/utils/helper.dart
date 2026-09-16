@@ -12,7 +12,7 @@ bool isLossless(String filename, int bitrate) {
   return false;
 }
 
-String? pickNadekodonFormat(
+Map<String, dynamic>? pickNadekodonFormat(
   List<Map<String, dynamic>> audioFormats,
   String quality,
 ) {
@@ -28,7 +28,7 @@ String? pickNadekodonFormat(
       candidates.sort(
         (a, b) => ((a['abr'] as num?) ?? 0).compareTo((b['abr'] as num?) ?? 0),
       );
-      return candidates.first['format_id'] as String?;
+      return candidates.first;
     case 'high':
       var filtered = candidates
           .where((f) => ((f['abr'] as num?) ?? 0) >= 320)
@@ -38,7 +38,7 @@ String? pickNadekodonFormat(
           (a, b) =>
               ((a['abr'] as num?) ?? 0).compareTo((b['abr'] as num?) ?? 0),
         );
-        return filtered.first['format_id'] as String?;
+        return filtered.first;
       }
       break;
     case 'medium':
@@ -50,7 +50,7 @@ String? pickNadekodonFormat(
           (a, b) =>
               ((a['abr'] as num?) ?? 0).compareTo((b['abr'] as num?) ?? 0),
         );
-        return filtered.first['format_id'] as String?;
+        return filtered.first;
       }
       break;
   }
@@ -58,7 +58,7 @@ String? pickNadekodonFormat(
   candidates.sort(
     (a, b) => ((b['abr'] as num?) ?? 0).compareTo((a['abr'] as num?) ?? 0),
   );
-  return candidates.first['format_id'] as String?;
+  return candidates.first;
 }
 
 SearchResultItem? pickBestMatch(

@@ -17,6 +17,9 @@ import 'package:tawai/ui/pages/search/modals/downloads_sheet.dart';
 import 'package:tawai/ui/pages/search/modals/nadekodon_format_picker.dart';
 import 'package:tawai/ui/pages/search/utils/helper.dart';
 
+String _sanitizeFilename(String name) =>
+    name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
+
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
 
@@ -211,7 +214,7 @@ class _SearchPageState extends State<SearchPage> {
         return;
       }
 
-      String? formatId;
+      Map<String, dynamic>? format;
       if (_autoDownloadEnabled) {
         final data = jsonDecode(infoJson) as Map<String, dynamic>;
         final items = data['items'] as List<dynamic>;
@@ -226,8 +229,8 @@ class _SearchPageState extends State<SearchPage> {
           }
         }
         final quality = SettingsManager.desiredAudioQuality.value;
-        formatId = pickNadekodonFormat(audioFormats, quality);
-        if (formatId == null && mounted) {
+        format = pickNadekodonFormat(audioFormats, quality);
+        if (format == null && mounted) {
           AppSnackBar.show(
             context,
             'No formats match quality "$quality" for ${entry.title ?? entry.filename}',
@@ -236,12 +239,12 @@ class _SearchPageState extends State<SearchPage> {
         }
       } else {
         setState(() => _loadingUrls.remove(entry.filename));
-        formatId = await showNadekodonFormatPicker(context, infoJson: infoJson);
+        format = await showNadekodonFormatPicker(context, infoJson: infoJson);
         if (!mounted) return;
-        if (formatId == null) return;
+        if (format == null) return;
       }
 
-      if (formatId == null) {
+      if (format == null) {
         if (mounted) {
           AppSnackBar.show(
             context,
@@ -253,12 +256,14 @@ class _SearchPageState extends State<SearchPage> {
       }
 
       final userId = SettingsManager.currentUserId.value ?? '';
+      final dest =
+          '${SettingsManager.downloadFolder.value}/${_sanitizeFilename(entry.title ?? entry.filename)}';
       await BridgeService.instance.create(
         'nadekodon',
-        entry.filename,
-        SettingsManager.downloadFolder.value,
+        entry.webpageUrl ?? entry.filename,
+        dest,
         userId,
-        extra: '{"audio_format": "$formatId"}',
+        extra: '{"audio_format": ${jsonEncode(format)}}',
       );
       if (mounted) {
         AppSnackBar.show(

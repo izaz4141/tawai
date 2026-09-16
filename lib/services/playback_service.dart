@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
@@ -9,6 +10,7 @@ import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/app.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/utils/bridge_service.dart';
+import 'package:tawai/utils/image_cache.dart';
 import 'package:tawai/utils/settings.dart' show SettingsManager;
 import 'package:tawai/utils/helper.dart';
 import 'package:tawai/utils/logger.dart';
@@ -268,8 +270,16 @@ class PlaybackService {
     final title = !fallback && tags!.title.isNotEmpty ? tags.title : withoutExt;
     final artist = fallback ? '' : tags.artist;
 
+    final id = 'external_${DateTime.now().microsecondsSinceEpoch}';
+    if (!fallback && tags.cover != null && tags.cover!.isNotEmpty) {
+      AppImageCache.instance.seedCover(
+        trackId: id,
+        bytes: Uint8List.fromList(tags.cover!),
+      );
+    }
+
     return TrackInfo(
-      id: 'external_${DateTime.now().microsecondsSinceEpoch}',
+      id: id,
       title: title,
       albumId: '',
       albumTitle: fallback ? '' : tags.album,

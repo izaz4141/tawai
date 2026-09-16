@@ -34,6 +34,38 @@ t.bitrate, t.mbid_recording, t.lyrics, t.track_gain, t.track_peak,
     }
 }
 
+pub async fn lookup_track_by_file_path(
+    pool: &SqlitePool,
+    file_path: &str,
+) -> Result<Option<TrackInfo>> {
+    let row = sqlx::query(
+        r#"SELECT t.id, t.title, t.album_id, COALESCE(a.title, 'Unknown Album') AS album_title,
+                  ar.name AS artists_string,
+                  t.track_num, t.disc_num, t.duration_secs, t.file_path, t.file_size,
+t.bitrate, t.mbid_recording, t.lyrics, t.track_gain, t.track_peak,
+                   a.date AS release_date,
+                   ar.mbid AS artist_mbid, a.mbid AS album_mbid,
+                   ls.name AS source, ls.source_type AS source_type, t.cover,
+                   (SELECT GROUP_CONCAT(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id) AS genres
+            FROM tracks t
+            JOIN albums a ON t.album_id = a.id
+            JOIN artists ar ON t.artist_id = ar.id
+            JOIN library_sources ls ON t.source_id = ls.id
+            WHERE t.file_path = ?"#,
+    )
+    .bind(file_path)
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some(row) = row {
+        let mut info = map_track_row(row);
+        info.artists = get_track_artists(pool, &info.id).await?;
+        Ok(Some(info))
+    } else {
+        Ok(None)
+    }
+}
+
 pub async fn list_tracks(pool: &SqlitePool, album_id: Option<&str>) -> Result<Vec<TrackInfo>> {
     let rows = if let Some(aid) = album_id {
         sqlx::query(

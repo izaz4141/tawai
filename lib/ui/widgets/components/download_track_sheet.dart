@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import 'package:tawai/src/bindings/bindings.dart';
@@ -17,6 +19,9 @@ void showTrackDownloadSheet(BuildContext context, TrackInfo track) {
     builder: (_) => _DownloadTrackSheet(track: track),
   );
 }
+
+String _sanitizeFilename(String name) =>
+    name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
 
 class _DownloadTrackSheet extends StatefulWidget {
   final TrackInfo track;
@@ -109,12 +114,12 @@ class _DownloadTrackSheetState extends State<_DownloadTrackSheet> {
         return;
       }
 
-      final formatId = await showNadekodonFormatPicker(
+      final format = await showNadekodonFormatPicker(
         context,
         infoJson: infoJson,
       );
 
-      if (!mounted || formatId == null) return;
+      if (!mounted || format == null) return;
 
       final userId = SettingsManager.currentUserId.value ?? '';
       if (userId.isEmpty) {
@@ -122,12 +127,30 @@ class _DownloadTrackSheetState extends State<_DownloadTrackSheet> {
         return;
       }
 
+      late String dest;
+      try {
+        final formattedName = await BridgeService.instance.formatNamingPreview(
+          pattern: SettingsManager.namingPattern.value,
+          title: widget.track.title,
+          artist: widget.track.artistsString,
+          albumArtist: widget.track.artistsString,
+          album: widget.track.albumTitle,
+          releaseDate: widget.track.releaseDate,
+          trackNumber: widget.track.trackNum ?? 0,
+          discNumber: widget.track.discNum ?? 1,
+        );
+        dest = '${SettingsManager.downloadFolder.value}/$formattedName';
+      } catch (_) {
+        dest =
+            '${SettingsManager.downloadFolder.value}/${_sanitizeFilename(widget.track.title)}';
+      }
+
       final result = await BridgeService.instance.create(
         'nadekodon',
-        entry.filename,
-        SettingsManager.downloadFolder.value,
+        entry.webpageUrl ?? entry.filename,
+        dest,
         userId,
-        extra: '{"audio_format": "$formatId"}',
+        extra: '{"audio_format": ${jsonEncode(format)}}',
       );
 
       if (mounted) {

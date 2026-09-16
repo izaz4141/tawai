@@ -18,22 +18,38 @@ pub async fn resolve_track_source(
     source_type: &str,
     url: &str,
     client: &reqwest::Client,
+    pool: Option<&DatabasePool>,
+    cfg: Option<&AppConfig>,
 ) -> (String, Option<Vec<(String, String)>>) {
-    if file_path.starts_with("recommendation://") {
-        return (String::new(), None);
-    }
-    if !file_path.starts_with("jellyfin://") {
+    let is_recommendation = file_path.starts_with("recommendation://");
+    if !file_path.starts_with("jellyfin://") && !is_recommendation {
         return (file_path.to_string(), None);
     }
-    let parser = match get_parser(source_type, client.clone()) {
-        Some(p) => p,
-        None => return (file_path.to_string(), None),
+    if is_recommendation && (pool.is_none() || cfg.is_none()) {
+        return (String::new(), None);
+    }
+    let Some(pool) = pool else {
+        return (file_path.to_string(), None);
     };
-    match parser.resolve_stream_url(file_path, url).await {
+    let Some(parser) = get_parser(source_type, client.clone(), pool) else {
+        return if is_recommendation {
+            (String::new(), None)
+        } else {
+            (file_path.to_string(), None)
+        };
+    };
+    match parser
+        .resolve_stream_url(pool, file_path, url, client, cfg)
+        .await
+    {
         Ok((url, headers)) => (url, Some(headers)),
         Err(e) => {
             logger::error(&format!("resolve stream URL failed: {}", e));
-            (file_path.to_string(), None)
+            if is_recommendation {
+                (String::new(), None)
+            } else {
+                (file_path.to_string(), None)
+            }
         }
     }
 }
@@ -66,7 +82,7 @@ async fn resolve_and_fallback(
         }
     };
     let (path, headers) =
-        resolve_track_source(&track.file_path, &source_type, &url, client).await;
+        resolve_track_source(&track.file_path, &source_type, &url, client, Some(pool), cfg).await;
 
     if !path.is_empty() {
         return PlayTrackResult {
@@ -77,6 +93,8 @@ async fn resolve_and_fallback(
         };
     }
 
+    // For recommendation tracks, the parser handles stream resolution via
+    // nadekodon. If it returned empty, fall back to a direct nadekodon lookup.
     match cfg {
         Some(cfg) => {
             match nadekodon::resolve_audio_url(cfg, client, &track.artists_string, &track.title)

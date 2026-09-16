@@ -20,6 +20,55 @@ pub async fn handle_create(
     Json(req): Json<DownloadCreateRequest>,
 ) -> impl IntoResponse {
     let cfg = state.context.cfg().await;
+
+    let is_recommendation_direct =
+        req.source_type.starts_with("recommendation:") || req.source_type == "preview";
+    if is_recommendation_direct {
+        let db = state.context.db().await;
+        let pool = db.pool();
+        let client = state.context.client().clone();
+        let result = if let Some(parser) =
+            tawai_core::libsources::get_parser(&req.source_type, client.clone(), pool)
+        {
+            parser
+                .download(
+                    pool,
+                    &req.url,
+                    &req.dest,
+                    &client,
+                    &cfg,
+                    &req.user_id,
+                    req.extra.as_deref(),
+                )
+                .await
+        } else {
+            tawai_core::libsources::recommendation::download(
+                pool,
+                &req.url,
+                &req.dest,
+                &client,
+                &cfg,
+                &req.user_id,
+                req.extra.as_deref(),
+            )
+            .await
+        };
+        return match result {
+            Ok(download_id) => Json(DownloadCreateResponse {
+                id: req.id,
+                download_id,
+                success: true,
+                error: None,
+            })
+            .into_response(),
+            Err(e) => (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+                .into_response(),
+        };
+    }
+
     let client = match DownloadClient::from_config(&req.source_type, &cfg, state.context.client()) {
         Ok(c) => c,
         Err(e) => {

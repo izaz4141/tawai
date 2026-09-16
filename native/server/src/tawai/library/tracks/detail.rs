@@ -45,11 +45,15 @@ pub async fn handle_get_track(
                 Ok(u) => u,
                 Err(_) => String::new(),
             };
+            let db = state.context.db().await;
+            let cfg = state.context.cfg().await;
             let (resolved_path, _headers) = resolve_track_source(
                 &t.file_path,
                 &source_type,
                 &url,
                 state.context.client(),
+                Some(db.pool()),
+                Some(&cfg),
             )
             .await;
             t.file_path = resolved_path;
