@@ -1,6 +1,7 @@
 pub mod jellyfin;
 pub mod local;
 pub mod recommendation;
+pub mod tawai;
 
 pub use recommendation::{ApiType, RecommendationSource, ALL_RECOMMENDATION_SOURCES};
 
@@ -64,6 +65,7 @@ impl SourceUrlResolver {
     }
 
     /// Probe whether a single URL is reachable, classified by URL scheme.
+    /// `tawai://` URLs are probed against the remote server's version endpoint;
     /// `file://` and bare path URLs are inspected on the local filesystem
     /// (strict containment when `file_path` is given); `http(s)://` URLs are
     /// probed with an HTTP HEAD against the server.
@@ -72,7 +74,14 @@ impl SourceUrlResolver {
         client: Option<&reqwest::Client>,
         file_path: Option<&str>,
     ) -> bool {
-        match reqwest::Url::parse(url.trim()) {
+        let trimmed = url.trim();
+        if trimmed.starts_with("tawai://") {
+            return match client {
+                Some(c) => tawai::url_reachable(c, trimmed).await,
+                None => false,
+            };
+        }
+        match reqwest::Url::parse(trimmed) {
             Ok(parsed) if parsed.scheme() == "file" => match parsed.to_file_path() {
                 Ok(path) => Self::local_check(&path, file_path),
                 Err(_) => false,
@@ -114,14 +123,21 @@ impl SourceUrlResolver {
 pub enum SourceParser {
     Local,
     Jellyfin(jellyfin::JellyfinParser),
+    Tawai(tawai::TawaiParser),
     Recommendation(RecommendationSource),
 }
 
 impl SourceParser {
-    pub async fn enumerate_paths(&self, pool: &DatabasePool, url: &str) -> Result<Vec<String>> {
+    pub async fn enumerate_paths(
+        &self,
+        pool: &DatabasePool,
+        url: &str,
+        urls: &[String],
+    ) -> Result<Vec<String>> {
         match self {
             SourceParser::Local => local::enumerate_paths(url),
             SourceParser::Jellyfin(p) => p.enumerate_paths(url).await,
+            SourceParser::Tawai(p) => p.enumerate_paths(pool, url, urls).await,
             SourceParser::Recommendation(rec) => recommendation::enumerate_paths(pool, rec).await,
         }
     }
@@ -130,11 +146,13 @@ impl SourceParser {
         &self,
         _pool: &DatabasePool,
         url: &str,
+        urls: &[String],
         paths: &[String],
     ) -> Result<Vec<ParsedTrack>> {
         match self {
             SourceParser::Local => local::scan_paths(url, paths),
             SourceParser::Jellyfin(p) => p.scan_paths(url, paths).await,
+            SourceParser::Tawai(p) => p.scan_paths(_pool, url, urls, paths).await,
             SourceParser::Recommendation(_) => Ok(vec![]),
         }
     }
@@ -143,11 +161,13 @@ impl SourceParser {
         &self,
         _pool: &DatabasePool,
         url: &str,
+        urls: &[String],
         file_path: &str,
     ) -> Result<ParsedTrack> {
         match self {
             SourceParser::Local => local::scan_file(Path::new(file_path)),
             SourceParser::Jellyfin(p) => p.scan_file(url, file_path).await,
+            SourceParser::Tawai(p) => p.scan_file(_pool, url, urls, file_path).await,
             SourceParser::Recommendation(_) => {
                 anyhow::bail!("recommendation sources are synced, not scanned")
             }
@@ -159,22 +179,36 @@ impl SourceParser {
         pool: &DatabasePool,
         file_path: &str,
         url: &str,
+        urls: &[String],
         client: &reqwest::Client,
         cfg: Option<&AppConfig>,
     ) -> Result<(String, Vec<(String, String)>)> {
         match self {
             SourceParser::Local => Ok((file_path.to_string(), vec![])),
             SourceParser::Jellyfin(p) => p.resolve_stream_url(file_path, url).await,
+            SourceParser::Tawai(p) => p.resolve_stream_url(pool, file_path, url, urls, client, cfg).await,
             SourceParser::Recommendation(_) => {
                 recommendation::resolve_stream_url(pool, file_path, client, cfg).await
             }
         }
     }
 
-    pub async fn delete(&self, pool: &DatabasePool, file_path: &str, url: &str) -> Result<()> {
+    /// Delete a track's materials. `mirror_remote` controls whether the delete
+    /// is propagated back to the source's remote server: user-initiated deletes
+    /// mirror (`true`), while automated scan-time duplicate cleanup must only
+    /// touch local state (`false`) so it can never destroy a shared remote copy.
+    pub async fn delete(
+        &self,
+        pool: &DatabasePool,
+        file_path: &str,
+        url: &str,
+        urls: &[String],
+        mirror_remote: bool,
+    ) -> Result<()> {
         match self {
             SourceParser::Local => local::delete_file(file_path),
-            SourceParser::Jellyfin(p) => p.delete(file_path, url).await,
+            SourceParser::Jellyfin(p) => p.delete(file_path, url, mirror_remote).await,
+            SourceParser::Tawai(p) => p.delete(pool, file_path, url, urls, mirror_remote).await,
             SourceParser::Recommendation(_) => {
                 recommendation::delete(pool, file_path).await
             }
@@ -192,7 +226,7 @@ impl SourceParser {
         extra: Option<&str>,
     ) -> Result<String> {
         match self {
-            SourceParser::Local | SourceParser::Jellyfin(_) => {
+            SourceParser::Local | SourceParser::Jellyfin(_) | SourceParser::Tawai(_) => {
                 anyhow::bail!("download not supported for this source type")
             }
             SourceParser::Recommendation(_) => {
@@ -211,7 +245,9 @@ impl SourceParser {
         user_name: &str,
     ) -> Result<(u32, u32)> {
         match self {
-            SourceParser::Local | SourceParser::Jellyfin(_) => Ok((0, 0)),
+            SourceParser::Local | SourceParser::Jellyfin(_) | SourceParser::Tawai(_) => {
+                Ok((0, 0))
+            }
             SourceParser::Recommendation(rec) => {
                 recommendation::sync(pool, rec, source_id, client, token, user_name).await
             }
@@ -229,15 +265,17 @@ pub fn get_parser(
         "jellyfin" => Some(SourceParser::Jellyfin(jellyfin::JellyfinParser::new(
             client,
         ))),
+        "tawai" => Some(SourceParser::Tawai(tawai::TawaiParser::new(client))),
         _ => RecommendationSource::from_key(source_type)
             .map(|rec| SourceParser::Recommendation(*rec)),
     }
 }
 
 /// Whether a source's media can be edited in place (rename, move, metadata
-/// edits). Today only `local` sources are editable; anything served remotely
-/// (jellyfin, recommendation sources) is not. Single source of truth for this
-/// decision across the codebase.
+/// edits). Local sources and `tawai` backups are real files on this machine, so
+/// they are editable; anything served remotely (jellyfin, recommendation
+/// sources) is not. Single source of truth for this decision across the
+/// codebase.
 pub fn is_editable(source_type: &str) -> bool {
-    source_type == "local"
+    matches!(source_type, "local" | "tawai")
 }

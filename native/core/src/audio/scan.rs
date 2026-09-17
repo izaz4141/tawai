@@ -251,7 +251,7 @@ pub async fn run_scan(
             }
         };
 
-        let paths = match parser.enumerate_paths(pool, &url).await {
+        let paths = match parser.enumerate_paths(pool, &url, &source.urls).await {
             Ok(p) => p,
             Err(e) => {
                 logger::error(&format!(
@@ -400,7 +400,7 @@ pub async fn run_scan(
                 }
             };
 
-            let mut track = match parser.scan_file(pool, &url, file_path).await {
+            let mut track = match parser.scan_file(pool, &url, &source.urls, file_path).await {
                 Ok(t) => t,
                 Err(e) => {
                     logger::warn(&format!("Failed to scan '{}': {}", file_path, e));
@@ -508,7 +508,9 @@ pub async fn run_scan(
                 }
                 InsertOutcome::Duplicate => {
                     // A surviving copy exists (or was kept this scan) — remove this file.
-                    match parser.delete(pool, file_path, &url).await {
+                    // `mirror_remote = false`: scan-time cleanup must never propagate
+                    // the delete back to a remote server's shared copy.
+                    match parser.delete(pool, file_path, &url, &source.urls, false).await {
                         Ok(()) => {
                             total_duplicates_deleted += 1;
                             logger::info(&format!("Deleted duplicate file '{}'", file_path));

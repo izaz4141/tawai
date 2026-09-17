@@ -23,6 +23,12 @@ class SettingsDiscoveryTab extends StatefulWidget {
 }
 
 String _redactUrl(String url) {
+  if (url.startsWith('tawai://')) {
+    final body = url.substring('tawai://'.length);
+    final hostPort = body.contains('@') ? body.split('@').first : body;
+    final sourceId = RegExp(r'source_id=([^&]*)').firstMatch(body)?.group(1);
+    return hostPort + (sourceId == null || sourceId.isEmpty ? '' : '?source_id=$sourceId');
+  }
   final at = url.lastIndexOf('@');
   return at >= 0 ? url.substring(at + 1) : url;
 }
@@ -226,15 +232,17 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
           ...List.generate(_sources.length, (i) {
             final source = _sources[i];
             final isLocal = source.sourceType == 'local';
+            final icon = isLocal
+                ? Icons.folder_outlined
+                : source.sourceType == 'tawai'
+                    ? Icons.cloud_outlined
+                    : Icons.dns_outlined;
             return Card(
               margin: EdgeInsets.symmetric(
                 vertical: AppTheme.spaceXS * AppTheme.spaceScale(context),
               ),
               child: ListTile(
-                leading: Icon(
-                  isLocal ? Icons.folder_outlined : Icons.dns_outlined,
-                  color: colorScheme.primary,
-                ),
+                leading: Icon(icon, color: colorScheme.primary),
                 title: Row(
                   children: [
                     Expanded(
@@ -609,6 +617,9 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
   late final TextEditingController _usernameCtrl;
   late final TextEditingController _passwordCtrl;
   late final TextEditingController _nameCtrl;
+  late final TextEditingController _tawaiServersCtrl;
+  late final TextEditingController _tawaiApiKeyCtrl;
+  late final TextEditingController _tawaiSourceIdCtrl;
 
   List<JellyfinLibraryInfo> _jellyfinLibraries = [];
   Set<String> _selectedLibraryIds = {};
@@ -622,9 +633,15 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
     _usernameCtrl = TextEditingController();
     _passwordCtrl = TextEditingController();
     _nameCtrl = TextEditingController();
+    _tawaiServersCtrl = TextEditingController();
+    _tawaiApiKeyCtrl = TextEditingController();
+    _tawaiSourceIdCtrl = TextEditingController();
     _urlCtrl.addListener(_onFieldChanged);
     _usernameCtrl.addListener(_onFieldChanged);
     _passwordCtrl.addListener(_onFieldChanged);
+    _tawaiServersCtrl.addListener(_onFieldChanged);
+    _tawaiApiKeyCtrl.addListener(_onFieldChanged);
+    _tawaiSourceIdCtrl.addListener(_onFieldChanged);
   }
 
   void _onFieldChanged() => setState(() {});
@@ -634,15 +651,26 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
     _urlCtrl.removeListener(_onFieldChanged);
     _usernameCtrl.removeListener(_onFieldChanged);
     _passwordCtrl.removeListener(_onFieldChanged);
+    _tawaiServersCtrl.removeListener(_onFieldChanged);
+    _tawaiApiKeyCtrl.removeListener(_onFieldChanged);
+    _tawaiSourceIdCtrl.removeListener(_onFieldChanged);
     _urlCtrl.dispose();
     _usernameCtrl.dispose();
     _passwordCtrl.dispose();
     _nameCtrl.dispose();
+    _tawaiServersCtrl.dispose();
+    _tawaiApiKeyCtrl.dispose();
+    _tawaiSourceIdCtrl.dispose();
     super.dispose();
   }
 
   String _schemeOf(String host) =>
       host.trim().startsWith('https') ? 'https' : 'http';
+
+  String _tawaiUrl(String raw, String key, String sid) {
+    final clean = raw.trim().replaceAll(RegExp(r'^https?://'), '');
+    return 'tawai://$clean@$key?source_id=$sid&scheme=${_schemeOf(raw)}';
+  }
 
   Future<void> _pickFolder() async {
     final path = await IOServiceFactory.create().getDirectoryPath(
@@ -658,26 +686,43 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
   }
 
   Future<void> _testConnection() async {
-    final hosts = _urlCtrl.text
-        .split(',')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
-    if (hosts.isEmpty) {
-      setState(() {
-        _testing = false;
-        _testError = 'No server URL provided';
-      });
-      return;
-    }
     final urls = <String>[];
-    final labels = <String>[];
-    for (final host in hosts) {
-      final clean = host.replaceAll(RegExp(r'^https?://'), '');
-      urls.add(
-        '${_schemeOf(host)}://${_usernameCtrl.text}:${_passwordCtrl.text}@$clean',
-      );
-      labels.add(clean);
+
+    if (_sourceType == 'tawai') {
+      final servers = _tawaiServersCtrl.text
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      if (servers.isEmpty) {
+        setState(() {
+          _testing = false;
+          _testError = 'No server address provided';
+        });
+        return;
+      }
+      for (final server in servers) {
+        urls.add(_tawaiUrl(server, _tawaiApiKeyCtrl.text, _tawaiSourceIdCtrl.text));
+      }
+    } else {
+      final hosts = _urlCtrl.text
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      if (hosts.isEmpty) {
+        setState(() {
+          _testing = false;
+          _testError = 'No server URL provided';
+        });
+        return;
+      }
+      for (final host in hosts) {
+        final clean = host.replaceAll(RegExp(r'^https?://'), '');
+        urls.add(
+          '${_schemeOf(host)}://${_usernameCtrl.text}:${_passwordCtrl.text}@$clean',
+        );
+      }
     }
 
     setState(() {
@@ -687,47 +732,48 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
       _selectedLibraryIds = {};
     });
 
-    final failed = <String>[];
-    var connected = false;
+    try {
+      final res = await BridgeService.instance.testSource(_sourceType, urls);
+      if (!mounted) return;
 
-    for (var i = 0; i < urls.length; i++) {
-      try {
-        final libraries = await BridgeService.instance.testJellyfinSource(urls[i]);
-        if (!mounted) return;
-        if (!connected) {
-          connected = true;
-          setState(() {
-            _jellyfinLibraries = libraries;
-            _selectedLibraryIds = libraries.map((l) => l.id).toSet();
-          });
-        }
-      } catch (_) {
-        failed.add(labels[i]);
-      }
-    }
+      final reachable = res.results.where((r) => r.reachable).toList();
+      final failed = res.results.where((r) => !r.reachable).toList();
 
-    if (!mounted) return;
-
-    if (!connected) {
       setState(() {
         _testing = false;
-        _testError = 'All servers unreachable: ${failed.join(', ')}';
+        if (res.libraries.isNotEmpty) {
+          _jellyfinLibraries = res.libraries;
+          _selectedLibraryIds = res.libraries.map((l) => l.id).toSet();
+        }
       });
-      AppSnackBar.show(
-        context,
-        'Unable to reach any server',
-        type: SnackType.error,
-      );
-    } else if (failed.isNotEmpty) {
-      setState(() => _testing = false);
-      AppSnackBar.show(
-        context,
-        '${failed.length} of ${urls.length} server(s) unreachable: '
-        '${failed.join(', ')}. Reachable servers act as fallbacks.',
-        type: SnackType.error,
-      );
-    } else {
-      setState(() => _testing = false);
+
+      if (failed.isNotEmpty) {
+        final failedLabels = failed.map((r) => _redactUrl(r.url)).toList();
+        if (reachable.isEmpty) {
+          setState(() {
+            _testError = 'All servers unreachable: ${failedLabels.join(', ')}';
+          });
+          AppSnackBar.show(
+            context,
+            'Unable to reach any server',
+            type: SnackType.error,
+          );
+        } else {
+          AppSnackBar.show(
+            context,
+            '${failed.length} of ${urls.length} server(s) unreachable: '
+            '${failedLabels.join(', ')}. Reachable servers act as fallbacks.',
+            type: SnackType.error,
+          );
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _testing = false;
+        _testError = e.toString();
+      });
+      AppSnackBar.show(context, e.toString(), type: SnackType.error);
     }
   }
 
@@ -742,6 +788,37 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
         _AddSourceResult(
           urls: [_localPath],
           name: name.isNotEmpty ? name : _localPath.split('/').last,
+          sourceType: _sourceType,
+        ),
+      );
+      if (mounted) Navigator.of(context).pop(results);
+      return;
+    }
+
+    if (_sourceType == 'tawai') {
+      final servers = _tawaiServersCtrl.text
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      if (servers.isEmpty) {
+        AppSnackBar.show(
+          context,
+          'Enter at least one server address',
+          type: SnackType.error,
+        );
+        return;
+      }
+      final urls = <String>[
+        _localPath,
+        for (final server in servers)
+          _tawaiUrl(server, _tawaiApiKeyCtrl.text, _tawaiSourceIdCtrl.text),
+      ];
+      final defaultName = servers.first.replaceAll(RegExp(r'^https?://'), '').split(':').first;
+      results.add(
+        _AddSourceResult(
+          urls: urls,
+          name: name.isNotEmpty ? name : defaultName,
           sourceType: _sourceType,
         ),
       );
@@ -794,16 +871,23 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
     if (mounted) Navigator.of(context).pop(results);
   }
 
-  bool get _fieldsFilled =>
+bool get _fieldsFilled =>
       _urlCtrl.text.isNotEmpty &&
       _usernameCtrl.text.isNotEmpty &&
       _passwordCtrl.text.isNotEmpty;
 
-  int _addCount() {
-    if (_sourceType == 'local') return 1;
-    if (_jellyfinLibraries.isNotEmpty) return _selectedLibraryIds.length;
-    return 1;
+bool get _tawaiFieldsFilled =>
+      _tawaiServersCtrl.text.isNotEmpty &&
+      _tawaiApiKeyCtrl.text.isNotEmpty &&
+      _tawaiSourceIdCtrl.text.isNotEmpty;
+
+int _addCount() {
+  if (_sourceType == 'local') return 1;
+  if (_sourceType != 'tawai' && _jellyfinLibraries.isNotEmpty) {
+    return _selectedLibraryIds.length;
   }
+  return 1;
+}
 
   @override
   Widget build(BuildContext context) {
@@ -812,7 +896,9 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
 
     final canSubmit = _sourceType == 'local'
         ? _localPath.isNotEmpty
-        : _fieldsFilled;
+        : _sourceType == 'tawai'
+            ? _localPath.isNotEmpty && _tawaiFieldsFilled
+            : _fieldsFilled;
 
     return AlertDialog(
       title: const Text('Add Library Source'),
@@ -834,6 +920,11 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                   value: 'jellyfin',
                   label: Text('Jellyfin'),
                   icon: Icon(Icons.dns_outlined),
+                ),
+                ButtonSegment(
+                  value: 'tawai',
+                  label: Text('Tawai'),
+                  icon: Icon(Icons.cloud_outlined),
                 ),
               ],
               selected: {_sourceType},
@@ -867,7 +958,7 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                   ),
                 ],
               ),
-            ] else ...[
+            ] else if (_sourceType == 'jellyfin') ...[
               TextField(
                 controller: _urlCtrl,
                 decoration: const InputDecoration(
@@ -962,6 +1053,102 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
                         }
                       });
                     },
+                  ),
+                ),
+              ],
+            ] else ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _localPath.isEmpty
+                          ? 'No backup folder selected'
+                          : _localPath,
+                      style: textTheme.bodySmall,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  SizedBox(
+                    width: AppTheme.spaceSM * AppTheme.spaceScale(context),
+                  ),
+                  OutlinedButton(
+                    onPressed: _pickFolder,
+                    child: const Text('Browse'),
+                  ),
+                ],
+              ),
+              SizedBox(
+                height: AppTheme.spaceMD * AppTheme.spaceScale(context),
+              ),
+              TextField(
+                controller: _tawaiServersCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Server Addresses',
+                  hintText: 'myhost:8080, 192.168.1.5:3000',
+                  helperText:
+                      'Multiple servers separated by commas. First is '
+                      'preferred (e.g. home network), the rest are used as '
+                      'fallbacks (e.g. remote network). Plain hosts default to '
+                      'http://; prefix https:// to use TLS.',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onChanged: (_) => _testError = null,
+              ),
+              SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
+              TextField(
+                controller: _tawaiApiKeyCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'API Key',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                obscureText: true,
+                onChanged: (_) => _testError = null,
+              ),
+              SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
+              TextField(
+                controller: _tawaiSourceIdCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Remote Source ID',
+                  helperText:
+                      'The library source id on the remote Tawai server.',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onChanged: (_) => _testError = null,
+              ),
+              SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _tawaiFieldsFilled ? _testConnection : null,
+                  icon: _testing
+                      ? SizedBox(
+                          width:
+                              AppTheme.spaceSM *
+                              2 *
+                              AppTheme.spaceScale(context),
+                          height:
+                              AppTheme.spaceSM *
+                              2 *
+                              AppTheme.spaceScale(context),
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.wifi_find),
+                  label: Text(_testing ? 'Testing...' : 'Test Connection'),
+                ),
+              ),
+              if (_testError != null) ...[
+                SizedBox(
+                  height: AppTheme.spaceSM * AppTheme.spaceScale(context),
+                ),
+                Text(
+                  _testError!,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.error,
                   ),
                 ),
               ],

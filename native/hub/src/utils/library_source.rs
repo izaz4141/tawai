@@ -8,6 +8,7 @@ use tawai_core::app_context::AppContext;
 use tawai_core::db::account::get_user_role;
 use tawai_core::db::library_source as core_libsrc;
 use tawai_core::libsources::jellyfin::JellyfinParser;
+use tawai_core::libsources::tawai;
 
 pub async fn handle_add_library_source(context: Arc<AppContext>) {
     use signals::library::*;
@@ -160,34 +161,65 @@ pub async fn handle_list_editable_sources(context: Arc<AppContext>) {
     }
 }
 
-pub async fn handle_test_jellyfin_source(context: Arc<AppContext>) {
+pub async fn handle_test_source(context: Arc<AppContext>) {
     use signals::discovery::*;
-    let receiver = TestJellyfinSourceRequest::get_dart_signal_receiver();
+    let receiver = TestSourceRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let client = context.client().clone();
-        let parser = JellyfinParser::new(client);
-
-        match parser.fetch_libraries(&msg.url).await {
-            Ok(libraries) => {
-                let infos: Vec<JellyfinLibraryInfo> =
-                    libraries.into_iter().map(Into::into).collect();
-                TestJellyfinSourceResponse {
-                    id: msg.id,
-                    libraries: infos,
-                    error: None,
-                }
-                .send_signal_to_dart();
-            }
-            Err(e) => {
-                logger::error(&format!("test_jellyfin_source failed: {}", e));
-                TestJellyfinSourceResponse {
+        let resp = match msg.source_type.as_str() {
+            "tawai" => {
+                let results = tawai::test_remote_urls(&client, &msg.urls).await;
+                TestSourceResponse {
                     id: msg.id,
                     libraries: vec![],
-                    error: Some(e.to_string()),
+                    results: results.into_iter().map(Into::into).collect(),
+                    error: None,
                 }
-                .send_signal_to_dart();
             }
-        }
+            _ => {
+                // Default: treat as jellyfin for backwards compatibility.
+                let parser = JellyfinParser::new(client);
+                let mut libraries = Vec::new();
+                let mut results = Vec::new();
+                let mut last_err: Option<String> = None;
+                for url in &msg.urls {
+                    match parser.fetch_libraries(url).await {
+                        Ok(libs) => {
+                            if libraries.is_empty() {
+                                libraries = libs;
+                            }
+                            results.push(ServerTestResult {
+                                url: url.clone(),
+                                reachable: true,
+                                track_count: 0,
+                                error: None,
+                            });
+                        }
+                        Err(e) => {
+                            last_err = Some(e.to_string());
+                            results.push(ServerTestResult {
+                                url: url.clone(),
+                                reachable: false,
+                                track_count: 0,
+                                error: Some(e.to_string()),
+                            });
+                        }
+                    }
+                }
+                let error = if libraries.is_empty() {
+                    last_err
+                } else {
+                    None
+                };
+                TestSourceResponse {
+                    id: msg.id,
+                    libraries: libraries.into_iter().map(Into::into).collect(),
+                    results: results.into_iter().map(Into::into).collect(),
+                    error,
+                }
+            }
+        };
+        resp.send_signal_to_dart();
     }
 }

@@ -84,7 +84,7 @@ pub async fn handle_read_file_tags(
     )
 )]
 pub async fn handle_write_file_tags(
-    _state: State<SharedState>,
+    state: State<SharedState>,
     Json(body): Json<WriteFileTagsRequest>,
 ) -> impl IntoResponse {
     let path = std::path::PathBuf::from(&body.path);
@@ -104,12 +104,26 @@ pub async fn handle_write_file_tags(
     };
 
     match audio::tags::write_audio_tags(&path, &tag) {
-        Ok(()) => Json(WriteFileTagsResponse {
-            id: body.id,
-            success: true,
-            error: None,
-        })
-        .into_response(),
+        Ok(()) => {
+            // Mirror the edit to the remote tawai source (best-effort).
+            let db = state.context.db().await;
+            if let Err(e) = tawai_core::libsources::tawai::mirror_tag_write(
+                db.pool(),
+                &path.to_string_lossy(),
+                &tag,
+                state.context.client(),
+            )
+            .await
+            {
+                tawai_core::utils::logger::warn(&format!("tawai tag mirror failed: {e}"));
+            }
+            Json(WriteFileTagsResponse {
+                id: body.id,
+                success: true,
+                error: None,
+            })
+            .into_response()
+        }
         Err(e) => {
             tawai_core::utils::logger::error(&format!("write_audio_tags failed: {e}"));
             (

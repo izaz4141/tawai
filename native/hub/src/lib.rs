@@ -88,9 +88,7 @@ async fn main() {
     spawn(utils::library_source::handle_list_editable_sources(
         context.clone(),
     ));
-    spawn(utils::library_source::handle_test_jellyfin_source(
-        context.clone(),
-    ));
+    spawn(utils::library_source::handle_test_source(context.clone()));
 
     // Playlist track handlers
     spawn(utils::library::handle_get_playlist_tracks(context.clone()));

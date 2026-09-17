@@ -243,3 +243,28 @@ pub async fn auth_query(
 
     Ok(next.run(req).await)
 }
+
+/// Auth for audio streaming endpoints: accepts an `X-API-Key` header
+/// (libsource / API-key clients) or falls back to the `?token=<JWT>` query
+/// param used by web players. Unlike [`auth_query`], does not guarantee a
+/// [`QueryToken`] extension, so handlers relying on it must stay on
+/// [`auth_query`].
+pub async fn auth_stream(
+    State(state): State<SharedState>,
+    req: Request<Body>,
+    next: Next,
+) -> Result<impl IntoResponse, StatusCode> {
+    if let Some(key) = req.headers().get("X-API-Key")
+        && let Ok(k) = key.to_str()
+        && let Ok(user_id) = resolve_api_key_user(&state, k).await
+    {
+        let mut req = req;
+        req.extensions_mut().insert(user_id);
+        return Ok(next.run(req).await);
+    }
+
+    match auth_query(State(state), req, next).await {
+        Ok(resp) => Ok(resp.into_response()),
+        Err(e) => Err(e),
+    }
+}

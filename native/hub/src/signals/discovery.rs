@@ -35,19 +35,6 @@ impl From<core_disc::DiscoveryRecording> for DiscoveryRecording {
     }
 }
 
-#[derive(Deserialize, DartSignal)]
-pub struct TestJellyfinSourceRequest {
-    pub id: String,
-    pub url: String,
-}
-
-#[derive(Serialize, RustSignal)]
-pub struct TestJellyfinSourceResponse {
-    pub id: String,
-    pub libraries: Vec<JellyfinLibraryInfo>,
-    pub error: Option<String>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]
 pub struct JellyfinLibraryInfo {
     pub id: String,
@@ -61,6 +48,44 @@ impl From<core_disc::JellyfinLibraryInfo> for JellyfinLibraryInfo {
             name: s.name,
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Library source connection test (type-dispatched)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]
+pub struct ServerTestResult {
+    pub url: String,
+    pub reachable: bool,
+    pub track_count: i64,
+    pub error: Option<String>,
+}
+
+impl From<core_disc::ServerTestResult> for ServerTestResult {
+    fn from(s: core_disc::ServerTestResult) -> Self {
+        Self {
+            url: s.url,
+            reachable: s.reachable,
+            track_count: s.track_count,
+            error: s.error,
+        }
+    }
+}
+
+#[derive(Deserialize, DartSignal)]
+pub struct TestSourceRequest {
+    pub id: String,
+    pub source_type: String,
+    pub urls: Vec<String>,
+}
+
+#[derive(Serialize, RustSignal)]
+pub struct TestSourceResponse {
+    pub id: String,
+    pub libraries: Vec<JellyfinLibraryInfo>,
+    pub results: Vec<ServerTestResult>,
+    pub error: Option<String>,
 }
 
 // ---------------------------------------------------------------------------

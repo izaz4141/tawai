@@ -17,12 +17,15 @@ pub async fn resolve_track_source(
     file_path: &str,
     source_type: &str,
     url: &str,
+    urls: &[String],
     client: &reqwest::Client,
     pool: Option<&DatabasePool>,
     cfg: Option<&AppConfig>,
 ) -> (String, Option<Vec<(String, String)>>) {
     let is_recommendation = file_path.starts_with("recommendation://");
-    if !file_path.starts_with("jellyfin://") && !is_recommendation {
+    // `tawai` tracks are local backup files, but resolve through the parser so
+    // the stream falls back to the remote server when the backup is missing.
+    if !file_path.starts_with("jellyfin://") && !is_recommendation && source_type != "tawai" {
         return (file_path.to_string(), None);
     }
     if is_recommendation && (pool.is_none() || cfg.is_none()) {
@@ -39,7 +42,7 @@ pub async fn resolve_track_source(
         };
     };
     match parser
-        .resolve_stream_url(pool, file_path, url, client, cfg)
+        .resolve_stream_url(pool, file_path, url, urls, client, cfg)
         .await
     {
         Ok((url, headers)) => (url, Some(headers)),
@@ -81,8 +84,16 @@ async fn resolve_and_fallback(
             };
         }
     };
-    let (path, headers) =
-        resolve_track_source(&track.file_path, &source_type, &url, client, Some(pool), cfg).await;
+    let (path, headers) = resolve_track_source(
+        &track.file_path,
+        &source_type,
+        &url,
+        &urls,
+        client,
+        Some(pool),
+        cfg,
+    )
+    .await;
 
     if !path.is_empty() {
         return PlayTrackResult {

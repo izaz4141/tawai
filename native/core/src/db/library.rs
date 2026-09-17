@@ -542,7 +542,7 @@ pub async fn delete_track(
             .resolve(&source.urls, Some(client), Some(&track.file_path))
             .await
         {
-            parser.delete(pool, &track.file_path, &url).await?;
+            parser.delete(pool, &track.file_path, &url, &source.urls, true).await?;
         }
     }
 

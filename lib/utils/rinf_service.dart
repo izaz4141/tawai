@@ -768,17 +768,22 @@ class RinfService {
     return signal.message.success;
   }
 
-  Future<List<JellyfinLibraryInfo>> testJellyfinSource(String url) async {
+  Future<({List<JellyfinLibraryInfo> libraries, List<ServerTestResult> results})>
+      testSource(String sourceType, List<String> urls) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
-    final stream = TestJellyfinSourceResponse.rustSignalStream.where(
+    final stream = TestSourceResponse.rustSignalStream.where(
       (s) => s.message.id == id,
     );
-    TestJellyfinSourceRequest(id: id, url: url).sendSignalToRust();
+    TestSourceRequest(id: id, sourceType: sourceType, urls: urls)
+        .sendSignalToRust();
     final signal = await stream.first;
     if (signal.message.error != null && signal.message.error!.isNotEmpty) {
       throw Exception(signal.message.error);
     }
-    return signal.message.libraries;
+    return (
+      libraries: signal.message.libraries,
+      results: signal.message.results,
+    );
   }
 
   // ---------------------------------------------------------------------------

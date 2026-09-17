@@ -39,18 +39,30 @@ pub struct JellyfinLibraryInfo {
     pub name: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ServerTestResult {
+    pub url: String,
+    pub reachable: bool,
+    pub track_count: i64,
+    pub error: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize, ToSchema)]
-pub struct TestJellyfinSourceRequest {
+pub struct TestSourceRequest {
     #[serde(default)]
     pub id: String,
-    pub url: String,
+    #[serde(default)]
+    pub source_type: String,
+    #[serde(default)]
+    pub urls: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct TestJellyfinSourceResponse {
+pub struct TestSourceResponse {
     #[serde(default)]
     pub id: String,
     pub libraries: Vec<JellyfinLibraryInfo>,
+    pub results: Vec<ServerTestResult>,
     pub error: Option<String>,
 }
 

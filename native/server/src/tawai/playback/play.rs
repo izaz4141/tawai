@@ -13,6 +13,8 @@ use tawai_core::{
 use crate::security::create_jwt_response;
 use crate::server::SharedState;
 
+use super::{TrackAccess, user_can_read_track};
+
 #[utoipa::path(
     post,
     path = "/api/tawai/playback/play",
@@ -20,6 +22,7 @@ use crate::server::SharedState;
     security(("ApiKeyAuth" = [])),
     responses(
         (status = 200, description = "Playable track response"),
+        (status = 403, description = "Forbidden: user cannot access the track's source"),
         (status = 404, description = "Track not found")
     )
 )]
@@ -43,6 +46,28 @@ pub async fn handle_play_track(
         Some(&cfg),
     )
     .await;
+
+    // Only mint playback tokens for tracks the requesting user may read, so
+    // unauthorized access surfaces here (403) instead of a broken stream later.
+    if let Some(tid) = &result.resolved_track_id {
+        match user_can_read_track(db.pool(), &user_id, tid).await {
+            TrackAccess::Allowed => {}
+            TrackAccess::NoSource | TrackAccess::NoUser => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({"error": "Track not found"})),
+                )
+                    .into_response();
+            }
+            TrackAccess::Denied => {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(serde_json::json!({"error": "User does not have access to this track"})),
+                )
+                    .into_response();
+            }
+        }
+    }
 
     // Native clients authenticate via `X-API-Key` and can play DASH (ExoPlayer
     // / libmpv). Web clients authenticate via JWT cookie and must fall back to

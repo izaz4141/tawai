@@ -605,11 +605,12 @@ class BridgeService {
     return RinfService.instance.removeLibrarySource(userId, sourceId);
   }
 
-  Future<List<JellyfinLibraryInfo>> testJellyfinSource(String url) async {
+  Future<({List<JellyfinLibraryInfo> libraries, List<ServerTestResult> results})>
+      testSource(String sourceType, List<String> urls) async {
     if (_isRemote) {
-      return APIService.instance.testJellyfinSource(url);
+      return APIService.instance.testSource(sourceType, urls);
     }
-    return RinfService.instance.testJellyfinSource(url);
+    return RinfService.instance.testSource(sourceType, urls);
   }
 
   // ---------------------------------------------------------------------------

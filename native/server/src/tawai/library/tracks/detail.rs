@@ -51,6 +51,7 @@ pub async fn handle_get_track(
                 &t.file_path,
                 &source_type,
                 &url,
+                &urls,
                 state.context.client(),
                 Some(db.pool()),
                 Some(&cfg),

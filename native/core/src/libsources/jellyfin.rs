@@ -203,7 +203,13 @@ impl JellyfinParser {
     }
 
     /// Deletes the item from the Jellyfin server (`DELETE /Items/{id}`).
-    pub async fn delete(&self, file_path: &str, source_url: &str) -> Result<()> {
+    /// Only mirrors the delete when `mirror_remote` is set: user-initiated
+    /// deletes pass `true`, while scan-time duplicate cleanup passes `false`
+    /// so a scan can never remove items from the shared Jellyfin library.
+    pub async fn delete(&self, file_path: &str, source_url: &str, mirror_remote: bool) -> Result<()> {
+        if !mirror_remote {
+            return Ok(());
+        }
         let item_id = file_path
             .strip_prefix("jellyfin://")
             .context("Invalid Jellyfin file path: missing jellyfin:// prefix")?;

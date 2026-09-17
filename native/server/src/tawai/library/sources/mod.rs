@@ -21,6 +21,6 @@ pub fn create_sources_router() -> Router<SharedState> {
         .route("/", get(list::handle_list_sources))
         .route("/", post(add::handle_add_source))
         .route("/editable", get(editable::handle_list_editable_sources))
-        .route("/test-jellyfin", post(test::handle_test_jellyfin_source))
+        .route("/test", post(test::handle_test_source))
         .route("/{id}", delete(remove::handle_remove_source))
 }

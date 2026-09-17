@@ -16,6 +16,8 @@ use tower_http::services::ServeFile;
 use crate::security::QueryToken;
 use crate::server::SharedState;
 
+use super::{TrackAccess, user_can_read_track};
+
 fn dash_content_type(name: &str) -> &'static str {
     if name.ends_with(".mpd") {
         "application/dash+xml"
@@ -171,6 +173,7 @@ fn parse_segment_number(file: &str) -> Option<u32> {
     responses(
         (status = 200, description = "DASH manifest or segment (supports HTTP range requests)"),
         (status = 206, description = "Partial content for byte-range requests"),
+        (status = 403, description = "Forbidden: user cannot access the track's source"),
         (status = 404, description = "Track, manifest or segment not found"),
         (status = 416, description = "Requested byte range not satisfiable")
     )
@@ -178,6 +181,7 @@ fn parse_segment_number(file: &str) -> Option<u32> {
 pub async fn handle_dash_file(
     State(state): State<SharedState>,
     Extension(QueryToken(token)): Extension<QueryToken>,
+    Extension(user_id): Extension<String>,
     Path((id, file)): Path<(String, String)>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
@@ -198,6 +202,14 @@ pub async fn handle_dash_file(
         || track.file_path.starts_with("https://")
     {
         return (StatusCode::NOT_FOUND, Body::empty()).into_response();
+    }
+
+    match user_can_read_track(db.pool(), &user_id, &id).await {
+        TrackAccess::Allowed => {}
+        TrackAccess::NoSource | TrackAccess::NoUser => {
+            return (StatusCode::NOT_FOUND, Body::empty()).into_response()
+        }
+        TrackAccess::Denied => return (StatusCode::FORBIDDEN, Body::empty()).into_response(),
     }
 
     if !is_valid_dash_file(&file) {
