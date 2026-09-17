@@ -368,10 +368,37 @@ class SettingsManager {
     return _ioService.getTorrentPersistencePath();
   }
 
-  static Future<void> regenerateApiKey(String userId) async {
+  static Future<String> getCurrentUserApiKey() async {
+    final user = currentUser.value;
+    if (user == null || user.id.isEmpty) return '';
+    if (user.apiKey.isNotEmpty) return user.apiKey;
+    if (PlatformService().isRemote) return '';
+    try {
+      final users = await BridgeService.instance.listUsers();
+      for (final u in users) {
+        if (u.id != user.id || u.apiKey.isEmpty) continue;
+        currentUser.value = User(
+          id: user.id,
+          username: user.username,
+          displayName: user.displayName,
+          passwordHash: user.passwordHash,
+          apiKey: u.apiKey,
+          role: user.role,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        );
+        return u.apiKey;
+      }
+    } catch (e) {
+      log('Failed to fetch current user API key: $e', isError: true);
+    }
+    return '';
+  }
+
+  static Future<String?> regenerateApiKey(String userId) async {
     if (PlatformService().isRemote) {
-      await APIService.instance.regenerateApiKey();
-      return;
+      final ok = await APIService.instance.regenerateApiKey();
+      return ok ? (currentUser.value?.apiKey ?? '') : null;
     }
     final configDir = await _ioService.getConfigDir();
     final masterKeyPath = '$configDir/$masterKeyFile';
@@ -390,7 +417,23 @@ class SettingsManager {
       final encodedKey = await x0(result.masterKey);
       await _ioService.writeFile(masterKeyPath, encodedKey);
       await _ioService.setPermissions(masterKeyPath, '0600');
+
+      final user = currentUser.value;
+      if (user != null && result.decryptedApiKey.isNotEmpty) {
+        currentUser.value = User(
+          id: user.id,
+          username: user.username,
+          displayName: user.displayName,
+          passwordHash: user.passwordHash,
+          apiKey: result.decryptedApiKey,
+          role: user.role,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        );
+      }
+      return result.decryptedApiKey;
     }
+    return null;
   }
 
   static Future<void> saveSlskdApiKey(String plainKey) async {
