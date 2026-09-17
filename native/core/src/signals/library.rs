@@ -66,7 +66,7 @@ pub struct ListTracksRequest {
     pub album_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ListTracksResponse {
     pub id: String,
     pub tracks: Vec<TrackInfo>,
@@ -487,8 +487,9 @@ pub struct ListLibrarySourcesRequest {
     pub user_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ListLibrarySourcesResponse {
+    #[serde(default)]
     pub id: String,
     pub sources: Vec<LibrarySourceInfo>,
 }

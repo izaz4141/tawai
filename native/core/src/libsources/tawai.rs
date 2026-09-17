@@ -13,8 +13,10 @@ use crate::db::library_source;
 use crate::db::user_settings;
 use crate::db::database::DatabasePool;
 use crate::libsources::{local, ParsedTrack};
-use crate::signals::discovery::ServerTestResult;
-use crate::signals::library::TrackInfo;
+use crate::signals::discovery::{JellyfinLibraryInfo, ServerTestResult};
+use crate::signals::library::{
+    ListLibrarySourcesResponse, ListTracksResponse, TrackInfo,
+};
 use crate::tools::rename::{dest_from_root, DEFAULT_PATTERN};
 use crate::utils::config::AppConfig;
 use crate::utils::logger;
@@ -25,10 +27,13 @@ use crate::utils::logger;
 pub struct RemoteConn {
     pub http_base: String,
     pub api_key: String,
-    pub source_id: String,
+    /// Set when the URL carries `?source_id=<id>` (scan/stream time). The
+    /// connection-test flow lists sources from a server before the id is known.
+    pub source_id: Option<String>,
 }
 
 /// Parse `tawai://host:port@api_key?source_id=<id>&scheme=http|https` URL.
+/// `source_id` is optional; `scheme` is required.
 pub fn parse_tawai_url(url: &str) -> Result<RemoteConn> {
     let without = url
         .strip_prefix("tawai://")
@@ -56,12 +61,10 @@ pub fn parse_tawai_url(url: &str) -> Result<RemoteConn> {
             _ => {}
         }
     }
-    let source_id =
-        source_id.context("tawai URL must contain ?source_id=<id>")?;
     let scheme = scheme.context("tawai URL must contain ?scheme=http|https")?;
     Ok(RemoteConn {
         http_base: format!("{}://{}", scheme, hostport),
-        api_key: api_key.to_string(),
+        api_key,
         source_id,
     })
 }
@@ -108,11 +111,15 @@ pub async fn url_reachable(client: &reqwest::Client, url: &str) -> bool {
 }
 
 /// Test a set of `tawai://` URLs (home + remote fallbacks). Each URL is
-/// verified for reachability and that the API key + source_id grant access.
+/// verified with a single request: list the library sources accessible to the
+/// API key. A successful list doubles as both the reachability probe and the
+/// API key validity check. The first successful server's library sources are
+/// returned so the caller can pick which to add.
 pub async fn test_remote_urls(
     client: &reqwest::Client,
     urls: &[String],
-) -> Vec<ServerTestResult> {
+) -> (Vec<JellyfinLibraryInfo>, Vec<ServerTestResult>) {
+    let mut libraries = Vec::new();
     let mut results = Vec::with_capacity(urls.len());
     for url in urls {
         let conn = match parse_tawai_url(url) {
@@ -127,31 +134,58 @@ pub async fn test_remote_urls(
                 continue;
             }
         };
-        if !is_remote_reachable(client, &conn).await {
-            results.push(ServerTestResult {
-                url: url.clone(),
-                reachable: false,
-                track_count: 0,
-                error: Some("server unreachable".into()),
-            });
-            continue;
-        }
-        match fetch_remote_tracks(client, &conn).await {
-            Ok(tracks) => results.push(ServerTestResult {
-                url: url.clone(),
-                reachable: true,
-                track_count: tracks.len() as i64,
-                error: None,
-            }),
+        match fetch_remote_libraries(client, &conn).await {
+            Ok(list) => {
+                if libraries.is_empty() {
+                    libraries = list;
+                }
+                results.push(ServerTestResult {
+                    url: url.clone(),
+                    reachable: true,
+                    track_count: 0,
+                    error: None,
+                });
+            }
             Err(e) => results.push(ServerTestResult {
                 url: url.clone(),
                 reachable: false,
                 track_count: 0,
-                error: Some(format!("auth or source_id not valid: {e}")),
+                error: Some(e.to_string()),
             }),
         }
     }
-    results
+    (libraries, results)
+}
+
+/// List the library sources accessible to the API key on the remote server.
+pub async fn fetch_remote_libraries(
+    client: &reqwest::Client,
+    conn: &RemoteConn,
+) -> Result<Vec<JellyfinLibraryInfo>> {
+    let url = format!("{}/api/tawai/library/sources", conn.http_base);
+    let resp = client
+        .get(&url)
+        .header("X-API-Key", &conn.api_key)
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        anyhow::bail!(
+            "tawai list sources failed with status {}: {}",
+            status,
+            text
+        );
+    }
+    let data: ListLibrarySourcesResponse = resp.json().await?;
+    Ok(data
+        .sources
+        .into_iter()
+        .map(|s| JellyfinLibraryInfo {
+            id: s.id,
+            name: s.name,
+        })
+        .collect())
 }
 
 /// Pick the first reachable tawai:// URL from the list.
@@ -177,14 +211,6 @@ fn local_root(urls: &[String]) -> Option<&str> {
 }
 
 // ── Remote track list fetch + cache ───────────────────────────────────
-
-/// Deserializable mirror of `ListTracksResponse` (which only derives Serialize).
-#[derive(serde::Deserialize)]
-struct TawaiListResponse {
-    #[allow(dead_code)]
-    id: String,
-    tracks: Vec<TrackInfo>,
-}
 
 #[derive(Debug, Clone)]
 pub struct RemoteTrack {
@@ -227,9 +253,10 @@ pub async fn fetch_remote_tracks(
     client: &reqwest::Client,
     conn: &RemoteConn,
 ) -> Result<Vec<RemoteTrack>> {
+    let source_id = conn.source_id.as_deref().context("source_id required")?;
     let url = format!(
         "{}/api/tawai/library/tracks/by-source/{}",
-        conn.http_base, conn.source_id
+        conn.http_base, source_id
     );
     let resp = client
         .get(&url)
@@ -239,7 +266,7 @@ pub async fn fetch_remote_tracks(
     if !resp.status().is_success() {
         anyhow::bail!("tawai list tracks failed with status {}", resp.status());
     }
-    let body: TawaiListResponse = resp.json().await?;
+    let body: ListTracksResponse = resp.json().await?;
     Ok(body.tracks.into_iter().map(RemoteTrack::from).collect())
 }
 
@@ -269,7 +296,7 @@ pub async fn cached_remote_tracks(
     client: &reqwest::Client,
     conn: &RemoteConn,
 ) -> Result<Vec<RemoteTrack>> {
-    let key = format!("{}|{}", conn.http_base, conn.source_id);
+    let key = format!("{}|{}", conn.http_base, conn.source_id.as_deref().unwrap_or(""));
     {
         let cache = REMOTE_CACHE.lock().unwrap();
         if let Some(entry) = cache.get(&key) {
@@ -612,7 +639,7 @@ mod tests {
             .expect("should parse");
         assert_eq!(conn.http_base, "http://myhost:8080");
         assert_eq!(conn.api_key, "");
-        assert_eq!(conn.source_id, "abc123");
+        assert_eq!(conn.source_id.as_deref(), Some("abc123"));
     }
 
     #[test]
@@ -623,7 +650,7 @@ mod tests {
         .expect("should parse");
         assert_eq!(conn.http_base, "http://192.168.1.5:3000");
         assert_eq!(conn.api_key, "secretkey");
-        assert_eq!(conn.source_id, "xyz");
+        assert_eq!(conn.source_id.as_deref(), Some("xyz"));
     }
 
     #[test]
@@ -633,7 +660,7 @@ mod tests {
                 .expect("should parse");
         assert_eq!(conn.http_base, "https://myhost:8443");
         assert_eq!(conn.api_key, "");
-        assert_eq!(conn.source_id, "abc123");
+        assert_eq!(conn.source_id.as_deref(), Some("abc123"));
     }
 
     #[test]
@@ -656,7 +683,26 @@ mod tests {
 
     #[test]
     fn parse_tawai_url_missing_source_id() {
-        assert!(parse_tawai_url("tawai://host:8080@key&scheme=http").is_err());
+        let conn = parse_tawai_url("tawai://host:8080@key?scheme=http")
+            .expect("should parse");
+        assert_eq!(conn.http_base, "http://host:8080");
+        assert_eq!(conn.api_key, "key");
+        assert_eq!(conn.source_id, None);
+    }
+
+    #[test]
+    fn parse_tawai_url_source_id_optional() {
+        let conn = parse_tawai_url("tawai://host:8080@key?scheme=https")
+            .expect("should parse");
+        assert_eq!(conn.http_base, "https://host:8080");
+        assert_eq!(conn.api_key, "key");
+        assert_eq!(conn.source_id, None);
+
+        let conn = parse_tawai_url(
+            "tawai://host:8080@key?source_id=abc&scheme=https",
+        )
+        .expect("should parse");
+        assert_eq!(conn.source_id.as_deref(), Some("abc"));
     }
 
     #[test]

@@ -169,10 +169,10 @@ pub async fn handle_test_source(context: Arc<AppContext>) {
         let client = context.client().clone();
         let resp = match msg.source_type.as_str() {
             "tawai" => {
-                let results = tawai::test_remote_urls(&client, &msg.urls).await;
+                let (libraries, results) = tawai::test_remote_urls(&client, &msg.urls).await;
                 TestSourceResponse {
                     id: msg.id,
-                    libraries: vec![],
+                    libraries: libraries.into_iter().map(Into::into).collect(),
                     results: results.into_iter().map(Into::into).collect(),
                     error: None,
                 }

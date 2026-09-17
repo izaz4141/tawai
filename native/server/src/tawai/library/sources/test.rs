@@ -26,8 +26,8 @@ pub async fn handle_test_source(
 
     let (libraries, results, error) = match payload.source_type.as_str() {
         "tawai" => {
-            let results = tawai::test_remote_urls(&client, &payload.urls).await;
-            (vec![], results, None)
+            let (libraries, results) = tawai::test_remote_urls(&client, &payload.urls).await;
+            (libraries, results, None)
         }
         "jellyfin" => {
             let parser = JellyfinParser::new(client);
