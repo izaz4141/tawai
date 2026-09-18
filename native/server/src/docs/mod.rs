@@ -35,6 +35,7 @@ use security::SecurityModifier;
         crate::tawai::library::tracks::detail::handle_get_track,
         crate::tawai::library::tracks::source::handle_list_tracks_by_source,
         crate::tawai::library::tracks::mbid::handle_get_album_mbid,
+        crate::tawai::library::tracks::import::handle_import_track,
         crate::tawai::settings::global::handle_get_global_settings,
         crate::tawai::settings::global::handle_update_global_settings,
         crate::tawai::settings::user::handle_get_all_user_settings,

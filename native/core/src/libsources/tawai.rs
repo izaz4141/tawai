@@ -15,7 +15,7 @@ use crate::db::database::DatabasePool;
 use crate::libsources::{local, ParsedTrack};
 use crate::signals::discovery::{JellyfinLibraryInfo, ServerTestResult};
 use crate::signals::library::{
-    ListLibrarySourcesResponse, ListTracksResponse, TrackInfo,
+    LibrarySourceInfo, ListLibrarySourcesResponse, ListTracksResponse, TrackInfo,
 };
 use crate::tools::rename::{dest_from_root, DEFAULT_PATTERN};
 use crate::utils::config::AppConfig;
@@ -253,6 +253,111 @@ fn local_root(urls: &[String]) -> Option<&str> {
     urls.iter()
         .find(|u| !u.starts_with("tawai://"))
         .map(|s| s.as_str())
+}
+
+/// Upload an already-downloaded audio file to a remote tawai server, which
+/// places it into the given source under the server's own naming pattern and
+/// rescans the source so it appears in the remote library. Used by the client
+/// recommendation-download flow for `tawai` destinations so the file lands in
+/// the actual remote library dir rather than only the local backup.
+pub async fn upload_to_remote(
+    client: &reqwest::Client,
+    conn: &RemoteConn,
+    file_bytes: Vec<u8>,
+    filename: &str,
+) -> Result<()> {
+    let source_id = conn
+        .source_id
+        .as_deref()
+        .context("tawai upload requires source_id in the remote URL")?;
+    let url = format!("{}/api/tawai/library/tracks/import", conn.http_base);
+    let part = reqwest::multipart::Part::bytes(file_bytes)
+        .file_name(filename.to_string())
+        .mime_str("application/octet-stream")?;
+    let form = reqwest::multipart::Form::new()
+        .text("source_id", source_id.to_string())
+        .text("name", filename.to_string())
+        .part("file", part);
+    let resp = client
+        .post(&url)
+        .header("X-API-Key", &conn.api_key)
+        .multipart(form)
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        anyhow::bail!("tawai import failed with status {status}: {text}");
+    }
+    Ok(())
+}
+
+/// Place an already-downloaded audio file into an editable library source on
+/// this machine (the "actual remote dir" from the importing client's point of
+/// view): stage the bytes, tag the file, move it into the source root under
+/// the configured naming pattern, and rescan the source so the track shows up
+/// immediately. Returns the final placed path.
+pub async fn import_into_source(
+    pool: &DatabasePool,
+    source: &LibrarySourceInfo,
+    file_bytes: &[u8],
+    filename: &str,
+    client: &reqwest::Client,
+    master_key: &str,
+) -> Result<String> {
+    if !crate::libsources::is_editable(&source.source_type) {
+        anyhow::bail!(
+            "cannot import into non-editable source: {}",
+            source.source_type
+        );
+    }
+    let root = local_root(&source.urls).context("import source has no local directory root")?;
+
+    let temp_name = Path::new(filename)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|n| !n.is_empty())
+        .unwrap_or("import.mp3");
+    let temp_path = std::env::temp_dir().join(temp_name);
+    tokio::fs::write(&temp_path, file_bytes).await?;
+
+    let (tag, _, _, _) = crate::audio::tags::read_audio_tags(&temp_path)?;
+    let pattern = user_settings::get_setting(pool, DEFAULT_USERNAME, "identify_naming_pattern")
+        .await
+        .filter(|s| !s.is_empty());
+
+    let final_path = crate::tools::rename::move_file_into_source(
+        &temp_path,
+        root,
+        pattern.as_deref(),
+        &tag,
+    )?;
+
+    if let Err(e) = crate::audio::tags::write_audio_tags(&final_path, &tag) {
+        logger::warn(&format!(
+            "failed to write tags to imported file {}: {}",
+            final_path.display(),
+            e
+        ));
+    }
+
+    let scan_result = crate::audio::scan::run_scan(
+        pool,
+        client.clone(),
+        std::slice::from_ref(source),
+        false,
+        None,
+        master_key,
+    )
+    .await;
+    if let Some(err) = scan_result.error {
+        logger::warn(&format!(
+            "failed to scan source '{}' after import: {}",
+            source.name, err
+        ));
+    }
+
+    Ok(final_path.to_string_lossy().to_string())
 }
 
 // ── Remote track list fetch + cache ───────────────────────────────────

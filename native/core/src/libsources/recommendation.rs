@@ -207,19 +207,22 @@ pub async fn download(
             .ok_or_else(|| anyhow::anyhow!("track not found for {}", file_path))?,
     };
 
-    // The destination must be a local library source root — we cannot place
+    // The destination must be an editable library source root — we cannot place
     // downloaded files onto jellyfin or recommendation sources.
     let dest = Path::new(dest_path);
-    let local_sources = library_source::list_all_sources(pool, master_key).await?;
-    let local_source = local_sources.iter().find(|s| {
-        s.source_type == "local"
+    let editable_sources = library_source::list_all_sources(pool, master_key).await?;
+    let local_source = editable_sources.iter().find(|s| {
+        crate::libsources::is_editable(&s.source_type)
             && s.urls.iter().any(|u| {
+                if s.source_type == "tawai" && u.starts_with("tawai://") {
+                    return false;
+                }
                 let root = Path::new(u);
                 dest == root || dest.starts_with(root)
             })
     });
     let Some(local_source) = local_source else {
-        anyhow::bail!("destination must be a local library source: {dest_path}");
+        anyhow::bail!("destination must be an editable library source: {dest_path}");
     };
 
     let format = resolve_audio_format(cfg, client, &track.artists_string, &track.title)
@@ -284,6 +287,24 @@ pub async fn download(
         .and_then(|n| n.to_str())
         .unwrap_or(&final_str)
         .to_string();
+
+    // For tawai destinations the file must land in the actual remote library
+    // dir too — push the finished local backup up to the remote server. A
+    // backup-only download is not acceptable, so remove the local file if the
+    // remote import fails.
+    if local_source.source_type == "tawai" {
+        let conn = crate::libsources::tawai::pick_remote(&local_source.urls, client)
+            .await
+            .ok_or_else(|| anyhow::anyhow!("no reachable tawai server for destination"))?;
+        let bytes = tokio::fs::read(&final_path).await?;
+        if let Err(e) =
+            crate::libsources::tawai::upload_to_remote(client, &conn, bytes, &fname).await
+        {
+            let _ = std::fs::remove_file(&final_path);
+            anyhow::bail!("failed to add download to remote tawai library: {e}");
+        }
+    }
+
     let download_id = crate::db::download::insert_download(
         pool,
         user_id,

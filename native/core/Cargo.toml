@@ -9,7 +9,7 @@ path = "src/lib.rs"
 [dependencies]
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "1.50.0", features = ["full"] }
-reqwest = { version = "0.12.23", features = ["json", "stream", "gzip", "brotli", "deflate", "http2", "rustls-tls", "blocking", "cookies"] }
+reqwest = { version = "0.12.23", features = ["json", "stream", "gzip", "brotli", "deflate", "http2", "rustls-tls", "multipart", "blocking", "cookies"] }
 uuid = { version = "1.18.0", features = ["v4"] }
 time = { version = "0.3.41", features = ["macros", "formatting", "parsing", "local-offset"] }
 futures = "0.3.31"
