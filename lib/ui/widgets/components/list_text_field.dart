@@ -13,6 +13,8 @@ class ListTextField extends StatefulWidget {
   final String? autofillHints;
   final TextInputType? keyboardType;
   final bool enabled;
+  final List<Widget>? suffixWidgets;
+  final TextEditingController? controller;
 
   const ListTextField({
     super.key,
@@ -25,6 +27,8 @@ class ListTextField extends StatefulWidget {
     this.autofillHints,
     this.keyboardType,
     this.enabled = true,
+    this.suffixWidgets,
+    this.controller,
   });
 
   @override
@@ -38,15 +42,18 @@ class _ListTextFieldState extends State<ListTextField> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(
-      text: widget.isObscured ? '' : widget.valueListenable.value,
-    );
+    _controller = widget.controller ??
+        TextEditingController(
+          text: widget.isObscured ? '' : widget.valueListenable.value,
+        );
     _obscureNotifier = ValueNotifier<bool>(widget.isObscured);
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    if (widget.controller == null) {
+      _controller.dispose();
+    }
     _obscureNotifier.dispose();
     super.dispose();
   }
@@ -129,6 +136,8 @@ class _ListTextFieldState extends State<ListTextField> {
                                 }
                               },
                             ),
+                          if (widget.suffixWidgets != null)
+                            ...widget.suffixWidgets!,
                         ],
                       )
                     : null,

@@ -46,17 +46,25 @@ String _schemeOfRaw(String raw) =>
 
 class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
   List<LibrarySourceInfo> _sources = [];
+  bool _lbTokenValid = false;
+  bool _lbTokenTesting = false;
+  late final TextEditingController _lbTokenController;
 
   @override
   void initState() {
     super.initState();
+    _lbTokenController = TextEditingController();
     _loadSources();
+    if (SettingsManager.listenbrainzToken.value.isNotEmpty) {
+      unawaited(_validateLbToken(showFeedback: false));
+    }
     ScanService.instance.acquire();
     ScanService.instance.isScanning.addListener(_onScanStateChanged);
   }
 
   @override
   void dispose() {
+    _lbTokenController.dispose();
     ScanService.instance.isScanning.removeListener(_onScanStateChanged);
     ScanService.instance.release();
     super.dispose();
@@ -104,6 +112,49 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
   Future<void> _syncRecommendations(String includedKeys) async {
     await BridgeService.instance.syncRecs(includedKeys: includedKeys);
     if (mounted) await _loadSources();
+  }
+
+  Future<void> _validateLbToken({bool showFeedback = true}) async {
+    final typed = _lbTokenController.text.trim();
+    final token = typed.isNotEmpty
+        ? typed
+        : SettingsManager.listenbrainzToken.value.trim();
+    if (token.isEmpty) {
+      setState(() => _lbTokenValid = false);
+      if (showFeedback) {
+        AppSnackBar.show(
+          context,
+          'Enter a ListenBrainz token first',
+          type: SnackType.error,
+        );
+      }
+      return;
+    }
+    setState(() => _lbTokenTesting = true);
+    final result = await BridgeService.instance.validateLBToken(token);
+    if (!mounted) return;
+    setState(() {
+      _lbTokenTesting = false;
+      _lbTokenValid = result.valid;
+    });
+    if (showFeedback) {
+      if (result.valid) {
+        final user = result.userName != null && result.userName!.isNotEmpty
+            ? ' — ${result.userName}'
+            : '';
+        AppSnackBar.show(
+          context,
+          'ListenBrainz token is valid$user',
+          type: SnackType.success,
+        );
+      } else {
+        AppSnackBar.show(
+          context,
+          'Invalid ListenBrainz token: ${result.message}',
+          type: SnackType.error,
+        );
+      }
+    }
   }
 
   Future<void> _showForceRescanDialog() async {
@@ -525,28 +576,47 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
 
         SizedBox(height: AppTheme.spaceXL * AppTheme.spaceScale(context)),
 
-        // Discovery section
-        const SectionHeader(title: 'Discovery', leading: Icon(Icons.explore)),
+        // ListenBrainz section
+        const SectionHeader(title: 'ListenBrainz', leading: Icon(Icons.explore)),
         SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
         ListTextField(
           title: 'ListenBrainz Token',
           subtitle: 'Required for scrobbling and music discovery',
           valueListenable: SettingsManager.listenbrainzToken,
+          controller: _lbTokenController,
           isObscured: true,
-          onConfirm: (value) => SettingsManager.saveUserSetting(
-            SettingsManager.listenbrainzToken,
-            'listenbrainz_token',
-            value,
-          ),
+          onConfirm: (value) {
+            SettingsManager.saveUserSetting(
+              SettingsManager.listenbrainzToken,
+              'listenbrainz_token',
+              value,
+            );
+            setState(() => _lbTokenValid = false);
+            unawaited(_validateLbToken(showFeedback: false));
+          },
+          suffixWidgets: [
+            IconButton(
+              icon: _lbTokenTesting
+                  ? SizedBox(
+                      width:
+                          AppTheme.spaceSM *
+                          2 *
+                          AppTheme.spaceScale(context),
+                      height:
+                          AppTheme.spaceSM *
+                          2 *
+                          AppTheme.spaceScale(context),
+                      child: const CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.bolt),
+              iconSize: AppTheme.iconSM * AppTheme.iconScale(context),
+              tooltip: 'Test token',
+              color: _lbTokenValid ? colorScheme.primary : null,
+              onPressed: _lbTokenTesting ? null : _validateLbToken,
+            ),
+          ],
         ),
         SizedBox(height: AppTheme.spaceLG * AppTheme.spaceScale(context)),
-
-        // Recommendation sources as library sources
-        const SectionHeader(
-          title: 'Recommendation Sources',
-          leading: Icon(Icons.explore),
-        ),
-        SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
         Text(
           'Select ListenBrainz recommendation types to include as library '
           'sources. Their tracks will appear in the library and can be '
@@ -555,11 +625,28 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
             color: colorScheme.onSurfaceVariant,
           ),
         ),
+        if (!_lbTokenValid ||
+            SettingsManager.listenbrainzToken.value.trim().isEmpty) ...[
+          SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
+          Text(
+            'Enter a valid ListenBrainz token above to enable recommendations.',
+            style: textTheme.bodySmall?.copyWith(
+              color: colorScheme.error,
+            ),
+          ),
+        ],
         SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-        ValueListenableBuilder<String>(
-          valueListenable: SettingsManager.includedRecommendations,
-          builder: (context, raw, _) {
+        ListenableBuilder(
+          listenable: Listenable.merge([
+            SettingsManager.includedRecommendations,
+            SettingsManager.listenbrainzToken,
+          ]),
+          builder: (context, _) {
+            final raw = SettingsManager.includedRecommendations.value;
             final selected = raw.split(',').where((s) => s.isNotEmpty).toSet();
+            final enabled =
+                _lbTokenValid &&
+                SettingsManager.listenbrainzToken.value.trim().isNotEmpty;
             return Column(
               children: [
                 for (final src in RecommendationSource.all)
@@ -569,20 +656,23 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                     controlAffinity: ListTileControlAffinity.leading,
                     title: Text(src.displayName, style: textTheme.bodyMedium),
                     value: selected.contains(src.key),
-                    onChanged: (checked) {
-                      final updated = Set<String>.from(selected);
-                      if (checked == true) {
-                        updated.add(src.key);
-                      } else {
-                        updated.remove(src.key);
-                      }
-                      SettingsManager.saveUserSetting(
-                        SettingsManager.includedRecommendations,
-                        'included_recommendations',
-                        updated.join(','),
-                      );
-                      unawaited(_syncRecommendations(updated.join(',')));
-                    },
+                    enabled: enabled,
+                    onChanged: enabled
+                        ? (checked) {
+                            final updated = Set<String>.from(selected);
+                            if (checked == true) {
+                              updated.add(src.key);
+                            } else {
+                              updated.remove(src.key);
+                            }
+                            SettingsManager.saveUserSetting(
+                              SettingsManager.includedRecommendations,
+                              'included_recommendations',
+                              updated.join(','),
+                            );
+                            unawaited(_syncRecommendations(updated.join(',')));
+                          }
+                        : null,
                   ),
               ],
             );
