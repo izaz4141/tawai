@@ -65,7 +65,7 @@ pub async fn sync_recs(params: SyncRecsParams<'_>) -> SyncRecsResult {
         .filter(|s| !s.is_empty())
         .collect();
 
-    let all_sources = match library_source::list_all_sources(params.pool).await {
+    let all_sources = match library_source::list_all_sources(params.pool, params.master_key).await {
         Ok(s) => s,
         Err(e) => {
             return SyncRecsResult {

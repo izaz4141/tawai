@@ -22,6 +22,7 @@ pub async fn handle_play_track(context: Arc<AppContext>) {
         let msg = signal_pack.message;
         let db = context.db().await;
         let cfg = context.cfg().await;
+        let mk = context.master_key.read().await.clone();
 
         let result = resolve_playable_track(
             db.pool(),
@@ -32,6 +33,7 @@ pub async fn handle_play_track(context: Arc<AppContext>) {
             msg.track.as_ref().map(|t| t.album_title.as_str()),
             msg.track.as_ref().and_then(|t| t.mbid_recording.as_deref()),
             Some(&cfg),
+            &mk,
         )
         .await;
 

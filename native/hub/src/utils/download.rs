@@ -78,6 +78,7 @@ pub async fn handle_download_create(context: Arc<AppContext>) {
             let db = context.db().await;
             let pool = db.pool();
             let cfg = context.cfg().await;
+            let mk = context.master_key.read().await.clone();
             let result = if let Some(parser) =
                 tawai_core::libsources::get_parser(&source_type, context.client().clone(), pool)
             {
@@ -90,6 +91,7 @@ pub async fn handle_download_create(context: Arc<AppContext>) {
                         &cfg,
                         &user_id,
                         msg.extra.as_deref(),
+                        &mk,
                     )
                     .await
             } else {
@@ -101,6 +103,7 @@ pub async fn handle_download_create(context: Arc<AppContext>) {
                     &cfg,
                     &user_id,
                     msg.extra.as_deref(),
+                    &mk,
                 )
                 .await
             };

@@ -29,7 +29,8 @@ pub async fn handle_delete_track(
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     let client = state.context.client().clone();
-    match library::delete_track(db.pool(), &client, &user_id, &id).await {
+    let mk = state.context.master_key.read().await.clone();
+    match library::delete_track(db.pool(), &client, &user_id, &id, &mk).await {
         Ok(()) => StatusCode::OK.into_response(),
         Err(e) => {
             tawai_core::utils::logger::error(&format!("delete track failed: {}", e));

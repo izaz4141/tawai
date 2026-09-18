@@ -57,6 +57,7 @@ pub async fn handle_stream_track(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
+    let mk = state.context.master_key.read().await.clone();
 
     let track = match library::lookup_track(db.pool(), &id).await {
         Ok(Some(t)) => t,
@@ -75,7 +76,7 @@ pub async fn handle_stream_track(
         return (StatusCode::NOT_FOUND, Body::empty()).into_response();
     }
 
-    match user_can_read_track(db.pool(), &user_id, &id).await {
+    match user_can_read_track(db.pool(), &user_id, &id, &mk).await {
         TrackAccess::Allowed => {}
         TrackAccess::NoSource | TrackAccess::NoUser => {
             return (StatusCode::NOT_FOUND, Body::empty()).into_response()

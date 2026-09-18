@@ -147,8 +147,9 @@ impl RecommendationSource {
 pub async fn enumerate_paths(
     pool: &DatabasePool,
     source: &RecommendationSource,
+    master_key: &str,
 ) -> Result<Vec<String>> {
-    let all_sources = library_source::list_all_sources(pool).await?;
+    let all_sources = library_source::list_all_sources(pool, master_key).await?;
     let source_id = all_sources
         .iter()
         .find(|s| s.source_type == source.source_type)
@@ -198,6 +199,7 @@ pub async fn download(
     cfg: &AppConfig,
     user_id: &str,
     extra: Option<&str>,
+    master_key: &str,
 ) -> Result<String> {
     let track = match library::lookup_track_by_file_path(pool, file_path).await? {
         Some(track) => track,
@@ -208,7 +210,7 @@ pub async fn download(
     // The destination must be a local library source root — we cannot place
     // downloaded files onto jellyfin or recommendation sources.
     let dest = Path::new(dest_path);
-    let local_sources = library_source::list_all_sources(pool).await?;
+    let local_sources = library_source::list_all_sources(pool, master_key).await?;
     let local_source = local_sources.iter().find(|s| {
         s.source_type == "local"
             && s.urls.iter().any(|u| {
@@ -309,6 +311,7 @@ pub async fn download(
         std::slice::from_ref(local_source),
         false,
         None,
+        master_key,
     )
     .await;
     if let Some(err) = scan_result.error {
@@ -354,6 +357,10 @@ fn parse_extra_track(file_path: &str, extra: Option<&str>) -> Option<TrackInfo> 
         source: String::new(),
         source_type: String::new(),
         genres: vec![],
+        file_hash: None,
+        sample_rate: None,
+        acoust_id_fingerprint: None,
+        acoust_id: None,
     })
 }
 

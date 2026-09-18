@@ -133,12 +133,15 @@ impl SourceParser {
         pool: &DatabasePool,
         url: &str,
         urls: &[String],
+        master_key: &str,
     ) -> Result<Vec<String>> {
         match self {
             SourceParser::Local => local::enumerate_paths(url),
             SourceParser::Jellyfin(p) => p.enumerate_paths(url).await,
             SourceParser::Tawai(p) => p.enumerate_paths(pool, url, urls).await,
-            SourceParser::Recommendation(rec) => recommendation::enumerate_paths(pool, rec).await,
+            SourceParser::Recommendation(rec) => {
+                recommendation::enumerate_paths(pool, rec, master_key).await
+            }
         }
     }
 
@@ -224,14 +227,17 @@ impl SourceParser {
         cfg: &AppConfig,
         user_id: &str,
         extra: Option<&str>,
+        master_key: &str,
     ) -> Result<String> {
         match self {
             SourceParser::Local | SourceParser::Jellyfin(_) | SourceParser::Tawai(_) => {
                 anyhow::bail!("download not supported for this source type")
             }
             SourceParser::Recommendation(_) => {
-                recommendation::download(pool, file_path, dest_path, client, cfg, user_id, extra)
-                    .await
+                recommendation::download(
+                    pool, file_path, dest_path, client, cfg, user_id, extra, master_key,
+                )
+                .await
             }
         }
     }

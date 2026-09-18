@@ -16,6 +16,7 @@ pub async fn handle_add_library_source(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
+        let mk = context.master_key.read().await.clone();
 
         let result = core_libsrc::add_source(
             db.pool(),
@@ -24,6 +25,7 @@ pub async fn handle_add_library_source(context: Arc<AppContext>) {
             &msg.name,
             &msg.source_type,
             "all",
+            &mk,
         )
         .await;
 
@@ -89,6 +91,7 @@ pub async fn handle_list_library_sources(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
+        let mk = context.master_key.read().await.clone();
         let role = match get_user_role(db.pool(), &msg.user_id).await {
             Ok(Some(r)) => r,
             _ => {
@@ -100,7 +103,7 @@ pub async fn handle_list_library_sources(context: Arc<AppContext>) {
                 continue;
             }
         };
-        let result = core_libsrc::list_accessible_sources(db.pool(), &msg.user_id, &role).await;
+        let result = core_libsrc::list_accessible_sources(db.pool(), &msg.user_id, &role, &mk).await;
 
         match result {
             Ok(sources) => {
@@ -128,6 +131,7 @@ pub async fn handle_list_editable_sources(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
+        let mk = context.master_key.read().await.clone();
         let role = match get_user_role(db.pool(), &msg.user_id).await {
             Ok(Some(r)) => r,
             _ => {
@@ -139,7 +143,7 @@ pub async fn handle_list_editable_sources(context: Arc<AppContext>) {
                 continue;
             }
         };
-        let result = core_libsrc::list_editable_sources(db.pool(), &msg.user_id, &role).await;
+        let result = core_libsrc::list_editable_sources(db.pool(), &msg.user_id, &role, &mk).await;
 
         match result {
             Ok(sources) => {

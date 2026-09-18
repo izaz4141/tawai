@@ -787,6 +787,10 @@ fn map_track_row(row: sqlx::sqlite::SqliteRow) -> TrackInfo {
         track_gain: row.get("track_gain"),
         track_peak: row.get("track_peak"),
         source_type: row.get("source_type"),
+        file_hash: row.try_get("file_hash").ok().flatten(),
+        sample_rate: row.try_get("sample_rate").ok().flatten(),
+        acoust_id_fingerprint: row.try_get("fingerprint").ok().flatten(),
+        acoust_id: row.try_get("acoust_id").ok().flatten(),
         genres: row
             .get::<Option<String>, _>("genres")
             .unwrap_or_default()
@@ -955,6 +959,9 @@ t.bitrate, t.mbid_recording, t.lyrics, t.track_gain, t.track_peak,
                    a.date AS release_date,
                    ar.mbid AS artist_mbid, a.mbid AS album_mbid,
                    ls.name AS source, ls.source_type AS source_type, t.cover,
+                   t.file_hash, t.sample_rate,
+                   (SELECT f.fingerprint FROM fingerprints f WHERE f.track_id = t.id) AS fingerprint,
+                   (SELECT f.acoust_id FROM fingerprints f WHERE f.track_id = t.id) AS acoust_id,
                    (SELECT GROUP_CONCAT(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id) AS genres
             FROM tracks t
             JOIN albums a ON t.album_id = a.id

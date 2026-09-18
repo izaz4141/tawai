@@ -34,6 +34,7 @@ pub async fn handle_play_track(
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     let cfg = state.context.cfg().await;
+    let mk = state.context.master_key.read().await.clone();
 
     let mut result = resolve_playable_track(
         db.pool(),
@@ -44,13 +45,14 @@ pub async fn handle_play_track(
         req.track.as_ref().map(|t| t.album_title.as_str()),
         req.track.as_ref().and_then(|t| t.mbid_recording.as_deref()),
         Some(&cfg),
+        &mk,
     )
     .await;
 
     // Only mint playback tokens for tracks the requesting user may read, so
     // unauthorized access surfaces here (403) instead of a broken stream later.
     if let Some(tid) = &result.resolved_track_id {
-        match user_can_read_track(db.pool(), &user_id, tid).await {
+        match user_can_read_track(db.pool(), &user_id, tid, &mk).await {
             TrackAccess::Allowed => {}
             TrackAccess::NoSource | TrackAccess::NoUser => {
                 return (

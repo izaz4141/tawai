@@ -63,7 +63,7 @@ pub async fn handle_scan_source(
     };
 
     // Enforce that the target source is accessible to the requesting user.
-    let accessible = library_source::list_accessible_sources(db.pool(), &user.id, &user.role)
+    let accessible = library_source::list_accessible_sources(db.pool(), &user.id, &user.role, &mk)
         .await
         .unwrap_or_default();
     let Some(source) = accessible.into_iter().find(|s| s.id == query.source_id) else {
@@ -80,7 +80,7 @@ pub async fn handle_scan_source(
 
     tokio::spawn(async move {
         let pool = db.pool();
-        tawai_core::audio::scan::run_scan(&pool, client, &sources, force, Some(tx)).await;
+        tawai_core::audio::scan::run_scan(&pool, client, &sources, force, Some(tx), &mk).await;
         scan_ctx.scan_running.store(false, Ordering::SeqCst);
     });
 

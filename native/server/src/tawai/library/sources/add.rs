@@ -27,6 +27,7 @@ pub async fn handle_add_source(
         &payload.name,
         &payload.source_type,
         "all",
+        &mk,
     )
     .await
     {

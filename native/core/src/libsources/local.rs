@@ -38,7 +38,7 @@ pub fn walk_directory(dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-fn hash_file(path: &Path) -> Result<String> {
+pub(crate) fn hash_file(path: &Path) -> Result<String> {
     let mut file = std::fs::File::open(path)?;
     let mut hasher = Sha256::new();
     let mut buf = [0; 8192];

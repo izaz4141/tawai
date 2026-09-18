@@ -178,6 +178,7 @@ pub async fn run_scan(
     sources: &[LibrarySourceInfo],
     force: bool,
     progress: Option<tokio::sync::watch::Sender<ScanProgress>>,
+    master_key: &str,
 ) -> ScanResult {
     let sources: Vec<LibrarySourceInfo> = sources
         .iter()
@@ -251,7 +252,10 @@ pub async fn run_scan(
             }
         };
 
-        let paths = match parser.enumerate_paths(pool, &url, &source.urls).await {
+        let paths = match parser
+            .enumerate_paths(pool, &url, &source.urls, master_key)
+            .await
+        {
             Ok(p) => p,
             Err(e) => {
                 logger::error(&format!(

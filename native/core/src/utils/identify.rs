@@ -62,10 +62,11 @@ pub async fn apply_identification(
     user_id: &str,
     role: &str,
     params: &ApplyIdentificationParams,
+    master_key: &str,
 ) -> Result<ApplyIdentificationOutcome> {
     let (source, file_path, track, download_folder) =
         if let Some(source_id) = params.target_source_id.as_deref() {
-            let source = library_source::get_source_by_id(pool, source_id)
+            let source = library_source::get_source_by_id(pool, source_id, master_key)
                 .await?
                 .ok_or_else(|| anyhow!("Target library source not found"))?;
             let file_path = params
@@ -77,7 +78,7 @@ pub async fn apply_identification(
             let track = library::lookup_track(pool, &params.track_id)
                 .await?
                 .ok_or_else(|| anyhow!("Track not found"))?;
-            let source = library_source::get_source_info_by_track_id(pool, &params.track_id)
+            let source = library_source::get_source_info_by_track_id(pool, &params.track_id, master_key)
                 .await?
                 .ok_or_else(|| anyhow!("Library source for track not found"))?;
             (source, track.file_path.clone(), Some(track), false)
@@ -330,6 +331,10 @@ pub fn parsed_track_to_info(track: libsources::ParsedTrack) -> TrackInfo {
         source: "Download folder".to_string(),
         source_type: "download_folder".to_string(),
         genres: tag.genres.clone(),
+        file_hash: track.file_hash.clone(),
+        sample_rate: track.sample_rate.map(|s| s as i32),
+        acoust_id_fingerprint: tag.acoust_id_fingerprint.clone(),
+        acoust_id: tag.acoust_id.clone(),
     }
 }
 

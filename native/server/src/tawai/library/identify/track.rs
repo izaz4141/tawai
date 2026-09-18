@@ -143,6 +143,7 @@ pub async fn handle_apply_identification(
         &user.id,
         &user.role,
         &params,
+        &mk,
     )
     .await
     {

@@ -18,7 +18,7 @@ pub async fn handle_list_editable_sources(
         Err(_) => return axum::http::StatusCode::UNAUTHORIZED.into_response(),
     };
 
-    match library_source::list_editable_sources(db.pool(), &user.id, &user.role).await {
+    match library_source::list_editable_sources(db.pool(), &user.id, &user.role, &mk).await {
         Ok(sources) => Json(serde_json::json!({ "sources": sources })).into_response(),
         Err(e) => {
             tawai_core::utils::logger::error(&format!("list editable sources failed: {}", e));

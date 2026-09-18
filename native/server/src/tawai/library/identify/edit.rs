@@ -107,11 +107,13 @@ pub async fn handle_write_file_tags(
         Ok(()) => {
             // Mirror the edit to the remote tawai source (best-effort).
             let db = state.context.db().await;
+            let mk = state.context.master_key.read().await.clone();
             if let Err(e) = tawai_core::libsources::tawai::mirror_tag_write(
                 db.pool(),
                 &path.to_string_lossy(),
                 &tag,
                 state.context.client(),
+                &mk,
             )
             .await
             {

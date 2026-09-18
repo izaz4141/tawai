@@ -56,6 +56,7 @@ pub async fn user_can_read_track(
     pool: &DatabasePool,
     user_id: &str,
     track_id: &str,
+    master_key: &str,
 ) -> TrackAccess {
     let now = Instant::now();
     let key = (user_id.to_string(), track_id.to_string());
@@ -68,7 +69,7 @@ pub async fn user_can_read_track(
         }
     }
 
-    let access = match library_source::get_source_info_by_track_id(pool, track_id).await {
+    let access = match library_source::get_source_info_by_track_id(pool, track_id, master_key).await {
         Ok(Some(source)) => match account::get_user_role(pool, user_id).await {
             Ok(Some(role)) => {
                 if library_source::can_access_source(

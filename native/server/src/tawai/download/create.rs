@@ -20,6 +20,7 @@ pub async fn handle_create(
     Json(req): Json<DownloadCreateRequest>,
 ) -> impl IntoResponse {
     let cfg = state.context.cfg().await;
+    let mk = state.context.master_key.read().await.clone();
 
     let is_recommendation_direct =
         req.source_type.starts_with("recommendation:") || req.source_type == "preview";
@@ -39,6 +40,7 @@ pub async fn handle_create(
                     &cfg,
                     &req.user_id,
                     req.extra.as_deref(),
+                    &mk,
                 )
                 .await
         } else {
@@ -50,6 +52,7 @@ pub async fn handle_create(
                 &cfg,
                 &req.user_id,
                 req.extra.as_deref(),
+                &mk,
             )
             .await
         };

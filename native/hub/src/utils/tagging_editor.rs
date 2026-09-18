@@ -102,6 +102,7 @@ pub async fn handle_apply_identification(context: Arc<AppContext>) {
             &user.id,
             &user.role,
             &params,
+            &mk,
         )
         .await
         {

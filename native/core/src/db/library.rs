@@ -508,10 +508,12 @@ pub async fn delete_track(
     client: &reqwest::Client,
     user_id: &str,
     track_id: &str,
+    master_key: &str,
 ) -> anyhow::Result<()> {
-    let source = super::library_source::get_source_info_by_track_id(pool, track_id)
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("Track {} not found or has no source", track_id))?;
+    let source =
+        super::library_source::get_source_info_by_track_id(pool, track_id, master_key)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Track {} not found or has no source", track_id))?;
 
     let role = super::account::get_user_role(pool, user_id)
         .await?

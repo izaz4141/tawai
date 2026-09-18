@@ -25,6 +25,16 @@ pub struct TrackInfo {
     pub source: String,
     pub source_type: String,
     pub genres: Vec<String>,
+    /// SHA-256 of the track's audio file. `#[serde(default)]` keeps old
+    /// servers/clients compatible: absent on the wire yields `None`.
+    #[serde(default)]
+    pub file_hash: Option<String>,
+    #[serde(default)]
+    pub sample_rate: Option<i32>,
+    #[serde(default)]
+    pub acoust_id_fingerprint: Option<String>,
+    #[serde(default)]
+    pub acoust_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

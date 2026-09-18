@@ -69,6 +69,51 @@ pub fn parse_tawai_url(url: &str) -> Result<RemoteConn> {
     })
 }
 
+/// Encrypt the API-key segment of a `tawai://` URL so it can be stored at
+/// rest. URLs that are not `tawai://`, carry no key, or already have an
+/// encrypted (`NDK:`) key are returned unchanged.
+pub fn encrypt_url(url: &str, master_key: &str) -> String {
+    let Some(rest) = url.strip_prefix("tawai://") else {
+        return url.to_string();
+    };
+    let (authority, query) = match rest.split_once('?') {
+        Some((a, q)) => (a, format!("?{q}")),
+        None => (rest, String::new()),
+    };
+    let Some((hostport, key)) = authority.split_once('@') else {
+        return url.to_string();
+    };
+    if key.is_empty() || key.starts_with("NDK:") {
+        return url.to_string();
+    }
+    let encrypted = crate::utils::encryption::encrypt(key, master_key)
+        .unwrap_or_else(|_| key.to_string());
+    format!("tawai://{hostport}@{encrypted}{query}")
+}
+
+/// Restore the plaintext API key of a `tawai://` URL persisted with
+/// `encrypt_url`. Non-tawai URLs, plaintext keys, and keys that fail to
+/// decrypt (e.g. after a master-key change) are returned unchanged, which
+/// keeps pre-encryption rows readable.
+pub fn decrypt_url(url: &str, master_key: &str) -> String {
+    if !url.starts_with("tawai://") || !url.contains("@NDK:") {
+        return url.to_string();
+    }
+    let Some(rest) = url.strip_prefix("tawai://") else {
+        return url.to_string();
+    };
+    let (authority, query) = match rest.split_once('?') {
+        Some((a, q)) => (a, format!("?{q}")),
+        None => (rest, String::new()),
+    };
+    let Some((hostport, key)) = authority.split_once('@') else {
+        return url.to_string();
+    };
+    let decrypted = crate::utils::encryption::decrypt(key, master_key)
+        .unwrap_or_else(|_| key.to_string());
+    format!("tawai://{hostport}@{decrypted}{query}")
+}
+
 /// Check if a remote tawai server is reachable (cached per base URL).
 async fn is_remote_reachable(client: &reqwest::Client, conn: &RemoteConn) -> bool {
     let now = Instant::now();
@@ -223,9 +268,18 @@ pub struct RemoteTrack {
     pub duration_secs: Option<f64>,
     pub file_size: Option<i64>,
     pub bitrate: Option<i32>,
+    pub sample_rate: Option<i32>,
     pub mbid_recording: Option<String>,
+    pub artist_mbid: Option<String>,
+    pub album_mbid: Option<String>,
     pub release_date: Option<String>,
     pub genres: Vec<String>,
+    pub lyrics: Option<String>,
+    pub track_gain: Option<f64>,
+    pub track_peak: Option<f64>,
+    pub acoust_id_fingerprint: Option<String>,
+    pub acoust_id: Option<String>,
+    pub file_hash: Option<String>,
     pub remote_file_path: String,
 }
 
@@ -241,9 +295,18 @@ impl From<TrackInfo> for RemoteTrack {
             duration_secs: t.duration_secs,
             file_size: t.file_size,
             bitrate: t.bitrate,
+            sample_rate: t.sample_rate,
             mbid_recording: t.mbid_recording,
+            artist_mbid: t.artist_mbid,
+            album_mbid: t.album_mbid,
             release_date: t.release_date,
             genres: t.genres,
+            lyrics: t.lyrics,
+            track_gain: t.track_gain,
+            track_peak: t.track_peak,
+            acoust_id_fingerprint: t.acoust_id_fingerprint,
+            acoust_id: t.acoust_id,
+            file_hash: t.file_hash,
             remote_file_path: t.file_path,
         }
     }
@@ -339,6 +402,13 @@ fn remote_track_to_tag(rt: &RemoteTrack) -> AudioTag {
         track_number: rt.track_num.unwrap_or(0),
         disc_number: rt.disc_num.unwrap_or(1),
         mbid_recording: rt.mbid_recording.clone(),
+        mbid_artist: rt.artist_mbid.clone(),
+        mbid_release: rt.album_mbid.clone(),
+        lyrics: rt.lyrics.clone(),
+        track_gain: rt.track_gain,
+        track_peak: rt.track_peak,
+        acoust_id_fingerprint: rt.acoust_id_fingerprint.clone(),
+        acoust_id: rt.acoust_id.clone(),
         ..Default::default()
     };
     tag.artist_sort = derive_sort_name(&tag.artist);
@@ -359,6 +429,32 @@ fn ext_from_path(path: &str) -> &str {
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("mp3")
+}
+
+/// Build a `ParsedTrack` for a downloaded backup directly from the remote
+/// database's metadata, skipping a full local rescan (tag parse + fingerprint
+/// computation + loudness measurement). Only called after the local file's
+/// SHA-256 has been verified against the remote's stored `file_hash`, so the
+/// metadata is guaranteed to describe these exact bytes.
+fn tawai_track_to_parsed(rt: &RemoteTrack, dest: &Path, file_hash: &str) -> ParsedTrack {
+    let mut tag = remote_track_to_tag(rt);
+    // Best-effort: keep the embedded cover art so album art still populates,
+    // without paying for fingerprinting or loudness measurement.
+    if let Ok((local_tag, _, _, _)) = crate::audio::tags::read_audio_tags(dest) {
+        if local_tag.cover.is_some() {
+            tag.cover = local_tag.cover;
+        }
+    }
+    let file_size = std::fs::metadata(dest).map(|m| m.len()).unwrap_or(0);
+    ParsedTrack {
+        tag,
+        file_path: dest.to_string_lossy().to_string(),
+        file_hash: Some(file_hash.to_string()),
+        duration_secs: rt.duration_secs.unwrap_or(0.0),
+        sample_rate: rt.sample_rate.map(|s| s as u32),
+        bitrate: rt.bitrate.map(|b| b as u32),
+        file_size,
+    }
 }
 
 // ── Download a single track from remote ───────────────────────────────
@@ -493,8 +589,11 @@ impl TawaiParser {
         Ok(tracks)
     }
 
-    /// Scan a single file. If local backup exists, scan as local.
-    /// If missing, download from remote then scan locally.
+    /// Scan a single file. Prefers the remote database's metadata: when the
+    /// local backup's SHA-256 matches the remote's stored `file_hash`, the
+    /// metadata is imported directly instead of rescanning the file. Falls back
+    /// to a full local scan when the remote is unreachable, the remote has no
+    /// hash, or the hashes differ (e.g. locally edited tags).
     pub async fn scan_file(
         &self,
         pool: &DatabasePool,
@@ -503,13 +602,31 @@ impl TawaiParser {
         file_path: &str,
     ) -> Result<ParsedTrack> {
         let dest = Path::new(file_path);
-        if dest.is_file() {
-            return local::scan_file(dest);
+        match resolve_remote_track(pool, &self.client, urls, file_path).await {
+            Ok((conn, rt)) => {
+                if !dest.is_file() {
+                    download_track(&self.client, &conn, &rt, dest).await?;
+                }
+                if let Some(remote_hash) = rt.file_hash.as_deref() {
+                    if let Ok(local_hash) = local::hash_file(dest) {
+                        if local_hash.eq_ignore_ascii_case(remote_hash) {
+                            return Ok(tawai_track_to_parsed(&rt, dest, &local_hash));
+                        }
+                    }
+                }
+                // No hash, hash mismatch, or unreadable file: full local scan.
+                local::scan_file(dest)
+            }
+            // Remote unreachable: still scan an existing local backup (offline
+            // mode); a missing file is a genuine error.
+            Err(e) => {
+                if dest.is_file() {
+                    local::scan_file(dest)
+                } else {
+                    Err(e)
+                }
+            }
         }
-        // Local file missing — download from remote
-        let (conn, rt) = resolve_remote_track(pool, &self.client, urls, file_path).await?;
-        download_track(&self.client, &conn, &rt, dest).await?;
-        local::scan_file(dest)
     }
 
     /// Resolve stream URL: local file if present, else remote stream.
@@ -590,8 +707,9 @@ pub async fn mirror_tag_write(
     local_path: &str,
     tag: &AudioTag,
     client: &reqwest::Client,
+    master_key: &str,
 ) -> Result<()> {
-    let sources = library_source::list_all_sources(pool).await?;
+    let sources = library_source::list_all_sources(pool, master_key).await?;
     let source = match sources.iter().find(|s| {
         s.source_type == "tawai"
             && local_root(&s.urls)
@@ -711,6 +829,32 @@ mod tests {
     }
 
     #[test]
+    fn encrypt_url_roundtrip() {
+        let mk = crate::utils::encryption::generate_master_key();
+        let url = "tawai://192.168.1.5:3000@secretkey?scheme=http&source_id=xyz&foo=bar";
+        let enc = encrypt_url(url, &mk);
+        assert!(enc.starts_with("tawai://192.168.1.5:3000@NDK:"));
+        assert!(enc.contains("?scheme=http&source_id=xyz&foo=bar"));
+        assert_eq!(decrypt_url(&enc, &mk), url);
+    }
+
+    #[test]
+    fn encrypt_url_skips_plaintext_and_non_tawai() {
+        let mk = crate::utils::encryption::generate_master_key();
+        assert_eq!(encrypt_url("/music/path", &mk), "/music/path");
+        assert_eq!(encrypt_url("tawai://host:8080?source_id=x&scheme=http", &mk), "tawai://host:8080?source_id=x&scheme=http");
+        let already = format!("tawai://host:8080@NDK:{}?scheme=http", "ab01");
+        assert_eq!(encrypt_url(&already, &mk), already);
+    }
+
+    #[test]
+    fn decrypt_url_passthrough_and_legacy() {
+        let mk = crate::utils::encryption::generate_master_key();
+        assert_eq!(decrypt_url("/music/path", &mk), "/music/path");
+        assert_eq!(decrypt_url("tawai://host:8080@plainkey?scheme=http", &mk), "tawai://host:8080@plainkey?scheme=http");
+    }
+
+    #[test]
     fn dest_for_deterministic() {
         let root = "/music";
         let pattern = DEFAULT_PATTERN;
@@ -724,9 +868,18 @@ mod tests {
             duration_secs: Some(240.0),
             file_size: Some(10_000_000),
             bitrate: Some(320_000),
+            sample_rate: None,
             mbid_recording: None,
+            artist_mbid: None,
+            album_mbid: None,
             release_date: None,
             genres: vec![],
+            lyrics: None,
+            track_gain: None,
+            track_peak: None,
+            acoust_id_fingerprint: None,
+            acoust_id: None,
+            file_hash: None,
             remote_file_path: "/srv/music/track.mp3".into(),
         };
         let d1 = dest_for(root, pattern, &rt);

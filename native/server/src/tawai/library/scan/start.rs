@@ -56,7 +56,7 @@ pub async fn handle_scan(
             .into_response();
     };
 
-    let sources = library_source::list_accessible_sources(db.pool(), &user.id, &user.role)
+    let sources = library_source::list_accessible_sources(db.pool(), &user.id, &user.role, &mk)
         .await
         .unwrap_or_default();
 
@@ -80,7 +80,8 @@ pub async fn handle_scan(
     let ctx = state.context.clone();
 
     tokio::spawn(async move {
-        tawai_core::audio::scan::run_scan(db.pool(), client, &sources2, force, Some(tx)).await;
+        tawai_core::audio::scan::run_scan(db.pool(), client, &sources2, force, Some(tx), &mk)
+            .await;
         ctx.scan_running.store(false, Ordering::SeqCst);
     });
 

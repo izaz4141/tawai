@@ -62,8 +62,9 @@ async fn resolve_and_fallback(
     client: &reqwest::Client,
     track: &TrackInfo,
     cfg: Option<&AppConfig>,
+    master_key: &str,
 ) -> PlayTrackResult {
-    let (source_type, urls_json) = library_source::get_source_by_track_id(pool, &track.id)
+    let (source_type, urls_json) = library_source::get_source_by_track_id(pool, &track.id, master_key)
         .await
         .ok()
         .flatten()
@@ -143,10 +144,11 @@ pub async fn resolve_playable_track(
     album_title: Option<&str>,
     mbid_recording: Option<&str>,
     cfg: Option<&AppConfig>,
+    master_key: &str,
 ) -> PlayTrackResult {
     if let Some(tid) = track_id {
         match library::lookup_track(pool, tid).await {
-            Ok(Some(t)) => return resolve_and_fallback(pool, client, &t, cfg).await,
+            Ok(Some(t)) => return resolve_and_fallback(pool, client, &t, cfg, master_key).await,
             Ok(None) => {}
             Err(e) => {
                 return PlayTrackResult {
@@ -170,7 +172,7 @@ pub async fn resolve_playable_track(
 
     match duplicates::find_matching_track(pool, t, a, Some(al), mbid_recording, 0.9).await {
         Ok(Some((matched_track, _))) => {
-            return resolve_and_fallback(pool, client, &matched_track, cfg).await;
+            return resolve_and_fallback(pool, client, &matched_track, cfg, master_key).await;
         }
         Ok(None) => {}
         Err(e) => {

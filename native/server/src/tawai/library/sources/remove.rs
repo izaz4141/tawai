@@ -18,7 +18,7 @@ pub async fn handle_remove_source(
         Err(_) => return axum::http::StatusCode::UNAUTHORIZED.into_response(),
     };
 
-    let source = match library_source::get_source_by_id(db.pool(), &source_id).await {
+    let source = match library_source::get_source_by_id(db.pool(), &source_id, &mk).await {
         Ok(Some(s)) => s,
         Ok(None) => return axum::http::StatusCode::NOT_FOUND.into_response(),
         Err(e) => {

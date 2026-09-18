@@ -30,8 +30,9 @@ pub async fn handle_get_track(
     let db = state.context.db().await;
     match library::lookup_track(db.pool(), &id).await {
         Ok(Some(mut t)) => {
+            let mk = state.context.master_key.read().await.clone();
             let (source_type, urls_json) =
-                library_source::get_source_by_track_id(db.pool(), &t.id)
+                library_source::get_source_by_track_id(db.pool(), &t.id, &mk)
                     .await
                     .ok()
                     .flatten()

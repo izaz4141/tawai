@@ -28,8 +28,15 @@ pub async fn handle_delete_track(context: Arc<AppContext>) {
         let msg = signal_pack.message;
         let db = context.db().await;
         let client = context.client().clone();
-        match tawai_core::db::library::delete_track(db.pool(), &client, &msg.user_id, &msg.track_id)
-            .await
+        let mk = context.master_key.read().await.clone();
+        match tawai_core::db::library::delete_track(
+            db.pool(),
+            &client,
+            &msg.user_id,
+            &msg.track_id,
+            &mk,
+        )
+        .await
         {
             Ok(()) => {
                 signals::library::DeleteTrackResponse {

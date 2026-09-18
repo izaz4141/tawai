@@ -40,7 +40,7 @@ pub async fn handle_scan_library(context: Arc<AppContext>) {
             continue;
         };
 
-        let sources = library_source::list_accessible_sources(db.pool(), &user.id, &user.role)
+        let sources = library_source::list_accessible_sources(db.pool(), &user.id, &user.role, &mk)
             .await
             .unwrap_or_default();
 
@@ -77,7 +77,7 @@ pub async fn handle_scan_library(context: Arc<AppContext>) {
         let ctx = context.clone();
         tokio::spawn(async move {
             let core_result =
-                tawai_core::audio::scan::run_scan(db.pool(), client, &sources, force, Some(tx))
+                tawai_core::audio::scan::run_scan(db.pool(), client, &sources, force, Some(tx), &mk)
                     .await;
 
             ctx.scan_running.store(false, Ordering::SeqCst);
@@ -144,7 +144,7 @@ pub async fn handle_scan_source(context: Arc<AppContext>) {
         };
 
         // Enforce that the target source is accessible to the requesting user.
-        let accessible = library_source::list_accessible_sources(db.pool(), &user.id, &user.role)
+        let accessible = library_source::list_accessible_sources(db.pool(), &user.id, &user.role, &mk)
             .await
             .unwrap_or_default();
         let Some(source) = accessible.into_iter().find(|s| s.id == msg.source_id) else {
@@ -199,7 +199,7 @@ pub async fn handle_scan_source(context: Arc<AppContext>) {
         tokio::spawn(async move {
             let pool = db.pool();
             let result =
-                tawai_core::audio::scan::run_scan(&pool, client, &sources, msg.force, Some(tx))
+                tawai_core::audio::scan::run_scan(&pool, client, &sources, msg.force, Some(tx), &mk)
                     .await;
             *ctx.scan_progress.write().await = Some(tawai_core::signals::library::ScanProgress {
                 complete: true,
