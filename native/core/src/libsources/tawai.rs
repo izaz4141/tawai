@@ -460,6 +460,11 @@ const CACHE_TTL: Duration = Duration::from_secs(60);
 
 const REACH_TTL: Duration = Duration::from_secs(60);
 
+/// Max download attempts for a single tawai track when the local backup is
+/// missing, its hash mismatches the remote's stored file_hash, or streaming
+/// fails. Download errors and hash mismatches share this budget.
+const MAX_DOWNLOAD_ATTEMPTS: u32 = 5;
+
 pub async fn cached_remote_tracks(
     client: &reqwest::Client,
     conn: &RemoteConn,
@@ -697,8 +702,13 @@ impl TawaiParser {
     /// Scan a single file. Prefers the remote database's metadata: when the
     /// local backup's SHA-256 matches the remote's stored `file_hash`, the
     /// metadata is imported directly instead of rescanning the file. Falls back
-    /// to a full local scan when the remote is unreachable, the remote has no
-    /// hash, or the hashes differ (e.g. locally edited tags).
+    /// to a full local scan when the remote is unreachable or the remote has no
+    /// hash. When the local file is missing, its hash differs from the remote,
+    /// or download/streaming fails, the file is (re)downloaded, retrying up to
+    /// `MAX_DOWNLOAD_ATTEMPTS` times (hash mismatches and download errors share
+    /// the budget). If the hash still mismatches after exhausting attempts, the
+    /// local copy is kept and fully scanned (e.g. deliberately locally-edited
+    /// tags); if the last attempts were download errors, the error is returned.
     pub async fn scan_file(
         &self,
         pool: &DatabasePool,
@@ -709,17 +719,50 @@ impl TawaiParser {
         let dest = Path::new(file_path);
         match resolve_remote_track(pool, &self.client, urls, file_path).await {
             Ok((conn, rt)) => {
-                if !dest.is_file() {
-                    download_track(&self.client, &conn, &rt, dest).await?;
-                }
-                if let Some(remote_hash) = rt.file_hash.as_deref() {
-                    if let Ok(local_hash) = local::hash_file(dest) {
-                        if local_hash.eq_ignore_ascii_case(remote_hash) {
-                            return Ok(tawai_track_to_parsed(&rt, dest, &local_hash));
+                let Some(remote_hash) = rt.file_hash.as_deref() else {
+                    // No remote hash to verify against: download a missing file
+                    // once, then fully rescan it.
+                    if !dest.is_file() {
+                        download_track(&self.client, &conn, &rt, dest).await?;
+                    }
+                    return local::scan_file(dest);
+                };
+
+                let mut last_err: Option<anyhow::Error> = None;
+                let mut attempts = 0u32;
+                loop {
+                    if dest.is_file() {
+                        if let Ok(local_hash) = local::hash_file(dest) {
+                            if local_hash.eq_ignore_ascii_case(remote_hash) {
+                                return Ok(tawai_track_to_parsed(&rt, dest, &local_hash));
+                            }
+                        }
+                    }
+                    if attempts >= MAX_DOWNLOAD_ATTEMPTS {
+                        break;
+                    }
+                    attempts += 1;
+                    match download_track(&self.client, &conn, &rt, dest).await {
+                        Ok(()) => {}
+                        Err(e) => {
+                            logger::warn(&format!(
+                                "tawai download attempt {attempts}/{} failed for {}: {}",
+                                MAX_DOWNLOAD_ATTEMPTS,
+                                dest.display(),
+                                e
+                            ));
+                            last_err = Some(e);
                         }
                     }
                 }
-                // No hash, hash mismatch, or unreadable file: full local scan.
+                if let Some(err) = last_err {
+                    return Err(err);
+                }
+                logger::warn(&format!(
+                    "tawai hash still mismatched after {} attempts, keeping local copy: {}",
+                    MAX_DOWNLOAD_ATTEMPTS,
+                    dest.display()
+                ));
                 local::scan_file(dest)
             }
             // Remote unreachable: still scan an existing local backup (offline
