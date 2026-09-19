@@ -251,7 +251,10 @@ impl JellyfinParser {
             anyhow::bail!("Jellyfin views request failed: {}", text);
         }
 
-        let data: ViewsResponse = resp.json().await?;
+        let status = resp.status();
+        let bytes = resp.bytes().await?;
+        let data: ViewsResponse =
+            crate::libsources::decode_json("jellyfin views", status, &bytes)?;
 
         let libraries: Vec<JellyfinLibraryInfo> = data
             .items
@@ -309,7 +312,9 @@ impl JellyfinParser {
             anyhow::bail!("Jellyfin authentication failed: {}", text);
         }
 
-        let data: AuthResponse = resp.json().await?;
+        let status = resp.status();
+        let bytes = resp.bytes().await?;
+        let data: AuthResponse = crate::libsources::decode_json("jellyfin authentication", status, &bytes)?;
 
         Ok((data.access_token, data.user.id))
     }
@@ -348,7 +353,10 @@ impl JellyfinParser {
                 anyhow::bail!("Jellyfin list items failed: {}", text);
             }
 
-            let data: ItemsResponse = resp.json().await?;
+            let status = resp.status();
+            let bytes = resp.bytes().await?;
+            let data: ItemsResponse =
+                crate::libsources::decode_json("jellyfin audio items", status, &bytes)?;
 
             let count = data.items.len();
             all_items.extend(data.items);
@@ -434,7 +442,13 @@ impl JellyfinParser {
             .send()
             .await?;
         if resp.status().is_success() {
-            Ok(Some(resp.json().await?))
+            let status = resp.status();
+            let bytes = resp.bytes().await?;
+            Ok(Some(crate::libsources::decode_json(
+                "jellyfin item",
+                status,
+                &bytes,
+            )?))
         } else {
             Ok(None)
         }

@@ -8,7 +8,7 @@ pub use recommendation::{ApiType, RecommendationSource, ALL_RECOMMENDATION_SOURC
 use std::ops::Deref;
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use crate::audio::tags::AudioTag;
 use crate::db::database::DatabasePool;
@@ -30,6 +30,32 @@ impl Deref for ParsedTrack {
     fn deref(&self) -> &Self::Target {
         &self.tag
     }
+}
+
+/// Deserialize an HTTP response body, embedding the HTTP status, byte count,
+/// the serde detail (which names the offending field) and a truncated body
+/// preview in the error so the real cause reaches the scan pipeline's log
+/// channel verbatim instead of a bare `error decoding response body`.
+pub(crate) fn decode_json<T: serde::de::DeserializeOwned>(
+    what: &str,
+    status: reqwest::StatusCode,
+    bytes: &[u8],
+) -> Result<T> {
+    serde_json::from_slice(bytes).map_err(|e| {
+        let preview = bytes
+            .iter()
+            .take(300)
+            .map(|&b| {
+                (b.is_ascii_graphic() || b == b' ')
+                    .then_some(b as char)
+                    .unwrap_or('.')
+            })
+            .collect::<String>();
+        anyhow!(
+            "error decoding response body for {what} ({status}, {} bytes): {e}; body preview: {preview}",
+            bytes.len()
+        )
+    })
 }
 
 /// Resolves the first reachable URL from a source's ordered URL list. Caches

@@ -218,7 +218,10 @@ pub async fn fetch_remote_libraries(
         let text = resp.text().await.unwrap_or_default();
         anyhow::bail!("tawai list sources failed with status {}: {}", status, text);
     }
-    let data: ListLibrarySourcesResponse = resp.json().await?;
+    let status = resp.status();
+    let bytes = resp.bytes().await?;
+    let data: ListLibrarySourcesResponse =
+        crate::libsources::decode_json("tawai library sources list", status, &bytes)?;
     Ok(data
         .sources
         .into_iter()
@@ -373,7 +376,22 @@ pub async fn fetch_remote_tracks(
     if !status.is_success() {
         anyhow::bail!("tawai list tracks failed with status {status}");
     }
+    let declared_len = resp.content_length();
+    let encoded = resp
+        .headers()
+        .get(reqwest::header::CONTENT_ENCODING)
+        .is_some();
     let bytes = resp.bytes().await?;
+    if !encoded {
+        if let Some(expected) = declared_len {
+            if expected as usize != bytes.len() {
+                anyhow::bail!(
+                    "tawai list tracks response truncated: declared {expected} bytes but received {} bytes",
+                    bytes.len()
+                );
+            }
+        }
+    }
     let body: ListTracksResponse = serde_json::from_slice(&bytes).map_err(|e| {
         // Embed the serde detail (which names the offending field, e.g.
         // "missing field 'track_num'") plus a body preview so the cause
@@ -615,7 +633,9 @@ async fn resolve_remote_track(
     let conn = pick_remote(urls, client)
         .await
         .context("remote tawai unreachable")?;
-    let tracks = cached_remote_tracks(client, &conn).await?;
+    let tracks = cached_remote_tracks(client, &conn)
+        .await
+        .context("tawai remote track list failed")?;
     let pattern = user_settings::get_setting(pool, DEFAULT_USERNAME, "identify_naming_pattern")
         .await
         .unwrap_or_else(|| DEFAULT_PATTERN.to_string());
