@@ -594,11 +594,6 @@ pub async fn all_track_file_paths(pool: &SqlitePool) -> Result<Vec<String>> {
 }
 
 pub async fn delete_tracks_by_source_id(pool: &SqlitePool, source_id: &str) -> Result<()> {
-    let track_ids: Vec<String> = sqlx::query_scalar("SELECT id FROM tracks WHERE source_id = ?")
-        .bind(source_id)
-        .fetch_all(pool)
-        .await?;
-
     let album_ids: Vec<String> = sqlx::query_scalar(
         "SELECT DISTINCT album_id FROM tracks WHERE source_id = ? AND album_id IS NOT NULL",
     )
@@ -630,79 +625,51 @@ pub async fn delete_tracks_by_source_id(pool: &SqlitePool, source_id: &str) -> R
         ids
     };
 
-    for track_id in &track_ids {
-        sqlx::query("DELETE FROM track_genres WHERE track_id = ?")
-            .bind(track_id)
-            .execute(pool)
-            .await?;
-        sqlx::query("DELETE FROM track_artists WHERE track_id = ?")
-            .bind(track_id)
-            .execute(pool)
-            .await?;
-        sqlx::query("DELETE FROM fingerprints WHERE track_id = ?")
-            .bind(track_id)
-            .execute(pool)
-            .await?;
-        sqlx::query("DELETE FROM playback_history WHERE track_id = ?")
-            .bind(track_id)
-            .execute(pool)
-            .await?;
-        sqlx::query("DELETE FROM collection_tracks WHERE track_id = ?")
-            .bind(track_id)
-            .execute(pool)
-            .await?;
-    }
+    // All mutations below run in a single transaction. Deleting tracks cascades
+    // via FK to track_genres, track_artists, fingerprints, playback_history and
+    // collection_tracks, so thousands of per-track auto-commit writes become a
+    // handful of statements with one commit.
+    let mut tx = pool.begin().await?;
 
     sqlx::query("DELETE FROM tracks WHERE source_id = ?")
         .bind(source_id)
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
 
-    for album_id in &album_ids {
-        let remaining: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tracks WHERE album_id = ?")
-            .bind(album_id)
-            .fetch_one(pool)
-            .await?;
-        if remaining == 0 {
-            sqlx::query("DELETE FROM album_artists WHERE album_id = ?")
-                .bind(album_id)
-                .execute(pool)
-                .await?;
-            sqlx::query("DELETE FROM albums WHERE id = ?")
-                .bind(album_id)
-                .execute(pool)
-                .await?;
+    if !album_ids.is_empty() {
+        let placeholders = album_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+        let sql = format!(
+            "DELETE FROM albums WHERE id IN ({}) AND NOT EXISTS (SELECT 1 FROM tracks WHERE album_id = albums.id)",
+            placeholders
+        );
+        let mut query = sqlx::query(&sql);
+        for id in &album_ids {
+            query = query.bind(id);
         }
+        query.execute(&mut *tx).await?;
     }
 
-    for artist_id in &artist_ids {
-        let album_count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM albums WHERE artist_id = ?")
-                .bind(artist_id)
-                .fetch_one(pool)
-                .await?;
-        let track_artist_count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM track_artists WHERE artist_id = ?")
-                .bind(artist_id)
-                .fetch_one(pool)
-                .await?;
-        let album_artist_count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM album_artists WHERE artist_id = ?")
-                .bind(artist_id)
-                .fetch_one(pool)
-                .await?;
-        if album_count == 0 && track_artist_count == 0 && album_artist_count == 0 {
-            sqlx::query("DELETE FROM artists WHERE id = ?")
-                .bind(artist_id)
-                .execute(pool)
-                .await?;
+    if !artist_ids.is_empty() {
+        let placeholders = artist_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+        let sql = format!(
+            r#"DELETE FROM artists WHERE id IN ({})
+               AND NOT EXISTS (SELECT 1 FROM albums WHERE artist_id = artists.id)
+               AND NOT EXISTS (SELECT 1 FROM track_artists WHERE artist_id = artists.id)
+               AND NOT EXISTS (SELECT 1 FROM album_artists WHERE artist_id = artists.id)"#,
+            placeholders
+        );
+        let mut query = sqlx::query(&sql);
+        for id in &artist_ids {
+            query = query.bind(id);
         }
+        query.execute(&mut *tx).await?;
     }
 
     sqlx::query("DELETE FROM genres WHERE id NOT IN (SELECT DISTINCT genre_id FROM track_genres)")
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
 
+    tx.commit().await?;
     Ok(())
 }
 

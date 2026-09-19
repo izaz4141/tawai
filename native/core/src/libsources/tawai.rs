@@ -355,65 +355,10 @@ pub async fn import_into_source(
 
 // ── Remote track list fetch + cache ───────────────────────────────────
 
-#[derive(Debug, Clone)]
-pub struct RemoteTrack {
-    pub id: String,
-    pub title: String,
-    pub artists_string: String,
-    pub album_title: String,
-    pub track_num: Option<i32>,
-    pub disc_num: Option<i32>,
-    pub duration_secs: Option<f64>,
-    pub file_size: Option<i64>,
-    pub bitrate: Option<i32>,
-    pub sample_rate: Option<i32>,
-    pub mbid_recording: Option<String>,
-    pub artist_mbid: Option<String>,
-    pub album_mbid: Option<String>,
-    pub release_date: Option<String>,
-    pub genres: Vec<String>,
-    pub lyrics: Option<String>,
-    pub track_gain: Option<f64>,
-    pub track_peak: Option<f64>,
-    pub acoust_id_fingerprint: Option<String>,
-    pub acoust_id: Option<String>,
-    pub file_hash: Option<String>,
-    pub remote_file_path: String,
-}
-
-impl From<TrackInfo> for RemoteTrack {
-    fn from(t: TrackInfo) -> Self {
-        Self {
-            id: t.id,
-            title: t.title,
-            artists_string: t.artists_string,
-            album_title: t.album_title,
-            track_num: t.track_num,
-            disc_num: t.disc_num,
-            duration_secs: t.duration_secs,
-            file_size: t.file_size,
-            bitrate: t.bitrate,
-            sample_rate: t.sample_rate,
-            mbid_recording: t.mbid_recording,
-            artist_mbid: t.artist_mbid,
-            album_mbid: t.album_mbid,
-            release_date: t.release_date,
-            genres: t.genres,
-            lyrics: t.lyrics,
-            track_gain: t.track_gain,
-            track_peak: t.track_peak,
-            acoust_id_fingerprint: t.acoust_id_fingerprint,
-            acoust_id: t.acoust_id,
-            file_hash: t.file_hash,
-            remote_file_path: t.file_path,
-        }
-    }
-}
-
 pub async fn fetch_remote_tracks(
     client: &reqwest::Client,
     conn: &RemoteConn,
-) -> Result<Vec<RemoteTrack>> {
+) -> Result<Vec<TrackInfo>> {
     let source_id = conn.source_id.as_deref().context("source_id required")?;
     let url = format!(
         "{}/api/tawai/library/tracks/by-source/{}",
@@ -424,18 +369,42 @@ pub async fn fetch_remote_tracks(
         .header("X-API-Key", &conn.api_key)
         .send()
         .await?;
-    if !resp.status().is_success() {
-        anyhow::bail!("tawai list tracks failed with status {}", resp.status());
+    let status = resp.status();
+    if !status.is_success() {
+        anyhow::bail!("tawai list tracks failed with status {status}");
     }
-    let body: ListTracksResponse = resp.json().await?;
-    Ok(body.tracks.into_iter().map(RemoteTrack::from).collect())
+    let bytes = resp.bytes().await?;
+    let body: ListTracksResponse = serde_json::from_slice(&bytes).map_err(|e| {
+        // Embed the serde detail (which names the offending field, e.g.
+        // "missing field 'track_num'") plus a body preview so the cause
+        // reaches the scan pipeline's log channel without extra local logging.
+        let preview = bytes
+            .iter()
+            .take(300)
+            .map(|&b| {
+                (b.is_ascii_graphic() || b == b' ')
+                    .then_some(b as char)
+                    .unwrap_or('.')
+            })
+            .collect::<String>();
+        anyhow::anyhow!(
+            "tawai: error decoding response body ({status}, {} bytes): {e}; body preview: {preview}",
+            bytes.len()
+        )
+    })?;
+    Ok(body.tracks)
 }
 
 // ── Process-local cache────────────────────────────────────────────────
 
 struct CacheEntry {
-    tracks: Vec<RemoteTrack>,
+    tracks: Vec<TrackInfo>,
     fetched_at: Instant,
+}
+
+struct FailEntry {
+    error: String,
+    failed_at: Instant,
 }
 
 struct ReachEntry {
@@ -444,6 +413,13 @@ struct ReachEntry {
 }
 
 static REMOTE_CACHE: LazyLock<Mutex<HashMap<String, CacheEntry>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Negative cache: remembers a failed remote track list fetch per connection
+/// for `CACHE_TTL`, so a failing server is re-probed once per TTL instead of
+/// once per scraped file (each probe can take tens of seconds on a large
+/// remote library).
+static REMOTE_FAIL_CACHE: LazyLock<Mutex<HashMap<String, FailEntry>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 static REACH_CACHE: LazyLock<Mutex<HashMap<String, ReachEntry>>> =
@@ -461,7 +437,7 @@ const MAX_DOWNLOAD_ATTEMPTS: u32 = 5;
 pub async fn cached_remote_tracks(
     client: &reqwest::Client,
     conn: &RemoteConn,
-) -> Result<Vec<RemoteTrack>> {
+) -> Result<Vec<TrackInfo>> {
     let key = format!(
         "{}|{}",
         conn.http_base,
@@ -475,23 +451,46 @@ pub async fn cached_remote_tracks(
             }
         }
     }
-    let tracks = fetch_remote_tracks(client, conn).await?;
     {
-        let mut cache = REMOTE_CACHE.lock().unwrap();
-        cache.insert(
-            key,
-            CacheEntry {
-                tracks: tracks.clone(),
-                fetched_at: Instant::now(),
-            },
-        );
+        let fails = REMOTE_FAIL_CACHE.lock().unwrap();
+        if let Some(entry) = fails.get(&key) {
+            if entry.failed_at.elapsed() < CACHE_TTL {
+                return Err(anyhow::anyhow!(
+                    "tawai remote track list (cached failure): {}",
+                    entry.error
+                ));
+            }
+        }
     }
-    Ok(tracks)
+    match fetch_remote_tracks(client, conn).await {
+        Ok(tracks) => {
+            let mut cache = REMOTE_CACHE.lock().unwrap();
+            cache.insert(
+                key,
+                CacheEntry {
+                    tracks: tracks.clone(),
+                    fetched_at: Instant::now(),
+                },
+            );
+            Ok(tracks)
+        }
+        Err(e) => {
+            let mut fails = REMOTE_FAIL_CACHE.lock().unwrap();
+            fails.insert(
+                key,
+                FailEntry {
+                    error: e.to_string(),
+                    failed_at: Instant::now(),
+                },
+            );
+            Err(e)
+        }
+    }
 }
 
 // ── AudioTag synthesis from remote metadata────────────────────────────
 
-fn remote_track_to_tag(rt: &RemoteTrack) -> AudioTag {
+fn remote_track_to_tag(rt: &TrackInfo) -> AudioTag {
     let artist = if rt.artists_string.is_empty() {
         "Unknown Artist".to_string()
     } else {
@@ -524,9 +523,9 @@ fn remote_track_to_tag(rt: &RemoteTrack) -> AudioTag {
 }
 
 /// Deterministic local backup path for a remote track.
-fn dest_for(local_root: &str, naming_pattern: &str, rt: &RemoteTrack) -> PathBuf {
+fn dest_for(local_root: &str, naming_pattern: &str, rt: &TrackInfo) -> PathBuf {
     let tag = remote_track_to_tag(rt);
-    let ext = ext_from_path(&rt.remote_file_path);
+    let ext = ext_from_path(&rt.file_path);
     let fallback = format!("{} - {}", rt.artists_string, rt.title);
     dest_from_root(local_root, naming_pattern, &tag, ext, &fallback)
 }
@@ -543,7 +542,7 @@ fn ext_from_path(path: &str) -> &str {
 /// computation + loudness measurement). Only called after the local file's
 /// SHA-256 has been verified against the remote's stored `file_hash`, so the
 /// metadata is guaranteed to describe these exact bytes.
-fn tawai_track_to_parsed(rt: &RemoteTrack, dest: &Path, file_hash: &str) -> ParsedTrack {
+fn tawai_track_to_parsed(rt: &TrackInfo, dest: &Path, file_hash: &str) -> ParsedTrack {
     let mut tag = remote_track_to_tag(rt);
     // Best-effort: keep the embedded cover art so album art still populates,
     // without paying for fingerprinting or loudness measurement.
@@ -569,7 +568,7 @@ fn tawai_track_to_parsed(rt: &RemoteTrack, dest: &Path, file_hash: &str) -> Pars
 async fn download_track(
     client: &reqwest::Client,
     conn: &RemoteConn,
-    rt: &RemoteTrack,
+    rt: &TrackInfo,
     dest: &Path,
 ) -> Result<()> {
     if let Some(parent) = dest.parent() {
@@ -611,7 +610,7 @@ async fn resolve_remote_track(
     client: &reqwest::Client,
     urls: &[String],
     local_path: &str,
-) -> Result<(RemoteConn, RemoteTrack)> {
+) -> Result<(RemoteConn, TrackInfo)> {
     let root = local_root(urls).unwrap_or("/tmp");
     let conn = pick_remote(urls, client)
         .await
@@ -640,7 +639,10 @@ impl TawaiParser {
     }
 
     /// Enumerate paths: remote's authoritative list → deterministic local dest paths.
-    /// Falls back to local dir walk when remote is unreachable (offline mode).
+    /// Falls back to the local backup dir walk only when the remote is
+    /// unreachable (offline mode). A reachable remote whose track list cannot
+    /// be fetched/decode propagates the error up to the scan pipeline's log
+    /// channel so it is reported instead of silently degrading.
     pub async fn enumerate_paths(
         &self,
         pool: &DatabasePool,
@@ -653,22 +655,13 @@ impl TawaiParser {
                 user_settings::get_setting(pool, DEFAULT_USERNAME, "identify_naming_pattern")
                     .await
                     .unwrap_or_else(|| DEFAULT_PATTERN.to_string());
-            match cached_remote_tracks(&self.client, &conn).await {
-                Ok(tracks) => {
-                    return Ok(tracks
-                        .iter()
-                        .map(|rt| dest_for(root, &pattern, rt).to_string_lossy().to_string())
-                        .collect());
-                }
-                Err(e) => {
-                    // Invalid/stale API key or source_id: degrade to offline mode
-                    // (scan local backups) instead of silently skipping the source.
-                    logger::warn(&format!(
-                        "tawai remote track list failed for {}: {} — falling back to local backup dir",
-                        conn.http_base, e
-                    ));
-                }
-            }
+            let tracks = cached_remote_tracks(&self.client, &conn)
+                .await
+                .context("tawai remote track list failed for remote source")?;
+            return Ok(tracks
+                .iter()
+                .map(|rt| dest_for(root, &pattern, rt).to_string_lossy().to_string())
+                .collect());
         }
         // Offline fallback: enumerate local backup dir
         if let Some(root) = local_root(urls) {
@@ -866,7 +859,7 @@ pub async fn mirror_tag_write(
 
     let (conn, rt) = resolve_remote_track(pool, client, &source.urls, local_path).await?;
     let body = serde_json::json!({
-        "path": rt.remote_file_path,
+        "path": rt.file_path,
         "title": tag.title,
         "artist": tag.artist,
         "album": tag.album,
@@ -999,31 +992,44 @@ mod tests {
 
     #[test]
     fn dest_for_deterministic() {
+        use crate::signals::library::ArtistInfo;
         let root = "/music";
         let pattern = DEFAULT_PATTERN;
-        let rt = RemoteTrack {
+        let rt = TrackInfo {
             id: "1".into(),
             title: "My Song".into(),
-            artists_string: "Artist A".into(),
+            album_id: "a1".into(),
             album_title: "The Album".into(),
+            artists: vec![ArtistInfo {
+                id: "ar1".into(),
+                name: "Artist A".into(),
+                sort_name: None,
+                mbid: None,
+                thumbnail_url: None,
+                album_count: 0,
+                track_count: 0,
+            }],
+            artists_string: "Artist A".into(),
             track_num: Some(3),
             disc_num: Some(1),
             duration_secs: Some(240.0),
+            file_path: "/srv/music/track.mp3".into(),
             file_size: Some(10_000_000),
             bitrate: Some(320_000),
-            sample_rate: None,
             mbid_recording: None,
             artist_mbid: None,
             album_mbid: None,
-            release_date: None,
-            genres: vec![],
             lyrics: None,
+            release_date: None,
             track_gain: None,
             track_peak: None,
+            source: "tawai".into(),
+            source_type: "tawai".into(),
+            genres: vec![],
+            file_hash: None,
+            sample_rate: None,
             acoust_id_fingerprint: None,
             acoust_id: None,
-            file_hash: None,
-            remote_file_path: "/srv/music/track.mp3".into(),
         };
         let d1 = dest_for(root, pattern, &rt);
         let d2 = dest_for(root, pattern, &rt);

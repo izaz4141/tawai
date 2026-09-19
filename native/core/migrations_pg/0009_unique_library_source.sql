@@ -12,3 +12,7 @@ WHERE a.source_type LIKE 'recommendation:%'
 CREATE UNIQUE INDEX IF NOT EXISTS idx_library_sources_unique
     ON library_sources(source_type, owner_id)
     WHERE source_type LIKE 'recommendation:%';
+
+-- Speeds up bulk operations that filter tracks by library source, e.g.
+-- deleting a source (list-by-source scan).
+CREATE INDEX idx_tracks_source ON tracks(source_id);

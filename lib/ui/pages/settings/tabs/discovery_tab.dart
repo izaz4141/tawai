@@ -46,6 +46,7 @@ String _schemeOfRaw(String raw) =>
 
 class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
   List<LibrarySourceInfo> _sources = [];
+  String? _removingSourceId;
   bool _lbTokenValid = false;
   bool _lbTokenTesting = false;
   late final TextEditingController _lbTokenController;
@@ -104,9 +105,72 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
     if (anyAdded) await _loadSources();
   }
 
-  Future<void> _removeSource(String sourceId) async {
-    await ScanService.instance.removeSource(sourceId);
-    await _loadSources();
+  Future<void> _removeSource(LibrarySourceInfo source) async {
+    if (_removingSourceId != null) return;
+    final sourceName = source.name.isNotEmpty
+        ? source.name
+        : (source.urls.isNotEmpty ? _redactUrl(source.urls.first) : '');
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final colorScheme = Theme.of(ctx).colorScheme;
+        return AlertDialog(
+          title: const Text('Remove Source'),
+          content: Text(
+            'Remove "$sourceName" as a library source? '
+            'All tracks from this source will be removed from your library.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: colorScheme.error,
+                foregroundColor: colorScheme.onError,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Remove'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _removingSourceId = source.id);
+    try {
+      final ok = await ScanService.instance.removeSource(source.id);
+      if (!mounted) return;
+      if (ok) {
+        await _loadSources();
+        if (!mounted) return;
+        AppSnackBar.show(
+          context,
+          'Remove source "$sourceName" succeeded',
+          type: SnackType.success,
+        );
+      } else {
+        AppSnackBar.show(
+          context,
+          'Failed to remove source "$sourceName"',
+          type: SnackType.error,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          'Failed to remove source "$sourceName": $e',
+          type: SnackType.error,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _removingSourceId = null);
+      }
+    }
   }
 
   Future<void> _syncRecommendations(String includedKeys) async {
@@ -345,11 +409,22 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: IconButton(
-                  icon: Icon(
-                    Icons.remove_circle_outline,
-                    color: colorScheme.error,
-                  ),
-                  onPressed: () => _removeSource(source.id),
+                  icon: _removingSourceId == source.id
+                      ? SizedBox(
+                          width: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                          height:
+                              AppTheme.spaceSM *
+                              2 *
+                              AppTheme.spaceScale(context),
+                          child: const CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          Icons.remove_circle_outline,
+                          color: colorScheme.error,
+                        ),
+                  onPressed: _removingSourceId != null
+                      ? null
+                      : () => _removeSource(source),
                   tooltip: 'Remove source',
                 ),
               ),
