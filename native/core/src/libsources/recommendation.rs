@@ -333,6 +333,7 @@ pub async fn download(
         false,
         None,
         master_key,
+        None,
     )
     .await;
     if let Some(err) = scan_result.error {

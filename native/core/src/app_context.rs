@@ -444,9 +444,16 @@ impl AppContext {
                     });
 
                     let mk_scan = inner_ctx.master_key.read().await.clone();
-                    let result =
-                        audio::scan::run_scan(&pool, client, &sources2, false, Some(tx), &mk_scan)
-                            .await;
+                    let result = audio::scan::run_scan(
+                        &pool,
+                        client,
+                        &sources2,
+                        false,
+                        Some(tx),
+                        &mk_scan,
+                        None,
+                    )
+                    .await;
 
                     *inner_ctx.scan_progress.write().await = Some(ScanProgress {
                         complete: true,

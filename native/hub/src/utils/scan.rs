@@ -74,11 +74,29 @@ pub async fn handle_scan_library(context: Arc<AppContext>) {
 
         let force = msg.force;
         let client = context.client().clone();
+        let (log_tx, mut log_rx) = tokio::sync::mpsc::unbounded_channel::<(String, String)>();
+        tokio::spawn(async move {
+            while let Some((level, msg)) = log_rx.recv().await {
+                match level.as_str() {
+                    "ERROR" => logger::error(&msg),
+                    "WARN" => logger::warn(&msg),
+                    "INFO" => logger::info(&msg),
+                    _ => logger::debug(&msg),
+                }
+            }
+        });
         let ctx = context.clone();
         tokio::spawn(async move {
-            let core_result =
-                tawai_core::audio::scan::run_scan(db.pool(), client, &sources, force, Some(tx), &mk)
-                    .await;
+            let core_result = tawai_core::audio::scan::run_scan(
+                db.pool(),
+                client,
+                &sources,
+                force,
+                Some(tx),
+                &mk,
+                Some(log_tx),
+            )
+            .await;
 
             ctx.scan_running.store(false, Ordering::SeqCst);
             *ctx.scan_progress.write().await = Some(tawai_core::signals::library::ScanProgress {
@@ -195,12 +213,30 @@ pub async fn handle_scan_source(context: Arc<AppContext>) {
 
         let client = context.client().clone();
         let sources = vec![source];
+        let (log_tx, mut log_rx) = tokio::sync::mpsc::unbounded_channel::<(String, String)>();
+        tokio::spawn(async move {
+            while let Some((level, msg)) = log_rx.recv().await {
+                match level.as_str() {
+                    "ERROR" => logger::error(&msg),
+                    "WARN" => logger::warn(&msg),
+                    "INFO" => logger::info(&msg),
+                    _ => logger::debug(&msg),
+                }
+            }
+        });
         let ctx = context.clone();
         tokio::spawn(async move {
             let pool = db.pool();
-            let result =
-                tawai_core::audio::scan::run_scan(&pool, client, &sources, msg.force, Some(tx), &mk)
-                    .await;
+            let result = tawai_core::audio::scan::run_scan(
+                &pool,
+                client,
+                &sources,
+                msg.force,
+                Some(tx),
+                &mk,
+                Some(log_tx),
+            )
+            .await;
             *ctx.scan_progress.write().await = Some(tawai_core::signals::library::ScanProgress {
                 complete: true,
                 tracks_found: result.tracks_found,

@@ -9,15 +9,15 @@ use tokio::io::AsyncWriteExt;
 
 use crate::audio::tags::{AudioTag, derive_sort_name, parse_artists};
 use crate::db::account::DEFAULT_USERNAME;
+use crate::db::database::DatabasePool;
 use crate::db::library_source;
 use crate::db::user_settings;
-use crate::db::database::DatabasePool;
-use crate::libsources::{local, ParsedTrack};
+use crate::libsources::{ParsedTrack, local};
 use crate::signals::discovery::{JellyfinLibraryInfo, ServerTestResult};
 use crate::signals::library::{
     LibrarySourceInfo, ListLibrarySourcesResponse, ListTracksResponse, TrackInfo,
 };
-use crate::tools::rename::{dest_from_root, DEFAULT_PATTERN};
+use crate::tools::rename::{DEFAULT_PATTERN, dest_from_root};
 use crate::utils::config::AppConfig;
 use crate::utils::logger;
 
@@ -86,8 +86,8 @@ pub fn encrypt_url(url: &str, master_key: &str) -> String {
     if key.is_empty() || key.starts_with("NDK:") {
         return url.to_string();
     }
-    let encrypted = crate::utils::encryption::encrypt(key, master_key)
-        .unwrap_or_else(|_| key.to_string());
+    let encrypted =
+        crate::utils::encryption::encrypt(key, master_key).unwrap_or_else(|_| key.to_string());
     format!("tawai://{hostport}@{encrypted}{query}")
 }
 
@@ -109,8 +109,8 @@ pub fn decrypt_url(url: &str, master_key: &str) -> String {
     let Some((hostport, key)) = authority.split_once('@') else {
         return url.to_string();
     };
-    let decrypted = crate::utils::encryption::decrypt(key, master_key)
-        .unwrap_or_else(|_| key.to_string());
+    let decrypted =
+        crate::utils::encryption::decrypt(key, master_key).unwrap_or_else(|_| key.to_string());
     format!("tawai://{hostport}@{decrypted}{query}")
 }
 
@@ -216,11 +216,7 @@ pub async fn fetch_remote_libraries(
     if !resp.status().is_success() {
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
-        anyhow::bail!(
-            "tawai list sources failed with status {}: {}",
-            status,
-            text
-        );
+        anyhow::bail!("tawai list sources failed with status {}: {}", status, text);
     }
     let data: ListLibrarySourcesResponse = resp.json().await?;
     Ok(data
@@ -326,12 +322,8 @@ pub async fn import_into_source(
         .await
         .filter(|s| !s.is_empty());
 
-    let final_path = crate::tools::rename::move_file_into_source(
-        &temp_path,
-        root,
-        pattern.as_deref(),
-        &tag,
-    )?;
+    let final_path =
+        crate::tools::rename::move_file_into_source(&temp_path, root, pattern.as_deref(), &tag)?;
 
     if let Err(e) = crate::audio::tags::write_audio_tags(&final_path, &tag) {
         logger::warn(&format!(
@@ -348,6 +340,7 @@ pub async fn import_into_source(
         false,
         None,
         master_key,
+        None,
     )
     .await;
     if let Some(err) = scan_result.error {
@@ -469,7 +462,11 @@ pub async fn cached_remote_tracks(
     client: &reqwest::Client,
     conn: &RemoteConn,
 ) -> Result<Vec<RemoteTrack>> {
-    let key = format!("{}|{}", conn.http_base, conn.source_id.as_deref().unwrap_or(""));
+    let key = format!(
+        "{}|{}",
+        conn.http_base,
+        conn.source_id.as_deref().unwrap_or("")
+    );
     {
         let cache = REMOTE_CACHE.lock().unwrap();
         if let Some(entry) = cache.get(&key) {
@@ -578,11 +575,8 @@ async fn download_track(
     if let Some(parent) = dest.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let stream_url = format!(
-        "{}/api/tawai/playback/stream/{}",
-        conn.http_base, rt.id
-    );
-    let mut resp = client
+    let stream_url = format!("{}/api/tawai/playback/stream/{}", conn.http_base, rt.id);
+    let resp = client
         .get(&stream_url)
         .header("X-API-Key", &conn.api_key)
         .send()
@@ -619,7 +613,9 @@ async fn resolve_remote_track(
     local_path: &str,
 ) -> Result<(RemoteConn, RemoteTrack)> {
     let root = local_root(urls).unwrap_or("/tmp");
-    let conn = pick_remote(urls, client).await.context("remote tawai unreachable")?;
+    let conn = pick_remote(urls, client)
+        .await
+        .context("remote tawai unreachable")?;
     let tracks = cached_remote_tracks(client, &conn).await?;
     let pattern = user_settings::get_setting(pool, DEFAULT_USERNAME, "identify_naming_pattern")
         .await
@@ -910,10 +906,9 @@ mod tests {
 
     #[test]
     fn parse_tawai_url_with_key() {
-        let conn = parse_tawai_url(
-            "tawai://192.168.1.5:3000@secretkey?scheme=http&source_id=xyz&foo=bar",
-        )
-        .expect("should parse");
+        let conn =
+            parse_tawai_url("tawai://192.168.1.5:3000@secretkey?scheme=http&source_id=xyz&foo=bar")
+                .expect("should parse");
         assert_eq!(conn.http_base, "http://192.168.1.5:3000");
         assert_eq!(conn.api_key, "secretkey");
         assert_eq!(conn.source_id.as_deref(), Some("xyz"));
@@ -921,9 +916,8 @@ mod tests {
 
     #[test]
     fn parse_tawai_url_https() {
-        let conn =
-            parse_tawai_url("tawai://myhost:8443?source_id=abc123&scheme=https")
-                .expect("should parse");
+        let conn = parse_tawai_url("tawai://myhost:8443?source_id=abc123&scheme=https")
+            .expect("should parse");
         assert_eq!(conn.http_base, "https://myhost:8443");
         assert_eq!(conn.api_key, "");
         assert_eq!(conn.source_id.as_deref(), Some("abc123"));
@@ -931,9 +925,8 @@ mod tests {
 
     #[test]
     fn parse_tawai_url_scheme_case_insensitive() {
-        let conn =
-            parse_tawai_url("tawai://myhost:8443?source_id=abc123&scheme=HTTPS")
-                .expect("should parse");
+        let conn = parse_tawai_url("tawai://myhost:8443?source_id=abc123&scheme=HTTPS")
+            .expect("should parse");
         assert_eq!(conn.http_base, "https://myhost:8443");
     }
 
@@ -949,8 +942,7 @@ mod tests {
 
     #[test]
     fn parse_tawai_url_missing_source_id() {
-        let conn = parse_tawai_url("tawai://host:8080@key?scheme=http")
-            .expect("should parse");
+        let conn = parse_tawai_url("tawai://host:8080@key?scheme=http").expect("should parse");
         assert_eq!(conn.http_base, "http://host:8080");
         assert_eq!(conn.api_key, "key");
         assert_eq!(conn.source_id, None);
@@ -958,16 +950,13 @@ mod tests {
 
     #[test]
     fn parse_tawai_url_source_id_optional() {
-        let conn = parse_tawai_url("tawai://host:8080@key?scheme=https")
-            .expect("should parse");
+        let conn = parse_tawai_url("tawai://host:8080@key?scheme=https").expect("should parse");
         assert_eq!(conn.http_base, "https://host:8080");
         assert_eq!(conn.api_key, "key");
         assert_eq!(conn.source_id, None);
 
-        let conn = parse_tawai_url(
-            "tawai://host:8080@key?source_id=abc&scheme=https",
-        )
-        .expect("should parse");
+        let conn = parse_tawai_url("tawai://host:8080@key?source_id=abc&scheme=https")
+            .expect("should parse");
         assert_eq!(conn.source_id.as_deref(), Some("abc"));
     }
 
@@ -990,7 +979,10 @@ mod tests {
     fn encrypt_url_skips_plaintext_and_non_tawai() {
         let mk = crate::utils::encryption::generate_master_key();
         assert_eq!(encrypt_url("/music/path", &mk), "/music/path");
-        assert_eq!(encrypt_url("tawai://host:8080?source_id=x&scheme=http", &mk), "tawai://host:8080?source_id=x&scheme=http");
+        assert_eq!(
+            encrypt_url("tawai://host:8080?source_id=x&scheme=http", &mk),
+            "tawai://host:8080?source_id=x&scheme=http"
+        );
         let already = format!("tawai://host:8080@NDK:{}?scheme=http", "ab01");
         assert_eq!(encrypt_url(&already, &mk), already);
     }
@@ -999,7 +991,10 @@ mod tests {
     fn decrypt_url_passthrough_and_legacy() {
         let mk = crate::utils::encryption::generate_master_key();
         assert_eq!(decrypt_url("/music/path", &mk), "/music/path");
-        assert_eq!(decrypt_url("tawai://host:8080@plainkey?scheme=http", &mk), "tawai://host:8080@plainkey?scheme=http");
+        assert_eq!(
+            decrypt_url("tawai://host:8080@plainkey?scheme=http", &mk),
+            "tawai://host:8080@plainkey?scheme=http"
+        );
     }
 
     #[test]

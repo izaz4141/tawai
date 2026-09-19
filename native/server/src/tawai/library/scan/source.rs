@@ -80,7 +80,8 @@ pub async fn handle_scan_source(
 
     tokio::spawn(async move {
         let pool = db.pool();
-        tawai_core::audio::scan::run_scan(&pool, client, &sources, force, Some(tx), &mk).await;
+        tawai_core::audio::scan::run_scan(&pool, client, &sources, force, Some(tx), &mk, None)
+            .await;
         scan_ctx.scan_running.store(false, Ordering::SeqCst);
     });
 

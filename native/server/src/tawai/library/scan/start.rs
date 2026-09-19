@@ -80,7 +80,7 @@ pub async fn handle_scan(
     let ctx = state.context.clone();
 
     tokio::spawn(async move {
-        tawai_core::audio::scan::run_scan(db.pool(), client, &sources2, force, Some(tx), &mk)
+        tawai_core::audio::scan::run_scan(db.pool(), client, &sources2, force, Some(tx), &mk, None)
             .await;
         ctx.scan_running.store(false, Ordering::SeqCst);
     });

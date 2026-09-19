@@ -17,6 +17,24 @@ fn send_progress(tx: &Option<tokio::sync::watch::Sender<ScanProgress>>, p: ScanP
     }
 }
 
+type LogSender = tokio::sync::mpsc::UnboundedSender<(String, String)>;
+
+/// Log to stdout (as before) and forward the message to the live log channel
+/// consumed by the hub (level, message). Level-aware so Dart shows source-level
+/// failures as errors and per-file skips as warnings.
+fn stream_log(log_tx: &Option<LogSender>, level: &str, msg: String) {
+    if let Some(tx) = log_tx {
+        let _ = tx.send((level.to_string(), msg));
+        return;
+    }
+    match level {
+        "ERROR" => logger::error(&msg),
+        "WARN" => logger::warn(&msg),
+        "INFO" => logger::info(&msg),
+        _ => logger::debug(&msg),
+    }
+}
+
 enum InsertOutcome {
     Inserted { track_id: String, album_id: String },
     Duplicate,
@@ -31,6 +49,7 @@ async fn insert_track_to_db(
     stale_fp_to_path: &mut HashMap<String, String>,
     total_new: &mut u32,
     total_duplicates: &mut u32,
+    log_tx: &Option<LogSender>,
 ) -> InsertOutcome {
     // Fingerprint-based duplicate detection within the new set
     if !force {
@@ -43,10 +62,14 @@ async fn insert_track_to_db(
                         // replacement happens — later duplicates hit the branch below.
                         if let Err(e) = library::delete_track_by_file_path(pool, &stale_path).await
                         {
-                            logger::error(&format!(
-                                "Failed to remove stale track '{}' before keep-one insert: {}",
-                                stale_path, e
-                            ));
+                            stream_log(
+                                log_tx,
+                                "ERROR",
+                                format!(
+                                    "Failed to remove stale track '{}' before keep-one insert: {}",
+                                    stale_path, e
+                                ),
+                            );
                         }
                     } else {
                         *total_duplicates += 1;
@@ -54,10 +77,14 @@ async fn insert_track_to_db(
                     }
                 }
                 Err(e) => {
-                    logger::error(&format!(
-                        "track_exists_by_fingerprint failed for {}: {}",
-                        track.file_path, e
-                    ));
+                    stream_log(
+                        log_tx,
+                        "ERROR",
+                        format!(
+                            "track_exists_by_fingerprint failed for {}: {}",
+                            track.file_path, e
+                        ),
+                    );
                 }
                 _ => {}
             }
@@ -76,7 +103,7 @@ async fn insert_track_to_db(
         match library::insert_artist(pool, name, &sort_name, mbid).await {
             Ok(id) => album_artist_ids.push(id),
             Err(e) => {
-                logger::error(&format!("Failed to insert album artist '{}': {}", name, e));
+                stream_log(log_tx, "ERROR", format!("Failed to insert album artist '{}': {}", name, e));
                 return InsertOutcome::Failed;
             }
         }
@@ -93,7 +120,7 @@ async fn insert_track_to_db(
         match library::insert_artist(pool, name, &sort_name, mbid).await {
             Ok(id) => track_artist_ids.push(id),
             Err(e) => {
-                logger::error(&format!("Failed to insert track artist '{}': {}", name, e));
+                stream_log(log_tx, "ERROR", format!("Failed to insert track artist '{}': {}", name, e));
                 return InsertOutcome::Failed;
             }
         }
@@ -115,7 +142,7 @@ async fn insert_track_to_db(
             id
         }
         Err(e) => {
-            logger::error(&format!("Failed to insert album '{}': {}", track.album, e));
+            stream_log(log_tx, "ERROR", format!("Failed to insert album '{}': {}", track.album, e));
             return InsertOutcome::Failed;
         }
     };
@@ -153,7 +180,7 @@ async fn insert_track_to_db(
             id
         }
         Err(e) => {
-            logger::error(&format!("Failed to insert track '{}': {}", track.title, e));
+            stream_log(log_tx, "ERROR", format!("Failed to insert track '{}': {}", track.title, e));
             return InsertOutcome::Failed;
         }
     };
@@ -162,10 +189,14 @@ async fn insert_track_to_db(
         if let Err(e) =
             library::insert_fingerprint(pool, &track_id, fp, track.acoust_id.as_deref()).await
         {
-            logger::error(&format!(
-                "Failed to insert fingerprint for '{}': {}",
-                track.title, e
-            ));
+            stream_log(
+                log_tx,
+                "ERROR",
+                format!(
+                    "Failed to insert fingerprint for '{}': {}",
+                    track.title, e
+                ),
+            );
         }
     }
 
@@ -179,6 +210,7 @@ pub async fn run_scan(
     force: bool,
     progress: Option<tokio::sync::watch::Sender<ScanProgress>>,
     master_key: &str,
+    log_tx: Option<LogSender>,
 ) -> ScanResult {
     let sources: Vec<LibrarySourceInfo> = sources
         .iter()
@@ -187,7 +219,7 @@ pub async fn run_scan(
         .collect();
     if force {
         if let Err(e) = library::delete_all_library(pool).await {
-            logger::error(&format!("delete_all_library failed: {}", e));
+            stream_log(&log_tx, "ERROR", format!("delete_all_library failed: {}", e));
             let result = ScanResult {
                 success: false,
                 tracks_found: 0,
@@ -235,7 +267,11 @@ pub async fn run_scan(
         let parser = match libsources::get_parser(&source.source_type, client.clone(), pool) {
             Some(p) => p,
             None => {
-                logger::error(&format!("Unknown source type: {}", source.source_type));
+                stream_log(
+                    &log_tx,
+                    "ERROR",
+                    format!("Unknown source type: {}", source.source_type),
+                );
                 continue;
             }
         };
@@ -244,10 +280,14 @@ pub async fn run_scan(
         let url = match resolver.resolve(&source.urls, Some(&client), None).await {
             Ok(u) => u,
             Err(e) => {
-                logger::error(&format!(
-                    "No reachable URL for source '{}' ({:?}): {}",
-                    source.name, source.urls, e
-                ));
+                stream_log(
+                    &log_tx,
+                    "ERROR",
+                    format!(
+                        "No reachable URL for source '{}' ({:?}): {}",
+                        source.name, source.urls, e
+                    ),
+                );
                 continue;
             }
         };
@@ -258,10 +298,11 @@ pub async fn run_scan(
         {
             Ok(p) => p,
             Err(e) => {
-                logger::error(&format!(
-                    "Failed to enumerate source '{}' ({}): {}",
-                    source.name, url, e
-                ));
+                stream_log(
+                    &log_tx,
+                    "ERROR",
+                    format!("Failed to enumerate source '{}' ({}): {}", source.name, url, e),
+                );
                 continue;
             }
         };
@@ -293,7 +334,11 @@ pub async fn run_scan(
     let db_paths: HashSet<String> = match library::all_track_file_paths(pool).await {
         Ok(paths) => paths.into_iter().collect(),
         Err(e) => {
-            logger::error(&format!("Failed to list track file paths: {}", e));
+            stream_log(
+                &log_tx,
+                "ERROR",
+                format!("Failed to list track file paths: {}", e),
+            );
             HashSet::new()
         }
     };
@@ -346,7 +391,7 @@ pub async fn run_scan(
         match library::fingerprint_paths_of(pool, &to_delete_set).await {
             Ok(map) => map,
             Err(e) => {
-                logger::error(&format!("fingerprint_paths_of failed: {}", e));
+                stream_log(&log_tx, "ERROR", format!("fingerprint_paths_of failed: {}", e));
                 HashMap::new()
             }
         };
@@ -393,13 +438,28 @@ pub async fn run_scan(
 
         let mut resolver = libsources::SourceUrlResolver::new();
         for file_path in &new_paths {
+            send_progress(
+                &progress,
+                ScanProgress {
+                    current_file: file_path.clone(),
+                    files_scanned: scanned_count,
+                    total_files: to_scan_count,
+                    stage: "scanning".to_string(),
+                    current_source: source.name.clone(),
+                    ..Default::default()
+                },
+            );
             let url = match resolver
                 .resolve(&source.urls, Some(&client), Some(file_path.as_str()))
                 .await
             {
                 Ok(u) => u,
                 Err(e) => {
-                    logger::warn(&format!("No reachable URL for '{}': {}", source.name, e));
+                    stream_log(
+                        &log_tx,
+                        "WARN",
+                        format!("No reachable URL for '{}': {}", source.name, e),
+                    );
                     continue;
                 }
             };
@@ -407,7 +467,11 @@ pub async fn run_scan(
             let mut track = match parser.scan_file(pool, &url, &source.urls, file_path).await {
                 Ok(t) => t,
                 Err(e) => {
-                    logger::warn(&format!("Failed to scan '{}': {}", file_path, e));
+                    stream_log(
+                        &log_tx,
+                        "WARN",
+                        format!("Failed to scan '{}': {}", file_path, e),
+                    );
                     continue;
                 }
             };
@@ -445,26 +509,19 @@ pub async fn run_scan(
                             Some((10f64.powf(m.peak_dbfs / 20.0)).clamp(0.0, 1.0));
                     }
                     Err(e) => {
-                        logger::warn(&format!(
-                            "Failed to measure loudness for '{}': {}",
-                            track.file_path, e
-                        ));
+                        stream_log(
+                            &log_tx,
+                            "WARN",
+                            format!(
+                                "Failed to measure loudness for '{}': {}",
+                                track.file_path, e
+                            ),
+                        );
                     }
                 }
             }
 
             scanned_count += 1;
-            send_progress(
-                &progress,
-                ScanProgress {
-                    current_file: track.file_path.clone(),
-                    files_scanned: scanned_count,
-                    total_files: to_scan_count,
-                    stage: "scanning".to_string(),
-                    current_source: source.name.clone(),
-                    ..Default::default()
-                },
-            );
 
             let outcome = insert_track_to_db(
                 pool,
@@ -474,6 +531,7 @@ pub async fn run_scan(
                 &mut stale_fp_to_path,
                 &mut total_new,
                 &mut total_duplicates,
+                &log_tx,
             )
             .await;
 
@@ -514,16 +572,20 @@ pub async fn run_scan(
                     // A surviving copy exists (or was kept this scan) — remove this file.
                     // `mirror_remote = false`: scan-time cleanup must never propagate
                     // the delete back to a remote server's shared copy.
-                    match parser.delete(pool, file_path, &url, &source.urls, false).await {
+                    match parser
+                        .delete(pool, file_path, &url, &source.urls, false)
+                        .await
+                    {
                         Ok(()) => {
                             total_duplicates_deleted += 1;
                             logger::info(&format!("Deleted duplicate file '{}'", file_path));
                         }
                         Err(e) => {
-                            logger::warn(&format!(
-                                "Failed to delete duplicate file '{}': {}",
-                                file_path, e
-                            ));
+                            stream_log(
+                                &log_tx,
+                                "WARN",
+                                format!("Failed to delete duplicate file '{}': {}", file_path, e),
+                            );
                         }
                     }
                 }
@@ -548,10 +610,11 @@ pub async fn run_scan(
 
     for file_path in &to_delete_set {
         if let Err(e) = library::delete_track_by_file_path(pool, file_path).await {
-            logger::error(&format!(
-                "Failed to delete missing track '{}': {}",
-                file_path, e
-            ));
+            stream_log(
+                &log_tx,
+                "ERROR",
+                format!("Failed to delete missing track '{}': {}", file_path, e),
+            );
         } else {
             total_deleted += 1;
         }
@@ -572,10 +635,11 @@ pub async fn run_scan(
     );
     for (album_id, (cover_bytes, _)) in &best_covers {
         if let Err(e) = library::update_album_cover(pool, album_id, cover_bytes).await {
-            logger::error(&format!(
-                "Failed to update album cover for '{}': {}",
-                album_id, e
-            ));
+            stream_log(
+                &log_tx,
+                "ERROR",
+                format!("Failed to update album cover for '{}': {}", album_id, e),
+            );
         }
     }
 
