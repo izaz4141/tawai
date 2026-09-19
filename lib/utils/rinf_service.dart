@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/utils/logger.dart';
+import 'package:tawai/utils/log_service.dart';
 
 class RinfService {
   static final RinfService _instance = RinfService._();
@@ -336,7 +337,7 @@ class RinfService {
     if (signal.message.error != null) {
       log(
         "Error fetching preview for track ${track.title}: ${signal.message.error}",
-        isError: true,
+        level: LogLevel.error,
       );
     }
     return signal.message;
@@ -1345,7 +1346,7 @@ class RinfService {
     ).sendSignalToRust();
     final signal = await stream.first;
     if (signal.message.error != null) {
-      log('searchLyrics error: ${signal.message.error}', isError: true);
+      log('searchLyrics error: ${signal.message.error}', level: LogLevel.error);
     }
     return signal.message.results;
   }

@@ -143,8 +143,8 @@ Future<void> main() async {
       runApp(const Tawai());
     },
     (error, stack) {
-      log('Error: $error', isError: true);
-      log('Stack: $stack', isError: true);
+      log('Error: $error', level: LogLevel.error);
+      log('Stack: $stack', level: LogLevel.error);
     },
     zoneSpecification: ZoneSpecification(
       print: (Zone self, ZoneDelegate parent, Zone zone, String line) {

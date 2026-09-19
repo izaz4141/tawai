@@ -7,6 +7,7 @@ import 'package:tawai/utils/api_service.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/byte_cache.dart';
 import 'package:tawai/utils/logger.dart';
+import 'package:tawai/utils/log_service.dart';
 
 class AppImageCache {
   static final AppImageCache _instance = AppImageCache._();
@@ -31,7 +32,7 @@ class AppImageCache {
         return response.bodyBytes;
       }
     } catch (e) {
-      log('getNetworkImage error for $url: $e', isError: true);
+      log('getNetworkImage error for $url: $e', level: LogLevel.error);
     }
     return null;
   }

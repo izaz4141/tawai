@@ -8,6 +8,7 @@ import 'package:archive/archive_io.dart';
 
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/logger.dart';
+import 'package:tawai/utils/log_service.dart';
 import 'package:tawai/utils/app_lifecycle.dart';
 import 'package:tawai/utils/system_service.dart';
 
@@ -58,7 +59,7 @@ Future<VersionInfo?> checkForUpdate({bool checkNightly = false}) async {
 
     return null;
   } catch (e) {
-    log('Error checking for updates: $e', isError: true);
+    log('Error checking for updates: $e', level: LogLevel.error);
     return null;
   }
 }
@@ -68,19 +69,19 @@ Future<bool> downloadAndReplaceAppImage(
   Function(double progress)? onProgress,
 }) async {
   if (!Platform.isLinux) {
-    log('This function only works on Linux', isError: true);
+    log('This function only works on Linux', level: LogLevel.warning);
     return false;
   }
 
   if (versionInfo.downloadUrl == null) {
-    log('No download URL available', isError: true);
+    log('No download URL available', level: LogLevel.error);
     return false;
   }
 
   try {
     final currentAppImagePath = Platform.environment['APPIMAGE'];
     if (currentAppImagePath == null || currentAppImagePath.isEmpty) {
-      log('Not running from AppImage', isError: true);
+      log('Not running from AppImage', level: LogLevel.warning);
       return false;
     }
 
@@ -92,7 +93,7 @@ Future<bool> downloadAndReplaceAppImage(
     final request = await http.Client().send(http.Request('GET', url));
 
     if (request.statusCode != 200) {
-      log('Failed to download: ${request.statusCode}', isError: true);
+      log('Failed to download: ${request.statusCode}', level: LogLevel.error);
       return false;
     }
 
@@ -130,7 +131,7 @@ Future<bool> downloadAndReplaceAppImage(
       }
       await currentFile.copy(backupPath);
     } catch (e) {
-      log('Warning: Failed to create backup: $e', isError: true);
+      log('Warning: Failed to create backup: $e', level: LogLevel.warning);
       // Proceeding anyway as the update is ready
     }
 
@@ -152,7 +153,7 @@ Future<bool> downloadAndReplaceAppImage(
 
     exit(0);
   } catch (e) {
-    log('Error updating AppImage: $e', isError: true);
+    log('Error updating AppImage: $e', level: LogLevel.error);
     return false;
   }
 }
@@ -162,12 +163,12 @@ Future<bool> downloadAndReplaceWindows(
   Function(double progress)? onProgress,
 }) async {
   if (!Platform.isWindows) {
-    log('This function only works on Windows', isError: true);
+    log('This function only works on Windows', level: LogLevel.warning);
     return false;
   }
 
   if (versionInfo.downloadUrl == null) {
-    log('No download URL available', isError: true);
+    log('No download URL available', level: LogLevel.error);
     return false;
   }
 
@@ -180,7 +181,7 @@ Future<bool> downloadAndReplaceWindows(
     final request = await http.Client().send(http.Request('GET', url));
 
     if (request.statusCode != 200) {
-      log('Failed to download: ${request.statusCode}', isError: true);
+      log('Failed to download: ${request.statusCode}', level: LogLevel.error);
       return false;
     }
 
@@ -220,7 +221,7 @@ Future<bool> downloadAndReplaceWindows(
           try {
             await targetFile.rename(oldPath);
           } catch (e) {
-            log('Could not rename $filename: $e', isError: true);
+            log('Could not rename $filename: $e', level: LogLevel.error);
           }
         }
 
@@ -248,7 +249,7 @@ Future<bool> downloadAndReplaceWindows(
 
     exit(0);
   } catch (e) {
-    log('Error updating Windows app: $e', isError: true);
+    log('Error updating Windows app: $e', level: LogLevel.error);
     return false;
   }
 }
@@ -272,7 +273,7 @@ Future<void> cleanupOldFiles() async {
         }
       }
     } catch (e) {
-      log('Error cleaning up old files: $e', isError: true);
+      log('Error cleaning up old files: $e', level: LogLevel.error);
     }
   } else if (Platform.isLinux) {
     try {
@@ -285,7 +286,7 @@ Future<void> cleanupOldFiles() async {
         }
       }
     } catch (e) {
-      log('Error cleaning up backup AppImage: $e', isError: true);
+      log('Error cleaning up backup AppImage: $e', level: LogLevel.error);
     }
   }
 }
@@ -298,7 +299,7 @@ Future<bool?> checkAndUpdate({Function(double progress)? onProgress}) async {
 
   final versionInfo = await checkForUpdate();
   if (versionInfo == null) {
-    log('Failed to check for updates', isError: true);
+    log('Failed to check for updates', level: LogLevel.error);
     return null;
   }
 

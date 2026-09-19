@@ -14,6 +14,7 @@ import 'package:tawai/utils/image_cache.dart';
 import 'package:tawai/utils/settings.dart' show SettingsManager;
 import 'package:tawai/utils/helper.dart';
 import 'package:tawai/utils/logger.dart';
+import 'package:tawai/utils/log_service.dart';
 
 import 'audio_handler.dart';
 
@@ -170,7 +171,7 @@ class PlaybackService {
 
       final result = await BridgeService.instance.previewTrack(syntheticTrack);
       if (result.error != null || result.url == null) {
-        log('Preview error: ${result.error}', isError: true);
+        log('Preview error: ${result.error}', level: LogLevel.error);
         await _restoreAfterPreview();
         return;
       }
@@ -258,7 +259,7 @@ class PlaybackService {
     try {
       tags = await BridgeService.instance.readFileTags(path);
     } catch (e) {
-      log('readFileTags failed for $path: $e', isError: true);
+      log('readFileTags failed for $path: $e', level: LogLevel.error);
     }
     final fallback =
         tags == null || tags.error != null || tags.durationSecs <= 0;
@@ -496,7 +497,7 @@ class PlaybackService {
   void _startPlayback() {
     unawaited(
       _player.play().catchError((Object e, StackTrace st) {
-        log('play failed: $e', isError: true);
+        log('play failed: $e', level: LogLevel.error);
       }),
     );
   }

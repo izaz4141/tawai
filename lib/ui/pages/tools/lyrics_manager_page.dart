@@ -6,6 +6,7 @@ import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/widgets/dialog/language_picker_dialog.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/logger.dart';
+import 'package:tawai/utils/log_service.dart';
 import 'package:tawai/utils/settings.dart';
 
 class LyricsManagerPage extends StatefulWidget {
@@ -52,7 +53,7 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
       );
       if (mounted) setState(() => _results = results);
     } catch (e) {
-      log('search error: $e', isError: true);
+      log('search error: $e', level: LogLevel.error);
     }
     if (mounted) setState(() => _loading = false);
   }
@@ -254,7 +255,7 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
         _loadTracks(sources.first.id);
       }
     } catch (e) {
-      log('lyrics_manager: loadSources error: $e', isError: true);
+      log('lyrics_manager: loadSources error: $e', level: LogLevel.error);
     }
   }
 
@@ -274,7 +275,7 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
         _loadingTracks = false;
       });
     } catch (e) {
-      log('lyrics_manager: loadTracks error: $e', isError: true);
+      log('lyrics_manager: loadTracks error: $e', level: LogLevel.error);
       if (mounted) {
         setState(() {
           _allTracks = [];
@@ -337,7 +338,7 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
         }
       }
     } catch (e) {
-      log('romajize error: $e', isError: true);
+      log('romajize error: $e', level: LogLevel.error);
     }
   }
 
@@ -357,7 +358,7 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
         }
       }
     } catch (e) {
-      log('lyrics_manager: saveLyrics error: $e', isError: true);
+      log('lyrics_manager: saveLyrics error: $e', level: LogLevel.error);
     }
     if (mounted) {
       setState(() => _saving = false);
@@ -383,7 +384,7 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
         }
       }
     } catch (e) {
-      log('lyrics_manager: clearLyrics error: $e', isError: true);
+      log('lyrics_manager: clearLyrics error: $e', level: LogLevel.error);
     }
     if (mounted) {
       setState(() => _saving = false);

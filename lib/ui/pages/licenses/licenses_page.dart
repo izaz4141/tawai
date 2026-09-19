@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/utils/logger.dart';
+import 'package:tawai/utils/log_service.dart';
 
 class LicensesPage extends StatefulWidget {
   const LicensesPage({super.key});
@@ -90,7 +91,7 @@ class _LicensesPageState extends State<LicensesPage> {
         _packageLicenses[name]!.add(licenseEntry);
       }
     } catch (e) {
-      log('Failed to load Rust licenses: $e', isError: true);
+      log('Failed to load Rust licenses: $e', level: LogLevel.error);
     }
 
     // Sort packages

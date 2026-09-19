@@ -9,6 +9,7 @@ import 'package:flutter_sharing_intent/model/sharing_file.dart';
 import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/utils/io_service.dart';
 import 'package:tawai/utils/logger.dart';
+import 'package:tawai/utils/log_service.dart';
 
 /// Receives audio files shared from other Android apps via the system share
 /// sheet or "Open with" and hands them to the player.
@@ -54,7 +55,7 @@ class SharedIntentService {
         .getInitialSharing()
         .then(_handleFiles)
         .catchError(
-          (Object e) => log('getInitialSharing error: $e', isError: true),
+          (Object e) => log('getInitialSharing error: $e', level: LogLevel.error),
         );
     FlutterSharingIntent.instance.reset();
   }
@@ -112,7 +113,7 @@ class SharedIntentService {
       if (!await src.exists()) return null;
       return await _copyToTemp(src);
     } catch (e) {
-      log('Shared file materialize error: $e', isError: true);
+      log('Shared file materialize error: $e', level: LogLevel.error);
       return null;
     }
   }
@@ -131,7 +132,7 @@ class SharedIntentService {
   }
 
   void _handleError(Object e) {
-    log('Shared intent stream error: $e', isError: true);
+    log('Shared intent stream error: $e', level: LogLevel.error);
   }
 
   void dispose() {

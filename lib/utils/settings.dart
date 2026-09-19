@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import 'package:tawai/utils/platform_service.dart';
 import 'package:tawai/utils/logger.dart';
+import 'package:tawai/utils/log_service.dart';
 import 'package:tawai/utils/io_service.dart';
 import 'package:tawai/utils/api_service.dart';
 import 'package:tawai/utils/bridge_service.dart';
@@ -87,7 +88,7 @@ class SettingsManager {
       );
       defaults = json.decode(response);
     } catch (e) {
-      log('Error loading default settings asset: $e', isError: true);
+      log('Error loading default settings asset: $e', level: LogLevel.error);
     }
   }
 
@@ -390,7 +391,7 @@ class SettingsManager {
         return u.apiKey;
       }
     } catch (e) {
-      log('Failed to fetch current user API key: $e', isError: true);
+      log('Failed to fetch current user API key: $e', level: LogLevel.error);
     }
     return '';
   }
@@ -475,7 +476,7 @@ class SettingsManager {
     if (data != null) {
       await _applyFromJson(data, fromBackend: true);
     } else {
-      log('Failed to load settings from backend', isError: true);
+      log('Failed to load settings from backend', level: LogLevel.error);
     }
   }
 
@@ -489,7 +490,7 @@ class SettingsManager {
     }
     final success = await APIService.instance.saveSettings(jsonMap);
     if (!success) {
-      log('Failed to save settings to backend', isError: true);
+      log('Failed to save settings to backend', level: LogLevel.error);
     }
   }
 

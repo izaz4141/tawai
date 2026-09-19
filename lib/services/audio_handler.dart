@@ -9,6 +9,7 @@ import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/io_service.dart';
 import 'package:tawai/utils/logger.dart';
+import 'package:tawai/utils/log_service.dart';
 
 /// Bridges [PlaybackService] to `audio_service` so that playback can be
 /// controlled from the Android media notification / lock screen and, on web,
@@ -98,7 +99,7 @@ class TawaiAudioHandler extends BaseAudioHandler with SeekHandler {
     try {
       art = await _resolveArtUri(track.id);
     } catch (e) {
-      log('resolveArt error: ${track.id}: $e', isError: true);
+      log('resolveArt error: ${track.id}: $e', level: LogLevel.error);
     }
     if (art == null) return;
     if (gen != _artGeneration) return;

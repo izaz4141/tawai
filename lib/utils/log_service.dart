@@ -23,19 +23,7 @@ class LogService {
           final timestampStr = match.group(2);
           final message = match.group(3);
 
-          LogLevel level;
-          switch (levelStr) {
-            case 'DEBUG':
-              level = LogLevel.debug;
-            case 'INFO':
-              level = LogLevel.info;
-            case 'WARN':
-              level = LogLevel.warning;
-            case 'ERROR':
-              level = LogLevel.error;
-            default:
-              level = LogLevel.stdout;
-          }
+          final level = logLevelFromString(levelStr);
 
           DateTime timestamp;
           try {
@@ -63,23 +51,7 @@ class LogService {
       final timestampStr = match.group(2);
       final message = match.group(3);
 
-      LogLevel level;
-      switch (levelStr) {
-        case 'DEBUG':
-          level = LogLevel.debug;
-          break;
-        case 'INFO':
-          level = LogLevel.info;
-          break;
-        case 'WARN':
-          level = LogLevel.warning;
-          break;
-        case 'ERROR':
-          level = LogLevel.error;
-          break;
-        default:
-          level = LogLevel.stdout;
-      }
+      final level = logLevelFromString(levelStr);
 
       DateTime timestamp;
       try {
@@ -167,4 +139,36 @@ class LogEntry {
     required this.timestamp,
     required this.message,
   });
+}
+
+LogLevel logLevelFromString(String? name) {
+  switch (name) {
+    case 'DEBUG':
+      return LogLevel.debug;
+    case 'INFO':
+      return LogLevel.info;
+    case 'WARN':
+      return LogLevel.warning;
+    case 'ERROR':
+      return LogLevel.error;
+    case 'STDOUT':
+      return LogLevel.stdout;
+    default:
+      return LogLevel.debug;
+  }
+}
+
+String logLevelLabel(LogLevel level) {
+  switch (level) {
+    case LogLevel.error:
+      return 'ERROR';
+    case LogLevel.warning:
+      return 'WARN';
+    case LogLevel.info:
+      return 'INFO';
+    case LogLevel.debug:
+      return 'DEBUG';
+    case LogLevel.stdout:
+      return 'STDOUT';
+  }
 }

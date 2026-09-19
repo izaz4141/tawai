@@ -8,6 +8,7 @@ import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/utils/logger.dart';
+import 'package:tawai/utils/log_service.dart';
 import 'package:tawai/ui/widgets/app_shell.dart';
 import 'package:tawai/ui/widgets/mini_player.dart';
 import 'package:tawai/ui/pages/library/filterable_list.dart';
@@ -309,7 +310,7 @@ class _LibraryPageState extends State<LibraryPage>
     final current = SettingsManager.includedRecommendations.value;
     final result = await BridgeService.instance.syncRecs(includedKeys: current);
     if (!result.success && result.error != null) {
-      log('syncRecs failed: ${result.error}', isError: true);
+      log('syncRecs failed: ${result.error}', level: LogLevel.error);
     }
   }
 

@@ -12,6 +12,7 @@ import 'package:tawai/utils/bindings_json.dart';
 import 'package:tawai/utils/helper.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/utils/logger.dart';
+import 'package:tawai/utils/log_service.dart';
 import 'package:tawai/utils/rinf_service.dart';
 import 'package:tawai/utils/system_service.dart';
 import 'package:tawai/models/fs.dart';
@@ -101,7 +102,7 @@ class APIService {
         return response.bodyBytes;
       }
     } catch (e) {
-      log('getAlbumCover error: $e', isError: true);
+      log('getAlbumCover error: $e', level: LogLevel.error);
     }
     return null;
   }
@@ -116,7 +117,7 @@ class APIService {
         return response.bodyBytes;
       }
     } catch (e) {
-      log('getTrackCover error: $e', isError: true);
+      log('getTrackCover error: $e', level: LogLevel.error);
     }
     return null;
   }
@@ -187,11 +188,11 @@ class APIService {
       } else {
         log(
           'Login failed: ${response.statusCode} ${response.body}',
-          isError: true,
+          level: LogLevel.error,
         );
       }
     } catch (e, stack) {
-      log('Login error: $e \n$stack', isError: true);
+      log('Login error: $e \n$stack', level: LogLevel.error);
     }
 
     return false;
@@ -239,7 +240,7 @@ class APIService {
         }
       }
     } catch (e) {
-      log('Test login error: $e', isError: true);
+      log('Test login error: $e', level: LogLevel.error);
     }
     return (
       success: false,
@@ -278,11 +279,11 @@ class APIService {
       }
       log(
         'Regen API-Key failed: ${response.statusCode} ${response.body}',
-        isError: true,
+        level: LogLevel.error,
       );
       return false;
     } catch (e) {
-      log("Regen API-Key failed: $e", isError: true);
+      log("Regen API-Key failed: $e", level: LogLevel.error);
       return false;
     }
   }
@@ -300,10 +301,10 @@ class APIService {
       }
       log(
         "listDirectory failed: ${response.statusCode} ${response.body}",
-        isError: true,
+        level: LogLevel.error,
       );
     } catch (e) {
-      log('listDirectory error: $e', isError: true);
+      log('listDirectory error: $e', level: LogLevel.error);
     }
     return null;
   }
@@ -319,11 +320,11 @@ class APIService {
       }
       log(
         'Server restart failed: ${response.statusCode} ${response.body}',
-        isError: true,
+        level: LogLevel.error,
       );
       return false;
     } catch (e) {
-      log("Server restart failed: $e", isError: true);
+      log("Server restart failed: $e", level: LogLevel.error);
       return false;
     }
   }
@@ -351,7 +352,7 @@ class APIService {
     } catch (e) {
       if (!isOnline.value) {
       } else {
-        log("Server status check failed: $e", isError: true);
+        log("Server status check failed: $e", level: LogLevel.error);
       }
       isOnline.value = false;
       serverVersion.value = null;
@@ -373,7 +374,7 @@ class APIService {
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
     } catch (e) {
-      log("Error getting settings: $e", isError: true);
+      log("Error getting settings: $e", level: LogLevel.error);
     }
     return null;
   }
@@ -387,7 +388,7 @@ class APIService {
       );
       return response.statusCode == 200;
     } catch (e) {
-      log("Error saving settings: $e", isError: true);
+      log("Error saving settings: $e", level: LogLevel.error);
       return false;
     }
   }
@@ -404,7 +405,7 @@ class APIService {
         return settings.map((k, v) => MapEntry(k, v.toString()));
       }
     } catch (e) {
-      log("Error getting all user settings: $e", isError: true);
+      log("Error getting all user settings: $e", level: LogLevel.error);
     }
     return {};
   }
@@ -417,7 +418,7 @@ class APIService {
       );
       if (response.statusCode == 200) return response.body;
     } catch (e) {
-      log("Error generating master key: $e", isError: true);
+      log("Error generating master key: $e", level: LogLevel.error);
     }
     return null;
   }
@@ -433,7 +434,7 @@ class APIService {
         return data['version'] as String?;
       }
     } catch (e) {
-      log("Error getting current version: $e", isError: true);
+      log("Error getting current version: $e", level: LogLevel.error);
     }
     return null;
   }
@@ -460,7 +461,7 @@ class APIService {
         }
       }
     } catch (e) {
-      log("Error getting latest version: $e", isError: true);
+      log("Error getting latest version: $e", level: LogLevel.error);
     }
     return null;
   }
@@ -477,7 +478,7 @@ class APIService {
         return data['latest'] as String?;
       }
     } catch (e) {
-      log("Error comparing versions: $e", isError: true);
+      log("Error comparing versions: $e", level: LogLevel.error);
     }
     return null;
   }
@@ -514,7 +515,7 @@ class APIService {
         return (filePath: '', error: 'Track not found', headers: null);
       }
     } catch (e) {
-      log('playTrack error: $e', isError: true);
+      log('playTrack error: $e', level: LogLevel.error);
     }
     return (filePath: '', error: 'Failed to play track', headers: null);
   }
@@ -540,13 +541,13 @@ class APIService {
         if (error != null) {
           log(
             "Error fetching preview for track ${track.title}: $error",
-            isError: true,
+            level: LogLevel.error,
           );
         }
         return PreviewTrackResponse(id: '');
       }
     } catch (e) {
-      log('previewTrack error: $e', isError: true);
+      log('previewTrack error: $e', level: LogLevel.error);
       return PreviewTrackResponse(id: '');
     }
   }
@@ -562,7 +563,7 @@ class APIService {
         return TrackInfoJson.fromJson(json);
       }
     } catch (e) {
-      log('getTrackInfo error: $e', isError: true);
+      log('getTrackInfo error: $e', level: LogLevel.error);
     }
     return null;
   }
@@ -586,7 +587,7 @@ class APIService {
       );
       return response.statusCode == 200;
     } catch (e) {
-      log('reportPlayback error: $e', isError: true);
+      log('reportPlayback error: $e', level: LogLevel.error);
       return false;
     }
   }
@@ -616,7 +617,7 @@ class APIService {
         }).toList();
       }
     } catch (e) {
-      log('getHistory error: $e', isError: true);
+      log('getHistory error: $e', level: LogLevel.error);
     }
     return [];
   }
@@ -642,7 +643,7 @@ class APIService {
         }).toList();
       }
     } catch (e) {
-      log('getTracks error: $e', isError: true);
+      log('getTracks error: $e', level: LogLevel.error);
     }
     return [];
   }
@@ -671,7 +672,7 @@ class APIService {
         }).toList();
       }
     } catch (e) {
-      log('getAlbums error: $e', isError: true);
+      log('getAlbums error: $e', level: LogLevel.error);
     }
     return [];
   }
@@ -699,7 +700,7 @@ class APIService {
         }).toList();
       }
     } catch (e) {
-      log('getArtists error: $e', isError: true);
+      log('getArtists error: $e', level: LogLevel.error);
     }
     return [];
   }
@@ -726,7 +727,7 @@ class APIService {
         }).toList();
       }
     } catch (e) {
-      log('getPlaylists error: $e', isError: true);
+      log('getPlaylists error: $e', level: LogLevel.error);
     }
     return [];
   }
@@ -747,7 +748,7 @@ class APIService {
         return data['playlist_id'] as String;
       }
     } catch (e) {
-      log('createPlaylist error: $e', isError: true);
+      log('createPlaylist error: $e', level: LogLevel.error);
     }
     return '';
   }
@@ -760,7 +761,7 @@ class APIService {
       );
       return response.statusCode == 200;
     } catch (e) {
-      log('deletePlaylist error: $e', isError: true);
+      log('deletePlaylist error: $e', level: LogLevel.error);
       return false;
     }
   }
@@ -781,7 +782,7 @@ class APIService {
       } catch (_) {}
       return (success: false, error: error);
     } catch (e) {
-      log('deleteTrack error: $e', isError: true);
+      log('deleteTrack error: $e', level: LogLevel.error);
       return (success: false, error: e.toString());
     }
   }
@@ -805,7 +806,7 @@ class APIService {
         }).toList();
       }
     } catch (e) {
-      log('getPlaylistTracks error: $e', isError: true);
+      log('getPlaylistTracks error: $e', level: LogLevel.error);
     }
     return [];
   }
@@ -823,7 +824,7 @@ class APIService {
       );
       return response.statusCode == 200;
     } catch (e) {
-      log('addTrackToPlaylist error: $e', isError: true);
+      log('addTrackToPlaylist error: $e', level: LogLevel.error);
       return false;
     }
   }
@@ -841,7 +842,7 @@ class APIService {
       );
       return response.statusCode == 200;
     } catch (e) {
-      log('removeTrackFromPlaylist error: $e', isError: true);
+      log('removeTrackFromPlaylist error: $e', level: LogLevel.error);
       return false;
     }
   }
@@ -864,7 +865,7 @@ class APIService {
       );
       return response.statusCode == 200;
     } catch (e) {
-      log('reorderPlaylistTracks error: $e', isError: true);
+      log('reorderPlaylistTracks error: $e', level: LogLevel.error);
       return false;
     }
   }
@@ -903,7 +904,7 @@ class APIService {
         }).toList();
       }
     } catch (e) {
-      log('listDownloads error: $e', isError: true);
+      log('listDownloads error: $e', level: LogLevel.error);
     }
     return [];
   }
@@ -941,7 +942,7 @@ class APIService {
         }).toList();
       }
     } catch (e) {
-      log('pollDownloads error: $e', isError: true);
+      log('pollDownloads error: $e', level: LogLevel.error);
     }
     return [];
   }
@@ -987,7 +988,7 @@ class APIService {
         error: body['error'] as String? ?? 'HTTP ${response.statusCode}',
       );
     } catch (e) {
-      log('search error: $e', isError: true);
+      log('search error: $e', level: LogLevel.error);
       return (results: <DlSearchItem>[], success: false, error: e.toString());
     }
   }
@@ -1027,7 +1028,7 @@ class APIService {
         error: 'HTTP ${response.statusCode}',
       );
     } catch (e) {
-      log('create error: $e', isError: true);
+      log('create error: $e', level: LogLevel.error);
       return (success: false, downloadId: '', error: e.toString());
     }
   }
@@ -1054,7 +1055,7 @@ class APIService {
       }
       return (success: false, error: 'HTTP ${response.statusCode}');
     } catch (e) {
-      log('cancel error: $e', isError: true);
+      log('cancel error: $e', level: LogLevel.error);
       return (success: false, error: e.toString());
     }
   }
@@ -1095,7 +1096,7 @@ class APIService {
             'HTTP ${response.statusCode} ${error != null ? (": ", error) : ""}',
       );
     } catch (e) {
-      log('testConnection error: $e', isError: true);
+      log('testConnection error: $e', level: LogLevel.error);
       return (success: false, version: null, error: e.toString());
     }
   }
@@ -1117,7 +1118,7 @@ class APIService {
       }
       return null;
     } catch (e) {
-      log('getInfo error: $e', isError: true);
+      log('getInfo error: $e', level: LogLevel.error);
       return null;
     }
   }
@@ -1143,7 +1144,7 @@ class APIService {
         }).toList();
       }
     } catch (e) {
-      log('listUnidentifiedTracks error: $e', isError: true);
+      log('listUnidentifiedTracks error: $e', level: LogLevel.error);
     }
     return [];
   }
@@ -1163,7 +1164,7 @@ class APIService {
         }).toList();
       }
     } catch (e) {
-      log('listDownloadFolderTracks error: $e', isError: true);
+      log('listDownloadFolderTracks error: $e', level: LogLevel.error);
     }
     return [];
   }
@@ -1183,7 +1184,7 @@ class APIService {
         }).toList();
       }
     } catch (e) {
-      log('listTracksBySource error: $e', isError: true);
+      log('listTracksBySource error: $e', level: LogLevel.error);
     }
     return [];
   }
@@ -1199,7 +1200,7 @@ class APIService {
         return body['mbid'] as String?;
       }
     } catch (e) {
-      log('getAlbumMbid error: $e', isError: true);
+      log('getAlbumMbid error: $e', level: LogLevel.error);
     }
     return null;
   }
@@ -1229,7 +1230,7 @@ class APIService {
         }).toList();
       }
     } catch (e) {
-      log('identifySingleTrack error: $e', isError: true);
+      log('identifySingleTrack error: $e', level: LogLevel.error);
     }
     return [];
   }
@@ -1286,7 +1287,7 @@ class APIService {
         }).toList();
       }
     } catch (e) {
-      log('searchMusicBrainz error: $e', isError: true);
+      log('searchMusicBrainz error: $e', level: LogLevel.error);
     }
     return [];
   }
@@ -1320,7 +1321,7 @@ class APIService {
         );
       }
     } catch (e) {
-      log('getReleaseTracks error: $e', isError: true);
+      log('getReleaseTracks error: $e', level: LogLevel.error);
     }
     return GetReleaseTracksResponse(
       id: '',
@@ -1383,7 +1384,7 @@ class APIService {
         );
       }
     } catch (e) {
-      log('fetchRecording error: $e', isError: true);
+      log('fetchRecording error: $e', level: LogLevel.error);
     }
     return null;
   }
@@ -1453,7 +1454,7 @@ class APIService {
         newFilePath: null,
       );
     } catch (e) {
-      log('applyIdentification error: $e', isError: true);
+      log('applyIdentification error: $e', level: LogLevel.error);
       return (success: false, error: e.toString(), newFilePath: null);
     }
   }
@@ -1474,7 +1475,7 @@ class APIService {
       );
       return _parseFingerprintResponse(response);
     } catch (e) {
-      log('fingerprintTrack error: $e', isError: true);
+      log('fingerprintTrack error: $e', level: LogLevel.error);
     }
     return null;
   }
@@ -1561,7 +1562,7 @@ class APIService {
         );
       }
     } catch (e) {
-      log('fetchLyrics error: $e', isError: true);
+      log('fetchLyrics error: $e', level: LogLevel.error);
     }
     return null;
   }
@@ -1596,7 +1597,7 @@ class APIService {
         }).toList();
       }
     } catch (e) {
-      log('searchLyrics error: $e', isError: true);
+      log('searchLyrics error: $e', level: LogLevel.error);
     }
     return [];
   }
@@ -1655,10 +1656,10 @@ class APIService {
       }
       log(
         'Update account failed: ${response.statusCode} ${response.body}',
-        isError: true,
+        level: LogLevel.error,
       );
     } catch (e) {
-      log("Update account error: $e", isError: true);
+      log("Update account error: $e", level: LogLevel.error);
     }
     return (
       success: false,
@@ -1714,10 +1715,10 @@ class APIService {
       }
       log(
         'Create account failed: ${response.statusCode} ${response.body}',
-        isError: true,
+        level: LogLevel.error,
       );
     } catch (e) {
-      log("Create account error: $e", isError: true);
+      log("Create account error: $e", level: LogLevel.error);
     }
     return (
       success: false,
@@ -1752,10 +1753,10 @@ class APIService {
       }
       log(
         'List users failed: ${response.statusCode} ${response.body}',
-        isError: true,
+        level: LogLevel.error,
       );
     } catch (e) {
-      log("List users error: $e", isError: true);
+      log("List users error: $e", level: LogLevel.error);
     }
     return [];
   }
@@ -1784,10 +1785,10 @@ class APIService {
       }
       log(
         'Delete account failed: ${response.statusCode} ${response.body}',
-        isError: true,
+        level: LogLevel.error,
       );
     } catch (e) {
-      log("Delete account error: $e", isError: true);
+      log("Delete account error: $e", level: LogLevel.error);
     }
     return (success: false, username: targetUsername);
   }
@@ -1803,10 +1804,10 @@ class APIService {
       }
       log(
         'Verify password failed: ${response.statusCode} ${response.body}',
-        isError: true,
+        level: LogLevel.error,
       );
     } catch (e) {
-      log("Verify password error: $e", isError: true);
+      log("Verify password error: $e", level: LogLevel.error);
     }
     return false;
   }
@@ -1823,7 +1824,7 @@ class APIService {
         return data['encrypted_key'] as String?;
       }
     } catch (e) {
-      log("Encrypt error: $e", isError: true);
+      log("Encrypt error: $e", level: LogLevel.error);
     }
     return null;
   }
@@ -1840,7 +1841,7 @@ class APIService {
         return data['decrypted_key'] as String?;
       }
     } catch (e) {
-      log("Decrypt error: $e", isError: true);
+      log("Decrypt error: $e", level: LogLevel.error);
     }
     return null;
   }
@@ -1874,7 +1875,7 @@ class APIService {
         }).toList();
       }
     } catch (e) {
-      log("Error listing library sources: $e", isError: true);
+      log("Error listing library sources: $e", level: LogLevel.error);
     }
     return [];
   }
@@ -1904,7 +1905,7 @@ class APIService {
         }).toList();
       }
     } catch (e) {
-      log("Error listing editable sources: $e", isError: true);
+      log("Error listing editable sources: $e", level: LogLevel.error);
     }
     return [];
   }
@@ -1932,7 +1933,7 @@ class APIService {
       }
       return (sourceId: '', success: false);
     } catch (e) {
-      log("Error adding library source: $e", isError: true);
+      log("Error adding library source: $e", level: LogLevel.error);
       return (sourceId: '', success: false);
     }
   }
@@ -1945,7 +1946,7 @@ class APIService {
       );
       return response.statusCode == 200;
     } catch (e) {
-      log("Error removing library source: $e", isError: true);
+      log("Error removing library source: $e", level: LogLevel.error);
       return false;
     }
   }
@@ -1988,7 +1989,7 @@ class APIService {
           .toList();
       return (libraries: libraries, results: results);
     } catch (e) {
-      log("Error testing source: $e", isError: true);
+      log("Error testing source: $e", level: LogLevel.error);
       rethrow;
     }
   }
@@ -2016,7 +2017,7 @@ class APIService {
         error: data['error'] as String?,
       );
     } catch (e) {
-      log("Scan start error: $e", isError: true);
+      log("Scan start error: $e", level: LogLevel.error);
       return (started: false, error: 'Request failed');
     }
   }
@@ -2138,7 +2139,7 @@ class APIService {
         },
       );
     } catch (e) {
-      log('scanSource error: $e', isError: true);
+      log('scanSource error: $e', level: LogLevel.error);
       return (started: false, error: 'Request failed');
     }
   }
@@ -2176,7 +2177,7 @@ class APIService {
         error: data['error'] as String?,
       );
     } catch (e) {
-      log('readFileTags error: $e', isError: true);
+      log('readFileTags error: $e', level: LogLevel.error);
       return null;
     }
   }
@@ -2228,7 +2229,7 @@ class APIService {
         error: data['error'] as String? ?? 'HTTP ${response.statusCode}',
       );
     } catch (e) {
-      log('writeFileTags error: $e', isError: true);
+      log('writeFileTags error: $e', level: LogLevel.error);
       return (success: false, error: e.toString());
     }
   }
@@ -2273,7 +2274,7 @@ class APIService {
         error: data['error'] as String?,
       );
     } catch (e) {
-      log('readFileTagsBytes error: $e', isError: true);
+      log('readFileTagsBytes error: $e', level: LogLevel.error);
       return null;
     }
   }
@@ -2337,7 +2338,7 @@ class APIService {
         error: data['error'] as String? ?? 'HTTP ${response.statusCode}',
       );
     } catch (e) {
-      log('writeFileTagsBytes error: $e', isError: true);
+      log('writeFileTagsBytes error: $e', level: LogLevel.error);
       return (success: false, bytes: null, error: e.toString());
     }
   }
@@ -2383,7 +2384,7 @@ class APIService {
       }
       return '';
     } catch (e) {
-      log('formatNamingPreview error: $e', isError: true);
+      log('formatNamingPreview error: $e', level: LogLevel.error);
       return '';
     }
   }
@@ -2426,7 +2427,7 @@ class APIService {
         error: data['error'] as String?,
       );
     } catch (e) {
-      log('batchRenamePreview error: $e', isError: true);
+      log('batchRenamePreview error: $e', level: LogLevel.error);
       return null;
     }
   }
@@ -2464,7 +2465,7 @@ class APIService {
         error: data['error'] as String?,
       );
     } catch (e) {
-      log('batchRenameApply error: $e', isError: true);
+      log('batchRenameApply error: $e', level: LogLevel.error);
       return null;
     }
   }
@@ -2501,7 +2502,7 @@ class APIService {
         error: data['error'] as String?,
       );
     } catch (e) {
-      log('checkNamingConvention error: $e', isError: true);
+      log('checkNamingConvention error: $e', level: LogLevel.error);
       return null;
     }
   }
@@ -2551,7 +2552,7 @@ class APIService {
         error: data['error'] as String?,
       );
     } catch (e) {
-      log('findMissingMetadata error: $e', isError: true);
+      log('findMissingMetadata error: $e', level: LogLevel.error);
       return null;
     }
   }
@@ -2575,7 +2576,7 @@ class APIService {
         error: data['error'] as String?,
       );
     } catch (e) {
-      log('getLibraryStats error: $e', isError: true);
+      log('getLibraryStats error: $e', level: LogLevel.error);
       return null;
     }
   }
@@ -2663,7 +2664,7 @@ class APIService {
         error: data['error'] as String?,
       );
     } catch (e) {
-      log('writeTrackLyrics error: $e', isError: true);
+      log('writeTrackLyrics error: $e', level: LogLevel.error);
       return null;
     }
   }
@@ -2697,7 +2698,7 @@ class APIService {
         error: data['error'] as String?,
       );
     } catch (e) {
-      log('romajizeLyrics error: $e', isError: true);
+      log('romajizeLyrics error: $e', level: LogLevel.error);
       return null;
     }
   }
@@ -2762,7 +2763,7 @@ class APIService {
         error: data['error'] as String?,
       );
     } catch (e) {
-      log('findDuplicates error: $e', isError: true);
+      log('findDuplicates error: $e', level: LogLevel.error);
       return null;
     }
   }
@@ -2780,7 +2781,7 @@ class APIService {
       );
       return response.statusCode == 200;
     } catch (e) {
-      log('updateNowPlaying error: $e', isError: true);
+      log('updateNowPlaying error: $e', level: LogLevel.error);
       return false;
     }
   }
@@ -2831,7 +2832,7 @@ class APIService {
         );
       }
     } catch (e) {
-      log('getLBRecommendations error: $e', isError: true);
+      log('getLBRecommendations error: $e', level: LogLevel.error);
     }
     return (
       recordings: <DiscoveryRecording>[],
@@ -2880,7 +2881,7 @@ class APIService {
         );
       }
     } catch (e) {
-      log('validateLBToken error: $e', isError: true);
+      log('validateLBToken error: $e', level: LogLevel.error);
     }
     return (valid: false, userName: null, message: 'Request failed');
   }
@@ -2923,7 +2924,7 @@ class APIService {
         );
       }
     } catch (e) {
-      log('syncRecs error: $e', isError: true);
+      log('syncRecs error: $e', level: LogLevel.error);
     }
     return (
       success: false,
@@ -2948,7 +2949,7 @@ class APIService {
           headers: _authHeaders(),
         );
       } catch (e) {
-        log('Logout request failed: $e', isError: true);
+        log('Logout request failed: $e', level: LogLevel.error);
       }
     }
     clearAuth();
