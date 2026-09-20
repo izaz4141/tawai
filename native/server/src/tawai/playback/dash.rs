@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{
     body::Body,
     extract::{Extension, Path, State},
-    http::{HeaderMap, HeaderValue, Method, Request, StatusCode, header},
+    http::{HeaderValue, Request, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use mime::Mime;
@@ -183,7 +183,7 @@ pub async fn handle_dash_file(
     Extension(QueryToken(token)): Extension<QueryToken>,
     Extension(user_id): Extension<String>,
     Path((id, file)): Path<(String, String)>,
-    headers: HeaderMap,
+    mut request: Request<Body>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
@@ -268,9 +268,6 @@ pub async fn handle_dash_file(
     let mime: Mime = dash_content_type(&file)
         .parse()
         .unwrap_or(mime::APPLICATION_OCTET_STREAM);
-    let mut request = Request::new(Body::empty());
-    *request.method_mut() = Method::GET;
-    *request.headers_mut() = headers;
     let mut serve = ServeFile::new_with_mime(&path, &mime);
     match serve.try_call(request).await {
         Ok(response) => {

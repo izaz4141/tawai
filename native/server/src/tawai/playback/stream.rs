@@ -1,7 +1,7 @@
 use axum::{
     body::Body,
     extract::{Extension, Path, State},
-    http::{HeaderMap, Method, Request, StatusCode},
+    http::{Request, StatusCode},
     response::{IntoResponse, Response},
 };
 use mime::Mime;
@@ -54,7 +54,7 @@ pub async fn handle_stream_track(
     State(state): State<SharedState>,
     Path(id): Path<String>,
     Extension(user_id): Extension<String>,
-    headers: HeaderMap,
+    mut request: Request<Body>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
@@ -87,9 +87,6 @@ pub async fn handle_stream_track(
     let mime: Mime = stream_content_type(&track.file_path)
         .parse()
         .unwrap_or(mime::APPLICATION_OCTET_STREAM);
-    let mut request = Request::new(Body::empty());
-    *request.method_mut() = Method::GET;
-    *request.headers_mut() = headers;
     let mut serve = ServeFile::new_with_mime(&track.file_path, &mime);
     match serve.try_call(request).await {
         Ok(response) => {
