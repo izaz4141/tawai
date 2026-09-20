@@ -728,7 +728,18 @@ impl NadekodonClient {
         }
         let raw = resp.text().await.unwrap_or_default();
         let data: YtdlQueryOutput = decode_body(&raw)?;
-        Ok(data)
+        Ok(YtdlQueryOutput {
+            id: data.id,
+            error: data.error,
+            items: data
+                .items
+                .into_iter()
+                .map(|mut item| {
+                    item.audios.retain(|a| !a.ext.eq_ignore_ascii_case("webm"));
+                    item
+                })
+                .collect(),
+        })
     }
 
     pub async fn sync_downloads(&self, pool: &DatabasePool) -> Result<u32> {
