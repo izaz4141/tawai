@@ -162,9 +162,10 @@ pub async fn handle_scan_source(context: Arc<AppContext>) {
         };
 
         // Enforce that the target source is accessible to the requesting user.
-        let accessible = library_source::list_accessible_sources(db.pool(), &user.id, &user.role, &mk)
-            .await
-            .unwrap_or_default();
+        let accessible =
+            library_source::list_accessible_sources(db.pool(), &user.id, &user.role, &mk)
+                .await
+                .unwrap_or_default();
         let Some(source) = accessible.into_iter().find(|s| s.id == msg.source_id) else {
             ScanSourceResponse {
                 id,

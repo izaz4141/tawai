@@ -60,10 +60,10 @@ class _SettingsSystemTabState extends State<SettingsSystemTab> {
                     user == null
                         ? 'No account signed in'
                         : apiKey.isEmpty
-                            ? 'No API key available'
-                            : obscured
-                                ? List.filled(apiKey.length, '•').join()
-                                : apiKey,
+                        ? 'No API key available'
+                        : obscured
+                        ? List.filled(apiKey.length, '•').join()
+                        : apiKey,
                     style: textTheme.bodySmall?.copyWith(
                       color: colors.onSurfaceVariant,
                       fontFamily: 'monospace',
@@ -76,9 +76,7 @@ class _SettingsSystemTabState extends State<SettingsSystemTab> {
                         IconButton(
                           tooltip: obscured ? 'Show API key' : 'Hide API key',
                           icon: Icon(
-                            obscured
-                                ? Icons.visibility
-                                : Icons.visibility_off,
+                            obscured ? Icons.visibility : Icons.visibility_off,
                           ),
                           iconSize:
                               AppTheme.iconSM * AppTheme.iconScale(context),
@@ -87,14 +85,11 @@ class _SettingsSystemTabState extends State<SettingsSystemTab> {
                       IconButton(
                         tooltip: 'Copy API key',
                         icon: const Icon(Icons.copy),
-                        iconSize:
-                            AppTheme.iconSM * AppTheme.iconScale(context),
+                        iconSize: AppTheme.iconSM * AppTheme.iconScale(context),
                         onPressed: apiKey.isEmpty
                             ? null
                             : () {
-                                Clipboard.setData(
-                                  ClipboardData(text: apiKey),
-                                );
+                                Clipboard.setData(ClipboardData(text: apiKey));
                                 AppSnackBar.show(
                                   context,
                                   'API key copied',
@@ -105,49 +100,54 @@ class _SettingsSystemTabState extends State<SettingsSystemTab> {
                       IconButton(
                         tooltip: 'Reroll API key',
                         icon: const Icon(Icons.refresh),
-                        iconSize:
-                            AppTheme.iconSM * AppTheme.iconScale(context),
-                        onPressed: userId.isEmpty ? null : () async {
-                          final confirmed = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('Reroll API key?'),
-                              content: const Text(
-                                'Regenerating replaces your current API key. '
-                                'Clients using the old key will need to update.',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, false),
-                                  child: const Text('Cancel'),
-                                ),
-                                FilledButton(
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text('Reroll'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (confirmed != true || !context.mounted) return;
-                          final newKey = await SettingsManager.regenerateApiKey(
-                            userId,
-                          );
-                          if (!context.mounted) return;
-                          if (newKey != null && newKey.isNotEmpty) {
-                            _obscured.value = true;
-                            AppSnackBar.show(
-                              context,
-                              'API key rerolled',
-                              type: SnackType.success,
-                            );
-                          } else {
-                            AppSnackBar.show(
-                              context,
-                              'Failed to reroll API key',
-                              type: SnackType.error,
-                            );
-                          }
-                        },
+                        iconSize: AppTheme.iconSM * AppTheme.iconScale(context),
+                        onPressed: userId.isEmpty
+                            ? null
+                            : () async {
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('Reroll API key?'),
+                                    content: const Text(
+                                      'Regenerating replaces your current API key. '
+                                      'Clients using the old key will need to update.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      FilledButton(
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, true),
+                                        child: const Text('Reroll'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirmed != true || !context.mounted)
+                                  return;
+                                final newKey =
+                                    await SettingsManager.regenerateApiKey(
+                                      userId,
+                                    );
+                                if (!context.mounted) return;
+                                if (newKey != null && newKey.isNotEmpty) {
+                                  _obscured.value = true;
+                                  AppSnackBar.show(
+                                    context,
+                                    'API key rerolled',
+                                    type: SnackType.success,
+                                  );
+                                } else {
+                                  AppSnackBar.show(
+                                    context,
+                                    'Failed to reroll API key',
+                                    type: SnackType.error,
+                                  );
+                                }
+                              },
                       ),
                     ],
                   ),

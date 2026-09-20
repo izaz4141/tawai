@@ -42,7 +42,8 @@ class _ListTextFieldState extends State<ListTextField> {
   @override
   void initState() {
     super.initState();
-    _controller = widget.controller ??
+    _controller =
+        widget.controller ??
         TextEditingController(
           text: widget.isObscured ? '' : widget.valueListenable.value,
         );

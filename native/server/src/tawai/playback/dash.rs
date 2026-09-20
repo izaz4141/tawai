@@ -208,7 +208,7 @@ pub async fn handle_dash_file(
     match user_can_read_track(db.pool(), &user_id, &id, &mk).await {
         TrackAccess::Allowed => {}
         TrackAccess::NoSource | TrackAccess::NoUser => {
-            return (StatusCode::NOT_FOUND, Body::empty()).into_response()
+            return (StatusCode::NOT_FOUND, Body::empty()).into_response();
         }
         TrackAccess::Denied => return (StatusCode::FORBIDDEN, Body::empty()).into_response(),
     }

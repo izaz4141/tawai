@@ -117,7 +117,10 @@ pub async fn remove_source(pool: &SqlitePool, source_id: &str) -> Result<bool> {
     Ok(rows > 0)
 }
 
-pub async fn list_all_sources(pool: &SqlitePool, master_key: &str) -> Result<Vec<LibrarySourceInfo>> {
+pub async fn list_all_sources(
+    pool: &SqlitePool,
+    master_key: &str,
+) -> Result<Vec<LibrarySourceInfo>> {
     let rows = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
         "SELECT id, source_type, urls, name, owner_id, access_rule, last_sync_at, created_at, updated_at FROM library_sources ORDER BY created_at",
     )

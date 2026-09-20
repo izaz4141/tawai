@@ -81,10 +81,7 @@ const ALL_NADEKODON_STATES: &[&str] = &[
 ];
 
 fn all_nadekodon_states() -> Vec<String> {
-    ALL_NADEKODON_STATES
-        .iter()
-        .map(|s| s.to_string())
-        .collect()
+    ALL_NADEKODON_STATES.iter().map(|s| s.to_string()).collect()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -482,9 +479,8 @@ impl NadekodonClient {
             anyhow::bail!("nadekodon list downloads failed {}: {}", status, text);
         }
         let raw = resp.text().await.unwrap_or_default();
-        let data: NadekodonApiListResponse = serde_json::from_str(&raw).map_err(|e| {
-            anyhow::anyhow!("nadekodon list decode failed: {e}; raw body: {raw}")
-        })?;
+        let data: NadekodonApiListResponse = serde_json::from_str(&raw)
+            .map_err(|e| anyhow::anyhow!("nadekodon list decode failed: {e}; raw body: {raw}"))?;
         let downloads = data
             .list
             .into_iter()
@@ -795,7 +791,10 @@ impl NadekodonClient {
             .unwrap_or(true);
         let video_format = extra
             .as_ref()
-            .and_then(|e| e.get("video_format").and_then(|v| serde_json::from_value(v.clone()).ok()))
+            .and_then(|e| {
+                e.get("video_format")
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+            })
             .or_else(|| {
                 extra
                     .as_ref()
@@ -812,7 +811,10 @@ impl NadekodonClient {
             });
         let audio_format = extra
             .as_ref()
-            .and_then(|e| e.get("audio_format").and_then(|v| serde_json::from_value(v.clone()).ok()))
+            .and_then(|e| {
+                e.get("audio_format")
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+            })
             .or_else(|| {
                 extra
                     .as_ref()

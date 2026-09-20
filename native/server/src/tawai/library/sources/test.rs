@@ -1,9 +1,7 @@
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use tawai_core::libsources::jellyfin::JellyfinParser;
 use tawai_core::libsources::tawai;
-use tawai_core::signals::discovery::{
-    ServerTestResult, TestSourceRequest, TestSourceResponse,
-};
+use tawai_core::signals::discovery::{ServerTestResult, TestSourceRequest, TestSourceResponse};
 
 use crate::server::SharedState;
 
@@ -74,7 +72,7 @@ pub async fn handle_test_source(
                     error: Some(format!("unsupported source_type: {other}")),
                 }),
             )
-                .into_response()
+                .into_response();
         }
     };
 

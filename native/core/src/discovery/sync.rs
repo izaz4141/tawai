@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::db::{database::DatabasePool, history, library, library_source};
 use crate::discovery::listenbrainz;
-use crate::libsources::{get_parser, RecommendationSource};
+use crate::libsources::{RecommendationSource, get_parser};
 use crate::signals::library::LibrarySourceInfo;
 
 pub struct SyncRecsParams<'a> {

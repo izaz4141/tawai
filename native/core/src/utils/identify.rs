@@ -78,9 +78,10 @@ pub async fn apply_identification(
             let track = library::lookup_track(pool, &params.track_id)
                 .await?
                 .ok_or_else(|| anyhow!("Track not found"))?;
-            let source = library_source::get_source_info_by_track_id(pool, &params.track_id, master_key)
-                .await?
-                .ok_or_else(|| anyhow!("Library source for track not found"))?;
+            let source =
+                library_source::get_source_info_by_track_id(pool, &params.track_id, master_key)
+                    .await?
+                    .ok_or_else(|| anyhow!("Library source for track not found"))?;
             (source, track.file_path.clone(), Some(track), false)
         };
 

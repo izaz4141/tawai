@@ -8,7 +8,7 @@ use walkdir::WalkDir;
 
 use crate::audio::fingerprint::{compute_fingerprint, fingerprint_supported_format};
 use crate::audio::tags;
-use crate::libsources::ParsedTrack;
+use crate::libsources::{ParsedTrack, ScanDiff};
 use crate::utils::logger;
 
 pub fn walk_directory(dir: &Path) -> Vec<PathBuf> {
@@ -106,6 +106,19 @@ pub fn enumerate_paths(url: &str) -> Result<Vec<String>> {
         .into_iter()
         .map(|p| p.to_string_lossy().to_string())
         .collect())
+}
+
+/// Base scan delta: enumerated paths are present, so scan what's new and
+/// delete what's no longer enumerated.
+pub fn detect_difference(
+    enumerated: &HashSet<String>,
+    db_paths: &HashSet<String>,
+) -> Result<ScanDiff> {
+    Ok(ScanDiff {
+        to_scan: enumerated.difference(db_paths).cloned().collect(),
+        to_delete: db_paths.difference(enumerated).cloned().collect(),
+        replace: HashSet::new(),
+    })
 }
 
 /// Expensive: parse tags + hashes only for the given subset of paths.

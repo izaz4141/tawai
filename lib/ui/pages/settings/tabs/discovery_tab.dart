@@ -27,7 +27,8 @@ String _redactUrl(String url) {
     final body = url.substring('tawai://'.length);
     final hostPort = body.contains('@') ? body.split('@').first : body;
     final sourceId = RegExp(r'source_id=([^&]*)').firstMatch(body)?.group(1);
-    return hostPort + (sourceId == null || sourceId.isEmpty ? '' : '?source_id=$sourceId');
+    return hostPort +
+        (sourceId == null || sourceId.isEmpty ? '' : '?source_id=$sourceId');
   }
   final at = url.lastIndexOf('@');
   return at >= 0 ? url.substring(at + 1) : url;
@@ -35,14 +36,17 @@ String _redactUrl(String url) {
 
 String _stripScheme(String raw) {
   final t = raw.trim();
-  final noScheme = t.replaceAll(RegExp(r'^https?://', caseSensitive: false), '');
+  final noScheme = t.replaceAll(
+    RegExp(r'^https?://', caseSensitive: false),
+    '',
+  );
   return noScheme.replaceAll(RegExp(r'/+$'), '');
 }
 
 String _schemeOfRaw(String raw) =>
     RegExp(r'^https://', caseSensitive: false).hasMatch(raw.trim())
-        ? 'https'
-        : 'http';
+    ? 'https'
+    : 'http';
 
 class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
   List<LibrarySourceInfo> _sources = [];
@@ -361,8 +365,8 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
             final icon = isLocal
                 ? Icons.folder_outlined
                 : source.sourceType == 'tawai'
-                    ? Icons.cloud_outlined
-                    : Icons.dns_outlined;
+                ? Icons.cloud_outlined
+                : Icons.dns_outlined;
             return Card(
               margin: EdgeInsets.symmetric(
                 vertical: AppTheme.spaceXS * AppTheme.spaceScale(context),
@@ -373,7 +377,11 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                   children: [
                     Expanded(
                       child: Text(
-                        source.name.isNotEmpty ? source.name : (source.urls.isNotEmpty ? _redactUrl(source.urls.first) : ''),
+                        source.name.isNotEmpty
+                            ? source.name
+                            : (source.urls.isNotEmpty
+                                  ? _redactUrl(source.urls.first)
+                                  : ''),
                         style: textTheme.bodyMedium,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -411,12 +419,17 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                 trailing: IconButton(
                   icon: _removingSourceId == source.id
                       ? SizedBox(
-                          width: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                          width:
+                              AppTheme.spaceSM *
+                              2 *
+                              AppTheme.spaceScale(context),
                           height:
                               AppTheme.spaceSM *
                               2 *
                               AppTheme.spaceScale(context),
-                          child: const CircularProgressIndicator(strokeWidth: 2),
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
                         )
                       : Icon(
                           Icons.remove_circle_outline,
@@ -652,7 +665,10 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
         SizedBox(height: AppTheme.spaceXL * AppTheme.spaceScale(context)),
 
         // ListenBrainz section
-        const SectionHeader(title: 'ListenBrainz', leading: Icon(Icons.explore)),
+        const SectionHeader(
+          title: 'ListenBrainz',
+          leading: Icon(Icons.explore),
+        ),
         SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
         ListTextField(
           title: 'ListenBrainz Token',
@@ -674,13 +690,9 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
               icon: _lbTokenTesting
                   ? SizedBox(
                       width:
-                          AppTheme.spaceSM *
-                          2 *
-                          AppTheme.spaceScale(context),
+                          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
                       height:
-                          AppTheme.spaceSM *
-                          2 *
-                          AppTheme.spaceScale(context),
+                          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
                       child: const CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.bolt),
@@ -705,9 +717,7 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
           SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
           Text(
             'Enter a valid ListenBrainz token above to enable recommendations.',
-            style: textTheme.bodySmall?.copyWith(
-              color: colorScheme.error,
-            ),
+            style: textTheme.bodySmall?.copyWith(color: colorScheme.error),
           ),
         ],
         SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
@@ -1095,22 +1105,22 @@ class _AddSourceDialogState extends State<_AddSourceDialog> {
     if (mounted) Navigator.of(context).pop(results);
   }
 
-bool get _fieldsFilled =>
+  bool get _fieldsFilled =>
       _urlCtrl.text.trim().isNotEmpty &&
       _usernameCtrl.text.isNotEmpty &&
       _passwordCtrl.text.isNotEmpty;
 
-bool get _tawaiFieldsFilled =>
+  bool get _tawaiFieldsFilled =>
       _tawaiServersCtrl.text.trim().isNotEmpty &&
       _tawaiApiKeyCtrl.text.trim().isNotEmpty;
 
-int _addCount() {
-  if (_sourceType == 'local') return 1;
-  if (_sourceType == 'tawai' || _jellyfinLibraries.isNotEmpty) {
-    return _selectedLibraryIds.length;
+  int _addCount() {
+    if (_sourceType == 'local') return 1;
+    if (_sourceType == 'tawai' || _jellyfinLibraries.isNotEmpty) {
+      return _selectedLibraryIds.length;
+    }
+    return 1;
   }
-  return 1;
-}
 
   @override
   Widget build(BuildContext context) {
@@ -1120,10 +1130,10 @@ int _addCount() {
     final canSubmit = _sourceType == 'local'
         ? _localPath.isNotEmpty
         : _sourceType == 'tawai'
-            ? _localPath.isNotEmpty &&
-                _tawaiFieldsFilled &&
-                _selectedLibraryIds.isNotEmpty
-            : _fieldsFilled;
+        ? _localPath.isNotEmpty &&
+              _tawaiFieldsFilled &&
+              _selectedLibraryIds.isNotEmpty
+        : _fieldsFilled;
 
     final canTest = _sourceType == 'tawai' ? _tawaiFieldsFilled : _fieldsFilled;
 
@@ -1192,7 +1202,8 @@ int _addCount() {
                   controller: _urlCtrl,
                   decoration: const InputDecoration(
                     labelText: 'Server URL',
-                    hintText: 'https://jellyfin.local:8096, http://192.168.1.5:8096',
+                    hintText:
+                        'https://jellyfin.local:8096, http://192.168.1.5:8096',
                     helperText:
                         'Multiple server URLs separated by commas. First is '
                         'preferred (e.g. home network), the rest are used as '
@@ -1283,16 +1294,17 @@ int _addCount() {
                   onChanged: (_) => _testError = null,
                 ),
               ],
-              SizedBox(
-                height: AppTheme.spaceMD * AppTheme.spaceScale(context),
-              ),
+              SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: canTest ? _testConnection : null,
                   icon: _testing
                       ? SizedBox(
-                          width: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
+                          width:
+                              AppTheme.spaceSM *
+                              2 *
+                              AppTheme.spaceScale(context),
                           height:
                               AppTheme.spaceSM *
                               2 *

@@ -103,7 +103,8 @@ pub async fn handle_list_library_sources(context: Arc<AppContext>) {
                 continue;
             }
         };
-        let result = core_libsrc::list_accessible_sources(db.pool(), &msg.user_id, &role, &mk).await;
+        let result =
+            core_libsrc::list_accessible_sources(db.pool(), &msg.user_id, &role, &mk).await;
 
         match result {
             Ok(sources) => {
@@ -211,11 +212,7 @@ pub async fn handle_test_source(context: Arc<AppContext>) {
                         }
                     }
                 }
-                let error = if libraries.is_empty() {
-                    last_err
-                } else {
-                    None
-                };
+                let error = if libraries.is_empty() { last_err } else { None };
                 TestSourceResponse {
                     id: msg.id,
                     libraries: libraries.into_iter().map(Into::into).collect(),

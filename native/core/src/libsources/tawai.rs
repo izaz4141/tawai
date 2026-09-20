@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
@@ -13,7 +13,7 @@ use crate::db::account::DEFAULT_USERNAME;
 use crate::db::database::DatabasePool;
 use crate::db::library_source;
 use crate::db::user_settings;
-use crate::libsources::{ParsedTrack, local};
+use crate::libsources::{ParsedTrack, ScanDiff, local};
 use crate::signals::discovery::{JellyfinLibraryInfo, ServerTestResult};
 use crate::signals::library::{
     LibrarySourceInfo, ListLibrarySourcesResponse, ListTracksResponse, TrackInfo,
@@ -618,10 +618,7 @@ async fn download_track(
                         "WARN",
                         format!(
                             "tawai download pass {attempts}/{} failed for {} '{}' at offset {}, resuming",
-                            MAX_STREAM_RETRIES,
-                            rt.id,
-                            rt.title,
-                            offset
+                            MAX_STREAM_RETRIES, rt.id, rt.title, offset
                         ),
                     );
                 }
@@ -663,7 +660,11 @@ async fn download_chunk(
         .header(reqwest::header::ACCEPT_ENCODING, "identity")
         .header(
             reqwest::header::RANGE,
-            format!("bytes={}-{}", offset, offset.saturating_add(STREAM_CHUNK_SIZE - 1)),
+            format!(
+                "bytes={}-{}",
+                offset,
+                offset.saturating_add(STREAM_CHUNK_SIZE - 1)
+            ),
         )
         .send()
         .await?;
@@ -725,7 +726,10 @@ async fn download_chunk(
     };
 
     let mut file = if offset > 0 && !full_body {
-        tokio::fs::OpenOptions::new().append(true).open(dest).await?
+        tokio::fs::OpenOptions::new()
+            .append(true)
+            .open(dest)
+            .await?
     } else {
         tokio::fs::File::create(dest).await?
     };
@@ -851,6 +855,25 @@ impl TawaiParser {
             return local::enumerate_paths(root);
         }
         Ok(vec![])
+    }
+
+    /// Scan delta for tawai backups. Extends the base diff with a restore
+    /// rule: an enumerated backup that's in the DB but missing on disk is
+    /// re-provisioned — `scan_file` re-downloads it and the stale row is
+    /// replaced.
+    pub async fn detect_difference(
+        &self,
+        enumerated: &HashSet<String>,
+        db_paths: &HashSet<String>,
+    ) -> Result<ScanDiff> {
+        let mut diff = local::detect_difference(enumerated, db_paths)?;
+        for p in enumerated.intersection(db_paths) {
+            if !Path::new(p).is_file() {
+                diff.to_scan.push(p.clone());
+                diff.replace.insert(p.clone());
+            }
+        }
+        Ok(diff)
     }
 
     /// Bulk scan paths (unused by current scan pipeline but kept for completeness).

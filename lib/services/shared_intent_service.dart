@@ -55,7 +55,8 @@ class SharedIntentService {
         .getInitialSharing()
         .then(_handleFiles)
         .catchError(
-          (Object e) => log('getInitialSharing error: $e', level: LogLevel.error),
+          (Object e) =>
+              log('getInitialSharing error: $e', level: LogLevel.error),
         );
     FlutterSharingIntent.instance.reset();
   }

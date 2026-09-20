@@ -5,6 +5,7 @@ pub mod tawai;
 
 pub use recommendation::{ALL_RECOMMENDATION_SOURCES, ApiType, RecommendationSource};
 
+use std::collections::HashSet;
 use std::ops::Deref;
 use std::path::Path;
 
@@ -31,6 +32,19 @@ impl Deref for ParsedTrack {
     fn deref(&self) -> &Self::Target {
         &self.tag
     }
+}
+
+/// Per-source scan delta: which paths to insert, which DB paths are stale,
+/// and which inserts replace an existing row.
+#[derive(Debug, Clone, Default)]
+pub struct ScanDiff {
+    /// Enumerate (tag-parse) and insert: new tracks plus any to re-provision.
+    pub to_scan: Vec<String>,
+    /// DB entries whose backing material no longer exists for this source.
+    pub to_delete: Vec<String>,
+    /// Subset of `to_scan` that already has a DB row; the stale row must be
+    /// dropped before the replacement is inserted so the path stays unique.
+    pub replace: HashSet<String>,
 }
 
 /// Deserialize an HTTP response body, embedding the HTTP status, byte count,
@@ -184,6 +198,25 @@ impl SourceParser {
             SourceParser::Jellyfin(p) => p.scan_paths(url, paths).await,
             SourceParser::Tawai(p) => p.scan_paths(pool, url, urls, paths).await,
             SourceParser::Recommendation(_) => Ok(vec![]),
+        }
+    }
+
+    /// Compute this source's scan delta: which enumerated paths to insert and
+    /// which DB paths are stale. Each parser owns its interpretation (e.g.
+    /// tawai re-provisions derived backups that vanished from disk).
+    pub async fn detect_difference(
+        &self,
+        enumerated: &HashSet<String>,
+        db_paths: &HashSet<String>,
+    ) -> Result<ScanDiff> {
+        match self {
+            SourceParser::Local => local::detect_difference(enumerated, db_paths),
+            SourceParser::Jellyfin(_) => local::detect_difference(enumerated, db_paths),
+            SourceParser::Tawai(p) => p.detect_difference(enumerated, db_paths).await,
+            SourceParser::Recommendation(_) => {
+                // Synced, not scanned: nothing to diff.
+                Ok(ScanDiff::default())
+            }
         }
     }
 

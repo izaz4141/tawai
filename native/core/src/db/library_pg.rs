@@ -1149,8 +1149,8 @@ pub async fn set_track_file_path(pool: &PgPool, track_id: &str, new_file_path: &
     sqlx::query("UPDATE tracks SET file_path = $1, updated_at = NOW() WHERE id = $2")
         .bind(new_file_path)
         .bind(track_id)
-.execute(pool)
-    .await?;
+        .execute(pool)
+        .await?;
     Ok(())
 }
 

@@ -595,7 +595,12 @@ class BridgeService {
     if (_isRemote) {
       return APIService.instance.addLibrarySource(urls, name, sourceType);
     }
-    return RinfService.instance.addLibrarySource(userId, urls, name, sourceType);
+    return RinfService.instance.addLibrarySource(
+      userId,
+      urls,
+      name,
+      sourceType,
+    );
   }
 
   Future<bool> removeLibrarySource(String userId, String sourceId) async {
@@ -605,8 +610,10 @@ class BridgeService {
     return RinfService.instance.removeLibrarySource(userId, sourceId);
   }
 
-  Future<({List<JellyfinLibraryInfo> libraries, List<ServerTestResult> results})>
-      testSource(String sourceType, List<String> urls) async {
+  Future<
+    ({List<JellyfinLibraryInfo> libraries, List<ServerTestResult> results})
+  >
+  testSource(String sourceType, List<String> urls) async {
     if (_isRemote) {
       return APIService.instance.testSource(sourceType, urls);
     }

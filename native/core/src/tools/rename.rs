@@ -11,8 +11,7 @@ use crate::signals::tools::{NamingViolation, RenamePreview};
 
 /// The default library naming pattern, used everywhere a naming schema is
 /// required but none is configured. May contain subdirectories (`/`).
-pub(crate) const DEFAULT_PATTERN: &str =
-    "{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}";
+pub(crate) const DEFAULT_PATTERN: &str = "{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}";
 
 /// Format a naming pattern with tag values.
 ///
@@ -304,14 +303,17 @@ pub async fn batch_rename_apply(
         let path = Path::new(path_str);
         let result = match by_id.get(track_id) {
             Some(row) => {
-                    match resolver.resolve(&row.urls, None, Some(path_str.as_str())).await {
-                        Ok(root) => {
-                            let tag = build_audio_tag(row);
-                            move_file_into_source(path, &root, Some(pattern), &tag)
-                        }
-                        Err(e) => Err(e),
+                match resolver
+                    .resolve(&row.urls, None, Some(path_str.as_str()))
+                    .await
+                {
+                    Ok(root) => {
+                        let tag = build_audio_tag(row);
+                        move_file_into_source(path, &root, Some(pattern), &tag)
                     }
+                    Err(e) => Err(e),
                 }
+            }
             None => Err(anyhow::anyhow!("no database record for track")),
         };
         match result {

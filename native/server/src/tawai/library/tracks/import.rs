@@ -69,11 +69,7 @@ pub async fn handle_import_track(
         .await
         .unwrap_or_default();
     let Some(source) = accessible.into_iter().find(|s| s.id == source_id) else {
-        return (
-            StatusCode::FORBIDDEN,
-            "Library source is not accessible",
-        )
-            .into_response();
+        return (StatusCode::FORBIDDEN, "Library source is not accessible").into_response();
     };
     if !tawai_core::libsources::is_editable(&source.source_type) {
         return (
@@ -106,11 +102,7 @@ pub async fn handle_import_track(
         .into_response(),
         Err(e) => {
             logger::error(&format!("tawai track import failed: {e}"));
-            (
-                StatusCode::BAD_REQUEST,
-                format!("Import failed: {e}"),
-            )
-                .into_response()
+            (StatusCode::BAD_REQUEST, format!("Import failed: {e}")).into_response()
         }
     }
 }

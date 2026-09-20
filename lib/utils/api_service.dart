@@ -1951,8 +1951,10 @@ class APIService {
     }
   }
 
-  Future<({List<JellyfinLibraryInfo> libraries, List<ServerTestResult> results})>
-      testSource(String sourceType, List<String> urls) async {
+  Future<
+    ({List<JellyfinLibraryInfo> libraries, List<ServerTestResult> results})
+  >
+  testSource(String sourceType, List<String> urls) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/library/sources/test'),
@@ -1965,28 +1967,26 @@ class APIService {
       );
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       if (response.statusCode != 200) {
-        throw Exception(data['error'] as String? ?? 'HTTP ${response.statusCode}');
+        throw Exception(
+          data['error'] as String? ?? 'HTTP ${response.statusCode}',
+        );
       }
-      final libraries = (data['libraries'] as List<dynamic>? ?? [])
-          .map((e) {
-            final m = e as Map<String, dynamic>;
-            return JellyfinLibraryInfo(
-              id: m['id'] as String,
-              name: m['name'] as String,
-            );
-          })
-          .toList();
-      final results = (data['results'] as List<dynamic>? ?? [])
-          .map((e) {
-            final m = e as Map<String, dynamic>;
-            return ServerTestResult(
-              url: m['url'] as String,
-              reachable: m['reachable'] as bool? ?? false,
-              trackCount: (m['track_count'] as num? ?? 0).toInt(),
-              error: m['error'] as String?,
-            );
-          })
-          .toList();
+      final libraries = (data['libraries'] as List<dynamic>? ?? []).map((e) {
+        final m = e as Map<String, dynamic>;
+        return JellyfinLibraryInfo(
+          id: m['id'] as String,
+          name: m['name'] as String,
+        );
+      }).toList();
+      final results = (data['results'] as List<dynamic>? ?? []).map((e) {
+        final m = e as Map<String, dynamic>;
+        return ServerTestResult(
+          url: m['url'] as String,
+          reachable: m['reachable'] as bool? ?? false,
+          trackCount: (m['track_count'] as num? ?? 0).toInt(),
+          error: m['error'] as String?,
+        );
+      }).toList();
       return (libraries: libraries, results: results);
     } catch (e) {
       log("Error testing source: $e", level: LogLevel.error);

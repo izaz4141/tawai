@@ -650,7 +650,11 @@ pub async fn delete_tracks_by_source_id(pool: &SqlitePool, source_id: &str) -> R
     }
 
     if !artist_ids.is_empty() {
-        let placeholders = artist_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+        let placeholders = artist_ids
+            .iter()
+            .map(|_| "?")
+            .collect::<Vec<_>>()
+            .join(", ");
         let sql = format!(
             r#"DELETE FROM artists WHERE id IN ({})
                AND NOT EXISTS (SELECT 1 FROM albums WHERE artist_id = artists.id)

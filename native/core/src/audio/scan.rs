@@ -102,7 +102,11 @@ async fn insert_track_to_db(
         match library::insert_artist(pool, name, &sort_name, mbid).await {
             Ok(id) => album_artist_ids.push(id),
             Err(e) => {
-                stream_log(log_tx, "ERROR", format!("Failed to insert album artist '{}': {}", name, e));
+                stream_log(
+                    log_tx,
+                    "ERROR",
+                    format!("Failed to insert album artist '{}': {}", name, e),
+                );
                 return InsertOutcome::Failed;
             }
         }
@@ -119,7 +123,11 @@ async fn insert_track_to_db(
         match library::insert_artist(pool, name, &sort_name, mbid).await {
             Ok(id) => track_artist_ids.push(id),
             Err(e) => {
-                stream_log(log_tx, "ERROR", format!("Failed to insert track artist '{}': {}", name, e));
+                stream_log(
+                    log_tx,
+                    "ERROR",
+                    format!("Failed to insert track artist '{}': {}", name, e),
+                );
                 return InsertOutcome::Failed;
             }
         }
@@ -141,7 +149,11 @@ async fn insert_track_to_db(
             id
         }
         Err(e) => {
-            stream_log(log_tx, "ERROR", format!("Failed to insert album '{}': {}", track.album, e));
+            stream_log(
+                log_tx,
+                "ERROR",
+                format!("Failed to insert album '{}': {}", track.album, e),
+            );
             return InsertOutcome::Failed;
         }
     };
@@ -179,7 +191,11 @@ async fn insert_track_to_db(
             id
         }
         Err(e) => {
-            stream_log(log_tx, "ERROR", format!("Failed to insert track '{}': {}", track.title, e));
+            stream_log(
+                log_tx,
+                "ERROR",
+                format!("Failed to insert track '{}': {}", track.title, e),
+            );
             return InsertOutcome::Failed;
         }
     };
@@ -191,10 +207,7 @@ async fn insert_track_to_db(
             stream_log(
                 log_tx,
                 "ERROR",
-                format!(
-                    "Failed to insert fingerprint for '{}': {}",
-                    track.title, e
-                ),
+                format!("Failed to insert fingerprint for '{}': {}", track.title, e),
             );
         }
     }
@@ -218,7 +231,11 @@ pub async fn run_scan(
         .collect();
     if force {
         if let Err(e) = library::delete_all_library(pool).await {
-            stream_log(&log_tx, "ERROR", format!("delete_all_library failed: {}", e));
+            stream_log(
+                &log_tx,
+                "ERROR",
+                format!("delete_all_library failed: {}", e),
+            );
             let result = ScanResult {
                 success: false,
                 tracks_found: 0,
@@ -300,7 +317,10 @@ pub async fn run_scan(
                 stream_log(
                     &log_tx,
                     "ERROR",
-                    format!("Failed to enumerate source '{}' ({}): {}", source.name, url, e),
+                    format!(
+                        "Failed to enumerate source '{}' ({}): {}",
+                        source.name, url, e
+                    ),
                 );
                 continue;
             }
@@ -358,22 +378,37 @@ pub async fn run_scan(
             ..Default::default()
         },
     );
-    let (to_scan_set, to_delete_set) = if force {
-        let to_delete: HashSet<String> = db_paths
-            .difference(&filesystem_paths)
-            .cloned()
-            .filter(|p| !p.starts_with("recommendation://") && !p.is_empty())
-            .collect();
-        (filesystem_paths, to_delete)
-    } else {
-        let to_scan: HashSet<String> = filesystem_paths.difference(&db_paths).cloned().collect();
-        let to_delete: HashSet<String> = db_paths
-            .difference(&filesystem_paths)
-            .cloned()
-            .filter(|p| !p.starts_with("recommendation://") && !p.is_empty())
-            .collect();
-        (to_scan, to_delete)
-    };
+    let mut to_scan_set: HashSet<String> = HashSet::new();
+    let mut to_delete_set: HashSet<String> = HashSet::new();
+    let mut replace_set: HashSet<String> = HashSet::new();
+    for source in &sources {
+        let Some(parser) = libsources::get_parser(&source.source_type, client.clone(), pool) else {
+            continue;
+        };
+        let Some(enumerated) = source_paths.get(&source.id) else {
+            continue;
+        };
+        let enumerated: HashSet<String> = enumerated.iter().cloned().collect();
+        match parser.detect_difference(&enumerated, &db_paths).await {
+            Ok(diff) => {
+                to_scan_set.extend(diff.to_scan);
+                to_delete_set.extend(
+                    diff.to_delete
+                        .into_iter()
+                        .filter(|p| !p.starts_with("recommendation://") && !p.is_empty()),
+                );
+                replace_set.extend(diff.replace);
+            }
+            Err(e) => stream_log(
+                &log_tx,
+                "ERROR",
+                format!(
+                    "detect_difference failed for source '{}': {}",
+                    source.name, e
+                ),
+            ),
+        }
+    }
 
     logger::info(&format!(
         "Phase 3 complete: {} to scan, {} to delete",
@@ -390,7 +425,11 @@ pub async fn run_scan(
         match library::fingerprint_paths_of(pool, &to_delete_set).await {
             Ok(map) => map,
             Err(e) => {
-                stream_log(&log_tx, "ERROR", format!("fingerprint_paths_of failed: {}", e));
+                stream_log(
+                    &log_tx,
+                    "ERROR",
+                    format!("fingerprint_paths_of failed: {}", e),
+                );
                 HashMap::new()
             }
         };
@@ -524,6 +563,21 @@ pub async fn run_scan(
             }
 
             scanned_count += 1;
+
+            // Replacement re-provision: drop the stale DB row so the path
+            // stays unique and the old fingerprint can't veto the new copy.
+            if replace_set.contains(file_path) {
+                if let Err(e) = library::delete_track_by_file_path(pool, file_path).await {
+                    stream_log(
+                        &log_tx,
+                        "ERROR",
+                        format!(
+                            "Failed to remove replaced track '{}' before re-insert: {}",
+                            file_path, e
+                        ),
+                    );
+                }
+            }
 
             let outcome = insert_track_to_db(
                 pool,

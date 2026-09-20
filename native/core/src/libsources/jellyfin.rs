@@ -216,7 +216,12 @@ impl JellyfinParser {
     /// Only mirrors the delete when `mirror_remote` is set: user-initiated
     /// deletes pass `true`, while scan-time duplicate cleanup passes `false`
     /// so a scan can never remove items from the shared Jellyfin library.
-    pub async fn delete(&self, file_path: &str, source_url: &str, mirror_remote: bool) -> Result<()> {
+    pub async fn delete(
+        &self,
+        file_path: &str,
+        source_url: &str,
+        mirror_remote: bool,
+    ) -> Result<()> {
         if !mirror_remote {
             return Ok(());
         }
@@ -263,8 +268,7 @@ impl JellyfinParser {
 
         let status = resp.status();
         let bytes = resp.bytes().await?;
-        let data: ViewsResponse =
-            crate::libsources::decode_json("jellyfin views", status, &bytes)?;
+        let data: ViewsResponse = crate::libsources::decode_json("jellyfin views", status, &bytes)?;
 
         let libraries: Vec<JellyfinLibraryInfo> = data
             .items
@@ -324,7 +328,8 @@ impl JellyfinParser {
 
         let status = resp.status();
         let bytes = resp.bytes().await?;
-        let data: AuthResponse = crate::libsources::decode_json("jellyfin authentication", status, &bytes)?;
+        let data: AuthResponse =
+            crate::libsources::decode_json("jellyfin authentication", status, &bytes)?;
 
         Ok((data.access_token, data.user.id))
     }

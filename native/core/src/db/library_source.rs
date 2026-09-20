@@ -70,12 +70,28 @@ pub async fn add_source(
 ) -> std::result::Result<String, AddSourceError> {
     match pool {
         DatabasePool::Sqlite(p) => {
-            super::library_source_sq::add_source(p, user_id, urls, name, source_type, access_rule, master_key)
-                .await
+            super::library_source_sq::add_source(
+                p,
+                user_id,
+                urls,
+                name,
+                source_type,
+                access_rule,
+                master_key,
+            )
+            .await
         }
         DatabasePool::Postgres(p) => {
-            super::library_source_pg::add_source(p, user_id, urls, name, source_type, access_rule, master_key)
-                .await
+            super::library_source_pg::add_source(
+                p,
+                user_id,
+                urls,
+                name,
+                source_type,
+                access_rule,
+                master_key,
+            )
+            .await
         }
     }
 }
@@ -113,10 +129,15 @@ pub async fn list_accessible_sources(
         .collect())
 }
 
-pub async fn list_all_sources(pool: &DatabasePool, master_key: &str) -> Result<Vec<LibrarySourceInfo>> {
+pub async fn list_all_sources(
+    pool: &DatabasePool,
+    master_key: &str,
+) -> Result<Vec<LibrarySourceInfo>> {
     match pool {
         DatabasePool::Sqlite(p) => super::library_source_sq::list_all_sources(p, master_key).await,
-        DatabasePool::Postgres(p) => super::library_source_pg::list_all_sources(p, master_key).await,
+        DatabasePool::Postgres(p) => {
+            super::library_source_pg::list_all_sources(p, master_key).await
+        }
     }
 }
 
@@ -141,8 +162,12 @@ pub async fn get_source_by_id(
     master_key: &str,
 ) -> Result<Option<LibrarySourceInfo>> {
     match pool {
-        DatabasePool::Sqlite(p) => super::library_source_sq::get_source_by_id(p, source_id, master_key).await,
-        DatabasePool::Postgres(p) => super::library_source_pg::get_source_by_id(p, source_id, master_key).await,
+        DatabasePool::Sqlite(p) => {
+            super::library_source_sq::get_source_by_id(p, source_id, master_key).await
+        }
+        DatabasePool::Postgres(p) => {
+            super::library_source_pg::get_source_by_id(p, source_id, master_key).await
+        }
     }
 }
 
@@ -172,12 +197,24 @@ pub async fn get_source_by_url_and_owner(
 ) -> Result<Option<LibrarySourceInfo>> {
     match pool {
         DatabasePool::Sqlite(p) => {
-            super::library_source_sq::get_source_by_url_and_owner(p, source_type, url, owner_id, master_key)
-                .await
+            super::library_source_sq::get_source_by_url_and_owner(
+                p,
+                source_type,
+                url,
+                owner_id,
+                master_key,
+            )
+            .await
         }
         DatabasePool::Postgres(p) => {
-            super::library_source_pg::get_source_by_url_and_owner(p, source_type, url, owner_id, master_key)
-                .await
+            super::library_source_pg::get_source_by_url_and_owner(
+                p,
+                source_type,
+                url,
+                owner_id,
+                master_key,
+            )
+            .await
         }
     }
 }
@@ -185,7 +222,9 @@ pub async fn get_source_by_url_and_owner(
 pub async fn get_urls_for_scan(pool: &DatabasePool, master_key: &str) -> Result<Vec<String>> {
     match pool {
         DatabasePool::Sqlite(p) => super::library_source_sq::get_urls_for_scan(p, master_key).await,
-        DatabasePool::Postgres(p) => super::library_source_pg::get_urls_for_scan(p, master_key).await,
+        DatabasePool::Postgres(p) => {
+            super::library_source_pg::get_urls_for_scan(p, master_key).await
+        }
     }
 }
 

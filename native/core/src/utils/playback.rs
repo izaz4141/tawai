@@ -1,6 +1,6 @@
 use crate::db::{database::DatabasePool, library, library_source};
 use crate::dclient::nadekodon;
-use crate::libsources::{get_parser, SourceUrlResolver};
+use crate::libsources::{SourceUrlResolver, get_parser};
 use crate::signals::library::TrackInfo;
 use crate::tools::duplicates;
 use crate::utils::config::AppConfig;
@@ -64,11 +64,12 @@ async fn resolve_and_fallback(
     cfg: Option<&AppConfig>,
     master_key: &str,
 ) -> PlayTrackResult {
-    let (source_type, urls_json) = library_source::get_source_by_track_id(pool, &track.id, master_key)
-        .await
-        .ok()
-        .flatten()
-        .unwrap_or_default();
+    let (source_type, urls_json) =
+        library_source::get_source_by_track_id(pool, &track.id, master_key)
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or_default();
     let urls: Vec<String> = serde_json::from_str(&urls_json).unwrap_or_default();
     let mut resolver = SourceUrlResolver::new();
     let url = match resolver

@@ -7,7 +7,7 @@ use futures::StreamExt;
 use tokio::io::AsyncWriteExt;
 use tokio::time::sleep;
 
-use crate::audio::tags::{derive_sort_name, parse_artists, AudioTag};
+use crate::audio::tags::{AudioTag, derive_sort_name, parse_artists};
 use crate::db::account::DEFAULT_USERNAME;
 use crate::db::user_settings;
 use crate::db::{database::DatabasePool, library, library_source};
@@ -17,7 +17,7 @@ use crate::metadata::musicbrainz;
 use crate::signals::library::TrackInfo;
 use crate::signals::metadata::RecordingInfo;
 use crate::tools::duplicates;
-use crate::tools::rename::{dest_from_root, DEFAULT_PATTERN};
+use crate::tools::rename::{DEFAULT_PATTERN, dest_from_root};
 use crate::utils::config::AppConfig;
 use crate::utils::logger;
 
@@ -172,7 +172,14 @@ pub async fn resolve_stream_url(
         .ok_or_else(|| anyhow::anyhow!("track not found for {}", file_path))?;
 
     let cfg = cfg.ok_or_else(|| anyhow::anyhow!("config not available"))?;
-    match crate::dclient::nadekodon::resolve_audio_url(cfg, client, &track.artists_string, &track.title).await {
+    match crate::dclient::nadekodon::resolve_audio_url(
+        cfg,
+        client,
+        &track.artists_string,
+        &track.title,
+    )
+    .await
+    {
         Ok(Some(url)) => Ok((url, vec![])),
         Ok(None) => Err(anyhow::anyhow!("no audio source found")),
         Err(e) => Err(e),
@@ -235,7 +242,11 @@ pub async fn download(
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| DEFAULT_PATTERN.to_string());
     let fallback_stem = format!("{} - {}", track.artists_string, track.title);
-    let ext = if format.ext.is_empty() { "mp3" } else { &format.ext };
+    let ext = if format.ext.is_empty() {
+        "mp3"
+    } else {
+        &format.ext
+    };
     let final_path = dest_from_root(dest_path, &pattern, &tag, ext, &fallback_stem);
 
     if let Some(parent) = final_path.parent() {

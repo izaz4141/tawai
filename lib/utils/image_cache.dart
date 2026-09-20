@@ -63,11 +63,7 @@ class AppImageCache {
 
   void invalidateUrl(String url) => _cache.invalidate('url:$url');
 
-  void seedCover({
-    String? albumId,
-    String? trackId,
-    required Uint8List bytes,
-  }) {
+  void seedCover({String? albumId, String? trackId, required Uint8List bytes}) {
     final key = _coverKey(albumId: albumId, trackId: trackId);
     if (key != null) _cache.put(key, bytes);
   }

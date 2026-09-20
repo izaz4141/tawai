@@ -69,7 +69,8 @@ pub async fn user_can_read_track(
         }
     }
 
-    let access = match library_source::get_source_info_by_track_id(pool, track_id, master_key).await {
+    let access = match library_source::get_source_info_by_track_id(pool, track_id, master_key).await
+    {
         Ok(Some(source)) => match account::get_user_role(pool, user_id).await {
             Ok(Some(role)) => {
                 if library_source::can_access_source(
