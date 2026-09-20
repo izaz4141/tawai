@@ -7,6 +7,7 @@ use axum::{
 
 use tawai_core::{
     audio,
+    db::library,
     signals::metadata::{
         ReadFileTagsBytesRequest, ReadFileTagsRequest, ReadFileTagsResponse,
         WriteFileTagsBytesRequest, WriteFileTagsBytesResponse, WriteFileTagsRequest,
@@ -105,8 +106,31 @@ pub async fn handle_write_file_tags(
 
     match audio::tags::write_audio_tags(&path, &tag) {
         Ok(()) => {
-            // Mirror the edit to the remote tawai source (best-effort).
+            // Writing tags rewrote the file's bytes, so the stored SHA-256 is
+            // now stale. Recompute it in place, otherwise the next remote scan
+            // sees a permanent hash mismatch against freshly streamed bytes.
             let db = state.context.db().await;
+            if let Ok(hash) = tawai_core::libsources::local::hash_file(&path) {
+                if let Err(e) = library::update_file_hash_by_path(
+                    db.pool(),
+                    &path.to_string_lossy(),
+                    &hash,
+                )
+                .await
+                {
+                    tawai_core::utils::logger::warn(&format!(
+                        "failed to update stored file_hash after tag write for {}: {}",
+                        path.display(),
+                        e
+                    ));
+                }
+            } else {
+                tawai_core::utils::logger::warn(&format!(
+                    "failed to compute file_hash after tag write for {}",
+                    path.display()
+                ));
+            }
+            // Mirror the edit to the remote tawai source (best-effort).
             let mk = state.context.master_key.read().await.clone();
             if let Err(e) = tawai_core::libsources::tawai::mirror_tag_write(
                 db.pool(),

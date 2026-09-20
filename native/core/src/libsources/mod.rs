@@ -3,13 +3,14 @@ pub mod local;
 pub mod recommendation;
 pub mod tawai;
 
-pub use recommendation::{ApiType, RecommendationSource, ALL_RECOMMENDATION_SOURCES};
+pub use recommendation::{ALL_RECOMMENDATION_SOURCES, ApiType, RecommendationSource};
 
 use std::ops::Deref;
 use std::path::Path;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
+use crate::audio::scan::LogSender;
 use crate::audio::tags::AudioTag;
 use crate::db::database::DatabasePool;
 use crate::utils::config::AppConfig;
@@ -173,7 +174,7 @@ impl SourceParser {
 
     pub async fn scan_paths(
         &self,
-        _pool: &DatabasePool,
+        pool: &DatabasePool,
         url: &str,
         urls: &[String],
         paths: &[String],
@@ -181,22 +182,23 @@ impl SourceParser {
         match self {
             SourceParser::Local => local::scan_paths(url, paths),
             SourceParser::Jellyfin(p) => p.scan_paths(url, paths).await,
-            SourceParser::Tawai(p) => p.scan_paths(_pool, url, urls, paths).await,
+            SourceParser::Tawai(p) => p.scan_paths(pool, url, urls, paths).await,
             SourceParser::Recommendation(_) => Ok(vec![]),
         }
     }
 
     pub async fn scan_file(
         &self,
-        _pool: &DatabasePool,
+        pool: &DatabasePool,
         url: &str,
         urls: &[String],
         file_path: &str,
+        log_tx: &Option<LogSender>,
     ) -> Result<ParsedTrack> {
         match self {
             SourceParser::Local => local::scan_file(Path::new(file_path)),
-            SourceParser::Jellyfin(p) => p.scan_file(url, file_path).await,
-            SourceParser::Tawai(p) => p.scan_file(_pool, url, urls, file_path).await,
+            SourceParser::Jellyfin(p) => p.scan_file(url, file_path, log_tx).await,
+            SourceParser::Tawai(p) => p.scan_file(pool, url, urls, file_path, log_tx).await,
             SourceParser::Recommendation(_) => {
                 anyhow::bail!("recommendation sources are synced, not scanned")
             }
@@ -215,7 +217,10 @@ impl SourceParser {
         match self {
             SourceParser::Local => Ok((file_path.to_string(), vec![])),
             SourceParser::Jellyfin(p) => p.resolve_stream_url(file_path, url).await,
-            SourceParser::Tawai(p) => p.resolve_stream_url(pool, file_path, url, urls, client, cfg).await,
+            SourceParser::Tawai(p) => {
+                p.resolve_stream_url(pool, file_path, url, urls, client, cfg)
+                    .await
+            }
             SourceParser::Recommendation(_) => {
                 recommendation::resolve_stream_url(pool, file_path, client, cfg).await
             }
@@ -238,9 +243,7 @@ impl SourceParser {
             SourceParser::Local => local::delete_file(file_path),
             SourceParser::Jellyfin(p) => p.delete(file_path, url, mirror_remote).await,
             SourceParser::Tawai(p) => p.delete(pool, file_path, url, urls, mirror_remote).await,
-            SourceParser::Recommendation(_) => {
-                recommendation::delete(pool, file_path).await
-            }
+            SourceParser::Recommendation(_) => recommendation::delete(pool, file_path).await,
         }
     }
 
@@ -277,9 +280,7 @@ impl SourceParser {
         user_name: &str,
     ) -> Result<(u32, u32)> {
         match self {
-            SourceParser::Local | SourceParser::Jellyfin(_) | SourceParser::Tawai(_) => {
-                Ok((0, 0))
-            }
+            SourceParser::Local | SourceParser::Jellyfin(_) | SourceParser::Tawai(_) => Ok((0, 0)),
             SourceParser::Recommendation(rec) => {
                 recommendation::sync(pool, rec, source_id, client, token, user_name).await
             }

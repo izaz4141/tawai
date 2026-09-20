@@ -486,6 +486,24 @@ pub async fn set_track_file_path(
     }
 }
 
+/// Refresh a track's stored SHA-256 after its on-disk bytes changed (e.g. a
+/// tag write reused the file without a rescan). Matches on `file_path` because
+/// the tag-edit flows only know the path, not the track id.
+pub async fn update_file_hash_by_path(
+    pool: &DatabasePool,
+    file_path: &str,
+    file_hash: &str,
+) -> anyhow::Result<()> {
+    match pool {
+        DatabasePool::Sqlite(p) => {
+            super::library_sq::update_file_hash_by_path(p, file_path, file_hash).await
+        }
+        DatabasePool::Postgres(p) => {
+            super::library_pg::update_file_hash_by_path(p, file_path, file_hash).await
+        }
+    }
+}
+
 pub async fn delete_tracks_by_source_id(
     pool: &DatabasePool,
     source_id: &str,

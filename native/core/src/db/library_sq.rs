@@ -1159,6 +1159,19 @@ pub async fn set_track_file_path(
     Ok(())
 }
 
+pub async fn update_file_hash_by_path(
+    pool: &SqlitePool,
+    file_path: &str,
+    file_hash: &str,
+) -> Result<()> {
+    sqlx::query("UPDATE tracks SET file_hash = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE file_path = ?")
+        .bind(file_hash)
+        .bind(file_path)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 async fn upsert_artist_in_tx(
     conn: &mut sqlx::SqliteConnection,
     name: &str,

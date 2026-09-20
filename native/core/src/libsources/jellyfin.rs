@@ -7,6 +7,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use tokio::sync::RwLock;
 
+use crate::audio::scan::{LogSender, stream_log};
 use crate::audio::tags::{self, AudioTag};
 use crate::libsources::ParsedTrack;
 use crate::signals::discovery::JellyfinLibraryInfo;
@@ -171,7 +172,12 @@ impl JellyfinParser {
         Ok(tracks)
     }
 
-    pub async fn scan_file(&self, url: &str, file_path: &str) -> Result<ParsedTrack> {
+    pub async fn scan_file(
+        &self,
+        url: &str,
+        file_path: &str,
+        log_tx: &Option<LogSender>,
+    ) -> Result<ParsedTrack> {
         let (base_url, token, _, _) = self.get_or_authenticate(url).await?;
         let item_id = file_path
             .strip_prefix("jellyfin://")
@@ -189,10 +195,14 @@ impl JellyfinParser {
                 file_size: fsize,
             }),
             Err(e) => {
-                logger::warn(&format!(
-                    "Failed to download/extract Jellyfin item {}, fallback to API metadata: {}",
-                    item_id, e
-                ));
+                stream_log(
+                    log_tx,
+                    "WARN",
+                    format!(
+                        "Failed to download/extract Jellyfin item {}, fallback to API metadata: {}",
+                        item_id, e
+                    ),
+                );
                 let item = self
                     .fetch_item(&base_url, &token, &item_id)
                     .await?

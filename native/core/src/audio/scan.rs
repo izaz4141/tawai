@@ -17,12 +17,11 @@ fn send_progress(tx: &Option<tokio::sync::watch::Sender<ScanProgress>>, p: ScanP
     }
 }
 
-type LogSender = tokio::sync::mpsc::UnboundedSender<(String, String)>;
+pub(crate) type LogSender = tokio::sync::mpsc::UnboundedSender<(String, String)>;
 
-/// Log to stdout (as before) and forward the message to the live log channel
-/// consumed by the hub (level, message). Level-aware so Dart shows source-level
-/// failures as errors and per-file skips as warnings.
-fn stream_log(log_tx: &Option<LogSender>, level: &str, msg: String) {
+/// Forward a (level, message) pair to the live log channel, or log locally
+/// when absent. Levels map to Dart error/warning.
+pub(crate) fn stream_log(log_tx: &Option<LogSender>, level: &str, msg: String) {
     if let Some(tx) = log_tx {
         let _ = tx.send((level.to_string(), msg));
         return;
@@ -464,7 +463,10 @@ pub async fn run_scan(
                 }
             };
 
-            let mut track = match parser.scan_file(pool, &url, &source.urls, file_path).await {
+            let mut track = match parser
+                .scan_file(pool, &url, &source.urls, file_path, &log_tx)
+                .await
+            {
                 Ok(t) => t,
                 Err(e) => {
                     stream_log(

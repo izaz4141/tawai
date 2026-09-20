@@ -1149,6 +1149,19 @@ pub async fn set_track_file_path(pool: &PgPool, track_id: &str, new_file_path: &
     sqlx::query("UPDATE tracks SET file_path = $1, updated_at = NOW() WHERE id = $2")
         .bind(new_file_path)
         .bind(track_id)
+.execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn update_file_hash_by_path(
+    pool: &PgPool,
+    file_path: &str,
+    file_hash: &str,
+) -> Result<()> {
+    sqlx::query("UPDATE tracks SET file_hash = $1, updated_at = NOW() WHERE file_path = $2")
+        .bind(file_hash)
+        .bind(file_path)
         .execute(pool)
         .await?;
     Ok(())

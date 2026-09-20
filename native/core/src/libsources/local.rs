@@ -38,7 +38,7 @@ pub fn walk_directory(dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-pub(crate) fn hash_file(path: &Path) -> Result<String> {
+pub fn hash_file(path: &Path) -> Result<String> {
     let mut file = std::fs::File::open(path)?;
     let mut hasher = Sha256::new();
     let mut buf = [0; 8192];
@@ -54,8 +54,6 @@ pub(crate) fn hash_file(path: &Path) -> Result<String> {
 
 pub fn scan_file(path: &Path) -> Result<ParsedTrack> {
     let (mut tag, duration_secs, sample_rate, bitrate) = tags::read_audio_tags(path)?;
-    let file_hash = hash_file(path)?;
-    let file_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
 
     if tag.acoust_id_fingerprint.is_none() {
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
@@ -72,6 +70,12 @@ pub fn scan_file(path: &Path) -> Result<ParsedTrack> {
             }
         }
     }
+
+    // Hash AFTER any in-place tag write: the optional fingerprint embed just
+    // rewrote the file's bytes, so a hash captured before it would never match
+    // the on-disk file (and what remote tawai peers stream).
+    let file_hash = hash_file(path)?;
+    let file_size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
 
     Ok(ParsedTrack {
         tag,
