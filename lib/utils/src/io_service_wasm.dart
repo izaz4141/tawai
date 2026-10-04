@@ -156,6 +156,14 @@ class WasmIOService implements IOService {
     }
     return null;
   }
+
+  @override
+  void writeLine(String line) => print(line);
+
+  @override
+  void exit(int code) {
+    throw UnsupportedError('Cannot exit the process in WASM.');
+  }
 }
 
 IOService getIOService() => WasmIOService();

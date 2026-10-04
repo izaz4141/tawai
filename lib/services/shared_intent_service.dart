@@ -1,15 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_sharing_intent/flutter_sharing_intent.dart';
 import 'package:flutter_sharing_intent/model/sharing_file.dart';
-
 import 'package:tawai/services/playback_service.dart';
+import 'package:tawai/models/audio_format.dart';
 import 'package:tawai/utils/io_service.dart';
 import 'package:tawai/utils/logger.dart';
-import 'package:tawai/utils/log_service.dart';
 
 /// Receives audio files shared from other Android apps via the system share
 /// sheet or "Open with" and hands them to the player.
@@ -21,24 +19,6 @@ class SharedIntentService {
   static const MethodChannel _contentChannel = MethodChannel(
     'tawai/shared_file',
   );
-
-  static const Set<String> _audioExtensions = {
-    '.mp3',
-    '.aac',
-    '.m4a',
-    '.m4b',
-    '.flac',
-    '.wav',
-    '.ogg',
-    '.oga',
-    '.opus',
-    '.wma',
-    '.aiff',
-    '.aif',
-    '.amr',
-    '.mp4',
-    '.alac',
-  };
 
   StreamSubscription<List<SharedFile>>? _sub;
   final Set<String> _recent = {};
@@ -78,7 +58,7 @@ class SharedIntentService {
   bool _isAudio(SharedFile file) {
     final mimeType = file.mimeType ?? '';
     if (mimeType.toLowerCase().startsWith('audio')) return true;
-    return _audioExtensions.contains(_extensionOf(file.value ?? ''));
+    return isAudioPath(file.value ?? '');
   }
 
   bool _dedupe(String value) {
@@ -87,13 +67,6 @@ class SharedIntentService {
     _dedupeTimer?.cancel();
     _dedupeTimer = Timer(const Duration(seconds: 30), _recent.clear);
     return true;
-  }
-
-  String _extensionOf(String value) {
-    final lower = value.toLowerCase();
-    final index = lower.lastIndexOf('.');
-    if (index < 0) return '';
-    return lower.substring(index);
   }
 
   /// Resolves the shared value to a stable local file path. Values coming from

@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+// Prefixed as well, so [NativeIOService.exit] can reach `dart:io`'s exit
+// without calling itself.
+import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:synchronized/synchronized.dart';
@@ -124,6 +127,12 @@ class NativeIOService implements IOService {
 
   @override
   Future<void> downloadBytes(String name, Uint8List bytes) async {}
+
+@override
+  void writeLine(String line) => stdout.writeln(line);
+
+  @override
+  void exit(int code) => io.exit(code);
 
   @override
   String? getCookie(String name) {

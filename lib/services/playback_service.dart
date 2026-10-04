@@ -9,12 +9,12 @@ import 'package:synchronized/synchronized.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/app.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
+import 'package:tawai/models/audio_format.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/image_cache.dart';
 import 'package:tawai/utils/settings.dart' show SettingsManager;
 import 'package:tawai/utils/helper.dart';
 import 'package:tawai/utils/logger.dart';
-import 'package:tawai/utils/log_service.dart';
 
 import 'audio_handler.dart';
 
@@ -230,21 +230,34 @@ class PlaybackService {
   /// Plays an audio file received from outside the app (e.g. shared from
   /// another Android app) directly from its local path, without touching the
   /// library or triggering scrobbling/now-playing updates.
-  Future<bool> playExternalFile(String path) async {
-    final track = await _buildExternalTrack(path);
-    if (track == null) return false;
-    final cache = SourceCache(path, null);
+  Future<bool> playExternalFile(String path) => playExternalFiles([path]);
+
+  /// Plays audio files received from outside the app (e.g. from a file
+  /// association) directly from their local paths, without touching the library
+  /// or triggering scrobbling/now-playing updates.
+  ///
+  /// [paths] replace whatever was queued, with the first one playing and the
+  /// rest following it. Paths whose tags cannot be read still play, using the
+  /// file name as the title, and the whole call is a no-op if none of them
+  /// resolve.
+  Future<bool> playExternalFiles(List<String> paths) async {
+    final items = <QueueItem>[];
+    for (final path in paths) {
+      final track = await _buildExternalTrack(path);
+      if (track == null) continue;
+      items.add(QueueItem(track: track, source: SourceCache(path, null)));
+    }
+    if (items.isEmpty) return false;
+
+    final first = items.first;
     return _actionLock.synchronized(() async {
       await _reset();
       playerState.value = PlayerState(false, ProcessingState.loading);
-      _orderedItems = [QueueItem(track: track, source: cache)];
-      queue.value = QueueState(
-        items: [QueueItem(track: track, source: cache)],
-        currentIndex: 0,
-      );
-      _loadedTrackId = track.id;
+      _orderedItems = items;
+      queue.value = QueueState(items: items, currentIndex: 0);
+      _loadedTrackId = first.track.id;
       _sourceGeneration++;
-      await _player.setAudioSource(_buildSource(track, cache));
+      await _player.setAudioSource(_buildSource(first.track, first.source!));
       await _applyEffectiveVolume();
       _startPlayback();
       return true;
@@ -264,10 +277,10 @@ class PlaybackService {
     final fallback =
         tags == null || tags.error != null || tags.durationSecs <= 0;
 
-    final filename = path.split('/').last;
-    final withoutExt = filename.contains('.')
-        ? filename.substring(0, filename.lastIndexOf('.'))
-        : filename;
+    final filename = basename(path);
+    final ext = extension(path);
+    final withoutExt =
+        ext.isEmpty ? filename : filename.substring(0, filename.length - ext.length);
     final title = !fallback && tags!.title.isNotEmpty ? tags.title : withoutExt;
     final artist = fallback ? '' : tags.artist;
 

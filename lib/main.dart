@@ -1,36 +1,37 @@
 import 'dart:async';
+
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:window_manager/window_manager.dart';
-
 import 'package:rinf/rinf.dart';
-import 'package:audio_service/audio_service.dart';
-import 'package:tawai/src/bindings/bindings.dart';
-
-import 'package:tawai/services/playback_service.dart';
-import 'package:tawai/services/audio_handler.dart';
-import 'package:tawai/services/shared_intent_service.dart';
 import 'package:tawai/models/account.dart';
 import 'package:tawai/models/user.dart';
+import 'package:tawai/services/audio_handler.dart';
+import 'package:tawai/services/playback_service.dart';
+import 'package:tawai/services/shared_intent_service.dart';
+import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/app.dart';
-import 'package:tawai/utils/log_service.dart';
-import 'package:tawai/utils/settings.dart';
+import 'package:tawai/utils/api_service.dart';
+import 'package:tawai/utils/app_lifecycle.dart';
+import 'package:tawai/utils/bridge_service.dart';
+import 'package:tawai/utils/cli_args.dart';
+import 'package:tawai/utils/file_association_service.dart';
+import 'package:tawai/utils/helper.dart';
 import 'package:tawai/utils/io_service.dart';
+import 'package:tawai/utils/log_service.dart';
 import 'package:tawai/utils/logger.dart';
+import 'package:tawai/utils/platform_service.dart';
+import 'package:tawai/utils/rinf_service.dart';
+import 'package:tawai/utils/settings.dart';
+import 'package:tawai/utils/single_instance.dart';
 import 'package:tawai/utils/system_service.dart';
 import 'package:tawai/utils/updater.dart';
-import 'package:tawai/utils/api_service.dart';
-import 'package:tawai/utils/bridge_service.dart';
-import 'package:tawai/utils/rinf_service.dart';
-import 'package:tawai/utils/single_instance.dart';
-import 'package:tawai/utils/app_lifecycle.dart';
-import 'package:tawai/utils/platform_service.dart';
-import 'package:tawai/utils/helper.dart';
+import 'package:window_manager/window_manager.dart';
 
 final _windowListener = _WindowListener();
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
@@ -62,6 +63,29 @@ Future<void> main() async {
       await APIService.instance.init();
       await SettingsManager.init();
       await SystemService().init();
+
+      if (PlatformService.isDesktop) {
+        final action = await parseCliArgs(args, IOServiceFactory.create());
+        await action.run();
+        if (action is OpenTarget) {
+          OpenTargetService.instance.setStartupTargets(action.targets);
+        }
+
+        OpenTargetService.instance.targets.listen(_openTargets);
+
+        await SingleInstance.init(
+          () async {
+            await PlatformService().focusWindow();
+          },
+          _openTargets,
+          startupTargets: const [],
+        );
+        final startupTargets = OpenTargetService.instance.takeStartupTargets();
+        if (startupTargets != null && startupTargets.isNotEmpty) {
+          _openTargets(startupTargets);
+        }
+        await _ensureFileAssociationRegistered();
+      }
 
       if (!kIsWeb) {
         BridgeService.instance.startServer(
@@ -117,9 +141,6 @@ Future<void> main() async {
       }
 
       if (PlatformService.isDesktop) {
-        await SingleInstance.init(() async {
-          await PlatformService().focusWindow();
-        });
         await PlatformService().initWindow(
           listener: _windowListener,
           onReady: () async {
@@ -153,6 +174,32 @@ Future<void> main() async {
       },
     ),
   );
+}
+
+/// Plays audio files the desktop environment handed us, whether they came from
+/// our own command line or from a second instance forwarding them.
+Future<void> _openTargets(List<String> targets) async {
+  if (targets.isEmpty) return;
+  try {
+    final played = await PlaybackService.instance.playExternalFiles(targets);
+    if (!played) {
+      log('Could not play: ${targets.join(', ')}', level: LogLevel.error);
+    }
+  } catch (e, s) {
+    log('Failed to open ${targets.join(', ')}: $e\n$s', level: LogLevel.error);
+  }
+}
+
+Future<void> _ensureFileAssociationRegistered() async {
+  try {
+    final service = FileAssociationServiceFactory.create();
+    if (!service.isRegistered()) {
+      await service.register();
+    }
+  } catch (e, s) {
+    // Never let a registry problem stop the app from starting.
+    log('File association setup failed: $e\n$s', level: LogLevel.error);
+  }
 }
 
 Future<void> _resolveCurrentUser() async {

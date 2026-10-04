@@ -34,4 +34,10 @@ abstract class IOService {
   /// Triggers a platform download of [bytes] under the name [name].
   /// Only meaningful on web/wasm; no-op on platforms that write in place.
   Future<void> downloadBytes(String name, Uint8List bytes);
+
+  /// Writes [line] to standard output, followed by a newline.
+  void writeLine(String line);
+
+  /// Ends the process immediately with [code]. Never returns.
+  void exit(int code);
 }

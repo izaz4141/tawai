@@ -1,8 +1,9 @@
 [Desktop Entry]
 Name=Tawai
 Comment=Music discovery, metadata management, and player
-Exec=tawai
+Exec=tawai %F
 Icon=tawai
 Type=Application
 Categories=AudioVideo;Audio;Player;Music;
 Terminal=false
+MimeType=audio/mpeg;audio/mp3;audio/x-mp3;audio/x-mpeg;audio/aac;audio/x-aac;audio/mp4;audio/x-m4a;audio/m4a;audio/x-m4b;audio/flac;audio/x-flac;audio/vnd.wave;audio/wav;audio/x-wav;audio/x-aiff;audio/ogg;audio/x-vorbis+ogg;audio/x-opus+ogg;audio/x-speex;audio/x-ms-wma;audio/AMR;audio/x-ape;audio/x-musepack;audio/x-wavpack;

@@ -60,6 +60,7 @@ dependencies:
   device_info_plus: ^13.1.0
   collection: ^1.19.1
   web: ^1.1.1
+  win32_registry: ^3.0.3
 dev_dependencies:
   flutter_test:
     sdk: flutter

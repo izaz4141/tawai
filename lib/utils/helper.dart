@@ -89,6 +89,19 @@ String camelToSnake(String input) {
       .toLowerCase();
 }
 
+/// The file name of [path], with no directory part. Treats `\` as a separator
+/// so Windows paths work without normalising them first.
+String basename(String path) => path.replaceAll('\\', '/').split('/').last;
+
+/// The lowercase extension of [path], including the leading dot, or an empty
+/// string when it has none. A leading dot marks a dotfile, not an extension.
+String extension(String path) {
+  final name = basename(path);
+  final dot = name.lastIndexOf('.');
+  if (dot <= 0) return '';
+  return name.substring(dot).toLowerCase();
+}
+
 bool isLocalHost(String host) {
   final h = host.trim().toLowerCase();
   return h == '127.0.0.1' || h == 'localhost';

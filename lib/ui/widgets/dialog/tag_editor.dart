@@ -1,8 +1,9 @@
 import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-
+import 'package:tawai/models/audio_format.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
@@ -10,34 +11,14 @@ import 'package:tawai/ui/widgets/components/editable_cover.dart';
 import 'package:tawai/ui/widgets/components/media_uploader.dart';
 import 'package:tawai/ui/widgets/dialog/identify_dialog.dart';
 import 'package:tawai/utils/bridge_service.dart';
+import 'package:tawai/utils/helper.dart';
 import 'package:tawai/utils/io_service.dart';
-
-const _audioExtensions = [
-  'mp3',
-  'flac',
-  'ogg',
-  'm4a',
-  'mp4',
-  'wav',
-  'aiff',
-  'aac',
-  'ape',
-  'mpc',
-  'wv',
-  'opus',
-  'spx',
-];
 
 Future<void> showTagEditorDialog(BuildContext context, {String? initialPath}) {
   return showDialog(
     context: context,
     builder: (_) => _TagEditorDialog(initialPath: initialPath),
   );
-}
-
-String _basename(String path) {
-  final idx = path.replaceAll('\\', '/').lastIndexOf('/');
-  return idx >= 0 ? path.substring(idx + 1) : path;
 }
 
 class _TagEditorDialog extends StatefulWidget {
@@ -378,7 +359,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
   }
 
   Widget _buildFileName() {
-    final name = _filename ?? (_path != null ? _basename(_path!) : null);
+    final name = _filename ?? (_path != null ? basename(_path!) : null);
     if (name == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: AppTheme.spaceSM),
@@ -460,7 +441,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
         ? AppTheme.dialogWidthDesktop
         : AppTheme.dialogWidthMobile;
 
-    final fileName = _filename ?? (_path != null ? _basename(_path!) : null);
+    final fileName = _filename ?? (_path != null ? basename(_path!) : null);
     final header = fileName == null ? 'Tag Editor' : 'Edit Tags — $fileName';
 
     return AlertDialog(
@@ -603,7 +584,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
 
   Widget _buildFilePicker() {
     return MediaUploader(
-      allowedExtensions: _audioExtensions,
+      allowedExtensions: audioBareExtensions,
       limit: 1,
       hintText: 'Select an audio file to edit its tags.',
       pickLabel: 'Select Audio File',
