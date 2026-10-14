@@ -630,6 +630,14 @@ class PlaybackService {
     }
 
     playerState.value = PlayerState(false, ProcessingState.loading);
+    if (kIsWeb) {
+      // Workaround for ryanheise/just_audio#1596: just_audio_web caches
+      // decoded source players under the root playlist's fixed id (''), so a
+      // setAudioSource() over a live player resolves back to the previous
+      // track's source and the <audio> element replays it. stop() deactivates
+      // the platform player so the next load gets a fresh, empty cache.
+      await _player.stop();
+    }
     await _player.setAudioSource(_buildSource(item.track, item.source!));
     await _applyEffectiveVolume();
     _loadedTrackId = item.track.id;
