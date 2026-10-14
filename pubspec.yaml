@@ -61,6 +61,7 @@ dependencies:
   collection: ^1.19.1
   web: ^1.1.1
   win32_registry: ^3.0.3
+  tuple: ^2.0.2
 dev_dependencies:
   flutter_test:
     sdk: flutter

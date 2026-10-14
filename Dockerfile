@@ -7,7 +7,7 @@ WORKDIR /app
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-COPY pubspec*.yaml ./
+COPY pubspec.yaml pubspec.lock ./
 RUN flutter pub get
 
 COPY lib ./lib
