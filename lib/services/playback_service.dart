@@ -655,6 +655,7 @@ class PlaybackService {
       final result = await BridgeService.instance.playTrack(
         track.id,
         track: track,
+        bitrate: SettingsManager.preferredBitrate.value,
       );
       _inflight.remove(track.id);
       if (result.error != null) {

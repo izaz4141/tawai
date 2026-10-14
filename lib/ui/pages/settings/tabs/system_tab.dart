@@ -5,7 +5,7 @@ import 'package:tawai/models/user.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/widgets/components/list_choice.dart';
-import 'package:tawai/ui/widgets/components/list_dropdown.dart';
+import 'package:tawai/ui/widgets/components/list_slider.dart';
 import 'package:tawai/ui/widgets/components/list_switch.dart';
 import 'package:tawai/ui/widgets/components/section_header.dart';
 import 'package:tawai/ui/widgets/dialog/color_picker_dialog.dart';
@@ -19,18 +19,53 @@ class SettingsSystemTab extends StatefulWidget {
 }
 
 class _SettingsSystemTabState extends State<SettingsSystemTab> {
+  // 'lossless' parks on the extra step at the top of the range.
+  static const int _minBitrate = 32;
+  static const int _maxBitrate = 320;
+  static const int _losslessStep = _maxBitrate + 1;
+
   final _obscured = ValueNotifier<bool>(true);
+  late final ValueNotifier<int> _bitrateKbps;
+
+  int _toSlider(String raw) =>
+      raw == 'lossless' ? _losslessStep : (int.tryParse(raw) ?? _losslessStep);
+
+  String _fromSlider(int kbps) =>
+      kbps >= _losslessStep ? 'lossless' : kbps.toString();
 
   @override
   void initState() {
     super.initState();
     SettingsManager.getCurrentUserApiKey();
+    _bitrateKbps = ValueNotifier(
+      _toSlider(SettingsManager.preferredBitrate.value),
+    );
+    SettingsManager.preferredBitrate.addListener(_syncBitrate);
   }
 
   @override
   void dispose() {
+    SettingsManager.preferredBitrate.removeListener(_syncBitrate);
+    _bitrateKbps.dispose();
     _obscured.dispose();
     super.dispose();
+  }
+
+  void _syncBitrate() {
+    final next = _toSlider(SettingsManager.preferredBitrate.value);
+    if (_bitrateKbps.value != next) _bitrateKbps.value = next;
+  }
+
+  // Live preview while dragging; the value is only persisted once the drag
+  // ends, so a single gesture does not issue hundreds of setting writes.
+  void _previewBitrate(int kbps) => _bitrateKbps.value = kbps;
+
+  void _commitBitrate(int kbps) {
+    SettingsManager.saveUserSetting(
+      SettingsManager.preferredBitrate,
+      'preferred_bitrate',
+      _fromSlider(kbps),
+    );
   }
 
   @override
@@ -259,27 +294,28 @@ class _SettingsSystemTabState extends State<SettingsSystemTab> {
           leading: const Icon(Icons.headphones),
         ),
         SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-        ListDropdown(
-          title: 'Preferred Bitrate',
-          subtitle:
-              'Transcode remote streams to this bitrate. '
-              'Lossless streams the original file.',
-          valueListenable: SettingsManager.preferredBitrate,
-          items: const [
-            DropdownMenuItem(
-              value: 'lossless',
-              child: Text('Lossless (Original)'),
-            ),
-            DropdownMenuItem(value: '320', child: Text('320 kbps')),
-            DropdownMenuItem(value: '256', child: Text('256 kbps')),
-            DropdownMenuItem(value: '192', child: Text('192 kbps')),
-            DropdownMenuItem(value: '128', child: Text('128 kbps')),
-          ],
-          onChange: (v) => SettingsManager.saveUserSetting(
-            SettingsManager.preferredBitrate,
-            'preferred_bitrate',
-            v,
-          ),
+        ValueListenableBuilder<int>(
+          valueListenable: _bitrateKbps,
+          builder: (context, kbps, _) {
+            final lossless = kbps >= _losslessStep;
+            return ListSlider<int>(
+              title: 'Bitrate',
+              subtitle: lossless
+                  ? 'Lossless — playing the original file.'
+                  : 'Transcoding remote streams to $kbps kbps.',
+              valueListenable: _bitrateKbps,
+              onChanged: _previewBitrate,
+              onChangeEnd: _commitBitrate,
+              min: _minBitrate,
+              max: _maxBitrate,
+              minValue: (label: '$_minBitrate kbps', value: _minBitrate),
+              // Sentinel end: one step past the numeric max, labelled "Lossless".
+              maxValue: (label: 'Lossless', value: _losslessStep),
+              step: 1,
+              unit: 'kbps',
+              defaultValue: _losslessStep,
+            );
+          },
         ),
       ],
     );

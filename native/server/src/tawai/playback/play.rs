@@ -4,6 +4,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
+use tawai_core::audio::ffmpeg::{DASH_MAX_BITRATE_KBPS, DASH_MIN_BITRATE_KBPS, DEFAULT_DASH_BITRATE_KBPS};
 use tawai_core::utils::playback::resolve_playable_track;
 use tawai_core::{
     signals::playback::{PlayTrackRequest, PlayTrackResponse},
@@ -71,10 +72,19 @@ pub async fn handle_play_track(
         }
     }
 
-    // Native clients authenticate via `X-API-Key` and can play DASH (ExoPlayer
-    // / libmpv). Web clients authenticate via JWT cookie and must fall back to
-    // progressive streaming (HTML5 audio cannot play DASH).
+    // X-API-Key marks a native client (ExoPlayer / libmpv) that can play DASH.
+    // Web clients authenticate via JWT cookie and must fall back to progressive
+    // streaming (HTML5 audio cannot play DASH). A native client only gets a DASH
+    // transcode when it asked for a specific bitrate; "lossless"/absent keeps
+    // the original file and is served as a range stream.
     let is_native = headers.contains_key("X-API-Key");
+    let bitrate_kbps = req
+        .bitrate
+        .as_deref()
+        .filter(|b| !b.is_empty() && *b != "lossless")
+        .and_then(|b| b.parse::<u32>().ok())
+        .filter(|b| (DASH_MIN_BITRATE_KBPS..=DASH_MAX_BITRATE_KBPS).contains(b));
+    let transcode = is_native && bitrate_kbps.is_some();
 
     let file_path = if result.file_path.starts_with("http://")
         || result.file_path.starts_with("https://")
@@ -84,12 +94,19 @@ pub async fn handle_play_track(
     } else if let Some(tid) = &result.resolved_track_id {
         match create_jwt_response(&state, &user_id).await {
             Ok(jwt_resp) => {
-                let base = if is_native {
-                    format!("/api/tawai/playback/dash/{}/manifest.mpd", tid)
+                if transcode {
+                    format!(
+                        "/api/tawai/playback/stream/{}/manifest.mpd?token={}&bitrate={}",
+                        tid,
+                        jwt_resp.access_token,
+                        bitrate_kbps.unwrap_or(DEFAULT_DASH_BITRATE_KBPS)
+                    )
                 } else {
-                    format!("/api/tawai/playback/stream/{}", tid)
-                };
-                format!("{}?token={}", base, jwt_resp.access_token)
+                    format!(
+                        "/api/tawai/playback/stream/{}?token={}",
+                        tid, jwt_resp.access_token
+                    )
+                }
             }
             Err(e) => {
                 logger::error(&format!("Error creating jwt_response: {e}"));

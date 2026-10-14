@@ -9,8 +9,14 @@ use tokio::process::Command;
 /// Default DASH segment duration in seconds.
 pub const DASH_SEGMENT_DURATION_SECS: u32 = 6;
 
-/// Default adaptive bitrate ladder (kbps) for DASH representations.
-pub const DASH_BITRATES: &[u32] = &[128, 192, 256, 320];
+/// Lowest audio bitrate (kbps) accepted for DASH transcoding.
+pub const DASH_MIN_BITRATE_KBPS: u32 = 32;
+
+/// Highest audio bitrate (kbps) accepted for DASH transcoding.
+pub const DASH_MAX_BITRATE_KBPS: u32 = 320;
+
+/// Bitrate (kbps) used when a DASH request does not specify one.
+pub const DEFAULT_DASH_BITRATE_KBPS: u32 = 192;
 
 /// Transcode one `DASH_SEGMENT_DURATION_SECS`-second slice of `source_path`
 /// at `bitrate_kbps` into a single fMP4 (CMAF) DASH media segment plus its

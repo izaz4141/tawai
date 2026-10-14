@@ -1,15 +1,15 @@
-use crate::audio::ffmpeg::{DASH_BITRATES, DASH_SEGMENT_DURATION_SECS};
+use crate::audio::ffmpeg::DASH_SEGMENT_DURATION_SECS;
 
 /// Build a VOD-style static MPD describing the on-demand transcode output of
 /// `crate::audio::ffmpeg::generate_dash_segment`: one audio `AdaptationSet`
-/// with a `SegmentTemplate` addressing `init-$Bandwidth$.m4s` and
-/// `seg-$Bandwidth$-$Number$.m4s` (1-based numbers, one
-/// `DASH_SEGMENT_DURATION_SECS`-second segment each).
+/// with a single `Representation` at `bitrate_kbps` and a `SegmentTemplate`
+/// addressing `init-$Bandwidth$.m4s` and `seg-$Bandwidth$-$Number$.m4s`
+/// (1-based numbers, one `DASH_SEGMENT_DURATION_SECS`-second segment each).
 ///
 /// When `duration_secs` is `None` or non-positive, the `mediaPresentationDuration`
 /// attribute is omitted and the manifest is served as-is (players will then
 /// estimate the total length from downloaded segments).
-pub fn build_dash_manifest(duration_secs: Option<f64>) -> String {
+pub fn build_dash_manifest(duration_secs: Option<f64>, bitrate_kbps: u32) -> String {
     let duration_attr = duration_secs
         .filter(|d| *d > 0.0)
         .map(|d| {
@@ -20,21 +20,15 @@ pub fn build_dash_manifest(duration_secs: Option<f64>) -> String {
         })
         .unwrap_or_default();
 
-    let representations = DASH_BITRATES
-        .iter()
-        .map(|&bitrate| {
-            let bandwidth = bitrate * 1000;
-            format!(
-                "\t\t\t<Representation id=\"{bandwidth}\" mimeType=\"audio/mp4\" codecs=\"mp4a.40.2\" bandwidth=\"{bandwidth}\" audioSamplingRate=\"48000\">\n\
-                 \t\t\t\t<AudioChannelConfiguration schemeIdUri=\"urn:mpeg:dash:23003:3:audio_channel_configuration:2011\" value=\"2\" />\n\
-                 \t\t\t\t<SegmentTemplate timescale=\"1000000\" duration=\"{}\" initialization=\"init-$Bandwidth$.m4s\" media=\"seg-$Bandwidth$-$Number$.m4s\" startNumber=\"1\">\n\
-                 \t\t\t\t</SegmentTemplate>\n\
-                 \t\t\t</Representation>",
-                DASH_SEGMENT_DURATION_SECS * 1_000_000,
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let bandwidth = bitrate_kbps * 1000;
+    let representation = format!(
+        "\t\t\t<Representation id=\"{bandwidth}\" mimeType=\"audio/mp4\" codecs=\"mp4a.40.2\" bandwidth=\"{bandwidth}\" audioSamplingRate=\"48000\">\n\
+         \t\t\t\t<AudioChannelConfiguration schemeIdUri=\"urn:mpeg:dash:23003:3:audio_channel_configuration:2011\" value=\"2\" />\n\
+         \t\t\t\t<SegmentTemplate timescale=\"1000000\" duration=\"{}\" initialization=\"init-$Bandwidth$.m4s\" media=\"seg-$Bandwidth$-$Number$.m4s\" startNumber=\"1\">\n\
+         \t\t\t\t</SegmentTemplate>\n\
+         \t\t\t</Representation>",
+        DASH_SEGMENT_DURATION_SECS * 1_000_000,
+    );
 
     format!(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\
@@ -48,7 +42,7 @@ pub fn build_dash_manifest(duration_secs: Option<f64>) -> String {
 \tminBufferTime=\"PT10.0S\">\n\
 \t<Period id=\"0\" start=\"PT0.0S\">\n\
 \t\t<AdaptationSet id=\"0\" contentType=\"audio\" startWithSAP=\"1\" segmentAlignment=\"true\" bitstreamSwitching=\"true\">\n\
-{representations}\n\
+{representation}\n\
 \t\t</AdaptationSet>\n\
 \t</Period>\n\
 </MPD>"
@@ -68,21 +62,25 @@ mod tests {
 
     #[test]
     fn emits_static_manifest_with_duration() {
-        let mpd = build_dash_manifest(Some(90.5));
+        let mpd = build_dash_manifest(Some(90.5), 192);
         assert!(mpd.contains("type=\"static\""));
         assert!(mpd.contains("mediaPresentationDuration=\"PT90.5S\""));
-        for &bw in DASH_BITRATES {
-            let bandwidth = bw * 1000;
-            assert!(mpd.contains(&format!("bandwidth=\"{bandwidth}\"")));
-            assert!(mpd.contains("media=\"seg-$Bandwidth$-$Number$.m4s\""));
-        }
+        assert!(mpd.contains("bandwidth=\"192000\""));
+        assert!(mpd.contains("media=\"seg-$Bandwidth$-$Number$.m4s\""));
+    }
+
+    #[test]
+    fn emits_single_requested_representation() {
+        let mpd = build_dash_manifest(Some(30.0), 137);
+        assert!(mpd.contains("bandwidth=\"137000\""));
+        assert_eq!(mpd.matches("<Representation ").count(), 1);
     }
 
     #[test]
     fn omits_duration_when_unknown() {
-        let mpd = build_dash_manifest(None);
+        let mpd = build_dash_manifest(None, 192);
         assert!(!mpd.contains("mediaPresentationDuration"));
-        let mpd = build_dash_manifest(Some(0.0));
+        let mpd = build_dash_manifest(Some(0.0), 192);
         assert!(!mpd.contains("mediaPresentationDuration"));
     }
 

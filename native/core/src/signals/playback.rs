@@ -21,6 +21,11 @@ pub struct PlayTrackRequest {
     pub id: String,
     pub track_id: Option<String>,
     pub track: Option<TrackInfo>,
+    /// Preferred transcode bitrate in kbps, or `"lossless"`/absent for the
+    /// original file. Sent by clients so the server can decide between a
+    /// range-served original and a DASH transcode.
+    #[serde(default)]
+    pub bitrate: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]

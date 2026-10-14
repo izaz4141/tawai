@@ -1,10 +1,8 @@
-pub mod dash;
 pub mod history;
 pub mod play;
 pub mod preview;
 pub mod stream;
 
-pub use dash::*;
 pub use history::*;
 pub use play::*;
 pub use preview::*;
@@ -105,14 +103,15 @@ pub async fn user_can_read_track(
 }
 
 fn create_streaming_router(state: SharedState) -> Router<SharedState> {
-    // `/stream/{id}` is used by API-key clients (libsource backup/download) as
-    // well as token-authenticated web players, so it accepts either.
+    // `/stream/{id}` serves the original file with HTTP ranges. It is used by
+    // API-key clients (libsource backup/download and remote tawai playback) as
+    // well as token-authenticated players, so it accepts either.
     let stream_router = Router::new()
-        .route("/stream/{id}", get(handle_stream_track))
+        .route("/stream/{id}", get(handle_media_stream))
         .layer(middleware::from_fn_with_state(state.clone(), auth_stream));
     // DASH embeds the JWT into the manifest, so it must stay token-only.
     let dash_router = Router::new()
-        .route("/dash/{id}/{file}", get(handle_dash_file))
+        .route("/stream/{id}/{file}", get(handle_media_dash))
         .layer(middleware::from_fn_with_state(state, auth_query));
     stream_router.merge(dash_router)
 }

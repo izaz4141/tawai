@@ -273,10 +273,11 @@ class BridgeService {
   // ---------------------------------------------------------------------------
 
   Future<({String filePath, String? error, List<List<String>>? headers})>
-  playTrack(String? trackId, {TrackInfo? track}) async {
+  playTrack(String? trackId, {TrackInfo? track, String? bitrate}) async {
     if (_isRemote) {
-      return APIService.instance.playTrack(trackId, track: track);
+      return APIService.instance.playTrack(trackId, track: track, bitrate: bitrate);
     }
+    // Local playback reads the file directly (no transcode needed).
     return RinfService.instance.playTrack(trackId, track: track);
   }
 

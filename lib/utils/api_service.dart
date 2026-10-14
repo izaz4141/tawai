@@ -488,12 +488,14 @@ class APIService {
   // ---------------------------------------------------------------------------
 
   Future<({String filePath, String? error, List<List<String>>? headers})>
-  playTrack(String? trackId, {TrackInfo? track}) async {
+  playTrack(String? trackId, {TrackInfo? track, String? bitrate}) async {
     try {
       final body = {
         'id': _newId(),
         'track_id': trackId,
         if (track != null) 'track': track.toJson(),
+        if (bitrate != null && bitrate.isNotEmpty && bitrate != 'lossless')
+          'bitrate': bitrate,
       };
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/playback/play'),
