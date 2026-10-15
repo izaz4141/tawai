@@ -524,6 +524,7 @@ fn map_item_to_track(item: ItemDto, _base_url: &str) -> ParsedTrack {
             album_artists: Vec::new(),
             track_gain: None,
             track_peak: None,
+            ..Default::default()
         },
         file_path: format!("jellyfin://{}", item.id),
         file_hash: None,

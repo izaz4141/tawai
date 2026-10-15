@@ -736,6 +736,7 @@ mod tests {
             total_discs,
             track_gain: None,
             track_peak: None,
+            ..Default::default()
         }
     }
 

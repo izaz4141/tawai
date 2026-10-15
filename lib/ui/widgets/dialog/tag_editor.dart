@@ -30,6 +30,9 @@ class _TagEditorDialog extends StatefulWidget {
 }
 
 class _TagEditorDialogState extends State<_TagEditorDialog> {
+  // Width reserved for field labels so all rows line up.
+  static const double _labelWidth = 130;
+
   String? _path;
   String? _filename;
   Uint8List? _fileBytes;
@@ -40,29 +43,15 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
   Uint8List? _selectedCover;
   String? _coverUrl;
 
-  late final TextEditingController _titleCtrl;
-  late final TextEditingController _artistCtrl;
-  late final TextEditingController _albumCtrl;
-  late final TextEditingController _albumArtistCtrl;
-  late final TextEditingController _genreCtrl;
-  late final TextEditingController _trackCtrl;
-  late final TextEditingController _discCtrl;
-  late final TextEditingController _yearCtrl;
-  late final TextEditingController _lyricsCtrl;
+  /// One controller per editable field, keyed by the field's stable id.
+  final Map<String, TextEditingController> _controllers = {};
+
+  TextEditingController _ctrl(String key) =>
+      _controllers.putIfAbsent(key, TextEditingController.new);
 
   @override
   void initState() {
     super.initState();
-    _titleCtrl = TextEditingController();
-    _artistCtrl = TextEditingController();
-    _albumCtrl = TextEditingController();
-    _albumArtistCtrl = TextEditingController();
-    _genreCtrl = TextEditingController();
-    _trackCtrl = TextEditingController();
-    _discCtrl = TextEditingController();
-    _yearCtrl = TextEditingController();
-    _lyricsCtrl = TextEditingController();
-
     if (widget.initialPath != null) {
       _path = widget.initialPath;
       _loadTags();
@@ -71,15 +60,9 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
 
   @override
   void dispose() {
-    _titleCtrl.dispose();
-    _artistCtrl.dispose();
-    _albumCtrl.dispose();
-    _albumArtistCtrl.dispose();
-    _genreCtrl.dispose();
-    _trackCtrl.dispose();
-    _discCtrl.dispose();
-    _yearCtrl.dispose();
-    _lyricsCtrl.dispose();
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -142,19 +125,19 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
   Future<void> _fetchFromMusicBrainz() async {
     final result = await showIdentifyDialog(
       context,
-      currentTitle: _titleCtrl.text,
-      currentArtist: _artistCtrl.text,
-      currentAlbum: _albumCtrl.text,
+      currentTitle: _ctrl('title').text,
+      currentArtist: _ctrl('artist').text,
+      currentAlbum: _ctrl('album').text,
     );
     if (result == null || !mounted) return;
     setState(() {
-      _titleCtrl.text = result.title;
-      _artistCtrl.text = result.artist;
-      _albumCtrl.text = result.album;
-      _albumArtistCtrl.text = result.artist;
-      _trackCtrl.text = result.trackNumber?.toString() ?? '';
-      _discCtrl.text = result.discNumber?.toString() ?? '';
-      _yearCtrl.text = result.releaseDate ?? '';
+      _ctrl('title').text = result.title;
+      _ctrl('artist').text = result.artist;
+      _ctrl('album').text = result.album;
+      _ctrl('album_artist').text = result.artist;
+      _ctrl('track').text = result.trackNumber?.toString() ?? '';
+      _ctrl('disc').text = result.discNumber?.toString() ?? '';
+      _ctrl('date').text = result.releaseDate ?? '';
       if (result.coverBytes != null) {
         _selectedCover = result.coverBytes;
         _coverUrl = null;
@@ -226,19 +209,36 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
       _selectedCover = null;
       _coverUrl = null;
     });
-    _titleCtrl.text = response.title;
-    _artistCtrl.text = response.artist;
-    _albumCtrl.text = response.album;
-    _albumArtistCtrl.text = response.albumArtist;
-    _genreCtrl.text = response.genres.join(', ');
-    _trackCtrl.text = response.trackNumber > 0
-        ? response.trackNumber.toString()
-        : '';
-    _discCtrl.text = response.discNumber > 0
-        ? response.discNumber.toString()
-        : '';
-    _yearCtrl.text = response.releaseDate ?? '';
-    _lyricsCtrl.text = response.lyrics ?? '';
+    _ctrl('title').text = response.title;
+    _ctrl('artist').text = response.artist;
+    _ctrl('artists').text = response.artists.join('; ');
+    _ctrl('album').text = response.album;
+    _ctrl('album_artist').text = response.albumArtist;
+    _ctrl('album_artists').text = response.albumArtists.join('; ');
+    _ctrl('genres').text = response.genres.join(', ');
+    _ctrl('track').text = response.trackNumber?.toString() ?? '';
+    _ctrl('total_tracks').text = response.totalTracks?.toString() ?? '';
+    _ctrl('disc').text = response.discNumber?.toString() ?? '';
+    _ctrl('total_discs').text = response.totalDiscs?.toString() ?? '';
+    _ctrl('date').text = response.releaseDate ?? '';
+    _ctrl('original_date').text = response.originalDate ?? '';
+    _ctrl('media').text = response.media ?? '';
+    _ctrl('script').text = response.script ?? '';
+    _ctrl('record_label').text = response.recordLabel ?? '';
+    _ctrl('release_country').text = response.releaseCountry ?? '';
+    _ctrl('release_type').text = response.releaseType.join('; ');
+    _ctrl('isrc').text = response.isrc ?? '';
+    _ctrl('mbid_recording').text = response.mbidRecording ?? '';
+    _ctrl('mbid_track').text = response.mbidTrack ?? '';
+    _ctrl('mbid_artist').text = response.mbidArtist ?? '';
+    _ctrl('mbid_release_artist').text = response.mbidReleaseArtist ?? '';
+    _ctrl('mbid_release').text = response.mbidRelease ?? '';
+    _ctrl('mbid_release_group').text = response.mbidReleaseGroup ?? '';
+    _ctrl('artist_sort').text = response.artistSort;
+    _ctrl('album_artist_sort').text = response.albumArtistSort;
+    _ctrl('comment').text = response.comment ?? '';
+    _ctrl('copyright').text = response.copyright ?? '';
+    _ctrl('lyrics').text = response.lyrics ?? '';
   }
 
   Future<void> _apply() async {
@@ -266,24 +266,28 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
           return;
         }
       }
-      final genres = _genreCtrl.text
+      final genres = _ctrl('genres').text
           .split(RegExp(r'[,;/]'))
           .map((s) => s.trim())
           .where((s) => s.isNotEmpty)
           .toList();
-      final trackNumber = int.tryParse(_trackCtrl.text) ?? 0;
-      final discNumber = int.tryParse(_discCtrl.text) ?? 0;
-      final releaseDate = _yearCtrl.text.isNotEmpty ? _yearCtrl.text : null;
-      final lyrics = _lyricsCtrl.text.isNotEmpty ? _lyricsCtrl.text : null;
+      final trackNumber = int.tryParse(_ctrl('track').text) ?? 0;
+      final discNumber = int.tryParse(_ctrl('disc').text) ?? 0;
+      final releaseDate = _ctrl('date').text.isNotEmpty
+          ? _ctrl('date').text
+          : null;
+      final lyrics = _ctrl('lyrics').text.isNotEmpty
+          ? _ctrl('lyrics').text
+          : null;
 
       if (_fileBytes != null) {
         final result = await BridgeService.instance.writeFileTagsBytes(
           filename: _filename!,
           bytes: _fileBytes!,
-          title: _titleCtrl.text,
-          artist: _artistCtrl.text,
-          album: _albumCtrl.text,
-          albumArtist: _albumArtistCtrl.text,
+          title: _ctrl('title').text,
+          artist: _ctrl('artist').text,
+          album: _ctrl('album').text,
+          albumArtist: _ctrl('album_artist').text,
           genres: genres,
           trackNumber: trackNumber,
           discNumber: discNumber,
@@ -320,10 +324,10 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
       } else {
         final result = await BridgeService.instance.writeFileTags(
           path: _path!,
-          title: _titleCtrl.text,
-          artist: _artistCtrl.text,
-          album: _albumCtrl.text,
-          albumArtist: _albumArtistCtrl.text,
+          title: _ctrl('title').text,
+          artist: _ctrl('artist').text,
+          album: _ctrl('album').text,
+          albumArtist: _ctrl('album_artist').text,
           genres: genres,
           trackNumber: trackNumber,
           discNumber: discNumber,
@@ -385,8 +389,8 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
   }
 
   Widget _buildField(
-    String label,
-    TextEditingController controller, {
+    String key,
+    String label, {
     TextInputType? keyboardType,
     int? maxLines,
   }) {
@@ -399,7 +403,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
             : CrossAxisAlignment.center,
         children: [
           SizedBox(
-            width: 100,
+            width: _labelWidth,
             child: Text(
               label,
               style: textTheme.labelSmall?.copyWith(
@@ -410,7 +414,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
           ),
           Expanded(
             child: TextField(
-              controller: controller,
+              controller: _ctrl(key),
               style: textTheme.bodySmall,
               keyboardType: keyboardType,
               maxLines: maxLines,
@@ -426,6 +430,60 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReadOnlyField(String label, String? value) {
+    final textTheme = Theme.of(context).textTheme;
+    final display = (value == null || value.isEmpty) ? '—' : value;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: _labelWidth,
+            child: Text(
+              label,
+              style: textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              display,
+              style: textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Icon(
+            Icons.lock_outline,
+            size: AppTheme.iconSM,
+            color: Theme.of(context).colorScheme.outline,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _section(String title, List<Widget> children) {
+    final textTheme = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppTheme.spaceMD),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: AppTheme.spaceXS),
+          ...children,
         ],
       ),
     );
@@ -543,17 +601,22 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
       return const SizedBox.shrink();
     }
 
+    final tags = _tags!;
+    final filePath = _path ?? _filename;
+    final trackGain = tags.trackGain == null
+        ? null
+        : '${tags.trackGain!.toStringAsFixed(2)} dB';
+
     return SingleChildScrollView(
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildFileName(),
           EditableCover(
             coverBytes:
                 _selectedCover ??
-                (_tags?.cover != null
-                    ? Uint8List.fromList(_tags!.cover!)
-                    : null),
+                (tags.cover != null ? Uint8List.fromList(tags.cover!) : null),
             coverUrl: _coverUrl,
             replaced: _selectedCover != null || _coverUrl != null,
             onPickCover: _pickCover,
@@ -563,19 +626,64 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
             }),
             onPickCoverFromUrl: _pickCoverFromUrl,
           ),
-          _buildField('Title', _titleCtrl),
-          _buildField('Artist', _artistCtrl),
-          _buildField('Album', _albumCtrl),
-          _buildField('Album Artist', _albumArtistCtrl),
-          _buildField('Genre(s)', _genreCtrl),
-          _buildField(
-            'Track #',
-            _trackCtrl,
-            keyboardType: TextInputType.number,
-          ),
-          _buildField('Disc #', _discCtrl, keyboardType: TextInputType.number),
-          _buildField('Year', _yearCtrl),
-          _buildField('Lyrics', _lyricsCtrl, maxLines: 5),
+          _section('Basic', [
+            _buildField('title', 'Title'),
+            _buildField('artist', 'Artist'),
+            _buildField('artists', 'Artists'),
+            _buildField('album', 'Album'),
+            _buildField('album_artist', 'Album Artist'),
+            _buildField('album_artists', 'Album Artists'),
+            _buildField('genres', 'Genre(s)'),
+          ]),
+          _section('Track / Release', [
+            _buildField('track', 'Track #', keyboardType: TextInputType.number),
+            _buildField(
+              'total_tracks',
+              'Total Tracks',
+              keyboardType: TextInputType.number,
+            ),
+            _buildField('disc', 'Disc #', keyboardType: TextInputType.number),
+            _buildField(
+              'total_discs',
+              'Total Discs',
+              keyboardType: TextInputType.number,
+            ),
+            _buildField('date', 'Date'),
+            _buildField('original_date', 'Original Date'),
+            _buildReadOnlyField('Original Year', tags.originalYear?.toString()),
+            _buildField('media', 'Media'),
+            _buildField('script', 'Script'),
+          ]),
+          _section('Release / Identifiers', [
+            _buildField('record_label', 'Record Label'),
+            _buildField('release_country', 'Release Country'),
+            _buildField('release_type', 'Release Type'),
+            _buildField('isrc', 'ISRC'),
+            _buildField('mbid_recording', 'Recording MBID'),
+            _buildField('mbid_track', 'Track MBID'),
+            _buildField('mbid_artist', 'Artist MBID'),
+            _buildField('mbid_release_artist', 'Album Artist MBID'),
+            _buildField('mbid_release', 'Release MBID'),
+            _buildField('mbid_release_group', 'Release Group MBID'),
+          ]),
+          _section('Sorting', [
+            _buildField('artist_sort', 'Artist Sort'),
+            _buildField('album_artist_sort', 'Album Artist Sort'),
+          ]),
+          _section('ReplayGain', [
+            _buildReadOnlyField('Track Gain', trackGain),
+            _buildReadOnlyField('Track Peak', tags.trackPeak?.toString()),
+          ]),
+          _section('Lyrics / Comment / Copyright', [
+            _buildField('lyrics', 'Lyrics', maxLines: 5),
+            _buildField('comment', 'Comment', maxLines: 2),
+            _buildField('copyright', 'Copyright'),
+          ]),
+          _section('Technical', [
+            _buildReadOnlyField('File Path', filePath),
+            _buildReadOnlyField('Length', formatDuration(tags.durationSecs)),
+            _buildReadOnlyField('Encoder', tags.encoder),
+          ]),
           const SizedBox(height: AppTheme.spaceSM),
         ],
       ),

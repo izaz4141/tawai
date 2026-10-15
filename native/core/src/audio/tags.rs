@@ -99,15 +99,28 @@ pub struct AudioTag {
     pub track_number: i32,
     pub disc_number: i32,
     pub mbid_recording: Option<String>,
+    pub mbid_track: Option<String>,
     pub mbid_artist: Option<String>,
     pub mbid_release_artist: Option<String>,
     pub mbid_release: Option<String>,
+    pub mbid_release_group: Option<String>,
     pub acoust_id: Option<String>,
     pub acoust_id_fingerprint: Option<String>,
     pub lyrics: Option<String>,
     pub cover: Option<Vec<u8>>,
     pub album_disambiguation: Option<String>,
+    pub release_country: Option<String>,
+    pub release_type: Vec<String>,
+    pub record_label: Option<String>,
+    pub media: Option<String>,
+    pub script: Option<String>,
+    pub original_date: Option<String>,
+    pub comment: Option<String>,
+    pub copyright: Option<String>,
+    pub encoder: Option<String>,
+    pub isrc: Option<String>,
     pub total_discs: i32,
+    pub total_tracks: i32,
     pub track_gain: Option<f64>,
     pub track_peak: Option<f64>,
 }
@@ -262,6 +275,11 @@ fn extract_audio_tags(
                 .get_string(lofty::tag::ItemKey::MusicBrainzRecordingId)
                 .map(|s| s.to_string());
         }
+        if result.mbid_track.is_none() {
+            result.mbid_track = tag
+                .get_string(lofty::tag::ItemKey::MusicBrainzTrackId)
+                .map(|s| s.to_string());
+        }
         if result.mbid_artist.is_none() {
             result.mbid_artist = tag
                 .get_string(lofty::tag::ItemKey::MusicBrainzArtistId)
@@ -276,6 +294,74 @@ fn extract_audio_tags(
             result.mbid_release = tag
                 .get_string(lofty::tag::ItemKey::MusicBrainzReleaseId)
                 .map(|s| s.to_string());
+        }
+        if result.mbid_release_group.is_none() {
+            result.mbid_release_group = tag
+                .get_string(lofty::tag::ItemKey::MusicBrainzReleaseGroupId)
+                .map(|s| s.to_string());
+        }
+        if result.release_country.is_none() {
+            result.release_country = tag
+                .get_string(lofty::tag::ItemKey::ReleaseCountry)
+                .map(|s| s.to_string());
+        }
+        if result.release_type.is_empty() {
+            result.release_type = tag
+                .get_strings(lofty::tag::ItemKey::MusicBrainzReleaseType)
+                .map(|s| s.to_string())
+                .collect();
+        }
+        if result.record_label.is_none() {
+            result.record_label = tag
+                .get_string(lofty::tag::ItemKey::Label)
+                .map(|s| s.to_string());
+        }
+        if result.media.is_none() {
+            result.media = tag
+                .get_string(lofty::tag::ItemKey::OriginalMediaType)
+                .map(|s| s.to_string());
+        }
+        if result.script.is_none() {
+            result.script = tag
+                .get_string(lofty::tag::ItemKey::Script)
+                .map(|s| s.to_string());
+        }
+        if result.original_date.is_none() {
+            result.original_date = tag
+                .get_string(lofty::tag::ItemKey::OriginalReleaseDate)
+                .map(|s| s.to_string());
+        }
+        if result.comment.is_none() {
+            result.comment = tag
+                .get_string(lofty::tag::ItemKey::Comment)
+                .map(|s| s.to_string());
+        }
+        if result.copyright.is_none() {
+            result.copyright = tag
+                .get_string(lofty::tag::ItemKey::CopyrightMessage)
+                .map(|s| s.to_string());
+        }
+        if result.encoder.is_none() {
+            result.encoder = tag
+                .get_string(lofty::tag::ItemKey::EncodedBy)
+                .map(|s| s.to_string());
+        }
+        if result.isrc.is_none() {
+            result.isrc = tag
+                .get_string(lofty::tag::ItemKey::Isrc)
+                .map(|s| s.to_string());
+        }
+        if result.total_tracks == 0 {
+            result.total_tracks = tag
+                .get_string(lofty::tag::ItemKey::TrackTotal)
+                .and_then(|s| s.trim().parse::<i32>().ok())
+                .unwrap_or(0);
+        }
+        if result.total_discs == 0 {
+            result.total_discs = tag
+                .get_string(lofty::tag::ItemKey::DiscTotal)
+                .and_then(|s| s.trim().parse::<i32>().ok())
+                .unwrap_or(0);
         }
         if result.acoust_id.is_none() {
             result.acoust_id = tag

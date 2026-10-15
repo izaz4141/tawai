@@ -35,38 +35,16 @@ pub async fn handle_read_file_tags(
     let path = std::path::PathBuf::from(&body.path);
 
     match audio::tags::read_audio_tags(&path) {
-        Ok((tag, duration_secs, _sample_rate, _bitrate)) => Json(ReadFileTagsResponse {
-            id: body.id,
-            title: tag.title,
-            artist: tag.artist,
-            album: tag.album,
-            album_artist: tag.album_artist,
-            genres: tag.genres,
-            track_number: tag.track_number,
-            disc_number: tag.disc_number,
-            release_date: tag.release_date,
-            lyrics: tag.lyrics,
-            cover: tag.cover,
-            duration_secs,
-            error: None,
-        })
+        Ok((tag, duration_secs, _sample_rate, _bitrate)) => Json(
+            ReadFileTagsResponse::from_audio_tag(body.id, &tag, duration_secs),
+        )
         .into_response(),
         Err(e) => {
             tawai_core::utils::logger::error(&format!("read_audio_tags failed: {e}"));
             Json(ReadFileTagsResponse {
                 id: body.id,
-                title: String::new(),
-                artist: String::new(),
-                album: String::new(),
-                album_artist: String::new(),
-                genres: vec![],
-                track_number: 0,
-                disc_number: 0,
-                release_date: None,
-                lyrics: None,
-                cover: None,
-                duration_secs: 0.0,
                 error: Some(e.to_string()),
+                ..Default::default()
             })
             .into_response()
         }
@@ -198,58 +176,24 @@ pub async fn handle_read_file_tags_bytes(
 
     if filename.is_empty() || bytes.is_empty() {
         return Json(ReadFileTagsResponse {
-            id: String::new(),
-            title: String::new(),
-            artist: String::new(),
-            album: String::new(),
-            album_artist: String::new(),
-            genres: vec![],
-            track_number: 0,
-            disc_number: 0,
-            release_date: None,
-            lyrics: None,
-            cover: None,
-            duration_secs: 0.0,
             error: Some("Missing filename or file".to_string()),
+            ..Default::default()
         })
         .into_response();
     }
 
     match audio::tags::read_audio_tags_from_bytes(&filename, &bytes) {
-        Ok((tag, duration_secs, _sample_rate, _bitrate)) => Json(ReadFileTagsResponse {
-            id: String::new(),
-            title: tag.title,
-            artist: tag.artist,
-            album: tag.album,
-            album_artist: tag.album_artist,
-            genres: tag.genres,
-            track_number: tag.track_number,
-            disc_number: tag.disc_number,
-            release_date: tag.release_date,
-            lyrics: tag.lyrics,
-            cover: tag.cover,
-            duration_secs,
-            error: None,
-        })
+        Ok((tag, duration_secs, _sample_rate, _bitrate)) => Json(
+            ReadFileTagsResponse::from_audio_tag(String::new(), &tag, duration_secs),
+        )
         .into_response(),
         Err(e) => {
             tawai_core::utils::logger::error(&format!("read_audio_tags_from_bytes failed: {e}"));
             (
                 StatusCode::BAD_REQUEST,
                 Json(ReadFileTagsResponse {
-                    id: String::new(),
-                    title: String::new(),
-                    artist: String::new(),
-                    album: String::new(),
-                    album_artist: String::new(),
-                    genres: vec![],
-                    track_number: 0,
-                    disc_number: 0,
-                    release_date: None,
-                    lyrics: None,
-                    cover: None,
-                    duration_secs: 0.0,
                     error: Some(e.to_string()),
+                    ..Default::default()
                 }),
             )
                 .into_response()

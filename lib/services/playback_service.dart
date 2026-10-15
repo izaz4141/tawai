@@ -279,8 +279,9 @@ class PlaybackService {
 
     final filename = basename(path);
     final ext = extension(path);
-    final withoutExt =
-        ext.isEmpty ? filename : filename.substring(0, filename.length - ext.length);
+    final withoutExt = ext.isEmpty
+        ? filename
+        : filename.substring(0, filename.length - ext.length);
     final title = !fallback && tags!.title.isNotEmpty ? tags.title : withoutExt;
     final artist = fallback ? '' : tags.artist;
 
@@ -311,8 +312,8 @@ class PlaybackService {
                 trackCount: 0,
               ),
             ],
-      trackNum: fallback || tags.trackNumber <= 0 ? null : tags.trackNumber,
-      discNum: fallback || tags.discNumber <= 0 ? null : tags.discNumber,
+      trackNum: fallback ? null : tags.trackNumber,
+      discNum: fallback ? null : tags.discNumber,
       durationSecs: fallback ? null : tags.durationSecs,
       filePath: path,
       fileSize: null,

@@ -188,39 +188,21 @@ pub async fn handle_read_file_tags(_context: Arc<AppContext>) {
 
         match audio::tags::read_audio_tags(&path) {
             Ok((tag, duration_secs, _sample_rate, _bitrate)) => {
-                ReadFileTagsResponse {
-                    id: msg.id,
-                    title: tag.title,
-                    artist: tag.artist,
-                    album: tag.album,
-                    album_artist: tag.album_artist,
-                    genres: tag.genres,
-                    track_number: tag.track_number,
-                    disc_number: tag.disc_number,
-                    release_date: tag.release_date,
-                    lyrics: tag.lyrics,
-                    cover: tag.cover,
-                    duration_secs,
-                    error: None,
-                }
+                ReadFileTagsResponse::from(
+                    tawai_core::signals::metadata::ReadFileTagsResponse::from_audio_tag(
+                        msg.id,
+                        &tag,
+                        duration_secs,
+                    ),
+                )
                 .send_signal_to_dart();
             }
             Err(e) => {
                 logger::error(&format!("read_audio_tags failed: {e}"));
                 ReadFileTagsResponse {
                     id: msg.id,
-                    title: String::new(),
-                    artist: String::new(),
-                    album: String::new(),
-                    album_artist: String::new(),
-                    genres: vec![],
-                    track_number: 0,
-                    disc_number: 0,
-                    release_date: None,
-                    lyrics: None,
-                    cover: None,
-                    duration_secs: 0.0,
                     error: Some(e.to_string()),
+                    ..Default::default()
                 }
                 .send_signal_to_dart();
             }
@@ -279,39 +261,21 @@ pub async fn handle_read_file_tags_bytes(_context: Arc<AppContext>) {
 
         match audio::tags::read_audio_tags_from_bytes(&msg.filename, &msg.bytes) {
             Ok((tag, duration_secs, _sample_rate, _bitrate)) => {
-                ReadFileTagsResponse {
-                    id: msg.id,
-                    title: tag.title,
-                    artist: tag.artist,
-                    album: tag.album,
-                    album_artist: tag.album_artist,
-                    genres: tag.genres,
-                    track_number: tag.track_number,
-                    disc_number: tag.disc_number,
-                    release_date: tag.release_date,
-                    lyrics: tag.lyrics,
-                    cover: tag.cover,
-                    duration_secs,
-                    error: None,
-                }
+                ReadFileTagsResponse::from(
+                    tawai_core::signals::metadata::ReadFileTagsResponse::from_audio_tag(
+                        msg.id,
+                        &tag,
+                        duration_secs,
+                    ),
+                )
                 .send_signal_to_dart();
             }
             Err(e) => {
                 logger::error(&format!("read_audio_tags_from_bytes failed: {e}"));
                 ReadFileTagsResponse {
                     id: msg.id,
-                    title: String::new(),
-                    artist: String::new(),
-                    album: String::new(),
-                    album_artist: String::new(),
-                    genres: vec![],
-                    track_number: 0,
-                    disc_number: 0,
-                    release_date: None,
-                    lyrics: None,
-                    cover: None,
-                    duration_secs: 0.0,
                     error: Some(e.to_string()),
+                    ..Default::default()
                 }
                 .send_signal_to_dart();
             }

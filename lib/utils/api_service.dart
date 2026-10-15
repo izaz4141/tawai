@@ -2150,6 +2150,53 @@ class APIService {
   // Tag editor (file tags read/write via REST)
   // ---------------------------------------------------------------------------
 
+  /// Maps the JSON body of a tag read (path or bytes) to the bridge response.
+  static List<String> _stringList(Object? value) =>
+      (value as List<dynamic>?)?.map((e) => e as String).toList() ?? [];
+
+  static ReadFileTagsResponse _readFileTagsFromJson(Map<String, dynamic> data) {
+    return ReadFileTagsResponse(
+      id: '',
+      title: data['title'] as String? ?? '',
+      artist: data['artist'] as String? ?? '',
+      artists: _stringList(data['artists']),
+      album: data['album'] as String? ?? '',
+      albumArtist: data['album_artist'] as String? ?? '',
+      albumArtists: _stringList(data['album_artists']),
+      artistSort: data['artist_sort'] as String? ?? '',
+      albumArtistSort: data['album_artist_sort'] as String? ?? '',
+      genres: _stringList(data['genres']),
+      trackNumber: (data['track_number'] as num?)?.toInt(),
+      discNumber: (data['disc_number'] as num?)?.toInt(),
+      totalTracks: (data['total_tracks'] as num?)?.toInt(),
+      totalDiscs: (data['total_discs'] as num?)?.toInt(),
+      releaseDate: data['release_date'] as String?,
+      originalDate: data['original_date'] as String?,
+      originalYear: (data['original_year'] as num?)?.toInt(),
+      releaseCountry: data['release_country'] as String?,
+      releaseType: _stringList(data['release_type']),
+      recordLabel: data['record_label'] as String?,
+      media: data['media'] as String?,
+      script: data['script'] as String?,
+      isrc: data['isrc'] as String?,
+      mbidRecording: data['mbid_recording'] as String?,
+      mbidTrack: data['mbid_track'] as String?,
+      mbidArtist: data['mbid_artist'] as String?,
+      mbidReleaseArtist: data['mbid_release_artist'] as String?,
+      mbidRelease: data['mbid_release'] as String?,
+      mbidReleaseGroup: data['mbid_release_group'] as String?,
+      comment: data['comment'] as String?,
+      copyright: data['copyright'] as String?,
+      lyrics: data['lyrics'] as String?,
+      trackGain: (data['track_gain'] as num?)?.toDouble(),
+      trackPeak: (data['track_peak'] as num?)?.toDouble(),
+      encoder: data['encoder'] as String?,
+      cover: decodeBytes(data['cover']),
+      durationSecs: (data['duration_secs'] as num?)?.toDouble() ?? 0.0,
+      error: data['error'] as String?,
+    );
+  }
+
   Future<ReadFileTagsResponse?> readFileTags(String path) async {
     try {
       final response = await http.post(
@@ -2159,25 +2206,7 @@ class APIService {
       );
       if (response.statusCode != 200) return null;
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return ReadFileTagsResponse(
-        id: '',
-        title: data['title'] as String? ?? '',
-        artist: data['artist'] as String? ?? '',
-        album: data['album'] as String? ?? '',
-        albumArtist: data['album_artist'] as String? ?? '',
-        genres:
-            (data['genres'] as List<dynamic>?)
-                ?.map((e) => e as String)
-                .toList() ??
-            [],
-        trackNumber: (data['track_number'] as num?)?.toInt() ?? 0,
-        discNumber: (data['disc_number'] as num?)?.toInt() ?? 0,
-        releaseDate: data['release_date'] as String?,
-        lyrics: data['lyrics'] as String?,
-        cover: decodeBytes(data['cover']),
-        durationSecs: (data['duration_secs'] as num?)?.toDouble() ?? 0.0,
-        error: data['error'] as String?,
-      );
+      return _readFileTagsFromJson(data);
     } catch (e) {
       log('readFileTags error: $e', level: LogLevel.error);
       return null;
@@ -2256,25 +2285,7 @@ class APIService {
       final response = await http.Response.fromStream(streamed);
       if (response.statusCode != 200) return null;
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return ReadFileTagsResponse(
-        id: '',
-        title: data['title'] as String? ?? '',
-        artist: data['artist'] as String? ?? '',
-        album: data['album'] as String? ?? '',
-        albumArtist: data['album_artist'] as String? ?? '',
-        genres:
-            (data['genres'] as List<dynamic>?)
-                ?.map((e) => e as String)
-                .toList() ??
-            [],
-        trackNumber: (data['track_number'] as num?)?.toInt() ?? 0,
-        discNumber: (data['disc_number'] as num?)?.toInt() ?? 0,
-        releaseDate: data['release_date'] as String?,
-        lyrics: data['lyrics'] as String?,
-        cover: decodeBytes(data['cover']),
-        durationSecs: (data['duration_secs'] as num?)?.toDouble() ?? 0.0,
-        error: data['error'] as String?,
-      );
+      return _readFileTagsFromJson(data);
     } catch (e) {
       log('readFileTagsBytes error: $e', level: LogLevel.error);
       return null;

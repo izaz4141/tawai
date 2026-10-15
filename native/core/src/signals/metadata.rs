@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::audio::tags::AudioTag;
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ReleaseInfo {
     pub id: String,
@@ -166,22 +168,103 @@ pub struct ReadFileTagsRequest {
     pub path: String,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Default, Serialize, ToSchema)]
 pub struct ReadFileTagsResponse {
     #[serde(default)]
     pub id: String,
     pub title: String,
     pub artist: String,
+    pub artists: Vec<String>,
     pub album: String,
     pub album_artist: String,
+    pub album_artists: Vec<String>,
+    pub artist_sort: String,
+    pub album_artist_sort: String,
     pub genres: Vec<String>,
-    pub track_number: i32,
-    pub disc_number: i32,
+    pub track_number: Option<i32>,
+    pub disc_number: Option<i32>,
+    pub total_tracks: Option<i32>,
+    pub total_discs: Option<i32>,
     pub release_date: Option<String>,
+    pub original_date: Option<String>,
+    pub original_year: Option<i32>,
+    pub release_country: Option<String>,
+    pub release_type: Vec<String>,
+    pub record_label: Option<String>,
+    pub media: Option<String>,
+    pub script: Option<String>,
+    pub isrc: Option<String>,
+    pub mbid_recording: Option<String>,
+    pub mbid_track: Option<String>,
+    pub mbid_artist: Option<String>,
+    pub mbid_release_artist: Option<String>,
+    pub mbid_release: Option<String>,
+    pub mbid_release_group: Option<String>,
+    pub comment: Option<String>,
+    pub copyright: Option<String>,
     pub lyrics: Option<String>,
+    pub track_gain: Option<f64>,
+    pub track_peak: Option<f64>,
+    pub encoder: Option<String>,
     pub cover: Option<Vec<u8>>,
     pub duration_secs: f64,
     pub error: Option<String>,
+}
+
+impl ReadFileTagsResponse {
+    /// Build the full display response from a read `AudioTag`.
+    ///
+    /// `AudioTag` keeps an `i32` sentinel (`0` = absent) for numeric fields;
+    /// the response exposes them as `Option<i32>` (`None` when `<= 0`).
+    /// `original_year` is derived from the year component of `original_date`.
+    pub fn from_audio_tag(id: String, tag: &AudioTag, duration_secs: f64) -> Self {
+        let original_year = tag
+            .original_date
+            .as_deref()
+            .and_then(|d| d.get(..4))
+            .and_then(|y| y.parse::<i32>().ok());
+
+        Self {
+            id,
+            title: tag.title.clone(),
+            artist: tag.artist.clone(),
+            artists: tag.artists.clone(),
+            album: tag.album.clone(),
+            album_artist: tag.album_artist.clone(),
+            album_artists: tag.album_artists.clone(),
+            artist_sort: tag.artist_sort.clone(),
+            album_artist_sort: tag.album_artist_sort.clone(),
+            genres: tag.genres.clone(),
+            track_number: (tag.track_number > 0).then_some(tag.track_number),
+            disc_number: (tag.disc_number > 0).then_some(tag.disc_number),
+            total_tracks: (tag.total_tracks > 0).then_some(tag.total_tracks),
+            total_discs: (tag.total_discs > 0).then_some(tag.total_discs),
+            release_date: tag.release_date.clone(),
+            original_date: tag.original_date.clone(),
+            original_year,
+            release_country: tag.release_country.clone(),
+            release_type: tag.release_type.clone(),
+            record_label: tag.record_label.clone(),
+            media: tag.media.clone(),
+            script: tag.script.clone(),
+            isrc: tag.isrc.clone(),
+            mbid_recording: tag.mbid_recording.clone(),
+            mbid_track: tag.mbid_track.clone(),
+            mbid_artist: tag.mbid_artist.clone(),
+            mbid_release_artist: tag.mbid_release_artist.clone(),
+            mbid_release: tag.mbid_release.clone(),
+            mbid_release_group: tag.mbid_release_group.clone(),
+            comment: tag.comment.clone(),
+            copyright: tag.copyright.clone(),
+            lyrics: tag.lyrics.clone(),
+            track_gain: tag.track_gain,
+            track_peak: tag.track_peak,
+            encoder: tag.encoder.clone(),
+            cover: tag.cover.clone(),
+            duration_secs,
+            error: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
