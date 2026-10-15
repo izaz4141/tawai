@@ -284,7 +284,9 @@ pub async fn download(
         anyhow::bail!("downloaded file is empty: {}", final_path.display());
     }
 
-    if let Err(e) = crate::audio::tags::write_audio_tags(&final_path, &tag) {
+    if let Err(e) =
+        crate::audio::tags::write_audio_tags(&final_path, &tag, crate::audio::tags::TagWriteMode::Patch)
+    {
         logger::warn(&format!(
             "failed to write tags to {}: {}",
             final_path.display(),

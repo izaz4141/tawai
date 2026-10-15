@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:tawai/models/audio_format.dart';
+import 'package:tawai/models/editable_tag_data.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
@@ -266,34 +267,60 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
           return;
         }
       }
+      // Genres are displayed joined with ", ", so they split on any of
+      // ",;/"; the other multi-value fields are displayed joined with "; ".
       final genres = _ctrl('genres').text
           .split(RegExp(r'[,;/]'))
           .map((s) => s.trim())
           .where((s) => s.isNotEmpty)
           .toList();
-      final trackNumber = int.tryParse(_ctrl('track').text) ?? 0;
-      final discNumber = int.tryParse(_ctrl('disc').text) ?? 0;
-      final releaseDate = _ctrl('date').text.isNotEmpty
-          ? _ctrl('date').text
-          : null;
-      final lyrics = _ctrl('lyrics').text.isNotEmpty
-          ? _ctrl('lyrics').text
-          : null;
+      List<String> multi(String key) => _ctrl(key).text
+          .split(';')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      String? textOrNull(String key) =>
+          _ctrl(key).text.isNotEmpty ? _ctrl(key).text : null;
+
+      final data = EditableTagData(
+        title: _ctrl('title').text,
+        artist: _ctrl('artist').text,
+        artists: multi('artists'),
+        album: _ctrl('album').text,
+        albumArtist: _ctrl('album_artist').text,
+        albumArtists: multi('album_artists'),
+        genres: genres,
+        trackNumber: int.tryParse(_ctrl('track').text) ?? 0,
+        totalTracks: int.tryParse(_ctrl('total_tracks').text) ?? 0,
+        discNumber: int.tryParse(_ctrl('disc').text) ?? 0,
+        totalDiscs: int.tryParse(_ctrl('total_discs').text) ?? 0,
+        releaseDate: textOrNull('date'),
+        originalDate: textOrNull('original_date'),
+        media: _ctrl('media').text,
+        script: _ctrl('script').text,
+        recordLabel: _ctrl('record_label').text,
+        releaseCountry: _ctrl('release_country').text,
+        releaseType: multi('release_type'),
+        isrc: _ctrl('isrc').text,
+        mbidRecording: _ctrl('mbid_recording').text,
+        mbidTrack: _ctrl('mbid_track').text,
+        mbidArtist: _ctrl('mbid_artist').text,
+        mbidRelease: _ctrl('mbid_release').text,
+        mbidReleaseArtist: _ctrl('mbid_release_artist').text,
+        mbidReleaseGroup: _ctrl('mbid_release_group').text,
+        artistSort: _ctrl('artist_sort').text,
+        albumArtistSort: _ctrl('album_artist_sort').text,
+        comment: textOrNull('comment'),
+        copyright: textOrNull('copyright'),
+        lyrics: textOrNull('lyrics'),
+        cover: cover,
+      );
 
       if (_fileBytes != null) {
         final result = await BridgeService.instance.writeFileTagsBytes(
           filename: _filename!,
           bytes: _fileBytes!,
-          title: _ctrl('title').text,
-          artist: _ctrl('artist').text,
-          album: _ctrl('album').text,
-          albumArtist: _ctrl('album_artist').text,
-          genres: genres,
-          trackNumber: trackNumber,
-          discNumber: discNumber,
-          releaseDate: releaseDate,
-          lyrics: lyrics,
-          cover: cover,
+          data: data,
         );
         if (!mounted) return;
         if (result == null) {
@@ -324,16 +351,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
       } else {
         final result = await BridgeService.instance.writeFileTags(
           path: _path!,
-          title: _ctrl('title').text,
-          artist: _ctrl('artist').text,
-          album: _ctrl('album').text,
-          albumArtist: _ctrl('album_artist').text,
-          genres: genres,
-          trackNumber: trackNumber,
-          discNumber: discNumber,
-          releaseDate: releaseDate,
-          lyrics: lyrics,
-          cover: cover,
+          data: data,
         );
         if (!mounted) return;
         if (result == null) {

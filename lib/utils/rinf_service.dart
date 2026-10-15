@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:tawai/models/editable_tag_data.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/utils/logger.dart';
 import 'package:tawai/utils/log_service.dart';
@@ -946,16 +947,7 @@ class RinfService {
 
   Future<({bool success, String? error})> writeFileTags({
     required String path,
-    required String title,
-    required String artist,
-    required String album,
-    required String albumArtist,
-    required List<String> genres,
-    required int trackNumber,
-    required int discNumber,
-    String? releaseDate,
-    String? lyrics,
-    List<int>? cover,
+    required EditableTagData data,
   }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = WriteFileTagsResponse.rustSignalStream.where(
@@ -964,16 +956,37 @@ class RinfService {
     WriteFileTagsRequest(
       id: id,
       path: path,
-      title: title,
-      artist: artist,
-      album: album,
-      albumArtist: albumArtist,
-      genres: genres,
-      trackNumber: trackNumber,
-      discNumber: discNumber,
-      releaseDate: releaseDate,
-      lyrics: lyrics,
-      cover: cover,
+      title: data.title,
+      artist: data.artist,
+      artists: data.artists,
+      album: data.album,
+      albumArtist: data.albumArtist,
+      albumArtists: data.albumArtists,
+      genres: data.genres,
+      trackNumber: data.trackNumber,
+      discNumber: data.discNumber,
+      totalTracks: data.totalTracks,
+      totalDiscs: data.totalDiscs,
+      releaseDate: data.releaseDate,
+      originalDate: data.originalDate,
+      media: data.media,
+      script: data.script,
+      recordLabel: data.recordLabel,
+      releaseCountry: data.releaseCountry,
+      releaseType: data.releaseType,
+      isrc: data.isrc,
+      mbidRecording: data.mbidRecording,
+      mbidTrack: data.mbidTrack,
+      mbidArtist: data.mbidArtist,
+      mbidRelease: data.mbidRelease,
+      mbidReleaseArtist: data.mbidReleaseArtist,
+      mbidReleaseGroup: data.mbidReleaseGroup,
+      artistSort: data.artistSort,
+      albumArtistSort: data.albumArtistSort,
+      comment: data.comment,
+      copyright: data.copyright,
+      lyrics: data.lyrics,
+      cover: data.cover,
     ).sendSignalToRust();
     final signal = await stream.first;
     return (success: signal.message.success, error: signal.message.error);
@@ -998,16 +1011,7 @@ class RinfService {
   Future<({bool success, Uint8List? bytes, String? error})> writeFileTagsBytes({
     required String filename,
     required Uint8List bytes,
-    required String title,
-    required String artist,
-    required String album,
-    required String albumArtist,
-    required List<String> genres,
-    required int trackNumber,
-    required int discNumber,
-    String? releaseDate,
-    String? lyrics,
-    List<int>? cover,
+    required EditableTagData data,
   }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = WriteFileTagsBytesResponse.rustSignalStream.where(
@@ -1017,16 +1021,37 @@ class RinfService {
       id: id,
       filename: filename,
       bytes: bytes,
-      title: title,
-      artist: artist,
-      album: album,
-      albumArtist: albumArtist,
-      genres: genres,
-      trackNumber: trackNumber,
-      discNumber: discNumber,
-      releaseDate: releaseDate,
-      lyrics: lyrics,
-      cover: cover,
+      title: data.title,
+      artist: data.artist,
+      artists: data.artists,
+      album: data.album,
+      albumArtist: data.albumArtist,
+      albumArtists: data.albumArtists,
+      genres: data.genres,
+      trackNumber: data.trackNumber,
+      discNumber: data.discNumber,
+      totalTracks: data.totalTracks,
+      totalDiscs: data.totalDiscs,
+      releaseDate: data.releaseDate,
+      originalDate: data.originalDate,
+      media: data.media,
+      script: data.script,
+      recordLabel: data.recordLabel,
+      releaseCountry: data.releaseCountry,
+      releaseType: data.releaseType,
+      isrc: data.isrc,
+      mbidRecording: data.mbidRecording,
+      mbidTrack: data.mbidTrack,
+      mbidArtist: data.mbidArtist,
+      mbidRelease: data.mbidRelease,
+      mbidReleaseArtist: data.mbidReleaseArtist,
+      mbidReleaseGroup: data.mbidReleaseGroup,
+      artistSort: data.artistSort,
+      albumArtistSort: data.albumArtistSort,
+      comment: data.comment,
+      copyright: data.copyright,
+      lyrics: data.lyrics,
+      cover: data.cover,
     ).sendSignalToRust();
     final signal = await stream.first;
     final result = signal.message;

@@ -220,18 +220,39 @@ pub async fn handle_write_file_tags(_context: Arc<AppContext>) {
         let tag = audio::tags::AudioTag {
             title: msg.title,
             artist: msg.artist,
+            artists: msg.artists,
             album: msg.album,
             album_artist: msg.album_artist,
+            album_artists: msg.album_artists,
             genres: msg.genres,
             track_number: msg.track_number,
             disc_number: msg.disc_number,
+            total_tracks: msg.total_tracks,
+            total_discs: msg.total_discs,
             release_date: msg.release_date,
+            original_date: msg.original_date,
+            media: msg.media,
+            script: msg.script,
+            record_label: msg.record_label,
+            release_country: msg.release_country,
+            release_type: msg.release_type,
+            isrc: msg.isrc,
+            mbid_recording: msg.mbid_recording,
+            mbid_track: msg.mbid_track,
+            mbid_artist: msg.mbid_artist,
+            mbid_release: msg.mbid_release,
+            mbid_release_artist: msg.mbid_release_artist,
+            mbid_release_group: msg.mbid_release_group,
+            artist_sort: msg.artist_sort,
+            album_artist_sort: msg.album_artist_sort,
+            comment: msg.comment,
+            copyright: msg.copyright,
             lyrics: msg.lyrics,
             cover: msg.cover,
             ..Default::default()
         };
 
-        match audio::tags::write_audio_tags(&path, &tag) {
+        match audio::tags::write_audio_tags(&path, &tag, audio::tags::TagWriteMode::Replace) {
             Ok(()) => {
                 WriteFileTagsResponse {
                     id: msg.id,
@@ -292,18 +313,44 @@ pub async fn handle_write_file_tags_bytes(_context: Arc<AppContext>) {
         let tag = audio::tags::AudioTag {
             title: msg.title,
             artist: msg.artist,
+            artists: msg.artists,
             album: msg.album,
             album_artist: msg.album_artist,
+            album_artists: msg.album_artists,
             genres: msg.genres,
             track_number: msg.track_number,
             disc_number: msg.disc_number,
+            total_tracks: msg.total_tracks,
+            total_discs: msg.total_discs,
             release_date: msg.release_date,
+            original_date: msg.original_date,
+            media: msg.media,
+            script: msg.script,
+            record_label: msg.record_label,
+            release_country: msg.release_country,
+            release_type: msg.release_type,
+            isrc: msg.isrc,
+            mbid_recording: msg.mbid_recording,
+            mbid_track: msg.mbid_track,
+            mbid_artist: msg.mbid_artist,
+            mbid_release: msg.mbid_release,
+            mbid_release_artist: msg.mbid_release_artist,
+            mbid_release_group: msg.mbid_release_group,
+            artist_sort: msg.artist_sort,
+            album_artist_sort: msg.album_artist_sort,
+            comment: msg.comment,
+            copyright: msg.copyright,
             lyrics: msg.lyrics,
             cover: msg.cover,
             ..Default::default()
         };
 
-        match audio::tags::write_audio_tags_to_bytes(&msg.filename, &msg.bytes, &tag) {
+        match audio::tags::write_audio_tags_to_bytes(
+            &msg.filename,
+            &msg.bytes,
+            &tag,
+            audio::tags::TagWriteMode::Replace,
+        ) {
             Ok(new_bytes) => {
                 WriteFileTagsBytesResponse {
                     id: msg.id,

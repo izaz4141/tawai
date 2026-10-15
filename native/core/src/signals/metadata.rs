@@ -274,12 +274,54 @@ pub struct WriteFileTagsRequest {
     pub path: String,
     pub title: String,
     pub artist: String,
+    #[serde(default)]
+    pub artists: Vec<String>,
     pub album: String,
     pub album_artist: String,
+    #[serde(default)]
+    pub album_artists: Vec<String>,
     pub genres: Vec<String>,
     pub track_number: i32,
     pub disc_number: i32,
+    #[serde(default)]
+    pub total_tracks: i32,
+    #[serde(default)]
+    pub total_discs: i32,
     pub release_date: Option<String>,
+    #[serde(default)]
+    pub original_date: Option<String>,
+    #[serde(default)]
+    pub media: Option<String>,
+    #[serde(default)]
+    pub script: Option<String>,
+    #[serde(default)]
+    pub record_label: Option<String>,
+    #[serde(default)]
+    pub release_country: Option<String>,
+    #[serde(default)]
+    pub release_type: Vec<String>,
+    #[serde(default)]
+    pub isrc: Option<String>,
+    #[serde(default)]
+    pub mbid_recording: Option<String>,
+    #[serde(default)]
+    pub mbid_track: Option<String>,
+    #[serde(default)]
+    pub mbid_artist: Option<String>,
+    #[serde(default)]
+    pub mbid_release: Option<String>,
+    #[serde(default)]
+    pub mbid_release_artist: Option<String>,
+    #[serde(default)]
+    pub mbid_release_group: Option<String>,
+    #[serde(default)]
+    pub artist_sort: String,
+    #[serde(default)]
+    pub album_artist_sort: String,
+    #[serde(default)]
+    pub comment: Option<String>,
+    #[serde(default)]
+    pub copyright: Option<String>,
     pub lyrics: Option<String>,
     pub cover: Option<Vec<u8>>,
 }
@@ -308,12 +350,54 @@ pub struct WriteFileTagsBytesRequest {
     pub bytes: Vec<u8>,
     pub title: String,
     pub artist: String,
+    #[serde(default)]
+    pub artists: Vec<String>,
     pub album: String,
     pub album_artist: String,
+    #[serde(default)]
+    pub album_artists: Vec<String>,
     pub genres: Vec<String>,
     pub track_number: i32,
     pub disc_number: i32,
+    #[serde(default)]
+    pub total_tracks: i32,
+    #[serde(default)]
+    pub total_discs: i32,
     pub release_date: Option<String>,
+    #[serde(default)]
+    pub original_date: Option<String>,
+    #[serde(default)]
+    pub media: Option<String>,
+    #[serde(default)]
+    pub script: Option<String>,
+    #[serde(default)]
+    pub record_label: Option<String>,
+    #[serde(default)]
+    pub release_country: Option<String>,
+    #[serde(default)]
+    pub release_type: Vec<String>,
+    #[serde(default)]
+    pub isrc: Option<String>,
+    #[serde(default)]
+    pub mbid_recording: Option<String>,
+    #[serde(default)]
+    pub mbid_track: Option<String>,
+    #[serde(default)]
+    pub mbid_artist: Option<String>,
+    #[serde(default)]
+    pub mbid_release: Option<String>,
+    #[serde(default)]
+    pub mbid_release_artist: Option<String>,
+    #[serde(default)]
+    pub mbid_release_group: Option<String>,
+    #[serde(default)]
+    pub artist_sort: String,
+    #[serde(default)]
+    pub album_artist_sort: String,
+    #[serde(default)]
+    pub comment: Option<String>,
+    #[serde(default)]
+    pub copyright: Option<String>,
     pub lyrics: Option<String>,
     pub cover: Option<Vec<u8>>,
 }

@@ -316,7 +316,11 @@ pub async fn import_into_source(
     let final_path =
         crate::tools::rename::move_file_into_source(&temp_path, root, pattern.as_deref(), &tag)?;
 
-    if let Err(e) = crate::audio::tags::write_audio_tags(&final_path, &tag) {
+    if let Err(e) = crate::audio::tags::write_audio_tags(
+        &final_path,
+        &tag,
+        crate::audio::tags::TagWriteMode::Patch,
+    ) {
         logger::warn(&format!(
             "failed to write tags to imported file {}: {}",
             final_path.display(),
@@ -1058,12 +1062,33 @@ pub async fn mirror_tag_write(
         "path": rt.file_path,
         "title": tag.title,
         "artist": tag.artist,
+        "artists": tag.artists,
         "album": tag.album,
         "album_artist": tag.album_artist,
+        "album_artists": tag.album_artists,
         "genres": tag.genres,
         "track_number": tag.track_number,
         "disc_number": tag.disc_number,
+        "total_tracks": tag.total_tracks,
+        "total_discs": tag.total_discs,
         "release_date": tag.release_date,
+        "original_date": tag.original_date,
+        "media": tag.media,
+        "script": tag.script,
+        "record_label": tag.record_label,
+        "release_country": tag.release_country,
+        "release_type": tag.release_type,
+        "isrc": tag.isrc,
+        "mbid_recording": tag.mbid_recording,
+        "mbid_track": tag.mbid_track,
+        "mbid_artist": tag.mbid_artist,
+        "mbid_release": tag.mbid_release,
+        "mbid_release_artist": tag.mbid_release_artist,
+        "mbid_release_group": tag.mbid_release_group,
+        "artist_sort": tag.artist_sort,
+        "album_artist_sort": tag.album_artist_sort,
+        "comment": tag.comment,
+        "copyright": tag.copyright,
         "lyrics": tag.lyrics,
         "cover": tag.cover,
     });

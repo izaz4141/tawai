@@ -162,7 +162,7 @@ pub async fn apply_identification(
     }
 
     let file_path = PathBuf::from(&file_path);
-    audio::tags::write_audio_tags(&file_path, &tag)?;
+    audio::tags::write_audio_tags(&file_path, &tag, audio::tags::TagWriteMode::Patch)?;
 
     if let Some(cover_bytes) = &params.cover_bytes {
         if let Some(track) = &track {

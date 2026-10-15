@@ -16,6 +16,7 @@ import 'package:tawai/utils/log_service.dart';
 import 'package:tawai/utils/rinf_service.dart';
 import 'package:tawai/utils/system_service.dart';
 import 'package:tawai/models/fs.dart';
+import 'package:tawai/models/editable_tag_data.dart';
 import 'package:tawai/models/user.dart';
 
 class APIService {
@@ -2215,32 +2216,44 @@ class APIService {
 
   Future<({bool success, String? error})?> writeFileTags({
     required String path,
-    required String title,
-    required String artist,
-    required String album,
-    required String albumArtist,
-    required List<String> genres,
-    required int trackNumber,
-    required int discNumber,
-    String? releaseDate,
-    String? lyrics,
-    List<int>? cover,
+    required EditableTagData data,
   }) async {
     try {
       final body = <String, dynamic>{
         'id': _newId(),
         'path': path,
-        'title': title,
-        'artist': artist,
-        'album': album,
-        'album_artist': albumArtist,
-        'genres': genres,
-        'track_number': trackNumber,
-        'disc_number': discNumber,
+        'title': data.title,
+        'artist': data.artist,
+        'artists': data.artists,
+        'album': data.album,
+        'album_artist': data.albumArtist,
+        'album_artists': data.albumArtists,
+        'genres': data.genres,
+        'track_number': data.trackNumber,
+        'disc_number': data.discNumber,
+        'total_tracks': data.totalTracks,
+        'total_discs': data.totalDiscs,
+        'release_date': data.releaseDate,
+        'original_date': data.originalDate,
+        'media': data.media,
+        'script': data.script,
+        'record_label': data.recordLabel,
+        'release_country': data.releaseCountry,
+        'release_type': data.releaseType,
+        'isrc': data.isrc,
+        'mbid_recording': data.mbidRecording,
+        'mbid_track': data.mbidTrack,
+        'mbid_artist': data.mbidArtist,
+        'mbid_release': data.mbidRelease,
+        'mbid_release_artist': data.mbidReleaseArtist,
+        'mbid_release_group': data.mbidReleaseGroup,
+        'artist_sort': data.artistSort,
+        'album_artist_sort': data.albumArtistSort,
+        'comment': data.comment,
+        'copyright': data.copyright,
+        'lyrics': data.lyrics,
       };
-      if (releaseDate != null) body['release_date'] = releaseDate;
-      if (lyrics != null) body['lyrics'] = lyrics;
-      if (cover != null) body['cover'] = cover;
+      if (data.cover != null) body['cover'] = data.cover;
 
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/library/identify/tags/write'),
@@ -2248,16 +2261,16 @@ class APIService {
         body: jsonEncode(body),
       );
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final responseData = jsonDecode(response.body);
         return (
-          success: data['success'] as bool? ?? true,
-          error: data['error'] as String?,
+          success: responseData['success'] as bool? ?? true,
+          error: responseData['error'] as String?,
         );
       }
-      final data = jsonDecode(response.body);
+      final errorData = jsonDecode(response.body);
       return (
         success: false,
-        error: data['error'] as String? ?? 'HTTP ${response.statusCode}',
+        error: errorData['error'] as String? ?? 'HTTP ${response.statusCode}',
       );
     } catch (e) {
       log('writeFileTags error: $e', level: LogLevel.error);
@@ -2296,18 +2309,11 @@ class APIService {
   writeFileTagsBytes({
     required String filename,
     required Uint8List bytes,
-    required String title,
-    required String artist,
-    required String album,
-    required String albumArtist,
-    required List<String> genres,
-    required int trackNumber,
-    required int discNumber,
-    String? releaseDate,
-    String? lyrics,
-    List<int>? cover,
+    required EditableTagData data,
   }) async {
     try {
+      // Multi-value fields travel as a single `; `-joined text field; the
+      // server splits them back apart.
       final request =
           http.MultipartRequest(
               'POST',
@@ -2317,26 +2323,43 @@ class APIService {
             ..fields.addAll({
               'id': _newId(),
               'filename': filename,
-              'title': title,
-              'artist': artist,
-              'album': album,
-              'album_artist': albumArtist,
-              'track_number': trackNumber.toString(),
-              'disc_number': discNumber.toString(),
-              for (final g in genres) 'genres': g,
+              'title': data.title,
+              'artist': data.artist,
+              'artists': data.artists.join('; '),
+              'album': data.album,
+              'album_artist': data.albumArtist,
+              'album_artists': data.albumArtists.join('; '),
+              'genres': data.genres.join('; '),
+              'track_number': data.trackNumber.toString(),
+              'disc_number': data.discNumber.toString(),
+              'total_tracks': data.totalTracks.toString(),
+              'total_discs': data.totalDiscs.toString(),
+              'release_date': data.releaseDate ?? '',
+              'original_date': data.originalDate ?? '',
+              'media': data.media,
+              'script': data.script,
+              'record_label': data.recordLabel,
+              'release_country': data.releaseCountry,
+              'release_type': data.releaseType.join('; '),
+              'isrc': data.isrc,
+              'mbid_recording': data.mbidRecording,
+              'mbid_track': data.mbidTrack,
+              'mbid_artist': data.mbidArtist,
+              'mbid_release': data.mbidRelease,
+              'mbid_release_artist': data.mbidReleaseArtist,
+              'mbid_release_group': data.mbidReleaseGroup,
+              'artist_sort': data.artistSort,
+              'album_artist_sort': data.albumArtistSort,
+              'comment': data.comment ?? '',
+              'copyright': data.copyright ?? '',
+              'lyrics': data.lyrics ?? '',
             })
             ..files.add(
               http.MultipartFile.fromBytes('file', bytes, filename: filename),
             );
-      if (releaseDate != null && releaseDate.isNotEmpty) {
-        request.fields['release_date'] = releaseDate;
-      }
-      if (lyrics != null && lyrics.isNotEmpty) {
-        request.fields['lyrics'] = lyrics;
-      }
-      if (cover != null) {
+      if (data.cover != null) {
         request.files.add(
-          http.MultipartFile.fromBytes('cover', cover, filename: 'cover'),
+          http.MultipartFile.fromBytes('cover', data.cover!, filename: 'cover'),
         );
       }
       final streamed = await request.send();
@@ -2344,11 +2367,11 @@ class APIService {
       if (response.statusCode == 200) {
         return (success: true, bytes: response.bodyBytes, error: null);
       }
-      final data = jsonDecode(response.body);
+      final errorData = jsonDecode(response.body);
       return (
         success: false,
         bytes: null,
-        error: data['error'] as String? ?? 'HTTP ${response.statusCode}',
+        error: errorData['error'] as String? ?? 'HTTP ${response.statusCode}',
       );
     } catch (e) {
       log('writeFileTagsBytes error: $e', level: LogLevel.error);

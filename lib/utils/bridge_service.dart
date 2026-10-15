@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:tawai/src/bindings/bindings.dart';
+import 'package:tawai/models/editable_tag_data.dart';
 import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/utils/platform_service.dart';
 import 'package:tawai/utils/api_service.dart';
@@ -802,45 +803,12 @@ class BridgeService {
 
   Future<({bool success, String? error})?> writeFileTags({
     required String path,
-    required String title,
-    required String artist,
-    required String album,
-    required String albumArtist,
-    required List<String> genres,
-    required int trackNumber,
-    required int discNumber,
-    String? releaseDate,
-    String? lyrics,
-    List<int>? cover,
+    required EditableTagData data,
   }) {
     if (_isRemote) {
-      return APIService.instance.writeFileTags(
-        path: path,
-        title: title,
-        artist: artist,
-        album: album,
-        albumArtist: albumArtist,
-        genres: genres,
-        trackNumber: trackNumber,
-        discNumber: discNumber,
-        releaseDate: releaseDate,
-        lyrics: lyrics,
-        cover: cover,
-      );
+      return APIService.instance.writeFileTags(path: path, data: data);
     }
-    return RinfService.instance.writeFileTags(
-      path: path,
-      title: title,
-      artist: artist,
-      album: album,
-      albumArtist: albumArtist,
-      genres: genres,
-      trackNumber: trackNumber,
-      discNumber: discNumber,
-      releaseDate: releaseDate,
-      lyrics: lyrics,
-      cover: cover,
-    );
+    return RinfService.instance.writeFileTags(path: path, data: data);
   }
 
   Future<ReadFileTagsResponse?> readFileTagsBytes(
@@ -856,46 +824,19 @@ class BridgeService {
   writeFileTagsBytes({
     required String filename,
     required Uint8List bytes,
-    required String title,
-    required String artist,
-    required String album,
-    required String albumArtist,
-    required List<String> genres,
-    required int trackNumber,
-    required int discNumber,
-    String? releaseDate,
-    String? lyrics,
-    List<int>? cover,
+    required EditableTagData data,
   }) {
     if (_isRemote) {
       return APIService.instance.writeFileTagsBytes(
         filename: filename,
         bytes: bytes,
-        title: title,
-        artist: artist,
-        album: album,
-        albumArtist: albumArtist,
-        genres: genres,
-        trackNumber: trackNumber,
-        discNumber: discNumber,
-        releaseDate: releaseDate,
-        lyrics: lyrics,
-        cover: cover,
+        data: data,
       );
     }
     return RinfService.instance.writeFileTagsBytes(
       filename: filename,
       bytes: bytes,
-      title: title,
-      artist: artist,
-      album: album,
-      albumArtist: albumArtist,
-      genres: genres,
-      trackNumber: trackNumber,
-      discNumber: discNumber,
-      releaseDate: releaseDate,
-      lyrics: lyrics,
-      cover: cover,
+      data: data,
     );
   }
 
