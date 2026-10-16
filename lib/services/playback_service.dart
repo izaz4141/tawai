@@ -282,7 +282,7 @@ class PlaybackService {
     final withoutExt = ext.isEmpty
         ? filename
         : filename.substring(0, filename.length - ext.length);
-    final title = !fallback && tags!.title.isNotEmpty ? tags.title : withoutExt;
+    final title = !fallback && tags.title.isNotEmpty ? tags.title : withoutExt;
     final artist = fallback ? '' : tags.artist;
 
     final id = 'external_${DateTime.now().microsecondsSinceEpoch}';
