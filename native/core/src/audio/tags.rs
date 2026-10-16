@@ -532,22 +532,22 @@ fn apply_audio_tag(
 
     let replace = mode == TagWriteMode::Replace;
 
-    if replace && audio_tag.title.is_empty() {
+    if replace && audio_tag.title.trim().is_empty() {
         tag.remove_title();
     } else {
         tag.set_title(audio_tag.title.clone());
     }
-    if replace && audio_tag.artist.is_empty() {
+    if replace && audio_tag.artist.trim().is_empty() {
         tag.remove_artist();
     } else {
         tag.set_artist(audio_tag.artist.clone());
     }
-    if replace && audio_tag.album.is_empty() {
+    if replace && audio_tag.album.trim().is_empty() {
         tag.remove_album();
     } else {
         tag.set_album(audio_tag.album.clone());
     }
-    if replace && audio_tag.genres.is_empty() {
+    if replace && audio_tag.genres.iter().all(|g| g.trim().is_empty()) {
         tag.remove_genre();
     } else {
         tag.set_genre(audio_tag.genres.join("; "));
