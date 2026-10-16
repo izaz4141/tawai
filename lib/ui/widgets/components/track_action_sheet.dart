@@ -126,6 +126,8 @@ class _TrackActionSheet extends StatelessWidget {
                         artistsString: track.artistsString,
                         artists: track.artists,
                         trackCount: 0,
+                        totalTracks: 0,
+                        totalDiscs: 0,
                       ),
                     ),
                   ),

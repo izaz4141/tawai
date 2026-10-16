@@ -82,7 +82,8 @@ class SingleInstance {
       socket.listen(
         (data) => request.write(utf8.decode(data, allowMalformed: true)),
         onError: (_) {},
-        onDone: () => _handleRequest(request.toString(), onFocus, onOpenTargets),
+        onDone: () =>
+            _handleRequest(request.toString(), onFocus, onOpenTargets),
         cancelOnError: true,
       );
     });
@@ -103,8 +104,10 @@ class SingleInstance {
 
     final List<String> targets = _decodeTargets(message);
     if (targets.isEmpty) {
-      log('Ignoring unrecognised single instance request: $message',
-          level: LogLevel.warning);
+      log(
+        'Ignoring unrecognised single instance request: $message',
+        level: LogLevel.warning,
+      );
       return;
     }
 
@@ -122,7 +125,10 @@ class SingleInstance {
       if (decoded['cmd'] != 'open') return const [];
       final paths = decoded['paths'];
       if (paths is! List) return const [];
-      return [for (final path in paths) if (path is String) path];
+      return [
+        for (final path in paths)
+          if (path is String) path,
+      ];
     } catch (_) {
       return const [];
     }

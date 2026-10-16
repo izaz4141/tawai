@@ -538,7 +538,7 @@ const SQ_RENAME_TRACK_SELECT: &str = r#"SELECT t.id AS track_id, t.file_path, t.
     COALESCE((SELECT GROUP_CONCAT(ta2.name, '||') FROM track_artists ta1 JOIN artists ta2 ON ta1.artist_id = ta2.id WHERE ta1.track_id = t.id), '') AS track_artists,
     COALESCE((SELECT GROUP_CONCAT(aa2.name, '||') FROM album_artists aa1 JOIN artists aa2 ON aa1.artist_id = aa2.id WHERE aa1.album_id = a.id), '') AS album_artists,
     COALESCE((SELECT GROUP_CONCAT(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id), '') AS genres,
-    t.mbid_recording, ar.mbid AS mbid_artist, a.mbid AS mbid_release,
+    t.mbid_recording, ar.mbid AS mbid_artist, a.release_mbid AS mbid_release,
     t.lyrics, t.track_gain, t.track_peak
     FROM tracks t
     JOIN albums a ON t.album_id = a.id
@@ -555,7 +555,7 @@ const PG_RENAME_TRACK_SELECT: &str = r#"SELECT t.id AS track_id, t.file_path, t.
     COALESCE((SELECT string_agg(ta2.name, '||') FROM track_artists ta1 JOIN artists ta2 ON ta1.artist_id = ta2.id WHERE ta1.track_id = t.id), '') AS track_artists,
     COALESCE((SELECT string_agg(aa2.name, '||') FROM album_artists aa1 JOIN artists aa2 ON aa1.artist_id = aa2.id WHERE aa1.album_id = a.id), '') AS album_artists,
     COALESCE((SELECT string_agg(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id), '') AS genres,
-    t.mbid_recording, ar.mbid AS mbid_artist, a.mbid AS mbid_release,
+    t.mbid_recording, ar.mbid AS mbid_artist, a.release_mbid AS mbid_release,
     t.lyrics, t.track_gain, t.track_peak
     FROM tracks t
     JOIN albums a ON t.album_id = a.id
@@ -736,6 +736,7 @@ mod tests {
             total_discs,
             track_gain: None,
             track_peak: None,
+            ..Default::default()
         }
     }
 

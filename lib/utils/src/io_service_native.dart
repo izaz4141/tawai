@@ -128,7 +128,7 @@ class NativeIOService implements IOService {
   @override
   Future<void> downloadBytes(String name, Uint8List bytes) async {}
 
-@override
+  @override
   void writeLine(String line) => stdout.writeln(line);
 
   @override

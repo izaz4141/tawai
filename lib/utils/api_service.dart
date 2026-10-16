@@ -16,6 +16,7 @@ import 'package:tawai/utils/log_service.dart';
 import 'package:tawai/utils/rinf_service.dart';
 import 'package:tawai/utils/system_service.dart';
 import 'package:tawai/models/fs.dart';
+import 'package:tawai/models/editable_tag_data.dart';
 import 'package:tawai/models/user.dart';
 
 class APIService {
@@ -650,10 +651,11 @@ class APIService {
     return [];
   }
 
-  Future<List<AlbumInfo>> getAlbums({String? artistId}) async {
+  Future<List<AlbumInfo>> getAlbums({String? artistId, String? albumId}) async {
     try {
       final queryParams = <String, String>{};
       if (artistId != null) queryParams['artist_id'] = artistId;
+      if (albumId != null) queryParams['album_id'] = albumId;
       final uri = Uri.parse(
         '$baseUrl/api/tawai/library/albums',
       ).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
@@ -666,10 +668,22 @@ class APIService {
           return AlbumInfo(
             id: m['id'] as String,
             title: m['title'] as String,
+            sortName: m['sort_name'] as String?,
             artistsString: m['artists_string'] as String? ?? '',
             artists: [],
             releaseDate: m['release_date'] as String?,
             trackCount: (m['track_count'] as num?)?.toInt() ?? 0,
+            disambiguation: m['disambiguation'] as String?,
+            releaseMbid: m['release_mbid'] as String?,
+            releaseGroupMbid: m['release_group_mbid'] as String?,
+            releaseArtistMbid: m['release_artist_mbid'] as String?,
+            releaseCountry: m['release_country'] as String?,
+            releaseType: m['release_type'] as String?,
+            recordLabel: m['record_label'] as String?,
+            media: m['media'] as String?,
+            originalDate: m['original_date'] as String?,
+            totalTracks: (m['total_tracks'] as num?)?.toInt() ?? 0,
+            totalDiscs: (m['total_discs'] as num?)?.toInt() ?? 0,
           );
         }).toList();
       }
@@ -1281,6 +1295,15 @@ class APIService {
                             )
                             .toList() ??
                         [],
+                    disambiguation: r['disambiguation'] as String?,
+                    totalDiscs: (r['total_discs'] as num?)?.toInt(),
+                    totalTracks: (r['total_tracks'] as num?)?.toInt(),
+                    releaseGroupMbid: r['release_group_mbid'] as String?,
+                    releaseType: r['release_type'] as String?,
+                    recordLabel: r['record_label'] as String?,
+                    media: r['media'] as String?,
+                    script: r['script'] as String?,
+                    originalDate: r['original_date'] as String?,
                   ),
                 )
                 .toList(),
@@ -1319,7 +1342,17 @@ class APIService {
           releaseDate: json['release_date'] as String?,
           artist: json['artist'] as String? ?? '',
           artistId: json['artist_id'] as String?,
+          disambiguation: json['disambiguation'] as String?,
           tracks: tracksList,
+          releaseCountry: json['release_country'] as String?,
+          releaseGroupMbid: json['release_group_mbid'] as String?,
+          releaseType: json['release_type'] as String?,
+          recordLabel: json['record_label'] as String?,
+          media: json['media'] as String?,
+          script: json['script'] as String?,
+          originalDate: json['original_date'] as String?,
+          totalTracks: (json['total_tracks'] as num?)?.toInt(),
+          totalDiscs: (json['total_discs'] as num?)?.toInt(),
         );
       }
     } catch (e) {
@@ -1332,7 +1365,17 @@ class APIService {
       releaseDate: null,
       artist: '',
       artistId: null,
+      disambiguation: null,
       tracks: [],
+      releaseCountry: null,
+      releaseGroupMbid: null,
+      releaseType: null,
+      recordLabel: null,
+      media: null,
+      script: null,
+      originalDate: null,
+      totalTracks: null,
+      totalDiscs: null,
     );
   }
 
@@ -1378,6 +1421,15 @@ class APIService {
                               )
                               .toList() ??
                           [],
+                      disambiguation: r['disambiguation'] as String?,
+                      totalDiscs: (r['total_discs'] as num?)?.toInt(),
+                      totalTracks: (r['total_tracks'] as num?)?.toInt(),
+                      releaseGroupMbid: r['release_group_mbid'] as String?,
+                      releaseType: r['release_type'] as String?,
+                      recordLabel: r['record_label'] as String?,
+                      media: r['media'] as String?,
+                      script: r['script'] as String?,
+                      originalDate: r['original_date'] as String?,
                     ),
                   )
                   .toList() ??
@@ -1398,16 +1450,35 @@ class APIService {
     String? title,
     String? artist,
     String? artistMbid,
+    String? albumArtist,
+    String? albumArtistMbid,
+    List<String>? artists,
+    List<String>? albumArtists,
+    String? artistSort,
+    String? albumArtistSort,
     String? album,
     String? albumMbid,
     String? albumDisambiguation,
     String? releaseDate,
+    String? originalDate,
+    String? releaseGroupMbid,
+    String? releaseCountry,
+    List<String>? releaseType,
+    String? recordLabel,
+    String? media,
     int? trackNum,
     int? discNum,
+    int? totalTracks,
+    int? totalDiscs,
     String? mbidRecording,
+    String? mbidTrack,
+    String? isrc,
+    String? comment,
+    String? copyright,
+    String? script,
+    List<String>? genres,
     String? lyrics,
     List<int>? coverBytes,
-    int? totalDiscs,
     String? filePath,
     String? targetSourceId,
   }) async {
@@ -1419,20 +1490,43 @@ class APIService {
       };
       if (title != null) body['title'] = title;
       if (artist != null) body['artist'] = artist;
-      if (album != null) body['album'] = album;
       if (artistMbid != null) body['artist_mbid'] = artistMbid;
+      if (albumArtist != null) body['album_artist'] = albumArtist;
+      if (albumArtistMbid != null) body['album_artist_mbid'] = albumArtistMbid;
+      if (artists != null) body['artists'] = artists;
+      if (albumArtists != null) body['album_artists'] = albumArtists;
+      if (artistSort != null) body['artist_sort'] = artistSort;
+      if (albumArtistSort != null) body['album_artist_sort'] = albumArtistSort;
+      if (album != null) body['album'] = album;
       if (albumMbid != null) body['album_mbid'] = albumMbid;
       if (albumDisambiguation != null) {
         body['album_disambiguation'] = albumDisambiguation;
       }
       if (releaseDate != null) body['release_date'] = releaseDate;
+      if (originalDate != null) body['original_date'] = originalDate;
+      if (releaseGroupMbid != null)
+        body['release_group_mbid'] = releaseGroupMbid;
+      if (releaseCountry != null) body['release_country'] = releaseCountry;
+      if (releaseType != null) body['release_type'] = releaseType;
+      if (recordLabel != null) body['record_label'] = recordLabel;
+      if (media != null) body['media'] = media;
       if (trackNum != null) body['track_num'] = trackNum;
       if (discNum != null) body['disc_num'] = discNum;
+      if (totalTracks != null && totalTracks > 0) {
+        body['total_tracks'] = totalTracks;
+      }
+      if (totalDiscs != null && totalDiscs > 0) {
+        body['total_discs'] = totalDiscs;
+      }
       if (mbidRecording != null) body['mbid_recording'] = mbidRecording;
+      if (mbidTrack != null) body['mbid_track'] = mbidTrack;
+      if (isrc != null) body['isrc'] = isrc;
+      if (comment != null) body['comment'] = comment;
+      if (copyright != null) body['copyright'] = copyright;
+      if (script != null) body['script'] = script;
+      if (genres != null) body['genres'] = genres;
       if (lyrics != null) body['lyrics'] = lyrics;
       if (coverBytes != null) body['cover_bytes'] = base64Encode(coverBytes);
-      if (totalDiscs != null && totalDiscs > 0)
-        body['total_discs'] = totalDiscs;
       if (filePath != null) body['file_path'] = filePath;
       if (targetSourceId != null) body['target_source_id'] = targetSourceId;
 
@@ -1523,6 +1617,15 @@ class APIService {
                           )
                           .toList() ??
                       [],
+                  disambiguation: r['disambiguation'] as String?,
+                  totalDiscs: (r['total_discs'] as num?)?.toInt(),
+                  totalTracks: (r['total_tracks'] as num?)?.toInt(),
+                  releaseGroupMbid: r['release_group_mbid'] as String?,
+                  releaseType: r['release_type'] as String?,
+                  recordLabel: r['record_label'] as String?,
+                  media: r['media'] as String?,
+                  script: r['script'] as String?,
+                  originalDate: r['original_date'] as String?,
                 ),
               )
               .toList() ??
@@ -2150,6 +2253,52 @@ class APIService {
   // Tag editor (file tags read/write via REST)
   // ---------------------------------------------------------------------------
 
+  /// Maps the JSON body of a tag read (path or bytes) to the bridge response.
+  static List<String> _stringList(Object? value) =>
+      (value as List<dynamic>?)?.map((e) => e as String).toList() ?? [];
+
+  static ReadFileTagsResponse _readFileTagsFromJson(Map<String, dynamic> data) {
+    return ReadFileTagsResponse(
+      id: '',
+      title: data['title'] as String? ?? '',
+      artist: data['artist'] as String? ?? '',
+      artists: _stringList(data['artists']),
+      album: data['album'] as String? ?? '',
+      albumArtist: data['album_artist'] as String? ?? '',
+      albumArtists: _stringList(data['album_artists']),
+      artistSort: data['artist_sort'] as String? ?? '',
+      albumArtistSort: data['album_artist_sort'] as String? ?? '',
+      genres: _stringList(data['genres']),
+      trackNumber: (data['track_number'] as num?)?.toInt(),
+      discNumber: (data['disc_number'] as num?)?.toInt(),
+      totalTracks: (data['total_tracks'] as num?)?.toInt(),
+      totalDiscs: (data['total_discs'] as num?)?.toInt(),
+      releaseDate: data['release_date'] as String?,
+      originalDate: data['original_date'] as String?,
+      releaseCountry: data['release_country'] as String?,
+      releaseType: _stringList(data['release_type']),
+      recordLabel: data['record_label'] as String?,
+      media: data['media'] as String?,
+      script: data['script'] as String?,
+      isrc: data['isrc'] as String?,
+      mbidRecording: data['mbid_recording'] as String?,
+      mbidTrack: data['mbid_track'] as String?,
+      mbidArtist: data['mbid_artist'] as String?,
+      mbidReleaseArtist: data['mbid_release_artist'] as String?,
+      mbidRelease: data['mbid_release'] as String?,
+      mbidReleaseGroup: data['mbid_release_group'] as String?,
+      comment: data['comment'] as String?,
+      copyright: data['copyright'] as String?,
+      lyrics: data['lyrics'] as String?,
+      trackGain: (data['track_gain'] as num?)?.toDouble(),
+      trackPeak: (data['track_peak'] as num?)?.toDouble(),
+      encoder: data['encoder'] as String?,
+      cover: decodeBytes(data['cover']),
+      durationSecs: (data['duration_secs'] as num?)?.toDouble() ?? 0.0,
+      error: data['error'] as String?,
+    );
+  }
+
   Future<ReadFileTagsResponse?> readFileTags(String path) async {
     try {
       final response = await http.post(
@@ -2159,25 +2308,7 @@ class APIService {
       );
       if (response.statusCode != 200) return null;
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return ReadFileTagsResponse(
-        id: '',
-        title: data['title'] as String? ?? '',
-        artist: data['artist'] as String? ?? '',
-        album: data['album'] as String? ?? '',
-        albumArtist: data['album_artist'] as String? ?? '',
-        genres:
-            (data['genres'] as List<dynamic>?)
-                ?.map((e) => e as String)
-                .toList() ??
-            [],
-        trackNumber: (data['track_number'] as num?)?.toInt() ?? 0,
-        discNumber: (data['disc_number'] as num?)?.toInt() ?? 0,
-        releaseDate: data['release_date'] as String?,
-        lyrics: data['lyrics'] as String?,
-        cover: decodeBytes(data['cover']),
-        durationSecs: (data['duration_secs'] as num?)?.toDouble() ?? 0.0,
-        error: data['error'] as String?,
-      );
+      return _readFileTagsFromJson(data);
     } catch (e) {
       log('readFileTags error: $e', level: LogLevel.error);
       return null;
@@ -2186,32 +2317,46 @@ class APIService {
 
   Future<({bool success, String? error})?> writeFileTags({
     required String path,
-    required String title,
-    required String artist,
-    required String album,
-    required String albumArtist,
-    required List<String> genres,
-    required int trackNumber,
-    required int discNumber,
-    String? releaseDate,
-    String? lyrics,
-    List<int>? cover,
+    required EditableTagData data,
+    bool syncDatabase = true,
   }) async {
     try {
       final body = <String, dynamic>{
         'id': _newId(),
         'path': path,
-        'title': title,
-        'artist': artist,
-        'album': album,
-        'album_artist': albumArtist,
-        'genres': genres,
-        'track_number': trackNumber,
-        'disc_number': discNumber,
+        'sync_database': syncDatabase,
+        'title': data.title,
+        'artist': data.artist,
+        'artists': data.artists,
+        'album': data.album,
+        'album_artist': data.albumArtist,
+        'album_artists': data.albumArtists,
+        'genres': data.genres,
+        'track_number': data.trackNumber,
+        'disc_number': data.discNumber,
+        'total_tracks': data.totalTracks,
+        'total_discs': data.totalDiscs,
+        'release_date': data.releaseDate,
+        'original_date': data.originalDate,
+        'media': data.media,
+        'script': data.script,
+        'record_label': data.recordLabel,
+        'release_country': data.releaseCountry,
+        'release_type': data.releaseType,
+        'isrc': data.isrc,
+        'mbid_recording': data.mbidRecording,
+        'mbid_track': data.mbidTrack,
+        'mbid_artist': data.mbidArtist,
+        'mbid_release': data.mbidRelease,
+        'mbid_release_artist': data.mbidReleaseArtist,
+        'mbid_release_group': data.mbidReleaseGroup,
+        'artist_sort': data.artistSort,
+        'album_artist_sort': data.albumArtistSort,
+        'comment': data.comment,
+        'copyright': data.copyright,
+        'lyrics': data.lyrics,
       };
-      if (releaseDate != null) body['release_date'] = releaseDate;
-      if (lyrics != null) body['lyrics'] = lyrics;
-      if (cover != null) body['cover'] = cover;
+      if (data.cover != null) body['cover'] = data.cover;
 
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/library/identify/tags/write'),
@@ -2219,16 +2364,16 @@ class APIService {
         body: jsonEncode(body),
       );
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final responseData = jsonDecode(response.body);
         return (
-          success: data['success'] as bool? ?? true,
-          error: data['error'] as String?,
+          success: responseData['success'] as bool? ?? true,
+          error: responseData['error'] as String?,
         );
       }
-      final data = jsonDecode(response.body);
+      final errorData = jsonDecode(response.body);
       return (
         success: false,
-        error: data['error'] as String? ?? 'HTTP ${response.statusCode}',
+        error: errorData['error'] as String? ?? 'HTTP ${response.statusCode}',
       );
     } catch (e) {
       log('writeFileTags error: $e', level: LogLevel.error);
@@ -2256,25 +2401,7 @@ class APIService {
       final response = await http.Response.fromStream(streamed);
       if (response.statusCode != 200) return null;
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return ReadFileTagsResponse(
-        id: '',
-        title: data['title'] as String? ?? '',
-        artist: data['artist'] as String? ?? '',
-        album: data['album'] as String? ?? '',
-        albumArtist: data['album_artist'] as String? ?? '',
-        genres:
-            (data['genres'] as List<dynamic>?)
-                ?.map((e) => e as String)
-                .toList() ??
-            [],
-        trackNumber: (data['track_number'] as num?)?.toInt() ?? 0,
-        discNumber: (data['disc_number'] as num?)?.toInt() ?? 0,
-        releaseDate: data['release_date'] as String?,
-        lyrics: data['lyrics'] as String?,
-        cover: decodeBytes(data['cover']),
-        durationSecs: (data['duration_secs'] as num?)?.toDouble() ?? 0.0,
-        error: data['error'] as String?,
-      );
+      return _readFileTagsFromJson(data);
     } catch (e) {
       log('readFileTagsBytes error: $e', level: LogLevel.error);
       return null;
@@ -2285,18 +2412,11 @@ class APIService {
   writeFileTagsBytes({
     required String filename,
     required Uint8List bytes,
-    required String title,
-    required String artist,
-    required String album,
-    required String albumArtist,
-    required List<String> genres,
-    required int trackNumber,
-    required int discNumber,
-    String? releaseDate,
-    String? lyrics,
-    List<int>? cover,
+    required EditableTagData data,
   }) async {
     try {
+      // Multi-value fields travel as a single `; `-joined text field; the
+      // server splits them back apart.
       final request =
           http.MultipartRequest(
               'POST',
@@ -2306,26 +2426,43 @@ class APIService {
             ..fields.addAll({
               'id': _newId(),
               'filename': filename,
-              'title': title,
-              'artist': artist,
-              'album': album,
-              'album_artist': albumArtist,
-              'track_number': trackNumber.toString(),
-              'disc_number': discNumber.toString(),
-              for (final g in genres) 'genres': g,
+              'title': data.title,
+              'artist': data.artist,
+              'artists': data.artists.join('; '),
+              'album': data.album,
+              'album_artist': data.albumArtist,
+              'album_artists': data.albumArtists.join('; '),
+              'genres': data.genres.join('; '),
+              'track_number': data.trackNumber.toString(),
+              'disc_number': data.discNumber.toString(),
+              'total_tracks': data.totalTracks.toString(),
+              'total_discs': data.totalDiscs.toString(),
+              'release_date': data.releaseDate ?? '',
+              'original_date': data.originalDate ?? '',
+              'media': data.media,
+              'script': data.script,
+              'record_label': data.recordLabel,
+              'release_country': data.releaseCountry,
+              'release_type': data.releaseType.join('; '),
+              'isrc': data.isrc,
+              'mbid_recording': data.mbidRecording,
+              'mbid_track': data.mbidTrack,
+              'mbid_artist': data.mbidArtist,
+              'mbid_release': data.mbidRelease,
+              'mbid_release_artist': data.mbidReleaseArtist,
+              'mbid_release_group': data.mbidReleaseGroup,
+              'artist_sort': data.artistSort,
+              'album_artist_sort': data.albumArtistSort,
+              'comment': data.comment ?? '',
+              'copyright': data.copyright ?? '',
+              'lyrics': data.lyrics ?? '',
             })
             ..files.add(
               http.MultipartFile.fromBytes('file', bytes, filename: filename),
             );
-      if (releaseDate != null && releaseDate.isNotEmpty) {
-        request.fields['release_date'] = releaseDate;
-      }
-      if (lyrics != null && lyrics.isNotEmpty) {
-        request.fields['lyrics'] = lyrics;
-      }
-      if (cover != null) {
+      if (data.cover != null) {
         request.files.add(
-          http.MultipartFile.fromBytes('cover', cover, filename: 'cover'),
+          http.MultipartFile.fromBytes('cover', data.cover!, filename: 'cover'),
         );
       }
       final streamed = await request.send();
@@ -2333,11 +2470,11 @@ class APIService {
       if (response.statusCode == 200) {
         return (success: true, bytes: response.bodyBytes, error: null);
       }
-      final data = jsonDecode(response.body);
+      final errorData = jsonDecode(response.body);
       return (
         success: false,
         bytes: null,
-        error: data['error'] as String? ?? 'HTTP ${response.statusCode}',
+        error: errorData['error'] as String? ?? 'HTTP ${response.statusCode}',
       );
     } catch (e) {
       log('writeFileTagsBytes error: $e', level: LogLevel.error);

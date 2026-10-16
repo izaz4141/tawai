@@ -42,6 +42,15 @@ pub async fn handle_get_release_tracks(
                     artist_id: None,
                     disambiguation: None,
                     tracks: vec![],
+                    release_country: None,
+                    release_group_mbid: None,
+                    release_type: None,
+                    record_label: None,
+                    media: None,
+                    script: None,
+                    original_date: None,
+                    total_tracks: None,
+                    total_discs: None,
                 }),
             )
                 .into_response()
@@ -59,5 +68,14 @@ fn get_release_tracks_response(release_id: String, info: ReleaseInfo) -> GetRele
         artist_id: info.artist_id,
         disambiguation: info.disambiguation,
         tracks: info.tracks,
+        release_country: info.country,
+        release_group_mbid: info.release_group_mbid,
+        release_type: info.release_type,
+        record_label: info.record_label,
+        media: info.media,
+        script: info.script,
+        original_date: info.original_date,
+        total_tracks: info.total_tracks,
+        total_discs: info.total_discs,
     }
 }

@@ -85,16 +85,35 @@ pub async fn handle_apply_identification(context: Arc<AppContext>) {
             title: msg.title,
             artist: msg.artist,
             artist_mbid: msg.artist_mbid,
+            album_artist: msg.album_artist,
+            album_artist_mbid: msg.album_artist_mbid,
+            artists: msg.artists,
+            album_artists: msg.album_artists,
+            artist_sort: msg.artist_sort,
+            album_artist_sort: msg.album_artist_sort,
             album: msg.album,
             album_mbid: msg.album_mbid,
             album_disambiguation: msg.album_disambiguation,
             release_date: msg.release_date,
+            original_date: msg.original_date,
+            release_group_mbid: msg.release_group_mbid,
+            release_country: msg.release_country,
+            release_type: msg.release_type,
+            record_label: msg.record_label,
+            media: msg.media,
             track_num: msg.track_num,
             disc_num: msg.disc_num,
-            mbid_recording: msg.mbid_recording,
-            lyrics: msg.lyrics,
-            cover_bytes: msg.cover_bytes,
+            total_tracks: msg.total_tracks,
             total_discs: msg.total_discs,
+            mbid_recording: msg.mbid_recording,
+            mbid_track: msg.mbid_track,
+            isrc: msg.isrc,
+            comment: msg.comment,
+            copyright: msg.copyright,
+            script: msg.script,
+            lyrics: msg.lyrics,
+            genres: msg.genres,
+            cover_bytes: msg.cover_bytes,
         };
 
         match tawai_core::utils::identify::apply_identification(
@@ -188,39 +207,21 @@ pub async fn handle_read_file_tags(_context: Arc<AppContext>) {
 
         match audio::tags::read_audio_tags(&path) {
             Ok((tag, duration_secs, _sample_rate, _bitrate)) => {
-                ReadFileTagsResponse {
-                    id: msg.id,
-                    title: tag.title,
-                    artist: tag.artist,
-                    album: tag.album,
-                    album_artist: tag.album_artist,
-                    genres: tag.genres,
-                    track_number: tag.track_number,
-                    disc_number: tag.disc_number,
-                    release_date: tag.release_date,
-                    lyrics: tag.lyrics,
-                    cover: tag.cover,
-                    duration_secs,
-                    error: None,
-                }
+                ReadFileTagsResponse::from(
+                    tawai_core::signals::metadata::ReadFileTagsResponse::from_audio_tag(
+                        msg.id,
+                        &tag,
+                        duration_secs,
+                    ),
+                )
                 .send_signal_to_dart();
             }
             Err(e) => {
                 logger::error(&format!("read_audio_tags failed: {e}"));
                 ReadFileTagsResponse {
                     id: msg.id,
-                    title: String::new(),
-                    artist: String::new(),
-                    album: String::new(),
-                    album_artist: String::new(),
-                    genres: vec![],
-                    track_number: 0,
-                    disc_number: 0,
-                    release_date: None,
-                    lyrics: None,
-                    cover: None,
-                    duration_secs: 0.0,
                     error: Some(e.to_string()),
+                    ..Default::default()
                 }
                 .send_signal_to_dart();
             }
@@ -228,7 +229,7 @@ pub async fn handle_read_file_tags(_context: Arc<AppContext>) {
     }
 }
 
-pub async fn handle_write_file_tags(_context: Arc<AppContext>) {
+pub async fn handle_write_file_tags(context: Arc<AppContext>) {
     use signals::metadata::*;
     let receiver = WriteFileTagsRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
@@ -238,19 +239,65 @@ pub async fn handle_write_file_tags(_context: Arc<AppContext>) {
         let tag = audio::tags::AudioTag {
             title: msg.title,
             artist: msg.artist,
+            artists: msg.artists,
             album: msg.album,
             album_artist: msg.album_artist,
+            album_artists: msg.album_artists,
             genres: msg.genres,
             track_number: msg.track_number,
             disc_number: msg.disc_number,
+            total_tracks: msg.total_tracks,
+            total_discs: msg.total_discs,
             release_date: msg.release_date,
+            original_date: msg.original_date,
+            media: msg.media,
+            script: msg.script,
+            record_label: msg.record_label,
+            release_country: msg.release_country,
+            release_type: msg.release_type,
+            isrc: msg.isrc,
+            mbid_recording: msg.mbid_recording,
+            mbid_track: msg.mbid_track,
+            mbid_artist: msg.mbid_artist,
+            mbid_release: msg.mbid_release,
+            mbid_release_artist: msg.mbid_release_artist,
+            mbid_release_group: msg.mbid_release_group,
+            artist_sort: msg.artist_sort,
+            album_artist_sort: msg.album_artist_sort,
+            comment: msg.comment,
+            copyright: msg.copyright,
             lyrics: msg.lyrics,
             cover: msg.cover,
             ..Default::default()
         };
 
-        match audio::tags::write_audio_tags(&path, &tag) {
+        match audio::tags::write_audio_tags(&path, &tag, audio::tags::TagWriteMode::Replace) {
             Ok(()) => {
+                // The write already succeeded; a DB sync failure must not fail
+                // the save. This mirrors the file on disk into the library row
+                // so the library does not wait for a rescan.
+                if msg.sync_database {
+                    let db = context.db().await;
+                    match library::sync_track_tags_by_file_path(db.pool(), &msg.path, &tag).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            logger::warn(&format!(
+                                "failed to sync library row after tag write for {}: {e}",
+                                msg.path
+                            ));
+                        }
+                    }
+                    if let Ok(hash) = tawai_core::libsources::local::hash_file(&path) {
+                        if let Err(e) =
+                            library::update_file_hash_by_path(db.pool(), &msg.path, &hash).await
+                        {
+                            logger::warn(&format!(
+                                "failed to update stored file_hash after tag write for {}: {e}",
+                                msg.path
+                            ));
+                        }
+                    }
+                }
                 WriteFileTagsResponse {
                     id: msg.id,
                     success: true,
@@ -279,39 +326,21 @@ pub async fn handle_read_file_tags_bytes(_context: Arc<AppContext>) {
 
         match audio::tags::read_audio_tags_from_bytes(&msg.filename, &msg.bytes) {
             Ok((tag, duration_secs, _sample_rate, _bitrate)) => {
-                ReadFileTagsResponse {
-                    id: msg.id,
-                    title: tag.title,
-                    artist: tag.artist,
-                    album: tag.album,
-                    album_artist: tag.album_artist,
-                    genres: tag.genres,
-                    track_number: tag.track_number,
-                    disc_number: tag.disc_number,
-                    release_date: tag.release_date,
-                    lyrics: tag.lyrics,
-                    cover: tag.cover,
-                    duration_secs,
-                    error: None,
-                }
+                ReadFileTagsResponse::from(
+                    tawai_core::signals::metadata::ReadFileTagsResponse::from_audio_tag(
+                        msg.id,
+                        &tag,
+                        duration_secs,
+                    ),
+                )
                 .send_signal_to_dart();
             }
             Err(e) => {
                 logger::error(&format!("read_audio_tags_from_bytes failed: {e}"));
                 ReadFileTagsResponse {
                     id: msg.id,
-                    title: String::new(),
-                    artist: String::new(),
-                    album: String::new(),
-                    album_artist: String::new(),
-                    genres: vec![],
-                    track_number: 0,
-                    disc_number: 0,
-                    release_date: None,
-                    lyrics: None,
-                    cover: None,
-                    duration_secs: 0.0,
                     error: Some(e.to_string()),
+                    ..Default::default()
                 }
                 .send_signal_to_dart();
             }
@@ -328,18 +357,44 @@ pub async fn handle_write_file_tags_bytes(_context: Arc<AppContext>) {
         let tag = audio::tags::AudioTag {
             title: msg.title,
             artist: msg.artist,
+            artists: msg.artists,
             album: msg.album,
             album_artist: msg.album_artist,
+            album_artists: msg.album_artists,
             genres: msg.genres,
             track_number: msg.track_number,
             disc_number: msg.disc_number,
+            total_tracks: msg.total_tracks,
+            total_discs: msg.total_discs,
             release_date: msg.release_date,
+            original_date: msg.original_date,
+            media: msg.media,
+            script: msg.script,
+            record_label: msg.record_label,
+            release_country: msg.release_country,
+            release_type: msg.release_type,
+            isrc: msg.isrc,
+            mbid_recording: msg.mbid_recording,
+            mbid_track: msg.mbid_track,
+            mbid_artist: msg.mbid_artist,
+            mbid_release: msg.mbid_release,
+            mbid_release_artist: msg.mbid_release_artist,
+            mbid_release_group: msg.mbid_release_group,
+            artist_sort: msg.artist_sort,
+            album_artist_sort: msg.album_artist_sort,
+            comment: msg.comment,
+            copyright: msg.copyright,
             lyrics: msg.lyrics,
             cover: msg.cover,
             ..Default::default()
         };
 
-        match audio::tags::write_audio_tags_to_bytes(&msg.filename, &msg.bytes, &tag) {
+        match audio::tags::write_audio_tags_to_bytes(
+            &msg.filename,
+            &msg.bytes,
+            &tag,
+            audio::tags::TagWriteMode::Replace,
+        ) {
             Ok(new_bytes) => {
                 WriteFileTagsBytesResponse {
                     id: msg.id,

@@ -103,8 +103,8 @@ void groupSessionIntoAlbum(
     existing.userTracks.removeWhere((t) => t.trackId == track.id);
     existing.userTracks.add(userTrack);
     existing.expanded = true;
-    if (existing.albumMbid == null && track.albumMbid != null) {
-      existing.albumMbid = track.albumMbid;
+    if (existing.albumMbid == null && track.releaseMbid != null) {
+      existing.albumMbid = track.releaseMbid;
     }
   } else {
     albumResults[albumKey] = IdentifyAlbumResult(
@@ -112,7 +112,7 @@ void groupSessionIntoAlbum(
       sourceAlbumId: track.albumId,
       userTracks: [userTrack],
       expanded: true,
-      albumMbid: track.albumMbid,
+      albumMbid: track.releaseMbid,
     );
   }
 }
@@ -145,7 +145,7 @@ void groupIdentifiedTracks(
         )
         .toList();
     final albumKey = IdentifyAlbumResult.groupKey(
-      albumMbid: first.albumMbid,
+      albumMbid: first.releaseMbid,
       sourceAlbumId: first.albumId,
     );
     final existing = albumResults[albumKey];
@@ -160,7 +160,7 @@ void groupIdentifiedTracks(
         sourceAlbumId: first.albumId,
         userTracks: userTracks,
         expanded: false,
-        albumMbid: first.albumMbid,
+        albumMbid: first.releaseMbid,
       );
     }
   }

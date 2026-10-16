@@ -4,7 +4,9 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
-use tawai_core::audio::ffmpeg::{DASH_MAX_BITRATE_KBPS, DASH_MIN_BITRATE_KBPS, DEFAULT_DASH_BITRATE_KBPS};
+use tawai_core::audio::ffmpeg::{
+    DASH_MAX_BITRATE_KBPS, DASH_MIN_BITRATE_KBPS, DEFAULT_DASH_BITRATE_KBPS,
+};
 use tawai_core::utils::playback::resolve_playable_track;
 use tawai_core::{
     signals::playback::{PlayTrackRequest, PlayTrackResponse},

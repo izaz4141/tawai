@@ -9,6 +9,7 @@ use tokio::time::sleep;
 
 use crate::audio::tags::{AudioTag, derive_sort_name, parse_artists};
 use crate::db::account::DEFAULT_USERNAME;
+use crate::db::library::{AlbumWriteMeta, TrackTagMeta};
 use crate::db::user_settings;
 use crate::db::{database::DatabasePool, library, library_source};
 use crate::dclient::nadekodon::resolve_audio_format;
@@ -284,7 +285,11 @@ pub async fn download(
         anyhow::bail!("downloaded file is empty: {}", final_path.display());
     }
 
-    if let Err(e) = crate::audio::tags::write_audio_tags(&final_path, &tag) {
+    if let Err(e) = crate::audio::tags::write_audio_tags(
+        &final_path,
+        &tag,
+        crate::audio::tags::TagWriteMode::Patch,
+    ) {
         logger::warn(&format!(
             "failed to write tags to {}: {}",
             final_path.display(),
@@ -382,7 +387,7 @@ fn parse_extra_track(file_path: &str, extra: Option<&str>) -> Option<TrackInfo> 
         bitrate: None,
         mbid_recording: mbid.clone(),
         artist_mbid: None,
-        album_mbid: None,
+        release_mbid: None,
         lyrics: None,
         release_date: None,
         track_gain: None,
@@ -394,6 +399,12 @@ fn parse_extra_track(file_path: &str, extra: Option<&str>) -> Option<TrackInfo> 
         sample_rate: None,
         acoust_id_fingerprint: None,
         acoust_id: None,
+        mbid_track: None,
+        isrc: None,
+        comment: None,
+        copyright: None,
+        encoder: None,
+        script: None,
     })
 }
 
@@ -413,7 +424,7 @@ fn audio_tag_for_track(t: &TrackInfo) -> AudioTag {
         disc_number: t.disc_num.unwrap_or(0),
         mbid_recording: t.mbid_recording.clone(),
         mbid_artist: t.artist_mbid.clone(),
-        mbid_release: t.album_mbid.clone(),
+        mbid_release: t.release_mbid.clone(),
         lyrics: t.lyrics.clone(),
         track_gain: t.track_gain,
         track_peak: t.track_peak,
@@ -584,24 +595,21 @@ async fn dedup_or_insert_track(
     let disambiguation = release.and_then(|r| r.disambiguation.clone());
     let total_discs = release.and_then(|r| r.total_discs).unwrap_or(0);
 
-    let album_id = match library::insert_album(
-        pool,
-        album_title,
-        &artist_id,
-        release_date,
-        album_mbid,
-        None,
+    let album_meta = AlbumWriteMeta {
+        date: release_date,
+        release_mbid: album_mbid,
         disambiguation,
         total_discs,
-    )
-    .await
-    {
-        Ok(id) => id,
-        Err(e) => {
-            logger::error(&format!("failed to insert album: {}", e));
-            return None;
-        }
+        ..Default::default()
     };
+    let album_id =
+        match library::insert_album(pool, album_title, &artist_id, None, &album_meta).await {
+            Ok(id) => id,
+            Err(e) => {
+                logger::error(&format!("failed to insert album: {}", e));
+                return None;
+            }
+        };
 
     library::insert_album_artists(pool, &album_id, &[artist_id.clone()])
         .await
@@ -631,11 +639,14 @@ async fn dedup_or_insert_track(
         None,
         None,
         None,
-        Some(mbid.clone()),
         cover.as_deref(),
         None,
         None,
         None,
+        &TrackTagMeta {
+            mbid_recording: Some(mbid.clone()),
+            ..Default::default()
+        },
     )
     .await
     {

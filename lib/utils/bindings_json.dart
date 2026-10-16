@@ -19,7 +19,7 @@ extension TrackInfoJson on TrackInfo {
     bitrate: json['bitrate'] as int?,
     mbidRecording: json['mbid_recording'] as String?,
     artistMbid: json['artist_mbid'] as String?,
-    albumMbid: json['album_mbid'] as String?,
+    releaseMbid: json['release_mbid'] as String?,
     lyrics: json['lyrics'] as String?,
     releaseDate: json['release_date'] as String?,
     trackGain: (json['track_gain'] as num?)?.toDouble(),
@@ -29,6 +29,12 @@ extension TrackInfoJson on TrackInfo {
     genres: [
       for (final g in json['genres'] as List<dynamic>? ?? []) g as String,
     ],
+    mbidTrack: json['mbid_track'] as String?,
+    isrc: json['isrc'] as String?,
+    comment: json['comment'] as String?,
+    copyright: json['copyright'] as String?,
+    encoder: json['encoder'] as String?,
+    script: json['script'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -46,7 +52,7 @@ extension TrackInfoJson on TrackInfo {
     'bitrate': bitrate,
     'mbid_recording': mbidRecording,
     'artist_mbid': artistMbid,
-    'album_mbid': albumMbid,
+    'release_mbid': releaseMbid,
     'lyrics': lyrics,
     'release_date': releaseDate,
     'track_gain': trackGain,
@@ -54,6 +60,12 @@ extension TrackInfoJson on TrackInfo {
     'source': source,
     'source_type': sourceType,
     'genres': genres,
+    'mbid_track': mbidTrack,
+    'isrc': isrc,
+    'comment': comment,
+    'copyright': copyright,
+    'encoder': encoder,
+    'script': script,
   };
 }
 

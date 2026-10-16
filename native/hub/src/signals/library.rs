@@ -43,7 +43,8 @@ pub struct TrackInfo {
     pub bitrate: Option<i32>,
     pub mbid_recording: Option<String>,
     pub artist_mbid: Option<String>,
-    pub album_mbid: Option<String>,
+    /// MusicBrainz release MBID of the track's album.
+    pub release_mbid: Option<String>,
     pub lyrics: Option<String>,
     pub release_date: Option<String>,
     pub track_gain: Option<f64>,
@@ -51,12 +52,19 @@ pub struct TrackInfo {
     pub source: String,
     pub source_type: String,
     pub genres: Vec<String>,
+    pub mbid_track: Option<String>,
+    pub isrc: Option<String>,
+    pub comment: Option<String>,
+    pub copyright: Option<String>,
+    pub encoder: Option<String>,
+    pub script: Option<String>,
 }
 
 #[derive(Deserialize, DartSignal)]
 pub struct ListAlbumsRequest {
     pub id: String,
     pub artist_id: Option<String>,
+    pub album_id: Option<String>,
 }
 
 #[derive(Serialize, RustSignal)]
@@ -74,6 +82,19 @@ pub struct AlbumInfo {
     pub artists: Vec<ArtistInfo>,
     pub release_date: Option<String>,
     pub track_count: i64,
+    pub disambiguation: Option<String>,
+    /// MusicBrainz release MBID.
+    pub release_mbid: Option<String>,
+    pub release_group_mbid: Option<String>,
+    pub release_artist_mbid: Option<String>,
+    pub release_country: Option<String>,
+    /// Semicolon-separated multi-value; split in the UI where needed.
+    pub release_type: Option<String>,
+    pub record_label: Option<String>,
+    pub media: Option<String>,
+    pub original_date: Option<String>,
+    pub total_tracks: i64,
+    pub total_discs: i64,
 }
 
 #[derive(Deserialize, DartSignal)]
@@ -236,7 +257,7 @@ impl From<tawai_core::signals::library::TrackInfo> for TrackInfo {
             bitrate: t.bitrate,
             mbid_recording: t.mbid_recording,
             artist_mbid: t.artist_mbid,
-            album_mbid: t.album_mbid,
+            release_mbid: t.release_mbid,
             lyrics: t.lyrics,
             release_date: t.release_date,
             track_gain: t.track_gain,
@@ -244,6 +265,12 @@ impl From<tawai_core::signals::library::TrackInfo> for TrackInfo {
             source: t.source,
             source_type: t.source_type,
             genres: t.genres,
+            mbid_track: t.mbid_track,
+            isrc: t.isrc,
+            comment: t.comment,
+            copyright: t.copyright,
+            encoder: t.encoder,
+            script: t.script,
         }
     }
 }
@@ -258,6 +285,17 @@ impl From<tawai_core::signals::library::AlbumInfo> for AlbumInfo {
             artists: a.artists.into_iter().map(|a| a.into()).collect(),
             release_date: a.release_date,
             track_count: a.track_count,
+            disambiguation: a.disambiguation,
+            release_mbid: a.release_mbid,
+            release_group_mbid: a.release_group_mbid,
+            release_artist_mbid: a.release_artist_mbid,
+            release_country: a.release_country,
+            release_type: a.release_type,
+            record_label: a.record_label,
+            media: a.media,
+            original_date: a.original_date,
+            total_tracks: a.total_tracks,
+            total_discs: a.total_discs,
         }
     }
 }

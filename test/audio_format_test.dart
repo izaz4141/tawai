@@ -9,7 +9,11 @@ void main() {
     test('every format has at least one extension', () {
       for (final format in audioFormats) {
         expect(format.label, isNotEmpty, reason: 'a format needs a label');
-        expect(format.extensions, isNotEmpty, reason: '${format.label} has none');
+        expect(
+          format.extensions,
+          isNotEmpty,
+          reason: '${format.label} has none',
+        );
       }
     });
 
@@ -19,9 +23,16 @@ void main() {
         for (final ext in format.extensions) {
           expect(ext, startsWith('.'), reason: '$ext in ${format.label}');
           expect(ext, ext.toLowerCase(), reason: '$ext in ${format.label}');
-          expect(ext.length, greaterThan(1), reason: 'bare dot in ${format.label}');
-          expect(seen.containsKey(ext), isFalse,
-              reason: '$ext is claimed by both ${seen[ext]} and ${format.label}');
+          expect(
+            ext.length,
+            greaterThan(1),
+            reason: 'bare dot in ${format.label}',
+          );
+          expect(
+            seen.containsKey(ext),
+            isFalse,
+            reason: '$ext is claimed by both ${seen[ext]} and ${format.label}',
+          );
           seen[ext] = format.label;
         }
       }
@@ -29,8 +40,11 @@ void main() {
 
     test('every MIME type is an audio type', () {
       for (final mime in audioMimeTypes) {
-        expect(mime, startsWith('audio/'),
-            reason: '$mime would offer Tawai for non audio files');
+        expect(
+          mime,
+          startsWith('audio/'),
+          reason: '$mime would offer Tawai for non audio files',
+        );
       }
     });
 
@@ -39,8 +53,10 @@ void main() {
     });
 
     test('audioBareExtensions mirrors audioExtensions without the dot', () {
-      expect(audioBareExtensions.toSet(),
-          audioExtensions.map((e) => e.substring(1)).toSet());
+      expect(
+        audioBareExtensions.toSet(),
+        audioExtensions.map((e) => e.substring(1)).toSet(),
+      );
     });
   });
 
