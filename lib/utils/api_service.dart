@@ -2230,11 +2230,13 @@ class APIService {
   Future<({bool success, String? error})?> writeFileTags({
     required String path,
     required EditableTagData data,
+    bool syncDatabase = true,
   }) async {
     try {
       final body = <String, dynamic>{
         'id': _newId(),
         'path': path,
+        'sync_database': syncDatabase,
         'title': data.title,
         'artist': data.artist,
         'artists': data.artists,

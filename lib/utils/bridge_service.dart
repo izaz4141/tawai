@@ -804,11 +804,20 @@ class BridgeService {
   Future<({bool success, String? error})?> writeFileTags({
     required String path,
     required EditableTagData data,
+    bool syncDatabase = true,
   }) {
     if (_isRemote) {
-      return APIService.instance.writeFileTags(path: path, data: data);
+      return APIService.instance.writeFileTags(
+        path: path,
+        data: data,
+        syncDatabase: syncDatabase,
+      );
     }
-    return RinfService.instance.writeFileTags(path: path, data: data);
+    return RinfService.instance.writeFileTags(
+      path: path,
+      data: data,
+      syncDatabase: syncDatabase,
+    );
   }
 
   Future<ReadFileTagsResponse?> readFileTagsBytes(

@@ -210,7 +210,7 @@ pub async fn handle_read_file_tags(_context: Arc<AppContext>) {
     }
 }
 
-pub async fn handle_write_file_tags(_context: Arc<AppContext>) {
+pub async fn handle_write_file_tags(context: Arc<AppContext>) {
     use signals::metadata::*;
     let receiver = WriteFileTagsRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
@@ -254,6 +254,35 @@ pub async fn handle_write_file_tags(_context: Arc<AppContext>) {
 
         match audio::tags::write_audio_tags(&path, &tag, audio::tags::TagWriteMode::Replace) {
             Ok(()) => {
+                // The write already succeeded; a DB sync failure must not fail
+                // the save. This mirrors the file on disk into the library row
+                // so the library does not wait for a rescan.
+                if msg.sync_database {
+                    let db = context.db().await;
+                    match library::sync_track_tags_by_file_path(db.pool(), &msg.path, &tag).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            logger::warn(&format!(
+                                "failed to sync library row after tag write for {}: {e}",
+                                msg.path
+                            ));
+                        }
+                    }
+                    if let Ok(hash) = tawai_core::libsources::local::hash_file(&path) {
+                        if let Err(e) = library::update_file_hash_by_path(
+                            db.pool(),
+                            &msg.path,
+                            &hash,
+                        )
+                        .await
+                        {
+                            logger::warn(&format!(
+                                "failed to update stored file_hash after tag write for {}: {e}",
+                                msg.path
+                            ));
+                        }
+                    }
+                }
                 WriteFileTagsResponse {
                     id: msg.id,
                     success: true,

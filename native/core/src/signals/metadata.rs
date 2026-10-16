@@ -267,11 +267,21 @@ impl ReadFileTagsResponse {
     }
 }
 
+/// Serde default for [`WriteFileTagsRequest::sync_database`]: path-based saves
+/// sync the library row unless a caller explicitly opts out.
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct WriteFileTagsRequest {
     #[serde(default)]
     pub id: String,
     pub path: String,
+    /// Update the matching library track row (matched by file path) after a
+    /// successful write. Ignored by bytes-based writes. Defaults to `true`.
+    #[serde(default = "default_true")]
+    pub sync_database: bool,
     pub title: String,
     pub artist: String,
     #[serde(default)]

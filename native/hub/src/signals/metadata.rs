@@ -331,6 +331,9 @@ impl From<tawai_core::signals::metadata::ReadFileTagsResponse> for ReadFileTagsR
 pub struct WriteFileTagsRequest {
     pub id: String,
     pub path: String,
+    /// Update the matching library track row (matched by file path) after a
+    /// successful write. Ignored by bytes-based writes.
+    pub sync_database: bool,
     pub title: String,
     pub artist: String,
     pub artists: Vec<String>,

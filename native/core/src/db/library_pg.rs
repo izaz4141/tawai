@@ -2,7 +2,7 @@ use anyhow::Result;
 use sqlx::{PgPool, Row};
 
 use super::library::{AlbumWriteMeta, TrackTagMeta};
-use crate::audio::tags::derive_sort_name;
+use crate::audio::tags::{derive_sort_name, original_year_of, AudioTag};
 use crate::signals::library::*;
 use crate::utils::helper::sha256_hex;
 
@@ -1213,6 +1213,274 @@ pub async fn update_file_hash_by_path(
         .execute(pool)
         .await?;
     Ok(())
+}
+
+/// Apply a full tag-editor edit to an existing library track row.
+///
+/// Unlike [`update_track`] (partial and `COALESCE`-based, used by the identify
+/// flow) this mirrors what the tag editor wrote to disk: editable fields are
+/// set to the edited value directly, so a cleared tag clears in the library
+/// too. The album, artists, artist links, and genre links are updated in the
+/// same transaction.
+pub async fn update_track_tags_from_audio_tag(
+    pool: &PgPool,
+    track_id: &str,
+    tag: &AudioTag,
+) -> Result<()> {
+    let mut tx = pool.begin().await?;
+
+    // Track artists: the primary/combined entry carries the recording artist
+    // MBID and the edited sort name; the rest derive their sort name. Falls
+    // back to the single `artist` field when the list is empty.
+    let artists: Vec<&str> = if tag.artists.is_empty() {
+        vec![tag.artist.as_str()]
+    } else {
+        tag.artists.iter().map(String::as_str).collect()
+    };
+    let mut artist_ids: Vec<String> = Vec::new();
+    for (i, name) in artists.iter().enumerate() {
+        let mbid = (i == 0 || artists.len() == 1)
+            .then(|| tag.mbid_artist.as_deref())
+            .flatten();
+        let sort = (i == 0 && !tag.artist_sort.is_empty()).then(|| tag.artist_sort.as_str());
+        artist_ids
+            .push(upsert_artist_with_sort_in_tx(&mut *tx, name, sort, mbid).await?);
+    }
+
+    // Album artists: same primary-MBID rule as the scan insert flow.
+    let album_artists: Vec<&str> = if tag.album_artists.is_empty() {
+        vec![tag.album_artist.as_str()]
+    } else {
+        tag.album_artists.iter().map(String::as_str).collect()
+    };
+    let mut album_artist_ids: Vec<String> = Vec::new();
+    for (i, name) in album_artists.iter().enumerate() {
+        let mbid = (i == 0 || album_artists.len() == 1)
+            .then(|| tag.mbid_release_artist.as_deref())
+            .flatten();
+        let sort =
+            (i == 0 && !tag.album_artist_sort.is_empty()).then(|| tag.album_artist_sort.as_str());
+        album_artist_ids
+            .push(upsert_artist_with_sort_in_tx(&mut *tx, name, sort, mbid).await?);
+    }
+
+    let album_id = upsert_album_from_tag_in_tx(&mut *tx, tag, &album_artist_ids[0]).await?;
+
+    // Set the editable track columns directly. Numeric fields use a `0`
+    // sentinel for "absent", so keep the existing value in that case.
+    sqlx::query(
+        r#"UPDATE tracks SET title = $1, album_id = $2, artist_id = $3,
+           disc_num = COALESCE($4, disc_num),
+           track_num = COALESCE($5, track_num),
+           mbid_recording = $6,
+           mbid_track = $7,
+           isrc = $8,
+           comment = $9,
+           copyright = $10,
+           script = $11,
+           lyrics = $12,
+           cover = $13,
+           updated_at = NOW()
+           WHERE id = $14"#,
+    )
+    .bind(&tag.title)
+    .bind(&album_id)
+    .bind(artist_ids.first().map(String::as_str))
+    .bind((tag.disc_number > 0).then_some(tag.disc_number))
+    .bind((tag.track_number > 0).then_some(tag.track_number))
+    .bind(tag.mbid_recording.as_deref())
+    .bind(tag.mbid_track.as_deref())
+    .bind(tag.isrc.as_deref())
+    .bind(tag.comment.as_deref())
+    .bind(tag.copyright.as_deref())
+    .bind(tag.script.as_deref())
+    .bind(tag.lyrics.as_deref())
+    .bind(tag.cover.as_deref())
+    .bind(track_id)
+    .execute(&mut *tx)
+    .await?;
+
+    // Rebuild track-artist links
+    sqlx::query("DELETE FROM track_artists WHERE track_id = $1")
+        .bind(track_id)
+        .execute(&mut *tx)
+        .await?;
+    for aid in &artist_ids {
+        sqlx::query("INSERT INTO track_artists (track_id, artist_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
+            .bind(track_id)
+            .bind(aid)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    // Rebuild album-artist links
+    sqlx::query("DELETE FROM album_artists WHERE album_id = $1")
+        .bind(&album_id)
+        .execute(&mut *tx)
+        .await?;
+    for aid in &album_artist_ids {
+        sqlx::query("INSERT INTO album_artists (album_id, artist_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
+            .bind(&album_id)
+            .bind(aid)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    // Rebuild genre links
+    sqlx::query("DELETE FROM track_genres WHERE track_id = $1")
+        .bind(track_id)
+        .execute(&mut *tx)
+        .await?;
+    for name in &tag.genres {
+        if name.trim().is_empty() {
+            continue;
+        }
+        let genre_id = upsert_genre_in_tx(&mut *tx, name).await?;
+        sqlx::query("INSERT INTO track_genres (track_id, genre_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
+            .bind(track_id)
+            .bind(&genre_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Update the library row for `file_path` with an edited tag set. Returns
+/// `Ok(false)` when the file is not part of the library (the caller should
+/// treat that as a silent no-op).
+pub async fn sync_track_tags_by_file_path(
+    pool: &PgPool,
+    file_path: &str,
+    tag: &AudioTag,
+) -> Result<bool> {
+    let track_id: Option<String> =
+        sqlx::query_scalar("SELECT id FROM tracks WHERE file_path = $1 LIMIT 1")
+            .bind(file_path)
+            .fetch_optional(pool)
+            .await?;
+    match track_id {
+        Some(id) => {
+            update_track_tags_from_audio_tag(pool, &id, tag).await?;
+            Ok(true)
+        }
+        None => Ok(false),
+    }
+}
+
+async fn upsert_album_from_tag_in_tx(
+    conn: &mut sqlx::PgConnection,
+    tag: &AudioTag,
+    album_artist_id: &str,
+) -> Result<String> {
+    // Multi-value release types are stored semicolon-separated (see scan.rs).
+    let release_type = (!tag.release_type.is_empty()).then(|| tag.release_type.join(";"));
+    let original_year = original_year_of(tag.original_date.as_deref());
+
+    let existing: Option<String> =
+        sqlx::query_scalar("SELECT id FROM albums WHERE title = $1 AND artist_id = $2")
+            .bind(&tag.album)
+            .bind(album_artist_id)
+            .fetch_optional(&mut *conn)
+            .await?;
+
+    if let Some(id) = existing {
+        sqlx::query(
+            "UPDATE albums SET date = $1, release_mbid = $2, release_group_mbid = $3, release_artist_mbid = $4, release_country = $5, release_type = $6, record_label = $7, media = $8, original_date = $9, original_year = $10, total_tracks = $11, total_discs = $12, updated_at = NOW() WHERE id = $13",
+        )
+        .bind(tag.release_date.as_deref())
+        .bind(tag.mbid_release.as_deref())
+        .bind(tag.mbid_release_group.as_deref())
+        .bind(tag.mbid_release_artist.as_deref())
+        .bind(tag.release_country.as_deref())
+        .bind(release_type.as_deref())
+        .bind(tag.record_label.as_deref())
+        .bind(tag.media.as_deref())
+        .bind(tag.original_date.as_deref())
+        .bind(original_year.as_deref())
+        .bind(tag.total_tracks)
+        .bind(tag.total_discs)
+        .bind(&id)
+        .execute(&mut *conn)
+        .await?;
+        Ok(id)
+    } else {
+        let id = uuid::Uuid::new_v4().to_string();
+        sqlx::query(
+            "INSERT INTO albums (id, title, artist_id, date, release_mbid, release_group_mbid, release_artist_mbid, release_country, release_type, record_label, media, original_date, original_year, total_tracks, total_discs) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
+        )
+        .bind(&id)
+        .bind(&tag.album)
+        .bind(album_artist_id)
+        .bind(tag.release_date.as_deref())
+        .bind(tag.mbid_release.as_deref())
+        .bind(tag.mbid_release_group.as_deref())
+        .bind(tag.mbid_release_artist.as_deref())
+        .bind(tag.release_country.as_deref())
+        .bind(release_type.as_deref())
+        .bind(tag.record_label.as_deref())
+        .bind(tag.media.as_deref())
+        .bind(tag.original_date.as_deref())
+        .bind(original_year.as_deref())
+        .bind(tag.total_tracks)
+        .bind(tag.total_discs)
+        .execute(&mut *conn)
+        .await?;
+        Ok(id)
+    }
+}
+
+async fn upsert_artist_with_sort_in_tx(
+    conn: &mut sqlx::PgConnection,
+    name: &str,
+    sort_name: Option<&str>,
+    mbid: Option<&str>,
+) -> Result<String> {
+    let existing: Option<String> = sqlx::query_scalar("SELECT id FROM artists WHERE name = $1")
+        .bind(name)
+        .fetch_optional(&mut *conn)
+        .await?;
+
+    if let Some(id) = existing {
+        sqlx::query("UPDATE artists SET mbid = COALESCE($1, mbid), sort_name = COALESCE($2, sort_name), updated_at = NOW() WHERE id = $3")
+            .bind(mbid)
+            .bind(sort_name)
+            .bind(&id)
+            .execute(&mut *conn)
+            .await?;
+        Ok(id)
+    } else {
+        let id = uuid::Uuid::new_v4().to_string();
+        let sort_name = sort_name
+            .map(str::to_string)
+            .unwrap_or_else(|| derive_sort_name(name));
+        sqlx::query("INSERT INTO artists (id, name, sort_name, mbid) VALUES ($1, $2, $3, $4)")
+            .bind(&id)
+            .bind(name)
+            .bind(&sort_name)
+            .bind(mbid)
+            .execute(&mut *conn)
+            .await?;
+        Ok(id)
+    }
+}
+
+async fn upsert_genre_in_tx(conn: &mut sqlx::PgConnection, name: &str) -> Result<String> {
+    let existing: Option<String> = sqlx::query_scalar("SELECT id FROM genres WHERE name = $1")
+        .bind(name)
+        .fetch_optional(&mut *conn)
+        .await?;
+    if let Some(id) = existing {
+        return Ok(id);
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    sqlx::query("INSERT INTO genres (id, name) VALUES ($1, $2)")
+        .bind(&id)
+        .bind(name)
+        .execute(&mut *conn)
+        .await?;
+    Ok(id)
 }
 
 async fn upsert_artist_in_tx(

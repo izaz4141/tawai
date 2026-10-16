@@ -67,6 +67,7 @@ pub async fn handle_write_file_tags(
     Json(body): Json<WriteFileTagsRequest>,
 ) -> impl IntoResponse {
     let path = std::path::PathBuf::from(&body.path);
+    let sync_database = body.sync_database;
 
     let tag = audio::tags::AudioTag {
         title: body.title,
@@ -138,6 +139,19 @@ pub async fn handle_write_file_tags(
             .await
             {
                 tawai_core::utils::logger::warn(&format!("tawai tag mirror failed: {e}"));
+            }
+            // Reflect the edit in this library's row so it does not wait for a
+            // rescan. Best-effort: the write already succeeded.
+            if sync_database {
+                match library::sync_track_tags_by_file_path(db.pool(), &body.path, &tag).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        tawai_core::utils::logger::warn(&format!(
+                            "failed to sync library row after tag write for {}: {e}",
+                            body.path
+                        ));
+                    }
+                }
             }
             Json(WriteFileTagsResponse {
                 id: body.id,

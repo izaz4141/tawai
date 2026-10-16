@@ -948,6 +948,7 @@ class RinfService {
   Future<({bool success, String? error})> writeFileTags({
     required String path,
     required EditableTagData data,
+    bool syncDatabase = true,
   }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = WriteFileTagsResponse.rustSignalStream.where(
@@ -956,6 +957,7 @@ class RinfService {
     WriteFileTagsRequest(
       id: id,
       path: path,
+      syncDatabase: syncDatabase,
       title: data.title,
       artist: data.artist,
       artists: data.artists,

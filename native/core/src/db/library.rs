@@ -514,6 +514,39 @@ pub async fn update_file_hash_by_path(
     }
 }
 
+/// Apply a full tag-editor edit to an existing library track row.
+pub async fn update_track_tags_from_audio_tag(
+    pool: &DatabasePool,
+    track_id: &str,
+    tag: &crate::audio::tags::AudioTag,
+) -> anyhow::Result<()> {
+    match pool {
+        DatabasePool::Sqlite(p) => {
+            super::library_sq::update_track_tags_from_audio_tag(p, track_id, tag).await
+        }
+        DatabasePool::Postgres(p) => {
+            super::library_pg::update_track_tags_from_audio_tag(p, track_id, tag).await
+        }
+    }
+}
+
+/// Sync an edited tag set to the library row matching `file_path`. Returns
+/// `Ok(false)` when no library row matches (the caller should skip silently).
+pub async fn sync_track_tags_by_file_path(
+    pool: &DatabasePool,
+    file_path: &str,
+    tag: &crate::audio::tags::AudioTag,
+) -> anyhow::Result<bool> {
+    match pool {
+        DatabasePool::Sqlite(p) => {
+            super::library_sq::sync_track_tags_by_file_path(p, file_path, tag).await
+        }
+        DatabasePool::Postgres(p) => {
+            super::library_pg::sync_track_tags_by_file_path(p, file_path, tag).await
+        }
+    }
+}
+
 pub async fn delete_tracks_by_source_id(
     pool: &DatabasePool,
     source_id: &str,
