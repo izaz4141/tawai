@@ -4,9 +4,10 @@ use std::io::Cursor;
 use image::GenericImageView;
 
 use crate::audio::ffmpeg;
-use crate::audio::tags::derive_sort_name;
+use crate::audio::tags::{derive_sort_name, original_year_of};
 use crate::db::database::DatabasePool;
 use crate::db::library;
+use crate::db::library::{AlbumWriteMeta, TrackTagMeta};
 use crate::libsources;
 use crate::signals::library::{LibrarySourceInfo, ScanProgress, ScanResult};
 use crate::utils::logger;
@@ -132,15 +133,28 @@ async fn insert_track_to_db(
             }
         }
     }
+    let album_meta = AlbumWriteMeta {
+        date: track.release_date.clone(),
+        release_mbid: track.mbid_release.clone(),
+        release_group_mbid: track.mbid_release_group.clone(),
+        release_artist_mbid: track.mbid_release_artist.clone(),
+        release_country: track.release_country.clone(),
+        release_type: (!track.release_type.is_empty())
+            .then(|| track.release_type.join(";")),
+        record_label: track.record_label.clone(),
+        media: track.media.clone(),
+        original_date: track.original_date.clone(),
+        original_year: original_year_of(track.original_date.as_deref()),
+        disambiguation: track.album_disambiguation.clone(),
+        total_tracks: track.total_tracks,
+        total_discs: track.total_discs,
+    };
     let album_id = match library::insert_album(
         pool,
         &track.album,
         &album_artist_ids[0],
-        track.release_date.clone(),
-        track.mbid_release.clone(),
         None,
-        track.album_disambiguation.clone(),
-        0,
+        &album_meta,
     )
     .await
     {
@@ -172,11 +186,19 @@ async fn insert_track_to_db(
         Some(track.file_size as i64),
         track.bitrate.map(|b| b as i32),
         track.sample_rate.map(|s| s as i32),
-        track.mbid_recording.clone(),
         track.cover.as_deref(),
         track.lyrics.as_deref(),
         track.track_gain,
         track.track_peak,
+        &TrackTagMeta {
+            mbid_recording: track.mbid_recording.clone(),
+            mbid_track: track.mbid_track.clone(),
+            isrc: track.isrc.clone(),
+            comment: track.comment.clone(),
+            copyright: track.copyright.clone(),
+            encoder: track.encoder.clone(),
+            script: track.script.clone(),
+        },
     )
     .await
     {

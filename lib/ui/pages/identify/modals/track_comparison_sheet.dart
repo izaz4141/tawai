@@ -157,7 +157,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     _origTrackNum = widget.currentTrack.trackNum?.toString() ?? '';
     _origLyrics = widget.currentTrack.lyrics ?? '';
     _origDate = widget.currentTrack.releaseDate ?? '';
-    _origMbidAlbum = widget.currentTrack.albumMbid;
+    _origMbidAlbum = widget.currentTrack.releaseMbid;
     _origMbidArtist =
         widget.currentTrack.artistMbid ??
         widget.currentTrack.artists.firstOrNull?.mbid;

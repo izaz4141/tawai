@@ -1,6 +1,7 @@
 use anyhow::Result;
 use sqlx::{PgPool, Row};
 
+use super::library::{AlbumWriteMeta, TrackTagMeta};
 use crate::audio::tags::derive_sort_name;
 use crate::signals::library::*;
 use crate::utils::helper::sha256_hex;
@@ -10,9 +11,9 @@ pub async fn lookup_track(pool: &PgPool, track_id: &str) -> Result<Option<TrackI
         r#"SELECT t.id, t.title, t.album_id, COALESCE(a.title, 'Unknown Album') AS album_title,
                   ar.name AS artists_string,
                   t.track_num, t.disc_num, t.duration_secs, t.file_path, t.file_size,
-t.bitrate, t.mbid_recording, t.lyrics, t.track_gain, t.track_peak,
+t.bitrate, t.mbid_recording, t.mbid_track, t.isrc, t.comment, t.copyright, t.encoder, t.script, t.lyrics, t.track_gain, t.track_peak,
                    a.date AS release_date,
-                   ar.mbid AS artist_mbid, a.mbid AS album_mbid,
+                   ar.mbid AS artist_mbid, a.release_mbid AS release_mbid,
                    ls.name AS source, ls.source_type AS source_type, t.cover,
                    (SELECT STRING_AGG(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id) AS genres
             FROM tracks t
@@ -42,9 +43,9 @@ pub async fn lookup_track_by_file_path(
         r#"SELECT t.id, t.title, t.album_id, COALESCE(a.title, 'Unknown Album') AS album_title,
                   ar.name AS artists_string,
                   t.track_num, t.disc_num, t.duration_secs, t.file_path, t.file_size,
-t.bitrate, t.mbid_recording, t.lyrics, t.track_gain, t.track_peak,
+t.bitrate, t.mbid_recording, t.mbid_track, t.isrc, t.comment, t.copyright, t.encoder, t.script, t.lyrics, t.track_gain, t.track_peak,
                    a.date AS release_date,
-                   ar.mbid AS artist_mbid, a.mbid AS album_mbid,
+                   ar.mbid AS artist_mbid, a.release_mbid AS release_mbid,
                    ls.name AS source, ls.source_type AS source_type, t.cover,
                    (SELECT STRING_AGG(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id) AS genres
             FROM tracks t
@@ -72,9 +73,9 @@ pub async fn list_tracks(pool: &PgPool, album_id: Option<&str>) -> Result<Vec<Tr
             r#"SELECT t.id, t.title, t.album_id, COALESCE(a.title, 'Unknown Album') AS album_title,
                       ar.name AS artists_string,
                       t.track_num, t.disc_num, t.duration_secs, t.file_path, t.file_size,
-                       t.bitrate, t.mbid_recording, t.lyrics, t.track_gain, t.track_peak,
+                       t.bitrate, t.mbid_recording, t.mbid_track, t.isrc, t.comment, t.copyright, t.encoder, t.script, t.lyrics, t.track_gain, t.track_peak,
                        a.date AS release_date,
-                       ar.mbid AS artist_mbid, a.mbid AS album_mbid,
+                       ar.mbid AS artist_mbid, a.release_mbid AS release_mbid,
                       ls.name AS source, ls.source_type AS source_type, t.cover,
                       (SELECT STRING_AGG(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id) AS genres
                 FROM tracks t
@@ -92,9 +93,9 @@ pub async fn list_tracks(pool: &PgPool, album_id: Option<&str>) -> Result<Vec<Tr
             r#"SELECT t.id, t.title, t.album_id, COALESCE(a.title, 'Unknown Album') AS album_title,
                       ar.name AS artists_string,
                       t.track_num, t.disc_num, t.duration_secs, t.file_path, t.file_size,
-                       t.bitrate, t.mbid_recording, t.lyrics, t.track_gain, t.track_peak,
+                       t.bitrate, t.mbid_recording, t.mbid_track, t.isrc, t.comment, t.copyright, t.encoder, t.script, t.lyrics, t.track_gain, t.track_peak,
                        a.date AS release_date,
-                       ar.mbid AS artist_mbid, a.mbid AS album_mbid,
+                       ar.mbid AS artist_mbid, a.release_mbid AS release_mbid,
                       ls.name AS source, ls.source_type AS source_type, t.cover,
                       (SELECT STRING_AGG(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id) AS genres
                 FROM tracks t
@@ -116,6 +117,10 @@ pub async fn list_albums(pool: &PgPool, artist_id: Option<&str>) -> Result<Vec<A
         sqlx::query(
             r#"SELECT al.id, al.title, ar.name AS artists_string,
                       al.date, al.cover,
+                      al.release_mbid, al.release_group_mbid, al.release_artist_mbid,
+                      al.release_country, al.release_type, al.record_label, al.media,
+                      al.original_date, al.original_year, al.total_tracks,
+                      al.disambiguation, al.total_discs,
                       (SELECT COUNT(*) FROM tracks t WHERE t.album_id = al.id) AS track_count
                FROM albums al
                JOIN artists ar ON al.artist_id = ar.id
@@ -129,6 +134,10 @@ pub async fn list_albums(pool: &PgPool, artist_id: Option<&str>) -> Result<Vec<A
         sqlx::query(
             r#"SELECT al.id, al.title, ar.name AS artists_string,
                       al.date, al.cover,
+                      al.release_mbid, al.release_group_mbid, al.release_artist_mbid,
+                      al.release_country, al.release_type, al.record_label, al.media,
+                      al.original_date, al.original_year, al.total_tracks,
+                      al.disambiguation, al.total_discs,
                       (SELECT COUNT(*) FROM tracks t WHERE t.album_id = al.id) AS track_count
                FROM albums al
                JOIN artists ar ON al.artist_id = ar.id
@@ -226,11 +235,8 @@ pub async fn insert_album(
     pool: &PgPool,
     title: &str,
     artist_id: &str,
-    date: Option<String>,
-    mbid: Option<String>,
     cover: Option<&[u8]>,
-    disambiguation: Option<String>,
-    total_discs: i32,
+    meta: &AlbumWriteMeta,
 ) -> Result<String> {
     let existing: Option<String> =
         sqlx::query_scalar("SELECT id FROM albums WHERE title = $1 AND artist_id = $2")
@@ -241,12 +247,21 @@ pub async fn insert_album(
 
     if let Some(id) = existing {
         sqlx::query(
-            "UPDATE albums SET date = $1, mbid = COALESCE($2, mbid), disambiguation = COALESCE($3, disambiguation), total_discs = GREATEST($4, COALESCE(total_discs, 0)), updated_at = NOW() WHERE id = $5",
+            "UPDATE albums SET date = $1, release_mbid = COALESCE($2, release_mbid), release_group_mbid = COALESCE($3, release_group_mbid), release_artist_mbid = COALESCE($4, release_artist_mbid), release_country = COALESCE($5, release_country), release_type = COALESCE($6, release_type), record_label = COALESCE($7, record_label), media = COALESCE($8, media), original_date = COALESCE($9, original_date), original_year = COALESCE($10, original_year), disambiguation = COALESCE($11, disambiguation), total_tracks = GREATEST($12, total_tracks), total_discs = GREATEST($13, COALESCE(total_discs, 0)), updated_at = NOW() WHERE id = $14",
         )
-        .bind(date)
-        .bind(mbid.as_deref())
-        .bind(disambiguation)
-        .bind(total_discs)
+        .bind(meta.date.clone())
+        .bind(meta.release_mbid.as_deref())
+        .bind(meta.release_group_mbid.as_deref())
+        .bind(meta.release_artist_mbid.as_deref())
+        .bind(meta.release_country.as_deref())
+        .bind(meta.release_type.as_deref())
+        .bind(meta.record_label.as_deref())
+        .bind(meta.media.as_deref())
+        .bind(meta.original_date.as_deref())
+        .bind(meta.original_year.as_deref())
+        .bind(meta.disambiguation.clone())
+        .bind(meta.total_tracks)
+        .bind(meta.total_discs)
         .bind(&id)
         .execute(pool)
         .await?;
@@ -255,16 +270,25 @@ pub async fn insert_album(
 
     let id = uuid::Uuid::new_v4().to_string();
     sqlx::query(
-        "INSERT INTO albums (id, title, artist_id, date, mbid, cover, disambiguation, total_discs) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+        "INSERT INTO albums (id, title, artist_id, date, release_mbid, release_group_mbid, release_artist_mbid, release_country, release_type, record_label, media, original_date, original_year, disambiguation, total_tracks, total_discs, cover) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)",
     )
     .bind(&id)
     .bind(title)
     .bind(artist_id)
-    .bind(date)
-    .bind(mbid.as_deref())
+    .bind(meta.date.clone())
+    .bind(meta.release_mbid.as_deref())
+    .bind(meta.release_group_mbid.as_deref())
+    .bind(meta.release_artist_mbid.as_deref())
+    .bind(meta.release_country.as_deref())
+    .bind(meta.release_type.as_deref())
+    .bind(meta.record_label.as_deref())
+    .bind(meta.media.as_deref())
+    .bind(meta.original_date.as_deref())
+    .bind(meta.original_year.as_deref())
+    .bind(meta.disambiguation.clone())
+    .bind(meta.total_tracks)
+    .bind(meta.total_discs)
     .bind(cover)
-    .bind(disambiguation)
-    .bind(total_discs)
     .execute(pool)
     .await?;
     Ok(id)
@@ -329,17 +353,17 @@ pub async fn insert_track(
     file_size: Option<i64>,
     bitrate: Option<i32>,
     sample_rate: Option<i32>,
-    mbid_recording: Option<String>,
     cover: Option<&[u8]>,
     lyrics: Option<&str>,
     track_gain: Option<f64>,
     track_peak: Option<f64>,
+    tags: &TrackTagMeta,
 ) -> Result<String> {
     let id = uuid::Uuid::new_v4().to_string();
     sqlx::query(
         r#"INSERT INTO tracks (id, title, album_id, artist_id, disc_num, track_num,
-            duration_secs, file_path, file_hash, source_id, file_size, bitrate, sample_rate, mbid_recording, cover, lyrics, track_gain, track_peak)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)"#,
+            duration_secs, file_path, file_hash, source_id, file_size, bitrate, sample_rate, mbid_recording, mbid_track, isrc, comment, copyright, encoder, script, cover, lyrics, track_gain, track_peak)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)"#,
     )
     .bind(&id)
     .bind(title)
@@ -354,7 +378,13 @@ pub async fn insert_track(
     .bind(file_size)
     .bind(bitrate)
     .bind(sample_rate)
-    .bind(mbid_recording.as_deref())
+    .bind(tags.mbid_recording.as_deref())
+    .bind(tags.mbid_track.as_deref())
+    .bind(tags.isrc.as_deref())
+    .bind(tags.comment.as_deref())
+    .bind(tags.copyright.as_deref())
+    .bind(tags.encoder.as_deref())
+    .bind(tags.script.as_deref())
     .bind(cover)
     .bind(lyrics)
     .bind(track_gain)
@@ -752,7 +782,7 @@ fn map_track_row(row: sqlx::postgres::PgRow) -> TrackInfo {
         bitrate: row.get("bitrate"),
         mbid_recording: row.get("mbid_recording"),
         artist_mbid: row.get("artist_mbid"),
-        album_mbid: row.get("album_mbid"),
+        release_mbid: row.get("release_mbid"),
         lyrics: row.get("lyrics"),
         release_date: row.get("release_date"),
         source: row.get("source"),
@@ -763,6 +793,12 @@ fn map_track_row(row: sqlx::postgres::PgRow) -> TrackInfo {
         sample_rate: row.try_get("sample_rate").ok().flatten(),
         acoust_id_fingerprint: row.try_get("fingerprint").ok().flatten(),
         acoust_id: row.try_get("acoust_id").ok().flatten(),
+        mbid_track: row.try_get("mbid_track").ok().flatten(),
+        isrc: row.try_get("isrc").ok().flatten(),
+        comment: row.try_get("comment").ok().flatten(),
+        copyright: row.try_get("copyright").ok().flatten(),
+        encoder: row.try_get("encoder").ok().flatten(),
+        script: row.try_get("script").ok().flatten(),
         genres: row
             .get::<Option<String>, _>("genres")
             .unwrap_or_default()
@@ -783,6 +819,18 @@ fn map_album_row(row: sqlx::postgres::PgRow) -> AlbumInfo {
         artists_string: row.get("artists_string"),
         release_date: row.get("date"),
         track_count: row.get("track_count"),
+        disambiguation: row.try_get("disambiguation").ok().flatten(),
+        release_mbid: row.try_get("release_mbid").ok().flatten(),
+        release_group_mbid: row.try_get("release_group_mbid").ok().flatten(),
+        release_artist_mbid: row.try_get("release_artist_mbid").ok().flatten(),
+        release_country: row.try_get("release_country").ok().flatten(),
+        release_type: row.try_get("release_type").ok().flatten(),
+        record_label: row.try_get("record_label").ok().flatten(),
+        media: row.try_get("media").ok().flatten(),
+        original_date: row.try_get("original_date").ok().flatten(),
+        original_year: row.try_get("original_year").ok().flatten(),
+        total_tracks: row.try_get("total_tracks").unwrap_or(0),
+        total_discs: row.try_get("total_discs").unwrap_or(0),
     }
 }
 
@@ -837,9 +885,9 @@ pub async fn get_playlist_tracks(pool: &PgPool, playlist_id: &str) -> Result<Vec
         r#"SELECT t.id, t.title, t.album_id, COALESCE(a.title, 'Unknown Album') AS album_title,
                   ar.name AS artists_string,
                   t.track_num, t.disc_num, t.duration_secs, t.file_path, t.file_size,
-t.bitrate, t.mbid_recording, t.lyrics, t.track_gain, t.track_peak,
+t.bitrate, t.mbid_recording, t.mbid_track, t.isrc, t.comment, t.copyright, t.encoder, t.script, t.lyrics, t.track_gain, t.track_peak,
                    a.date AS release_date,
-                   ar.mbid AS artist_mbid, a.mbid AS album_mbid,
+                   ar.mbid AS artist_mbid, a.release_mbid AS release_mbid,
                    ls.name AS source, ls.source_type AS source_type, t.cover,
                    (SELECT STRING_AGG(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id) AS genres
             FROM collection_tracks ct
@@ -923,9 +971,9 @@ pub async fn list_tracks_by_source(pool: &PgPool, source_id: &str) -> Result<Vec
         r#"SELECT t.id, t.title, t.album_id, COALESCE(a.title, 'Unknown Album') AS album_title,
                   ar.name AS artists_string,
                   t.track_num, t.disc_num, t.duration_secs, t.file_path, t.file_size,
-t.bitrate, t.mbid_recording, t.lyrics, t.track_gain, t.track_peak,
+t.bitrate, t.mbid_recording, t.mbid_track, t.isrc, t.comment, t.copyright, t.encoder, t.script, t.lyrics, t.track_gain, t.track_peak,
                    a.date AS release_date,
-                   ar.mbid AS artist_mbid, a.mbid AS album_mbid,
+                   ar.mbid AS artist_mbid, a.release_mbid AS release_mbid,
                    ls.name AS source, ls.source_type AS source_type, t.cover,
                    t.file_hash, t.sample_rate,
                    (SELECT f.fingerprint FROM fingerprints f WHERE f.track_id = t.id) AS fingerprint,
@@ -947,7 +995,7 @@ t.bitrate, t.mbid_recording, t.lyrics, t.track_gain, t.track_peak,
 }
 
 pub async fn get_album_mbid(pool: &PgPool, album_id: &str) -> Result<Option<String>> {
-    let result: Option<String> = sqlx::query_scalar("SELECT mbid FROM albums WHERE id = $1")
+    let result: Option<String> = sqlx::query_scalar("SELECT release_mbid FROM albums WHERE id = $1")
         .bind(album_id)
         .fetch_optional(pool)
         .await?;
@@ -963,32 +1011,32 @@ pub async fn list_unidentified_tracks(
             r#"SELECT t.id, t.title, t.album_id, COALESCE(a.title, 'Unknown Album') AS album_title,
                   ar.name AS artists_string,
                   t.track_num, t.disc_num, t.duration_secs, t.file_path, t.file_size,
-t.bitrate, t.mbid_recording, t.lyrics, t.track_gain, t.track_peak,
+t.bitrate, t.mbid_recording, t.mbid_track, t.isrc, t.comment, t.copyright, t.encoder, t.script, t.lyrics, t.track_gain, t.track_peak,
                    a.date AS release_date,
-                   ar.mbid AS artist_mbid, a.mbid AS album_mbid,
+                   ar.mbid AS artist_mbid, a.release_mbid AS release_mbid,
                    ls.name AS source, ls.source_type AS source_type, t.cover,
                    (SELECT STRING_AGG(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id) AS genres
             FROM tracks t
             JOIN albums a ON t.album_id = a.id
             JOIN artists ar ON t.artist_id = ar.id
             JOIN library_sources ls ON t.source_id = ls.id
-            WHERE (t.mbid_recording IS NULL OR a.mbid IS NULL) AND t.source_id = $1
+            WHERE (t.mbid_recording IS NULL OR a.release_mbid IS NULL) AND t.source_id = $1
            ORDER BY ar.name, a.title, t.disc_num, t.track_num"#
         }
         None => {
             r#"SELECT t.id, t.title, t.album_id, COALESCE(a.title, 'Unknown Album') AS album_title,
                   ar.name AS artists_string,
                   t.track_num, t.disc_num, t.duration_secs, t.file_path, t.file_size,
-t.bitrate, t.mbid_recording, t.lyrics, t.track_gain, t.track_peak,
+t.bitrate, t.mbid_recording, t.mbid_track, t.isrc, t.comment, t.copyright, t.encoder, t.script, t.lyrics, t.track_gain, t.track_peak,
                    a.date AS release_date,
-                   ar.mbid AS artist_mbid, a.mbid AS album_mbid,
+                   ar.mbid AS artist_mbid, a.release_mbid AS release_mbid,
                    ls.name AS source, ls.source_type AS source_type, t.cover,
                    (SELECT STRING_AGG(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id) AS genres
             FROM tracks t
             JOIN albums a ON t.album_id = a.id
             JOIN artists ar ON t.artist_id = ar.id
             JOIN library_sources ls ON t.source_id = ls.id
-            WHERE (t.mbid_recording IS NULL OR a.mbid IS NULL)
+            WHERE (t.mbid_recording IS NULL OR a.release_mbid IS NULL)
             ORDER BY ar.name, a.title, t.disc_num, t.track_num"#
         }
     };
@@ -1023,7 +1071,7 @@ pub async fn update_track(
     artists: &[(String, Option<String>)],
     album_title: &str,
     album_artists: &[(String, Option<String>)],
-    album_mbid: Option<&str>,
+    release_mbid: Option<&str>,
     date: Option<String>,
     track_num: Option<i32>,
     disc_num: Option<i32>,
@@ -1060,9 +1108,9 @@ pub async fn update_track(
                 .await?;
 
         if let Some(id) = existing {
-            sqlx::query("UPDATE albums SET date = COALESCE($1, date), mbid = COALESCE($2, mbid), disambiguation = COALESCE($3, disambiguation), total_discs = GREATEST($4, COALESCE(total_discs, 0)), updated_at = NOW() WHERE id = $5")
+            sqlx::query("UPDATE albums SET date = COALESCE($1, date), release_mbid = COALESCE($2, release_mbid), disambiguation = COALESCE($3, disambiguation), total_discs = GREATEST($4, COALESCE(total_discs, 0)), updated_at = NOW() WHERE id = $5")
                 .bind(date)
-                .bind(album_mbid)
+                .bind(release_mbid)
                 .bind(album_disambiguation.as_deref())
                 .bind(total_discs)
                 .bind(&id)
@@ -1072,13 +1120,13 @@ pub async fn update_track(
         } else {
             let id = uuid::Uuid::new_v4().to_string();
             sqlx::query(
-                "INSERT INTO albums (id, title, artist_id, date, mbid, disambiguation, total_discs) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                "INSERT INTO albums (id, title, artist_id, date, release_mbid, disambiguation, total_discs) VALUES ($1, $2, $3, $4, $5, $6, $7)",
             )
             .bind(&id)
             .bind(album_title)
             .bind(&album_artist_ids[0])
             .bind(date)
-            .bind(album_mbid)
+            .bind(release_mbid)
             .bind(album_disambiguation.as_deref())
             .bind(total_discs)
             .execute(&mut *tx)

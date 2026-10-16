@@ -149,6 +149,16 @@ pub fn parse_genres(s: &str) -> Vec<String> {
         .collect()
 }
 
+/// Leading 4-digit year of an original-date tag value: `"1991-05-06"` →
+/// `"1991"`. `None` when the value is absent or doesn't start with digits.
+pub fn original_year_of(original_date: Option<&str>) -> Option<String> {
+    let date = original_date?;
+    let year = date.get(..4)?;
+    year.chars()
+        .all(|c| c.is_ascii_digit())
+        .then(|| year.to_string())
+}
+
 /// Parse a ReplayGain value like `"-3.22 dB"` or `"-3.22 LUFS"` into decibels.
 /// Handles the U+2212 (minus sign) that some taggers emit.
 pub fn parse_gain_db(s: &str) -> Option<f64> {

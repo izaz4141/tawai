@@ -55,10 +55,10 @@ class IdentifyController extends ChangeNotifier {
         fetched = [];
       }
       final identified = fetched
-          .where((t) => t.mbidRecording != null && t.albumMbid != null)
+          .where((t) => t.mbidRecording != null && t.releaseMbid != null)
           .toList();
       final unidentified = fetched
-          .where((t) => !(t.mbidRecording != null && t.albumMbid != null))
+          .where((t) => !(t.mbidRecording != null && t.releaseMbid != null))
           .toList();
       tracks = unidentified
           .where((t) => !_processedTrackIds.contains(t.id))
@@ -404,7 +404,7 @@ class IdentifyController extends ChangeNotifier {
       discNum: ut.discNum,
       durationSecs: remoteTrack?.durationSecs,
       mbidRecording: ut.mbidRecording ?? remoteTrack?.id,
-      albumMbid: album.albumMbid,
+      releaseMbid: album.albumMbid,
       artistMbid: album.releaseArtistMbid,
       releaseDate: album.releaseDate,
       filePath: '',

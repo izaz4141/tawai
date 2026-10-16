@@ -222,10 +222,10 @@ pub async fn apply_identification(
             .artist_mbid
             .clone()
             .or_else(|| track_row.artist_mbid.clone());
-        let album_mbid = params
+        let release_mbid = params
             .album_mbid
             .clone()
-            .or_else(|| track_row.album_mbid.clone());
+            .or_else(|| track_row.release_mbid.clone());
         let track_num = params.track_num.or(track_row.track_num);
         let disc_num = params.disc_num.or(track_row.disc_num);
         let mbid_recording = params
@@ -243,7 +243,7 @@ pub async fn apply_identification(
             &artist_pairs,
             &album,
             &album_artist_pairs,
-            album_mbid.as_deref(),
+            release_mbid.as_deref(),
             params.release_date.clone(),
             track_num,
             disc_num,
@@ -324,7 +324,7 @@ pub fn parsed_track_to_info(track: libsources::ParsedTrack) -> TrackInfo {
         bitrate: track.bitrate.map(|b| b as i32),
         mbid_recording: tag.mbid_recording.clone(),
         artist_mbid: tag.mbid_artist.clone(),
-        album_mbid: tag.mbid_release.clone(),
+        release_mbid: tag.mbid_release.clone(),
         lyrics: tag.lyrics.clone(),
         release_date: tag.release_date.clone(),
         track_gain: tag.track_gain,
@@ -336,6 +336,12 @@ pub fn parsed_track_to_info(track: libsources::ParsedTrack) -> TrackInfo {
         sample_rate: track.sample_rate.map(|s| s as i32),
         acoust_id_fingerprint: tag.acoust_id_fingerprint.clone(),
         acoust_id: tag.acoust_id.clone(),
+        mbid_track: tag.mbid_track.clone(),
+        isrc: tag.isrc.clone(),
+        comment: tag.comment.clone(),
+        copyright: tag.copyright.clone(),
+        encoder: tag.encoder.clone(),
+        script: tag.script.clone(),
     }
 }
 

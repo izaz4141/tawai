@@ -1,6 +1,41 @@
 use crate::db::database::DatabasePool;
 use crate::signals::library::*;
 
+/// Track-level tag metadata written alongside the positional insert columns.
+/// `mbid_recording` lives here rather than as a positional argument so the
+/// ever-growing tag set doesn't turn `insert_track` into an unreadable list.
+#[derive(Debug, Clone, Default)]
+pub struct TrackTagMeta {
+    pub mbid_recording: Option<String>,
+    pub mbid_track: Option<String>,
+    pub isrc: Option<String>,
+    pub comment: Option<String>,
+    pub copyright: Option<String>,
+    pub encoder: Option<String>,
+    pub script: Option<String>,
+}
+
+/// Album-level metadata for `insert_album`. Absorbs the former positional
+/// `date`/`mbid`/`disambiguation`/`total_discs` arguments plus the extended
+/// release tag set.
+#[derive(Debug, Clone, Default)]
+pub struct AlbumWriteMeta {
+    pub date: Option<String>,
+    pub release_mbid: Option<String>,
+    pub release_group_mbid: Option<String>,
+    pub release_artist_mbid: Option<String>,
+    pub release_country: Option<String>,
+    /// Semicolon-separated multi-value.
+    pub release_type: Option<String>,
+    pub record_label: Option<String>,
+    pub media: Option<String>,
+    pub original_date: Option<String>,
+    pub original_year: Option<String>,
+    pub disambiguation: Option<String>,
+    pub total_tracks: i32,
+    pub total_discs: i32,
+}
+
 pub async fn lookup_track(
     pool: &DatabasePool,
     track_id: &str,
@@ -41,38 +76,15 @@ pub async fn insert_album(
     pool: &DatabasePool,
     title: &str,
     artist_id: &str,
-    date: Option<String>,
-    mbid: Option<String>,
     cover: Option<&[u8]>,
-    disambiguation: Option<String>,
-    total_discs: i32,
+    meta: &AlbumWriteMeta,
 ) -> anyhow::Result<String> {
     match pool {
         DatabasePool::Sqlite(p) => {
-            super::library_sq::insert_album(
-                p,
-                title,
-                artist_id,
-                date,
-                mbid,
-                cover,
-                disambiguation,
-                total_discs,
-            )
-            .await
+            super::library_sq::insert_album(p, title, artist_id, cover, meta).await
         }
         DatabasePool::Postgres(p) => {
-            super::library_pg::insert_album(
-                p,
-                title,
-                artist_id,
-                date,
-                mbid,
-                cover,
-                disambiguation,
-                total_discs,
-            )
-            .await
+            super::library_pg::insert_album(p, title, artist_id, cover, meta).await
         }
     }
 }
@@ -126,11 +138,11 @@ pub async fn insert_track(
     file_size: Option<i64>,
     bitrate: Option<i32>,
     sample_rate: Option<i32>,
-    mbid_recording: Option<String>,
     cover: Option<&[u8]>,
     lyrics: Option<&str>,
     track_gain: Option<f64>,
     track_peak: Option<f64>,
+    tags: &TrackTagMeta,
 ) -> anyhow::Result<String> {
     match pool {
         DatabasePool::Sqlite(p) => {
@@ -148,11 +160,11 @@ pub async fn insert_track(
                 file_size,
                 bitrate,
                 sample_rate,
-                mbid_recording,
                 cover,
                 lyrics,
                 track_gain,
                 track_peak,
+                tags,
             )
             .await
         }
@@ -171,11 +183,11 @@ pub async fn insert_track(
                 file_size,
                 bitrate,
                 sample_rate,
-                mbid_recording,
                 cover,
                 lyrics,
                 track_gain,
                 track_peak,
+                tags,
             )
             .await
         }
@@ -410,7 +422,7 @@ pub async fn update_track(
     artists: &[(String, Option<String>)],
     album_title: &str,
     album_artists: &[(String, Option<String>)],
-    album_mbid: Option<&str>,
+    release_mbid: Option<&str>,
     date: Option<String>,
     track_num: Option<i32>,
     disc_num: Option<i32>,
@@ -430,7 +442,7 @@ pub async fn update_track(
                 artists,
                 album_title,
                 album_artists,
-                album_mbid,
+                release_mbid,
                 date,
                 track_num,
                 disc_num,
@@ -451,7 +463,7 @@ pub async fn update_track(
                 artists,
                 album_title,
                 album_artists,
-                album_mbid,
+                release_mbid,
                 date,
                 track_num,
                 disc_num,

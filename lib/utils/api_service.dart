@@ -667,10 +667,23 @@ class APIService {
           return AlbumInfo(
             id: m['id'] as String,
             title: m['title'] as String,
+            sortName: m['sort_name'] as String?,
             artistsString: m['artists_string'] as String? ?? '',
             artists: [],
             releaseDate: m['release_date'] as String?,
             trackCount: (m['track_count'] as num?)?.toInt() ?? 0,
+            disambiguation: m['disambiguation'] as String?,
+            releaseMbid: m['release_mbid'] as String?,
+            releaseGroupMbid: m['release_group_mbid'] as String?,
+            releaseArtistMbid: m['release_artist_mbid'] as String?,
+            releaseCountry: m['release_country'] as String?,
+            releaseType: m['release_type'] as String?,
+            recordLabel: m['record_label'] as String?,
+            media: m['media'] as String?,
+            originalDate: m['original_date'] as String?,
+            originalYear: m['original_year'] as String?,
+            totalTracks: (m['total_tracks'] as num?)?.toInt() ?? 0,
+            totalDiscs: (m['total_discs'] as num?)?.toInt() ?? 0,
           );
         }).toList();
       }

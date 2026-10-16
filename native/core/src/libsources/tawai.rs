@@ -521,7 +521,7 @@ fn remote_track_to_tag(rt: &TrackInfo) -> AudioTag {
         disc_number: rt.disc_num.unwrap_or(1),
         mbid_recording: rt.mbid_recording.clone(),
         mbid_artist: rt.artist_mbid.clone(),
-        mbid_release: rt.album_mbid.clone(),
+        mbid_release: rt.release_mbid.clone(),
         lyrics: rt.lyrics.clone(),
         track_gain: rt.track_gain,
         track_peak: rt.track_peak,
@@ -1239,7 +1239,7 @@ mod tests {
             bitrate: Some(320_000),
             mbid_recording: None,
             artist_mbid: None,
-            album_mbid: None,
+            release_mbid: None,
             lyrics: None,
             release_date: None,
             track_gain: None,
@@ -1251,6 +1251,12 @@ mod tests {
             sample_rate: None,
             acoust_id_fingerprint: None,
             acoust_id: None,
+            mbid_track: None,
+            isrc: None,
+            comment: None,
+            copyright: None,
+            encoder: None,
+            script: None,
         };
         let d1 = dest_for(root, pattern, &rt);
         let d2 = dest_for(root, pattern, &rt);
