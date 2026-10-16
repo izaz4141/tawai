@@ -208,6 +208,29 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
   String get _remoteReleaseCountry => widget.album.releaseCountry ?? '';
   String get _remoteReleaseType => widget.album.releaseType ?? '';
   String get _remoteReleaseGroupMbid => widget.album.releaseGroupMbid ?? '';
+  String get _remoteArtists {
+    final joined = _joinNames(widget.correctTrack.artists);
+    return joined.isNotEmpty ? joined : _remoteArtist;
+  }
+
+  String get _remoteAlbumArtists {
+    final joined = _joinNames(widget.album.releaseArtists);
+    return joined.isNotEmpty ? joined : _remoteAlbumArtist;
+  }
+
+  String get _remoteGenre => widget.correctTrack.genres.isNotEmpty
+      ? widget.correctTrack.genres.join('; ')
+      : widget.album.genres.join('; ');
+  String get _remoteIsrc => widget.correctTrack.isrcs.join('; ');
+  String get _remoteTrackMbid => widget.correctTrack.mbidTrack ?? '';
+  String get _remoteArtistMbid =>
+      widget.correctTrack.artists.firstOrNull?.mbid ??
+      widget.correctTrack.artists.firstOrNull?.id ??
+      '';
+  String get _remoteArtistSort =>
+      widget.correctTrack.artists.firstOrNull?.sortName ?? '';
+  String get _remoteAlbumArtistSort =>
+      widget.album.releaseArtists.firstOrNull?.sortName ?? '';
   String get _albumDisambiguation =>
       widget.album.albumDisambiguation ??
       widget.albumInfo?.disambiguation ??
@@ -331,11 +354,11 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
       _SectionHeader('Basic'),
       edit('Title', _titleCtrl, () => _remoteTitle),
       edit('Artist', _artistCtrl, () => _remoteArtist),
-      edit('Artists', _artistsCtrl, () => _remoteArtist),
+      edit('Artists', _artistsCtrl, () => _remoteArtists),
       edit('Album', _albumCtrl, () => _remoteAlbum),
       edit('Album Artist', _albumArtistCtrl, () => _remoteAlbumArtist),
-      edit('Album Artists', _albumArtistsCtrl, () => _remoteAlbumArtist),
-      edit('Genre(s)', _genreCtrl, () => ''),
+      edit('Album Artists', _albumArtistsCtrl, () => _remoteAlbumArtists),
+      edit('Genre(s)', _genreCtrl, () => _remoteGenre),
 
       _SectionHeader('Track / Release'),
       edit('Track #', _trackNumCtrl, () => _remoteTrackNum),
@@ -356,10 +379,10 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
       edit('Record Label', _recordLabelCtrl, () => _remoteRecordLabel),
       edit('Release Country', _releaseCountryCtrl, () => _remoteReleaseCountry),
       edit('Release Type', _releaseTypeCtrl, () => _remoteReleaseType),
-      edit('ISRC', _isrcCtrl, () => ''),
+      edit('ISRC', _isrcCtrl, () => _remoteIsrc),
       edit('Recording MBID', _mbidRecordingCtrl, () => _remoteMbid),
-      edit('Track MBID', _mbidTrackCtrl, () => ''),
-      edit('Artist MBID', _mbidArtistCtrl, () => ''),
+      edit('Track MBID', _mbidTrackCtrl, () => _remoteTrackMbid),
+      edit('Artist MBID', _mbidArtistCtrl, () => _remoteArtistMbid),
       edit('Release MBID', _mbidReleaseCtrl, () => _remoteReleaseMbid),
       edit(
         'Album Artist MBID',
@@ -373,8 +396,12 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
       ),
 
       _SectionHeader('Sorting'),
-      edit('Artist Sort', _artistSortCtrl, () => ''),
-      edit('Album Artist Sort', _albumArtistSortCtrl, () => ''),
+      edit('Artist Sort', _artistSortCtrl, () => _remoteArtistSort),
+      edit(
+        'Album Artist Sort',
+        _albumArtistSortCtrl,
+        () => _remoteAlbumArtistSort,
+      ),
 
       _SectionHeader('ReplayGain'),
       ro('Track Gain', () => _fmtGain(widget.currentTrack.trackGain)),

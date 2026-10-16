@@ -55,6 +55,8 @@ class IdentifyAlbumResult {
   String? releaseGroupMbid;
   int? totalTracks;
   int? totalDiscs;
+  List<ArtistInfo> releaseArtists;
+  List<String> genres;
 
   IdentifyAlbumResult({
     required this.albumTitle,
@@ -78,6 +80,8 @@ class IdentifyAlbumResult {
     this.releaseGroupMbid,
     this.totalTracks,
     this.totalDiscs,
+    this.releaseArtists = const [],
+    this.genres = const [],
   });
 
   static String releaseKey(String? albumMbid) => 'release_${albumMbid ?? ''}';

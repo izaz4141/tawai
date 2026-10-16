@@ -273,6 +273,12 @@ class IdentifyController extends ChangeNotifier {
     if (releaseData.artistId != null && releaseData.artistId!.isNotEmpty) {
       result.releaseArtistMbid = releaseData.artistId;
     }
+    if (releaseData.artists.isNotEmpty) {
+      result.releaseArtists = releaseData.artists;
+    }
+    if (releaseData.genres.isNotEmpty) {
+      result.genres = releaseData.genres;
+    }
     if (releaseData.disambiguation != null &&
         releaseData.disambiguation!.isNotEmpty) {
       result.albumDisambiguation = releaseData.disambiguation;

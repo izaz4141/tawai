@@ -2,8 +2,10 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::audio::tags::AudioTag;
+use crate::signals::library::ArtistInfo;
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+#[serde(default)]
 pub struct ReleaseInfo {
     pub id: String,
     pub title: String,
@@ -11,46 +13,44 @@ pub struct ReleaseInfo {
     pub country: Option<String>,
     pub artist: String,
     pub artist_id: Option<String>,
+    pub artists: Vec<ArtistInfo>,
+    pub genres: Vec<String>,
     pub tracks: Vec<ReleaseTrackInfo>,
-    #[serde(default)]
     pub disambiguation: Option<String>,
-    #[serde(default)]
     pub total_discs: Option<i32>,
-    #[serde(default)]
     pub total_tracks: Option<i32>,
-    #[serde(default)]
     pub release_group_mbid: Option<String>,
-    #[serde(default)]
     pub release_type: Option<String>,
-    #[serde(default)]
     pub record_label: Option<String>,
-    #[serde(default)]
     pub media: Option<String>,
-    #[serde(default)]
     pub script: Option<String>,
-    #[serde(default)]
     pub original_date: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+#[serde(default)]
 pub struct RecordingInfo {
     pub id: String,
     pub title: String,
     pub score: f64,
     pub artist: String,
     pub artist_id: Option<String>,
+    pub artists: Vec<ArtistInfo>,
+    pub isrcs: Vec<String>,
     pub duration_secs: Option<f64>,
     pub acoust_id: Option<String>,
     pub releases: Vec<ReleaseInfo>,
     pub cover: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+#[serde(default)]
 pub struct MBSearchInfo {
     pub recordings: Vec<RecordingInfo>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+#[serde(default)]
 pub struct ReleaseTrackInfo {
     pub id: String,
     pub title: String,
@@ -58,6 +58,10 @@ pub struct ReleaseTrackInfo {
     pub disc_number: Option<i32>,
     pub duration_secs: Option<f64>,
     pub lyrics: Option<String>,
+    pub artists: Vec<ArtistInfo>,
+    pub mbid_track: Option<String>,
+    pub isrcs: Vec<String>,
+    pub genres: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -102,6 +106,8 @@ pub struct GetReleaseTracksResponse {
     pub release_date: Option<String>,
     pub artist: String,
     pub artist_id: Option<String>,
+    pub artists: Vec<ArtistInfo>,
+    pub genres: Vec<String>,
     pub disambiguation: Option<String>,
     pub tracks: Vec<ReleaseTrackInfo>,
     #[serde(default)]

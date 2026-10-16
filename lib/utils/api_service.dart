@@ -1251,6 +1251,25 @@ class APIService {
     return [];
   }
 
+  ArtistInfo _parseArtistInfo(Map<String, dynamic> m) => ArtistInfo(
+    id: m['id'] as String? ?? '',
+    name: m['name'] as String? ?? '',
+    sortName: m['sort_name'] as String?,
+    mbid: m['mbid'] as String?,
+    thumbnailUrl: m['thumbnail_url'] as String?,
+    albumCount: (m['album_count'] as num?)?.toInt() ?? 0,
+    trackCount: (m['track_count'] as num?)?.toInt() ?? 0,
+  );
+
+  List<ArtistInfo> _parseArtistList(dynamic raw) =>
+      (raw as List<dynamic>?)
+          ?.map((e) => _parseArtistInfo(e as Map<String, dynamic>))
+          .toList() ??
+      [];
+
+  List<String> _parseStringList(dynamic raw) =>
+      (raw as List<dynamic>?)?.map((e) => e as String).toList() ?? [];
+
   Future<List<RecordingInfo>> searchMusicBrainz(String query) async {
     try {
       final response = await http.get(
@@ -1270,6 +1289,8 @@ class APIService {
             score: (m['score'] as num).toDouble(),
             artist: m['artist'] as String,
             artistId: m['artist_id'] as String?,
+            artists: _parseArtistList(m['artists']),
+            isrcs: _parseStringList(m['isrcs']),
             durationSecs: (m['duration_secs'] as num?)?.toDouble(),
             acoustId: m['acoust_id'] as String?,
             releases: (m['releases'] as List<dynamic>)
@@ -1281,6 +1302,8 @@ class APIService {
                     country: r['country'] as String?,
                     artist: r['artist'] as String? ?? '',
                     artistId: r['artist_id'] as String?,
+                    artists: _parseArtistList(r['artists']),
+                    genres: _parseStringList(r['genres']),
                     tracks:
                         (r['tracks'] as List<dynamic>?)
                             ?.map(
@@ -1291,6 +1314,10 @@ class APIService {
                                 discNumber: (t['disc_number'] as num?)?.toInt(),
                                 durationSecs: (t['duration_secs'] as num?)
                                     ?.toDouble(),
+                                artists: _parseArtistList(t['artists']),
+                                mbidTrack: t['mbid_track'] as String?,
+                                isrcs: _parseStringList(t['isrcs']),
+                                genres: _parseStringList(t['genres']),
                               ),
                             )
                             .toList() ??
@@ -1333,6 +1360,10 @@ class APIService {
             position: m['position'] as int?,
             discNumber: (m['disc_number'] as num?)?.toInt(),
             durationSecs: (m['duration_secs'] as num?)?.toDouble(),
+            artists: _parseArtistList(m['artists']),
+            mbidTrack: m['mbid_track'] as String?,
+            isrcs: _parseStringList(m['isrcs']),
+            genres: _parseStringList(m['genres']),
           );
         }).toList();
         return GetReleaseTracksResponse(
@@ -1342,6 +1373,8 @@ class APIService {
           releaseDate: json['release_date'] as String?,
           artist: json['artist'] as String? ?? '',
           artistId: json['artist_id'] as String?,
+          artists: _parseArtistList(json['artists']),
+          genres: _parseStringList(json['genres']),
           disambiguation: json['disambiguation'] as String?,
           tracks: tracksList,
           releaseCountry: json['release_country'] as String?,
@@ -1365,6 +1398,8 @@ class APIService {
       releaseDate: null,
       artist: '',
       artistId: null,
+      artists: [],
+      genres: [],
       disambiguation: null,
       tracks: [],
       releaseCountry: null,
@@ -1396,6 +1431,8 @@ class APIService {
           score: (json['score'] as num?)?.toDouble() ?? 0,
           artist: json['artist'] as String? ?? '',
           artistId: json['artist_id'] as String?,
+          artists: _parseArtistList(json['artists']),
+          isrcs: _parseStringList(json['isrcs']),
           durationSecs: (json['duration_secs'] as num?)?.toDouble(),
           acoustId: json['acoust_id'] as String?,
           releases:
@@ -1408,6 +1445,8 @@ class APIService {
                       country: r['country'] as String?,
                       artist: r['artist'] as String? ?? '',
                       artistId: r['artist_id'] as String?,
+                      artists: _parseArtistList(r['artists']),
+                      genres: _parseStringList(r['genres']),
                       tracks:
                           (r['tracks'] as List<dynamic>?)
                               ?.map(
@@ -1417,6 +1456,10 @@ class APIService {
                                   position: t['position'] as int?,
                                   durationSecs: (t['duration_secs'] as num?)
                                       ?.toDouble(),
+                                  artists: _parseArtistList(t['artists']),
+                                  mbidTrack: t['mbid_track'] as String?,
+                                  isrcs: _parseStringList(t['isrcs']),
+                                  genres: _parseStringList(t['genres']),
                                 ),
                               )
                               .toList() ??
@@ -1592,6 +1635,8 @@ class APIService {
       score: (json['score'] as num).toDouble(),
       artist: json['artist'] as String,
       artistId: json['artist_id'] as String?,
+      artists: _parseArtistList(json['artists']),
+      isrcs: _parseStringList(json['isrcs']),
       durationSecs: (json['duration_secs'] as num?)?.toDouble(),
       acoustId: json['acoust_id'] as String?,
       releases:
@@ -1604,6 +1649,8 @@ class APIService {
                   country: r['country'] as String?,
                   artist: r['artist'] as String? ?? '',
                   artistId: r['artist_id'] as String?,
+                  artists: _parseArtistList(r['artists']),
+                  genres: _parseStringList(r['genres']),
                   tracks:
                       (r['tracks'] as List<dynamic>?)
                           ?.map(
@@ -1613,6 +1660,10 @@ class APIService {
                               position: t['position'] as int?,
                               durationSecs: (t['duration_secs'] as num?)
                                   ?.toDouble(),
+                              artists: _parseArtistList(t['artists']),
+                              mbidTrack: t['mbid_track'] as String?,
+                              isrcs: _parseStringList(t['isrcs']),
+                              genres: _parseStringList(t['genres']),
                             ),
                           )
                           .toList() ??

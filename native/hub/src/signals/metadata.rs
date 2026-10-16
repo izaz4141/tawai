@@ -1,6 +1,8 @@
 use rinf::{DartSignal, RustSignal, SignalPiece};
 use serde::{Deserialize, Serialize};
 
+use crate::signals::library::ArtistInfo;
+
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]
 pub struct ReleaseInfo {
     pub id: String,
@@ -9,6 +11,8 @@ pub struct ReleaseInfo {
     pub country: Option<String>,
     pub artist: String,
     pub artist_id: Option<String>,
+    pub artists: Vec<ArtistInfo>,
+    pub genres: Vec<String>,
     pub tracks: Vec<ReleaseTrackInfo>,
     pub disambiguation: Option<String>,
     pub total_discs: Option<i32>,
@@ -28,6 +32,8 @@ pub struct RecordingInfo {
     pub score: f64,
     pub artist: String,
     pub artist_id: Option<String>,
+    pub artists: Vec<ArtistInfo>,
+    pub isrcs: Vec<String>,
     pub duration_secs: Option<f64>,
     pub acoust_id: Option<String>,
     pub releases: Vec<ReleaseInfo>,
@@ -47,6 +53,10 @@ pub struct ReleaseTrackInfo {
     pub disc_number: Option<i32>,
     pub duration_secs: Option<f64>,
     pub lyrics: Option<String>,
+    pub artists: Vec<ArtistInfo>,
+    pub mbid_track: Option<String>,
+    pub isrcs: Vec<String>,
+    pub genres: Vec<String>,
 }
 
 #[derive(Deserialize, DartSignal)]
@@ -75,6 +85,8 @@ pub struct GetReleaseTracksResponse {
     pub release_date: Option<String>,
     pub artist: String,
     pub artist_id: Option<String>,
+    pub artists: Vec<ArtistInfo>,
+    pub genres: Vec<String>,
     pub disambiguation: Option<String>,
     pub tracks: Vec<ReleaseTrackInfo>,
     pub release_country: Option<String>,
@@ -101,6 +113,8 @@ impl From<tawai_core::signals::metadata::ReleaseInfo> for ReleaseInfo {
             country: r.country,
             artist: r.artist,
             artist_id: r.artist_id,
+            artists: r.artists.into_iter().map(Into::into).collect(),
+            genres: r.genres,
             tracks: r.tracks.into_iter().map(Into::into).collect(),
             disambiguation: r.disambiguation,
             total_discs: r.total_discs,
@@ -123,6 +137,8 @@ impl From<tawai_core::signals::metadata::RecordingInfo> for RecordingInfo {
             score: r.score,
             artist: r.artist,
             artist_id: r.artist_id,
+            artists: r.artists.into_iter().map(Into::into).collect(),
+            isrcs: r.isrcs,
             duration_secs: r.duration_secs,
             acoust_id: r.acoust_id,
             releases: r.releases.into_iter().map(Into::into).collect(),
@@ -148,6 +164,10 @@ impl From<tawai_core::signals::metadata::ReleaseTrackInfo> for ReleaseTrackInfo 
             disc_number: t.disc_number,
             duration_secs: t.duration_secs,
             lyrics: t.lyrics,
+            artists: t.artists.into_iter().map(Into::into).collect(),
+            mbid_track: t.mbid_track,
+            isrcs: t.isrcs,
+            genres: t.genres,
         }
     }
 }
