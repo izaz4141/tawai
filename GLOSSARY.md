@@ -46,7 +46,8 @@ original year.
 
 ## Read set vs write set
 
-The tag editor *reads* the full metadata set but only *writes* the original
-subset of fields (writes for the rest are deferred to a later change). Release
-status and album ReplayGain are intentionally not read — no `ItemKey` exists for
-release status.
+The tag editor sends the complete editable set on every write
+(`EditableTagData` / `writeFileTags`), and `TagWriteMode::Replace` writes every
+field, clearing stored values for fields the user emptied. Read-only fields are
+never sent or written; release status is not read because no `ItemKey` exists
+for it.
