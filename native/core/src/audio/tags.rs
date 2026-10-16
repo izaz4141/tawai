@@ -99,6 +99,11 @@ pub enum TagWriteMode {
     /// field the user cleared actually gets cleared. Never affects pictures or
     /// unmanaged keys (acoustid, encoder, replaygain).
     Replace,
+    /// Like [`TagWriteMode::Patch`] for scalar fields, but the explicit
+    /// `TrackArtists` / `AlbumArtists` multi-value lists are written when
+    /// non-empty. Used by the identify flow, which supplies those lists from
+    /// the comparison sheet but otherwise patches the on-disk tags.
+    PatchExplicitArtists,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -147,16 +152,6 @@ pub fn parse_genres(s: &str) -> Vec<String> {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect()
-}
-
-/// Leading 4-digit year of an original-date tag value: `"1991-05-06"` →
-/// `"1991"`. `None` when the value is absent or doesn't start with digits.
-pub fn original_year_of(original_date: Option<&str>) -> Option<String> {
-    let date = original_date?;
-    let year = date.get(..4)?;
-    year.chars()
-        .all(|c| c.is_ascii_digit())
-        .then(|| year.to_string())
 }
 
 /// Parse a ReplayGain value like `"-3.22 dB"` or `"-3.22 LUFS"` into decibels.
@@ -404,7 +399,9 @@ fn extract_audio_tags(
 ///
 /// `mode` selects the write contract: [`TagWriteMode::Patch`] writes only
 /// non-empty fields (used by partial-tag flows); [`TagWriteMode::Replace`]
-/// writes the full editable set and clears empty ones (used by the tag editor).
+/// writes the full editable set and clears empty ones (used by the tag editor);
+/// [`TagWriteMode::PatchExplicitArtists`] is patch-like but also writes an
+/// explicit, non-empty `artists`/`album_artists` list (used by identify).
 pub fn write_audio_tags(path: &Path, audio_tag: &AudioTag, mode: TagWriteMode) -> Result<()> {
     let mut tagged_file = read_from_path(path)?;
     apply_audio_tag(&mut tagged_file, audio_tag, mode)?;
@@ -588,12 +585,26 @@ fn apply_audio_tag(tagged_file: &mut TaggedFile, audio_tag: &AudioTag, mode: Tag
     // formats write it normally.
     write_opt!(tag, audio_tag, lyrics, ItemKey::Lyrics, mode);
 
-    // Only the tag editor sends an explicit artist list; the other flows
-    // derive `artists`/`album_artists` from `artist`/`album_artist`, and
-    // writing those derived values back would pollute the tag.
-    if replace {
-        set_multi(tag, ItemKey::TrackArtists, &audio_tag.artists);
-        set_multi(tag, ItemKey::AlbumArtists, &audio_tag.album_artists);
+    // Only the tag editor and the identify flow send an explicit artist list;
+    // the other flows derive `artists`/`album_artists` from
+    // `artist`/`album_artist`, and writing those derived values back would
+    // pollute the tag. `Replace` always (re)writes the lists so a cleared
+    // artist list is cleared; `PatchExplicitArtists` writes a list only when it
+    // is non-empty, leaving any existing on-disk list untouched otherwise.
+    match mode {
+        TagWriteMode::Replace => {
+            set_multi(tag, ItemKey::TrackArtists, &audio_tag.artists);
+            set_multi(tag, ItemKey::AlbumArtists, &audio_tag.album_artists);
+        }
+        TagWriteMode::PatchExplicitArtists => {
+            if !audio_tag.artists.is_empty() {
+                set_multi(tag, ItemKey::TrackArtists, &audio_tag.artists);
+            }
+            if !audio_tag.album_artists.is_empty() {
+                set_multi(tag, ItemKey::AlbumArtists, &audio_tag.album_artists);
+            }
+        }
+        TagWriteMode::Patch => {}
     }
     if !audio_tag.release_type.is_empty() {
         set_multi(tag, ItemKey::MusicBrainzReleaseType, &audio_tag.release_type);

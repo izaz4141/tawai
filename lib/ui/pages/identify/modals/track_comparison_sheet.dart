@@ -138,7 +138,6 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
   late final TextEditingController _totalDiscsCtrl;
   late final TextEditingController _dateCtrl;
   late final TextEditingController _originalDateCtrl;
-  late final TextEditingController _originalYearCtrl;
   late final TextEditingController _mediaCtrl;
   late final TextEditingController _scriptCtrl;
   late final TextEditingController _isrcCtrl;
@@ -223,7 +222,6 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     );
     _dateCtrl = TextEditingController(text: t.releaseDate ?? '');
     _originalDateCtrl = TextEditingController(text: ai?.originalDate ?? '');
-    _originalYearCtrl = TextEditingController(text: ai?.originalYear ?? '');
     _mediaCtrl = TextEditingController(text: ai?.media ?? '');
     _scriptCtrl = TextEditingController(text: t.script ?? '');
     _isrcCtrl = TextEditingController(text: t.isrc ?? '');
@@ -267,7 +265,6 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
       _totalDiscsCtrl,
       _dateCtrl,
       _originalDateCtrl,
-      _originalYearCtrl,
       _mediaCtrl,
       _scriptCtrl,
       _isrcCtrl,
@@ -325,7 +322,6 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
       edit('Total Discs', _totalDiscsCtrl, () => ''),
       edit('Date', _dateCtrl, () => _remoteDate),
       edit('Original Date', _originalDateCtrl, () => ''),
-      edit('Original Year', _originalYearCtrl, () => ''),
       edit('Media', _mediaCtrl, () => ''),
       edit('Script', _scriptCtrl, () => ''),
       ro(
@@ -483,6 +479,16 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
 
   String? _textOrNull(String value) => value.isEmpty ? null : value;
 
+  /// Splits a `;`-separated multi-value field into a list, or null when empty.
+  List<String>? _splitList(String value) {
+    final parts = value
+        .split(';')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    return parts.isEmpty ? null : parts;
+  }
+
   Future<void> _apply() async {
     if (_isDownloadFolder && _targetSourceId == null) {
       if (!mounted) return;
@@ -497,10 +503,10 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     try {
       final st = widget.currentTrack;
 
-      // `applyIdentification`'s `artistMbid` currently writes both the track
-      // artist MBID and the album-artist MBID (ticket 07 splits them apart).
-      // Prefer an edited track artist MBID, falling back to the album-artist
-      // MBID to preserve the previous identification behaviour.
+      // Track artist and album artist are distinct in ticket 07. Prefer an
+      // edited track artist MBID, falling back to the album-artist MBID to
+      // preserve the previous identification behaviour when only the release
+      // artist MBID is known.
       final albumArtistMbid = _textOrNull(_mbidAlbumArtistCtrl.text);
       final artistMbid = _textOrNull(_mbidArtistCtrl.text) ?? albumArtistMbid;
 
@@ -530,14 +536,34 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
         title: _titleCtrl.text,
         artist: _artistCtrl.text,
         artistMbid: artistMbid,
+        albumArtist: _textOrNull(_albumArtistCtrl.text),
+        albumArtistMbid: albumArtistMbid,
+        artists: _splitList(_artistsCtrl.text),
+        albumArtists: _splitList(_albumArtistsCtrl.text),
+        artistSort: _textOrNull(_artistSortCtrl.text),
+        albumArtistSort: _textOrNull(_albumArtistSortCtrl.text),
         album: _albumCtrl.text,
         albumMbid: _textOrNull(_mbidReleaseCtrl.text),
         albumDisambiguation: widget.album.albumDisambiguation,
         releaseDate: _textOrNull(_dateCtrl.text),
+        originalDate: _textOrNull(_originalDateCtrl.text),
+        releaseGroupMbid: _textOrNull(_mbidReleaseGroupCtrl.text),
+        releaseCountry: _textOrNull(_releaseCountryCtrl.text),
+        releaseType: _splitList(_releaseTypeCtrl.text),
+        recordLabel: _textOrNull(_recordLabelCtrl.text),
+        media: _textOrNull(_mediaCtrl.text),
         trackNum: int.tryParse(_trackNumCtrl.text),
         discNum: int.tryParse(_discNumCtrl.text),
+        totalTracks: int.tryParse(_totalTracksCtrl.text),
+        totalDiscs: int.tryParse(_totalDiscsCtrl.text),
         mbidRecording: _textOrNull(_mbidRecordingCtrl.text),
+        mbidTrack: _textOrNull(_mbidTrackCtrl.text),
+        isrc: _textOrNull(_isrcCtrl.text),
+        comment: _textOrNull(_commentCtrl.text),
+        copyright: _textOrNull(_copyrightCtrl.text),
+        script: _textOrNull(_scriptCtrl.text),
         lyrics: _textOrNull(_lyricsCtrl.text),
+        genres: _splitList(_genreCtrl.text),
         coverBytes: coverBytes,
         filePath: _isDownloadFolder ? st.filePath : null,
         targetSourceId: _isDownloadFolder ? _targetSourceId : null,

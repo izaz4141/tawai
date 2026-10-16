@@ -187,7 +187,6 @@ pub struct ReadFileTagsResponse {
     pub total_discs: Option<i32>,
     pub release_date: Option<String>,
     pub original_date: Option<String>,
-    pub original_year: Option<i32>,
     pub release_country: Option<String>,
     pub release_type: Vec<String>,
     pub record_label: Option<String>,
@@ -216,14 +215,7 @@ impl ReadFileTagsResponse {
     ///
     /// `AudioTag` keeps an `i32` sentinel (`0` = absent) for numeric fields;
     /// the response exposes them as `Option<i32>` (`None` when `<= 0`).
-    /// `original_year` is derived from the year component of `original_date`.
     pub fn from_audio_tag(id: String, tag: &AudioTag, duration_secs: f64) -> Self {
-        let original_year = tag
-            .original_date
-            .as_deref()
-            .and_then(|d| d.get(..4))
-            .and_then(|y| y.parse::<i32>().ok());
-
         Self {
             id,
             title: tag.title.clone(),
@@ -241,7 +233,6 @@ impl ReadFileTagsResponse {
             total_discs: (tag.total_discs > 0).then_some(tag.total_discs),
             release_date: tag.release_date.clone(),
             original_date: tag.original_date.clone(),
-            original_year,
             release_country: tag.release_country.clone(),
             release_type: tag.release_type.clone(),
             record_label: tag.record_label.clone(),

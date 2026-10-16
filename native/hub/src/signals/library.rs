@@ -92,7 +92,6 @@ pub struct AlbumInfo {
     pub record_label: Option<String>,
     pub media: Option<String>,
     pub original_date: Option<String>,
-    pub original_year: Option<String>,
     pub total_tracks: i64,
     pub total_discs: i64,
 }
@@ -294,7 +293,6 @@ impl From<tawai_core::signals::library::AlbumInfo> for AlbumInfo {
             record_label: a.record_label,
             media: a.media,
             original_date: a.original_date,
-            original_year: a.original_year,
             total_tracks: a.total_tracks,
             total_discs: a.total_discs,
         }

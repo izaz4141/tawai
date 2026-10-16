@@ -4,7 +4,7 @@ use std::io::Cursor;
 use image::GenericImageView;
 
 use crate::audio::ffmpeg;
-use crate::audio::tags::{derive_sort_name, original_year_of};
+use crate::audio::tags::derive_sort_name;
 use crate::db::database::DatabasePool;
 use crate::db::library;
 use crate::db::library::{AlbumWriteMeta, TrackTagMeta};
@@ -144,7 +144,6 @@ async fn insert_track_to_db(
         record_label: track.record_label.clone(),
         media: track.media.clone(),
         original_date: track.original_date.clone(),
-        original_year: original_year_of(track.original_date.as_deref()),
         disambiguation: track.album_disambiguation.clone(),
         total_tracks: track.total_tracks,
         total_discs: track.total_discs,

@@ -2,7 +2,7 @@ use anyhow::Result;
 use sqlx::{Row, SqlitePool};
 
 use super::library::{AlbumWriteMeta, TrackTagMeta};
-use crate::audio::tags::{derive_sort_name, original_year_of, AudioTag};
+use crate::audio::tags::{derive_sort_name, AudioTag};
 use crate::signals::library::*;
 use crate::utils::helper::sha256_hex;
 
@@ -119,7 +119,7 @@ pub async fn list_albums(pool: &SqlitePool, artist_id: Option<&str>) -> Result<V
                       al.date, al.cover,
                       al.release_mbid, al.release_group_mbid, al.release_artist_mbid,
                       al.release_country, al.release_type, al.record_label, al.media,
-                      al.original_date, al.original_year, al.total_tracks,
+                      al.original_date, al.total_tracks,
                       al.disambiguation, al.total_discs,
                       (SELECT COUNT(*) FROM tracks t WHERE t.album_id = al.id) AS track_count
                FROM albums al
@@ -136,7 +136,7 @@ pub async fn list_albums(pool: &SqlitePool, artist_id: Option<&str>) -> Result<V
                       al.date, al.cover,
                       al.release_mbid, al.release_group_mbid, al.release_artist_mbid,
                       al.release_country, al.release_type, al.record_label, al.media,
-                      al.original_date, al.original_year, al.total_tracks,
+                      al.original_date, al.total_tracks,
                       al.disambiguation, al.total_discs,
                       (SELECT COUNT(*) FROM tracks t WHERE t.album_id = al.id) AS track_count
                FROM albums al
@@ -247,7 +247,7 @@ pub async fn insert_album(
 
     if let Some(id) = existing {
         sqlx::query(
-            "UPDATE albums SET date = ?, release_mbid = COALESCE(?, release_mbid), release_group_mbid = COALESCE(?, release_group_mbid), release_artist_mbid = COALESCE(?, release_artist_mbid), release_country = COALESCE(?, release_country), release_type = COALESCE(?, release_type), record_label = COALESCE(?, record_label), media = COALESCE(?, media), original_date = COALESCE(?, original_date), original_year = COALESCE(?, original_year), disambiguation = COALESCE(?, disambiguation), total_tracks = MAX(?, total_tracks), total_discs = MAX(?, COALESCE(total_discs, 0)), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
+            "UPDATE albums SET date = ?, release_mbid = COALESCE(?, release_mbid), release_group_mbid = COALESCE(?, release_group_mbid), release_artist_mbid = COALESCE(?, release_artist_mbid), release_country = COALESCE(?, release_country), release_type = COALESCE(?, release_type), record_label = COALESCE(?, record_label), media = COALESCE(?, media), original_date = COALESCE(?, original_date), disambiguation = COALESCE(?, disambiguation), total_tracks = MAX(?, total_tracks), total_discs = MAX(?, COALESCE(total_discs, 0)), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
         )
         .bind(meta.date.clone())
         .bind(meta.release_mbid.as_deref())
@@ -258,7 +258,6 @@ pub async fn insert_album(
         .bind(meta.record_label.as_deref())
         .bind(meta.media.as_deref())
         .bind(meta.original_date.as_deref())
-        .bind(meta.original_year.as_deref())
         .bind(meta.disambiguation.clone())
         .bind(meta.total_tracks)
         .bind(meta.total_discs)
@@ -270,7 +269,7 @@ pub async fn insert_album(
 
     let id = uuid::Uuid::new_v4().to_string();
     sqlx::query(
-        "INSERT INTO albums (id, title, artist_id, date, release_mbid, release_group_mbid, release_artist_mbid, release_country, release_type, record_label, media, original_date, original_year, disambiguation, total_tracks, total_discs, cover) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO albums (id, title, artist_id, date, release_mbid, release_group_mbid, release_artist_mbid, release_country, release_type, record_label, media, original_date, disambiguation, total_tracks, total_discs, cover) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&id)
     .bind(title)
@@ -284,7 +283,6 @@ pub async fn insert_album(
     .bind(meta.record_label.as_deref())
     .bind(meta.media.as_deref())
     .bind(meta.original_date.as_deref())
-    .bind(meta.original_year.as_deref())
     .bind(meta.disambiguation.clone())
     .bind(meta.total_tracks)
     .bind(meta.total_discs)
@@ -827,7 +825,6 @@ fn map_album_row(row: sqlx::sqlite::SqliteRow) -> AlbumInfo {
         record_label: row.try_get("record_label").ok().flatten(),
         media: row.try_get("media").ok().flatten(),
         original_date: row.try_get("original_date").ok().flatten(),
-        original_year: row.try_get("original_year").ok().flatten(),
         total_tracks: row.try_get("total_tracks").unwrap_or(0),
         total_discs: row.try_get("total_discs").unwrap_or(0),
     }
@@ -1071,80 +1068,107 @@ pub async fn update_track(
     pool: &SqlitePool,
     track_id: &str,
     title: &str,
-    artists: &[(String, Option<String>)],
+    artists: &[(String, Option<String>, Option<String>)],
     album_title: &str,
-    album_artists: &[(String, Option<String>)],
-    release_mbid: Option<&str>,
-    date: Option<String>,
+    album_artists: &[(String, Option<String>, Option<String>)],
+    album_meta: &AlbumWriteMeta,
+    track_meta: &TrackTagMeta,
     track_num: Option<i32>,
     disc_num: Option<i32>,
-    mbid_recording: Option<&str>,
     lyrics: Option<&str>,
     cover: Option<&[u8]>,
     new_file_path: Option<&str>,
-    album_disambiguation: Option<String>,
-    total_discs: i32,
+    genres: Option<&[String]>,
 ) -> Result<()> {
     let mut tx = pool.begin().await?;
 
-    // Upsert each track artist
+    // Upsert each track artist (name, mbid, sort name).
     let mut artist_ids: Vec<String> = Vec::new();
-    for (name, mbid) in artists {
-        let id = upsert_artist_in_tx(&mut *tx, name, mbid.as_deref()).await?;
+    for (name, mbid, sort) in artists {
+        let id =
+            upsert_artist_with_sort_in_tx(&mut *tx, name, sort.as_deref(), mbid.as_deref()).await?;
         artist_ids.push(id);
     }
 
-    // Upsert each album artist
+    // Upsert each album artist.
     let mut album_artist_ids: Vec<String> = Vec::new();
-    for (name, mbid) in album_artists {
-        let id = upsert_artist_in_tx(&mut *tx, name, mbid.as_deref()).await?;
+    for (name, mbid, sort) in album_artists {
+        let id =
+            upsert_artist_with_sort_in_tx(&mut *tx, name, sort.as_deref(), mbid.as_deref()).await?;
         album_artist_ids.push(id);
     }
+    let album_artist_id = album_artist_ids
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("update_track needs at least one album artist"))?;
 
-    // Upsert album
+    // Upsert album. Every extended column is write-if-set (COALESCE), and the
+    // totals only ever grow (MAX), matching the scan/import convention.
     let album_id: String = {
         let existing: Option<String> =
             sqlx::query_scalar("SELECT id FROM albums WHERE title = ? AND artist_id = ?")
                 .bind(album_title)
-                .bind(&album_artist_ids[0])
+                .bind(album_artist_id)
                 .fetch_optional(&mut *tx)
                 .await?;
 
         if let Some(id) = existing {
-            sqlx::query("UPDATE albums SET date = COALESCE(?, date), release_mbid = COALESCE(?, release_mbid), disambiguation = COALESCE(?, disambiguation), total_discs = MAX(?, COALESCE(total_discs, 0)), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?")
-                .bind(date)
-                .bind(release_mbid)
-                .bind(album_disambiguation.as_deref())
-                .bind(total_discs)
-                .bind(&id)
-                .execute(&mut *tx)
-                .await?;
+            sqlx::query(
+                "UPDATE albums SET date = COALESCE(?, date), release_mbid = COALESCE(?, release_mbid), release_group_mbid = COALESCE(?, release_group_mbid), release_artist_mbid = COALESCE(?, release_artist_mbid), release_country = COALESCE(?, release_country), release_type = COALESCE(?, release_type), record_label = COALESCE(?, record_label), media = COALESCE(?, media), original_date = COALESCE(?, original_date), disambiguation = COALESCE(?, disambiguation), total_tracks = MAX(?, COALESCE(total_tracks, 0)), total_discs = MAX(?, COALESCE(total_discs, 0)), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
+            )
+            .bind(album_meta.date.clone())
+            .bind(album_meta.release_mbid.as_deref())
+            .bind(album_meta.release_group_mbid.as_deref())
+            .bind(album_meta.release_artist_mbid.as_deref())
+            .bind(album_meta.release_country.as_deref())
+            .bind(album_meta.release_type.as_deref())
+            .bind(album_meta.record_label.as_deref())
+            .bind(album_meta.media.as_deref())
+            .bind(album_meta.original_date.as_deref())
+            .bind(album_meta.disambiguation.as_deref())
+            .bind(album_meta.total_tracks)
+            .bind(album_meta.total_discs)
+            .bind(&id)
+            .execute(&mut *tx)
+            .await?;
             id
         } else {
             let id = uuid::Uuid::new_v4().to_string();
             sqlx::query(
-                "INSERT INTO albums (id, title, artist_id, date, release_mbid, disambiguation, total_discs) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO albums (id, title, artist_id, date, release_mbid, release_group_mbid, release_artist_mbid, release_country, release_type, record_label, media, original_date, disambiguation, total_tracks, total_discs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(&id)
             .bind(album_title)
-            .bind(&album_artist_ids[0])
-            .bind(date)
-            .bind(release_mbid)
-            .bind(album_disambiguation.as_deref())
-            .bind(total_discs)
+            .bind(album_artist_id)
+            .bind(album_meta.date.clone())
+            .bind(album_meta.release_mbid.as_deref())
+            .bind(album_meta.release_group_mbid.as_deref())
+            .bind(album_meta.release_artist_mbid.as_deref())
+            .bind(album_meta.release_country.as_deref())
+            .bind(album_meta.release_type.as_deref())
+            .bind(album_meta.record_label.as_deref())
+            .bind(album_meta.media.as_deref())
+            .bind(album_meta.original_date.as_deref())
+            .bind(album_meta.disambiguation.as_deref())
+            .bind(album_meta.total_tracks)
+            .bind(album_meta.total_discs)
             .execute(&mut *tx)
             .await?;
             id
         }
     };
 
-    // Update track
+    // Update track. Every extended column is write-if-set (COALESCE).
     let file_path_update = new_file_path.map(|p| p.to_string());
     sqlx::query(
         r#"UPDATE tracks SET title = ?, album_id = ?, artist_id = ?,
            disc_num = COALESCE(?, disc_num),
            track_num = COALESCE(?, track_num),
            mbid_recording = COALESCE(?, mbid_recording),
+           mbid_track = COALESCE(?, mbid_track),
+           isrc = COALESCE(?, isrc),
+           comment = COALESCE(?, comment),
+           copyright = COALESCE(?, copyright),
+           script = COALESCE(?, script),
            lyrics = COALESCE(?, lyrics),
            cover = COALESCE(?, cover),
            file_path = COALESCE(?, file_path),
@@ -1153,10 +1177,15 @@ pub async fn update_track(
     )
     .bind(title)
     .bind(&album_id)
-    .bind(&artist_ids[0])
+    .bind(artist_ids.first().map(String::as_str))
     .bind(disc_num)
     .bind(track_num)
-    .bind(mbid_recording)
+    .bind(track_meta.mbid_recording.as_deref())
+    .bind(track_meta.mbid_track.as_deref())
+    .bind(track_meta.isrc.as_deref())
+    .bind(track_meta.comment.as_deref())
+    .bind(track_meta.copyright.as_deref())
+    .bind(track_meta.script.as_deref())
     .bind(lyrics)
     .bind(cover)
     .bind(file_path_update.as_deref())
@@ -1188,6 +1217,25 @@ pub async fn update_track(
             .bind(aid)
             .execute(&mut *tx)
             .await?;
+    }
+
+    // Rebuild genre links only when the caller supplied a genre list.
+    if let Some(genres) = genres {
+        sqlx::query("DELETE FROM track_genres WHERE track_id = ?")
+            .bind(track_id)
+            .execute(&mut *tx)
+            .await?;
+        for name in genres {
+            if name.trim().is_empty() {
+                continue;
+            }
+            let genre_id = upsert_genre_in_tx(&mut *tx, name).await?;
+            sqlx::query("INSERT OR IGNORE INTO track_genres (track_id, genre_id) VALUES (?, ?)")
+                .bind(track_id)
+                .bind(&genre_id)
+                .execute(&mut *tx)
+                .await?;
+        }
     }
 
     tx.commit().await?;
@@ -1385,7 +1433,6 @@ async fn upsert_album_from_tag_in_tx(
 ) -> Result<String> {
     // Multi-value release types are stored semicolon-separated (see scan.rs).
     let release_type = (!tag.release_type.is_empty()).then(|| tag.release_type.join(";"));
-    let original_year = original_year_of(tag.original_date.as_deref());
 
     let existing: Option<String> =
         sqlx::query_scalar("SELECT id FROM albums WHERE title = ? AND artist_id = ?")
@@ -1396,7 +1443,7 @@ async fn upsert_album_from_tag_in_tx(
 
     if let Some(id) = existing {
         sqlx::query(
-            "UPDATE albums SET date = ?, release_mbid = ?, release_group_mbid = ?, release_artist_mbid = ?, release_country = ?, release_type = ?, record_label = ?, media = ?, original_date = ?, original_year = ?, total_tracks = ?, total_discs = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
+            "UPDATE albums SET date = ?, release_mbid = ?, release_group_mbid = ?, release_artist_mbid = ?, release_country = ?, release_type = ?, record_label = ?, media = ?, original_date = ?, total_tracks = ?, total_discs = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
         )
         .bind(tag.release_date.as_deref())
         .bind(tag.mbid_release.as_deref())
@@ -1407,7 +1454,6 @@ async fn upsert_album_from_tag_in_tx(
         .bind(tag.record_label.as_deref())
         .bind(tag.media.as_deref())
         .bind(tag.original_date.as_deref())
-        .bind(original_year.as_deref())
         .bind(tag.total_tracks)
         .bind(tag.total_discs)
         .bind(&id)
@@ -1417,7 +1463,7 @@ async fn upsert_album_from_tag_in_tx(
     } else {
         let id = uuid::Uuid::new_v4().to_string();
         sqlx::query(
-            "INSERT INTO albums (id, title, artist_id, date, release_mbid, release_group_mbid, release_artist_mbid, release_country, release_type, record_label, media, original_date, original_year, total_tracks, total_discs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO albums (id, title, artist_id, date, release_mbid, release_group_mbid, release_artist_mbid, release_country, release_type, record_label, media, original_date, total_tracks, total_discs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&id)
         .bind(&tag.album)
@@ -1431,7 +1477,6 @@ async fn upsert_album_from_tag_in_tx(
         .bind(tag.record_label.as_deref())
         .bind(tag.media.as_deref())
         .bind(tag.original_date.as_deref())
-        .bind(original_year.as_deref())
         .bind(tag.total_tracks)
         .bind(tag.total_discs)
         .execute(&mut *conn)
@@ -1490,39 +1535,6 @@ async fn upsert_genre_in_tx(conn: &mut sqlx::SqliteConnection, name: &str) -> Re
         .execute(&mut *conn)
         .await?;
     Ok(id)
-}
-
-async fn upsert_artist_in_tx(
-    conn: &mut sqlx::SqliteConnection,
-    name: &str,
-    mbid: Option<&str>,
-) -> Result<String> {
-    let existing: Option<String> = sqlx::query_scalar("SELECT id FROM artists WHERE name = ?")
-        .bind(name)
-        .fetch_optional(&mut *conn)
-        .await?;
-
-    if let Some(id) = existing {
-        if let Some(mbid) = mbid {
-            sqlx::query("UPDATE artists SET mbid = COALESCE(?, mbid), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?")
-                .bind(mbid)
-                .bind(&id)
-                .execute(&mut *conn)
-                .await?;
-        }
-        Ok(id)
-    } else {
-        let id = uuid::Uuid::new_v4().to_string();
-        let sort_name = derive_sort_name(name);
-        sqlx::query("INSERT INTO artists (id, name, sort_name, mbid) VALUES (?, ?, ?, ?)")
-            .bind(&id)
-            .bind(name)
-            .bind(&sort_name)
-            .bind(mbid)
-            .execute(&mut *conn)
-            .await?;
-        Ok(id)
-    }
 }
 
 pub async fn find_or_create_collection(

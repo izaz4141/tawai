@@ -21,7 +21,6 @@ CREATE TABLE IF NOT EXISTS albums (
     record_label TEXT DEFAULT NULL,
     media TEXT DEFAULT NULL,
     original_date TEXT DEFAULT NULL,
-    original_year TEXT DEFAULT NULL,
     total_tracks INTEGER NOT NULL DEFAULT 0,
     disambiguation TEXT DEFAULT NULL,
     total_discs INTEGER NOT NULL DEFAULT 0,

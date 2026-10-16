@@ -3,14 +3,12 @@
 Canonical metadata vocabulary for the audio tag model and the tag editor. Terms
 here are load-bearing: they disambiguate fields that are easy to confuse.
 
-## Release date vs Original date vs Original year
+## Release date vs Original date
 
 - **Release date** (`release_date`, lofty `tag.date()`) — the date of *this*
   release.
 - **Original date** (`original_date`, `ItemKey::OriginalReleaseDate`) — the date
   of the work's first release.
-- **Original year** (`original_year`) — the year component of `original_date`,
-  derived at read time. Read-only in the tag editor.
 
 ## Media
 

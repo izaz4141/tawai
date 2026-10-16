@@ -668,7 +668,6 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
             ),
             _buildField('date', 'Date'),
             _buildField('original_date', 'Original Date'),
-            _buildReadOnlyField('Original Year', tags.originalYear?.toString()),
             _buildField('media', 'Media'),
             _buildField('script', 'Script'),
           ]),

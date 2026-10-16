@@ -681,7 +681,6 @@ class APIService {
             recordLabel: m['record_label'] as String?,
             media: m['media'] as String?,
             originalDate: m['original_date'] as String?,
-            originalYear: m['original_year'] as String?,
             totalTracks: (m['total_tracks'] as num?)?.toInt() ?? 0,
             totalDiscs: (m['total_discs'] as num?)?.toInt() ?? 0,
           );
@@ -1412,16 +1411,35 @@ class APIService {
     String? title,
     String? artist,
     String? artistMbid,
+    String? albumArtist,
+    String? albumArtistMbid,
+    List<String>? artists,
+    List<String>? albumArtists,
+    String? artistSort,
+    String? albumArtistSort,
     String? album,
     String? albumMbid,
     String? albumDisambiguation,
     String? releaseDate,
+    String? originalDate,
+    String? releaseGroupMbid,
+    String? releaseCountry,
+    List<String>? releaseType,
+    String? recordLabel,
+    String? media,
     int? trackNum,
     int? discNum,
+    int? totalTracks,
+    int? totalDiscs,
     String? mbidRecording,
+    String? mbidTrack,
+    String? isrc,
+    String? comment,
+    String? copyright,
+    String? script,
+    List<String>? genres,
     String? lyrics,
     List<int>? coverBytes,
-    int? totalDiscs,
     String? filePath,
     String? targetSourceId,
   }) async {
@@ -1433,20 +1451,43 @@ class APIService {
       };
       if (title != null) body['title'] = title;
       if (artist != null) body['artist'] = artist;
-      if (album != null) body['album'] = album;
       if (artistMbid != null) body['artist_mbid'] = artistMbid;
+      if (albumArtist != null) body['album_artist'] = albumArtist;
+      if (albumArtistMbid != null) body['album_artist_mbid'] = albumArtistMbid;
+      if (artists != null) body['artists'] = artists;
+      if (albumArtists != null) body['album_artists'] = albumArtists;
+      if (artistSort != null) body['artist_sort'] = artistSort;
+      if (albumArtistSort != null) body['album_artist_sort'] = albumArtistSort;
+      if (album != null) body['album'] = album;
       if (albumMbid != null) body['album_mbid'] = albumMbid;
       if (albumDisambiguation != null) {
         body['album_disambiguation'] = albumDisambiguation;
       }
       if (releaseDate != null) body['release_date'] = releaseDate;
+      if (originalDate != null) body['original_date'] = originalDate;
+      if (releaseGroupMbid != null)
+        body['release_group_mbid'] = releaseGroupMbid;
+      if (releaseCountry != null) body['release_country'] = releaseCountry;
+      if (releaseType != null) body['release_type'] = releaseType;
+      if (recordLabel != null) body['record_label'] = recordLabel;
+      if (media != null) body['media'] = media;
       if (trackNum != null) body['track_num'] = trackNum;
       if (discNum != null) body['disc_num'] = discNum;
+      if (totalTracks != null && totalTracks > 0) {
+        body['total_tracks'] = totalTracks;
+      }
+      if (totalDiscs != null && totalDiscs > 0) {
+        body['total_discs'] = totalDiscs;
+      }
       if (mbidRecording != null) body['mbid_recording'] = mbidRecording;
+      if (mbidTrack != null) body['mbid_track'] = mbidTrack;
+      if (isrc != null) body['isrc'] = isrc;
+      if (comment != null) body['comment'] = comment;
+      if (copyright != null) body['copyright'] = copyright;
+      if (script != null) body['script'] = script;
+      if (genres != null) body['genres'] = genres;
       if (lyrics != null) body['lyrics'] = lyrics;
       if (coverBytes != null) body['cover_bytes'] = base64Encode(coverBytes);
-      if (totalDiscs != null && totalDiscs > 0)
-        body['total_discs'] = totalDiscs;
       if (filePath != null) body['file_path'] = filePath;
       if (targetSourceId != null) body['target_source_id'] = targetSourceId;
 
@@ -2186,7 +2227,6 @@ class APIService {
       totalDiscs: (data['total_discs'] as num?)?.toInt(),
       releaseDate: data['release_date'] as String?,
       originalDate: data['original_date'] as String?,
-      originalYear: (data['original_year'] as num?)?.toInt(),
       releaseCountry: data['release_country'] as String?,
       releaseType: _stringList(data['release_type']),
       recordLabel: data['record_label'] as String?,

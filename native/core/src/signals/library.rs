@@ -57,7 +57,6 @@ pub struct AlbumInfo {
     pub record_label: Option<String>,
     pub media: Option<String>,
     pub original_date: Option<String>,
-    pub original_year: Option<String>,
     pub total_tracks: i64,
     pub total_discs: i64,
 }
