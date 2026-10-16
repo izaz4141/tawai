@@ -832,8 +832,14 @@ fn map_album_row(row: sqlx::postgres::PgRow) -> AlbumInfo {
         record_label: row.try_get("record_label").ok().flatten(),
         media: row.try_get("media").ok().flatten(),
         original_date: row.try_get("original_date").ok().flatten(),
-        total_tracks: row.try_get("total_tracks").unwrap_or(0),
-        total_discs: row.try_get("total_discs").unwrap_or(0),
+        total_tracks: row
+            .try_get::<i32, _>("total_tracks")
+            .map(|v| v as i64)
+            .unwrap_or(0),
+        total_discs: row
+            .try_get::<i32, _>("total_discs")
+            .map(|v| v as i64)
+            .unwrap_or(0),
     }
 }
 
