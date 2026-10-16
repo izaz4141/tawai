@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -11,6 +12,7 @@ import 'package:tawai/ui/widgets/components/cached_network_image.dart';
 import 'package:tawai/ui/widgets/components/editable_cover.dart';
 import 'package:tawai/ui/widgets/components/sheet.dart';
 import 'package:tawai/ui/widgets/components/shimmer.dart';
+import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/settings.dart';
 
 class ComparisonSheetResult {
@@ -157,11 +159,17 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
   late final TextEditingController _lyricsCtrl;
 
   late final List<TextEditingController> _controllers;
+  /// Controllers that feed the naming-pattern path preview.
+  late final List<TextEditingController> _previewControllers;
   late final List<_ComparisonRow> _rows;
 
   late final String _origLyrics;
 
   String? _targetSourceId;
+
+  Timer? _pathPreviewDebounce;
+  String _pathPreview = '';
+  int _previewSeq = 0;
 
   bool get _isDownloadFolder =>
       widget.currentTrack.sourceType == 'download_folder';
@@ -360,13 +368,33 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
       edit('Copyright', _copyrightCtrl, () => ''),
 
       _SectionHeader('Technical'),
-      ro('File Path', () => widget.currentTrack.filePath),
+      ro(
+        'File Path',
+        () => widget.currentTrack.filePath,
+        () => _pathPreview,
+      ),
       ro('Encoder', () => widget.currentTrack.encoder ?? ''),
     ];
 
     if (_isDownloadFolder && widget.controller.librarySources.isNotEmpty) {
       _targetSourceId = widget.controller.librarySources.first.id;
     }
+
+    // Recompute the destination preview as the pattern-relevant fields change.
+    _previewControllers = [
+      _titleCtrl,
+      _artistCtrl,
+      _albumArtistCtrl,
+      _albumCtrl,
+      _dateCtrl,
+      _trackNumCtrl,
+      _discNumCtrl,
+      _totalDiscsCtrl,
+    ];
+    for (final ctrl in _previewControllers) {
+      ctrl.addListener(_schedulePathPreview);
+    }
+    _updatePathPreview();
 
     _shimmerController = AnimationController(
       vsync: this,
@@ -408,6 +436,10 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
 
   @override
   void dispose() {
+    _pathPreviewDebounce?.cancel();
+    for (final ctrl in _previewControllers) {
+      ctrl.removeListener(_schedulePathPreview);
+    }
     for (final ctrl in _controllers) {
       ctrl.dispose();
     }
@@ -478,6 +510,51 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
   }
 
   String? _textOrNull(String value) => value.isEmpty ? null : value;
+
+  /// Debounce a preview recompute so rapid edits only trigger one preview.
+  void _schedulePathPreview() {
+    _pathPreviewDebounce?.cancel();
+    _pathPreviewDebounce = Timer(
+      const Duration(milliseconds: 200),
+      _updatePathPreview,
+    );
+  }
+
+  /// Recompute the destination preview from the currently edited values using
+  /// the configured naming pattern. Mirrors the inputs `_apply` sends so the
+  /// preview matches where `Apply` will place the file. The result is relative
+  /// to the library source root (the root itself is resolved by the backend at
+  /// apply time). No preview is shown when the track has no stored path.
+  Future<void> _updatePathPreview() async {
+    if (widget.currentTrack.filePath.isEmpty) {
+      if (mounted && _pathPreview.isNotEmpty) {
+        setState(() => _pathPreview = '');
+      }
+      return;
+    }
+    final seq = ++_previewSeq;
+    try {
+      final result = await BridgeService.instance.formatNamingPreview(
+        pattern: SettingsManager.namingPattern.value,
+        title: _titleCtrl.text,
+        artist: _artistCtrl.text,
+        albumArtist: _albumArtistCtrl.text.isNotEmpty
+            ? _albumArtistCtrl.text
+            : _artistCtrl.text,
+        album: _albumCtrl.text,
+        releaseDate: _textOrNull(_dateCtrl.text),
+        trackNumber: int.tryParse(_trackNumCtrl.text) ?? 0,
+        discNumber: int.tryParse(_discNumCtrl.text) ?? 1,
+        albumDisambiguation: widget.album.albumDisambiguation,
+        totalDiscs: int.tryParse(_totalDiscsCtrl.text) ?? 0,
+      );
+      if (!mounted || seq != _previewSeq) return;
+      setState(() => _pathPreview = result);
+    } catch (_) {
+      if (!mounted || seq != _previewSeq) return;
+      setState(() => _pathPreview = '');
+    }
+  }
 
   /// Splits a `;`-separated multi-value field into a list, or null when empty.
   List<String>? _splitList(String value) {
