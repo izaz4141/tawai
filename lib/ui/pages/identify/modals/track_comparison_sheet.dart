@@ -43,6 +43,43 @@ class ComparisonSheetResult {
   });
 }
 
+/// One row of the comparison sheet. Concrete variants are rendered by the
+/// sheet and, for [_EditableField], driven by Fill Missing / Replace All.
+sealed class _ComparisonRow {}
+
+class _SectionHeader extends _ComparisonRow {
+  final String title;
+  _SectionHeader(this.title);
+}
+
+class _EditableField extends _ComparisonRow {
+  final String label;
+  final TextEditingController controller;
+  final String Function() remote;
+  final String original;
+
+  _EditableField({
+    required this.label,
+    required this.controller,
+    required this.remote,
+    required this.original,
+  });
+}
+
+class _ReadonlyField extends _ComparisonRow {
+  final String label;
+  final String Function() current;
+  final String Function() remote;
+
+  _ReadonlyField({
+    required this.label,
+    required this.current,
+    required this.remote,
+  });
+}
+
+class _LyricsField extends _ComparisonRow {}
+
 Future<ComparisonSheetResult?> showTrackComparisonSheet({
   required BuildContext context,
   required IdentifyController controller,
@@ -50,6 +87,7 @@ Future<ComparisonSheetResult?> showTrackComparisonSheet({
   required ReleaseTrackInfo correctTrack,
   required IdentifyAlbumResult album,
   required String recordingArtist,
+  AlbumInfo? albumInfo,
 }) {
   return showModalBottomSheet<ComparisonSheetResult>(
     context: context,
@@ -60,6 +98,7 @@ Future<ComparisonSheetResult?> showTrackComparisonSheet({
       correctTrack: correctTrack,
       album: album,
       recordingArtist: recordingArtist,
+      albumInfo: albumInfo,
     ),
   );
 }
@@ -70,12 +109,14 @@ class _TrackComparisonSheet extends StatefulWidget {
   final ReleaseTrackInfo correctTrack;
   final IdentifyAlbumResult album;
   final String recordingArtist;
+  final AlbumInfo? albumInfo;
   const _TrackComparisonSheet({
     required this.controller,
     required this.currentTrack,
     required this.correctTrack,
     required this.album,
     required this.recordingArtist,
+    this.albumInfo,
   });
 
   @override
@@ -86,25 +127,41 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     with SingleTickerProviderStateMixin {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _artistCtrl;
+  late final TextEditingController _artistsCtrl;
   late final TextEditingController _albumCtrl;
-  late final TextEditingController _discNumCtrl;
+  late final TextEditingController _albumArtistCtrl;
+  late final TextEditingController _albumArtistsCtrl;
+  late final TextEditingController _genreCtrl;
   late final TextEditingController _trackNumCtrl;
+  late final TextEditingController _totalTracksCtrl;
+  late final TextEditingController _discNumCtrl;
+  late final TextEditingController _totalDiscsCtrl;
+  late final TextEditingController _dateCtrl;
+  late final TextEditingController _originalDateCtrl;
+  late final TextEditingController _originalYearCtrl;
+  late final TextEditingController _mediaCtrl;
+  late final TextEditingController _scriptCtrl;
+  late final TextEditingController _isrcCtrl;
+  late final TextEditingController _recordLabelCtrl;
+  late final TextEditingController _releaseCountryCtrl;
+  late final TextEditingController _releaseTypeCtrl;
+  late final TextEditingController _mbidRecordingCtrl;
+  late final TextEditingController _mbidTrackCtrl;
+  late final TextEditingController _mbidArtistCtrl;
+  late final TextEditingController _mbidReleaseCtrl;
+  late final TextEditingController _mbidAlbumArtistCtrl;
+  late final TextEditingController _mbidReleaseGroupCtrl;
+  late final TextEditingController _artistSortCtrl;
+  late final TextEditingController _albumArtistSortCtrl;
+  late final TextEditingController _commentCtrl;
+  late final TextEditingController _copyrightCtrl;
   late final TextEditingController _lyricsCtrl;
-  late final TextEditingController _yearCtrl;
 
-  late final String _origTitle;
-  late final String _origArtist;
-  late final String _origAlbum;
-  late final String _origDiscNum;
-  late final String _origTrackNum;
+  late final List<TextEditingController> _controllers;
+  late final List<_ComparisonRow> _rows;
+
   late final String _origLyrics;
-  late final String _origDate;
-  late final String? _origMbidAlbum;
-  late final String? _origMbidArtist;
 
-  String? _appliedRemoteRecId;
-  String? _appliedRemoteAlbumId;
-  String? _appliedRemoteArtistId;
   String? _targetSourceId;
 
   bool get _isDownloadFolder =>
@@ -123,44 +180,193 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
       : widget.currentTrack.title;
   String get _remoteArtist => widget.recordingArtist;
   String get _remoteAlbum => widget.album.albumTitle;
+  String get _remoteAlbumArtist => widget.album.releaseArtist ?? '';
   String get _remoteDiscNum => widget.correctTrack.discNumber?.toString() ?? '';
   String get _remoteTrackNum => widget.correctTrack.position?.toString() ?? '';
   String get _remoteMbid => widget.correctTrack.id;
+  String get _remoteReleaseMbid => widget.album.albumMbid ?? '';
+  String get _remoteAlbumArtistMbid => widget.album.releaseArtistMbid ?? '';
   String get _remoteLyrics => widget.correctTrack.lyrics ?? '';
   String _remoteLyricsResult = '';
   String get _remoteLyricsDisplay =>
       _remoteLyricsResult.isNotEmpty ? _remoteLyricsResult : _remoteLyrics;
   String get _remoteDate => widget.album.releaseDate ?? '';
 
+  String _joinNames(List<ArtistInfo> artists) =>
+      artists.map((a) => a.name).where((n) => n.isNotEmpty).join('; ');
+
+  String _fmtGain(double? gain) =>
+      gain == null ? '' : '${gain.toStringAsFixed(2)} dB';
+
   @override
   void initState() {
     super.initState();
-    _titleCtrl = TextEditingController(text: widget.currentTrack.title);
-    _artistCtrl = TextEditingController(
-      text: widget.currentTrack.artistsString,
+    final t = widget.currentTrack;
+    final ai = widget.albumInfo;
+
+    _titleCtrl = TextEditingController(text: t.title);
+    _artistCtrl = TextEditingController(text: t.artistsString);
+    _artistsCtrl = TextEditingController(text: _joinNames(t.artists));
+    _albumCtrl = TextEditingController(text: t.albumTitle);
+    _albumArtistCtrl = TextEditingController(text: ai?.artistsString ?? '');
+    _albumArtistsCtrl = TextEditingController(
+      text: _joinNames(ai?.artists ?? const []),
     );
-    _albumCtrl = TextEditingController(text: widget.currentTrack.albumTitle);
-    _discNumCtrl = TextEditingController(
-      text: widget.currentTrack.discNum?.toString() ?? '',
+    _genreCtrl = TextEditingController(text: t.genres.join('; '));
+    _trackNumCtrl = TextEditingController(text: t.trackNum?.toString() ?? '');
+    _totalTracksCtrl = TextEditingController(
+      text: (ai != null && ai.totalTracks > 0) ? ai.totalTracks.toString() : '',
     );
-    _trackNumCtrl = TextEditingController(
-      text: widget.currentTrack.trackNum?.toString() ?? '',
+    _discNumCtrl = TextEditingController(text: t.discNum?.toString() ?? '');
+    _totalDiscsCtrl = TextEditingController(
+      text: (ai != null && ai.totalDiscs > 0) ? ai.totalDiscs.toString() : '',
     );
-    _lyricsCtrl = TextEditingController(text: widget.currentTrack.lyrics ?? '');
-    _yearCtrl = TextEditingController(
-      text: widget.currentTrack.releaseDate ?? '',
+    _dateCtrl = TextEditingController(text: t.releaseDate ?? '');
+    _originalDateCtrl = TextEditingController(text: ai?.originalDate ?? '');
+    _originalYearCtrl = TextEditingController(text: ai?.originalYear ?? '');
+    _mediaCtrl = TextEditingController(text: ai?.media ?? '');
+    _scriptCtrl = TextEditingController(text: t.script ?? '');
+    _isrcCtrl = TextEditingController(text: t.isrc ?? '');
+    _recordLabelCtrl = TextEditingController(text: ai?.recordLabel ?? '');
+    _releaseCountryCtrl = TextEditingController(text: ai?.releaseCountry ?? '');
+    _releaseTypeCtrl = TextEditingController(text: ai?.releaseType ?? '');
+    _mbidRecordingCtrl = TextEditingController(text: t.mbidRecording ?? '');
+    _mbidTrackCtrl = TextEditingController(text: t.mbidTrack ?? '');
+    _mbidArtistCtrl = TextEditingController(
+      text: t.artistMbid ?? t.artists.firstOrNull?.mbid ?? '',
     );
-    _origTitle = widget.currentTrack.title;
-    _origArtist = widget.currentTrack.artistsString;
-    _origAlbum = widget.currentTrack.albumTitle;
-    _origDiscNum = widget.currentTrack.discNum?.toString() ?? '';
-    _origTrackNum = widget.currentTrack.trackNum?.toString() ?? '';
-    _origLyrics = widget.currentTrack.lyrics ?? '';
-    _origDate = widget.currentTrack.releaseDate ?? '';
-    _origMbidAlbum = widget.currentTrack.releaseMbid;
-    _origMbidArtist =
-        widget.currentTrack.artistMbid ??
-        widget.currentTrack.artists.firstOrNull?.mbid;
+    _mbidReleaseCtrl = TextEditingController(text: t.releaseMbid ?? '');
+    _mbidAlbumArtistCtrl = TextEditingController(
+      text: ai?.releaseArtistMbid ?? widget.album.releaseArtistMbid ?? '',
+    );
+    _mbidReleaseGroupCtrl = TextEditingController(
+      text: ai?.releaseGroupMbid ?? '',
+    );
+    _artistSortCtrl = TextEditingController(
+      text: t.artists.firstOrNull?.sortName ?? '',
+    );
+    _albumArtistSortCtrl = TextEditingController(
+      text: ai?.artists.firstOrNull?.sortName ?? '',
+    );
+    _commentCtrl = TextEditingController(text: t.comment ?? '');
+    _copyrightCtrl = TextEditingController(text: t.copyright ?? '');
+    _lyricsCtrl = TextEditingController(text: t.lyrics ?? '');
+    _origLyrics = t.lyrics ?? '';
+
+    _controllers = [
+      _titleCtrl,
+      _artistCtrl,
+      _artistsCtrl,
+      _albumCtrl,
+      _albumArtistCtrl,
+      _albumArtistsCtrl,
+      _genreCtrl,
+      _trackNumCtrl,
+      _totalTracksCtrl,
+      _discNumCtrl,
+      _totalDiscsCtrl,
+      _dateCtrl,
+      _originalDateCtrl,
+      _originalYearCtrl,
+      _mediaCtrl,
+      _scriptCtrl,
+      _isrcCtrl,
+      _recordLabelCtrl,
+      _releaseCountryCtrl,
+      _releaseTypeCtrl,
+      _mbidRecordingCtrl,
+      _mbidTrackCtrl,
+      _mbidArtistCtrl,
+      _mbidReleaseCtrl,
+      _mbidAlbumArtistCtrl,
+      _mbidReleaseGroupCtrl,
+      _artistSortCtrl,
+      _albumArtistSortCtrl,
+      _commentCtrl,
+      _copyrightCtrl,
+      _lyricsCtrl,
+    ];
+
+    _EditableField edit(
+      String label,
+      TextEditingController controller,
+      String Function() remote,
+    ) => _EditableField(
+      label: label,
+      controller: controller,
+      remote: remote,
+      original: controller.text,
+    );
+
+    _ReadonlyField ro(
+      String label,
+      String Function() current, [
+      String Function()? remote,
+    ]) => _ReadonlyField(
+      label: label,
+      current: current,
+      remote: remote ?? () => '',
+    );
+
+    _rows = [
+      _SectionHeader('Basic'),
+      edit('Title', _titleCtrl, () => _remoteTitle),
+      edit('Artist', _artistCtrl, () => _remoteArtist),
+      edit('Artists', _artistsCtrl, () => _remoteArtist),
+      edit('Album', _albumCtrl, () => _remoteAlbum),
+      edit('Album Artist', _albumArtistCtrl, () => _remoteAlbumArtist),
+      edit('Album Artists', _albumArtistsCtrl, () => _remoteAlbumArtist),
+      edit('Genre(s)', _genreCtrl, () => ''),
+
+      _SectionHeader('Track / Release'),
+      edit('Track #', _trackNumCtrl, () => _remoteTrackNum),
+      edit('Total Tracks', _totalTracksCtrl, () => ''),
+      edit('Disc #', _discNumCtrl, () => _remoteDiscNum),
+      edit('Total Discs', _totalDiscsCtrl, () => ''),
+      edit('Date', _dateCtrl, () => _remoteDate),
+      edit('Original Date', _originalDateCtrl, () => ''),
+      edit('Original Year', _originalYearCtrl, () => ''),
+      edit('Media', _mediaCtrl, () => ''),
+      edit('Script', _scriptCtrl, () => ''),
+      ro(
+        'Length',
+        () => _fmtDuration(widget.currentTrack.durationSecs),
+        () => _fmtDuration(widget.correctTrack.durationSecs),
+      ),
+
+      _SectionHeader('Release / Identifiers'),
+      edit('Record Label', _recordLabelCtrl, () => ''),
+      edit('Release Country', _releaseCountryCtrl, () => ''),
+      edit('Release Type', _releaseTypeCtrl, () => ''),
+      edit('ISRC', _isrcCtrl, () => ''),
+      edit('Recording MBID', _mbidRecordingCtrl, () => _remoteMbid),
+      edit('Track MBID', _mbidTrackCtrl, () => ''),
+      edit('Artist MBID', _mbidArtistCtrl, () => ''),
+      edit('Release MBID', _mbidReleaseCtrl, () => _remoteReleaseMbid),
+      edit(
+        'Album Artist MBID',
+        _mbidAlbumArtistCtrl,
+        () => _remoteAlbumArtistMbid,
+      ),
+      edit('Release Group MBID', _mbidReleaseGroupCtrl, () => ''),
+
+      _SectionHeader('Sorting'),
+      edit('Artist Sort', _artistSortCtrl, () => ''),
+      edit('Album Artist Sort', _albumArtistSortCtrl, () => ''),
+
+      _SectionHeader('ReplayGain'),
+      ro('Track Gain', () => _fmtGain(widget.currentTrack.trackGain)),
+      ro('Track Peak', () => widget.currentTrack.trackPeak?.toString() ?? ''),
+
+      _SectionHeader('Lyrics / Comment / Copyright'),
+      _LyricsField(),
+      edit('Comment', _commentCtrl, () => ''),
+      edit('Copyright', _copyrightCtrl, () => ''),
+
+      _SectionHeader('Technical'),
+      ro('File Path', () => widget.currentTrack.filePath),
+      ro('Encoder', () => widget.currentTrack.encoder ?? ''),
+    ];
 
     if (_isDownloadFolder && widget.controller.librarySources.isNotEmpty) {
       _targetSourceId = widget.controller.librarySources.first.id;
@@ -206,45 +412,42 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
 
   @override
   void dispose() {
-    _titleCtrl.dispose();
-    _artistCtrl.dispose();
-    _albumCtrl.dispose();
-    _discNumCtrl.dispose();
-    _trackNumCtrl.dispose();
-    _lyricsCtrl.dispose();
-    _yearCtrl.dispose();
+    for (final ctrl in _controllers) {
+      ctrl.dispose();
+    }
     _shimmerController.dispose();
     super.dispose();
   }
 
   void _fillMissing() {
     setState(() {
-      if (_titleCtrl.text.isEmpty) _titleCtrl.text = _remoteTitle;
-      if (_artistCtrl.text.isEmpty) _artistCtrl.text = _remoteArtist;
-      if (_albumCtrl.text.isEmpty) _albumCtrl.text = _remoteAlbum;
-      if (_discNumCtrl.text.isEmpty) _discNumCtrl.text = _remoteDiscNum;
-      if (_trackNumCtrl.text.isEmpty) _trackNumCtrl.text = _remoteTrackNum;
-      if (_lyricsCtrl.text.isEmpty) _lyricsCtrl.text = _remoteLyricsDisplay;
-      if (_yearCtrl.text.isEmpty) _yearCtrl.text = _remoteDate;
-      _appliedRemoteRecId ??= widget.correctTrack.id;
-      _appliedRemoteAlbumId ??= widget.album.albumMbid;
-      _appliedRemoteArtistId ??= widget.album.releaseArtistMbid;
+      for (final row in _rows) {
+        if (row is _EditableField &&
+            row.controller.text.isEmpty &&
+            row.remote().isNotEmpty) {
+          row.controller.text = row.remote();
+        }
+      }
+      if (_lyricsCtrl.text.isEmpty) {
+        _lyricsCtrl.text = _remoteLyricsDisplay;
+      }
     });
     if (_coverBytes == null) _downloadCover();
   }
 
   void _replaceAll() {
     setState(() {
-      _titleCtrl.text = _remoteTitle;
-      _artistCtrl.text = _remoteArtist;
-      _albumCtrl.text = _remoteAlbum;
-      _discNumCtrl.text = _remoteDiscNum;
-      _trackNumCtrl.text = _remoteTrackNum;
-      _lyricsCtrl.text = _remoteLyricsDisplay;
-      _yearCtrl.text = _remoteDate;
-      _appliedRemoteRecId = widget.correctTrack.id;
-      _appliedRemoteAlbumId = widget.album.albumMbid;
-      _appliedRemoteArtistId = widget.album.releaseArtistMbid;
+      for (final row in _rows) {
+        // Only overwrite where a MusicBrainz reference exists; an empty
+        // reference must not wipe a local value. Use the row's arrow to clear
+        // a field explicitly.
+        if (row is _EditableField && row.remote().isNotEmpty) {
+          row.controller.text = row.remote();
+        }
+      }
+      if (_remoteLyricsDisplay.isNotEmpty) {
+        _lyricsCtrl.text = _remoteLyricsDisplay;
+      }
     });
     _downloadCover();
   }
@@ -278,6 +481,8 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     });
   }
 
+  String? _textOrNull(String value) => value.isEmpty ? null : value;
+
   Future<void> _apply() async {
     if (_isDownloadFolder && _targetSourceId == null) {
       if (!mounted) return;
@@ -291,6 +496,13 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     setState(() => _applying = true);
     try {
       final st = widget.currentTrack;
+
+      // `applyIdentification`'s `artistMbid` currently writes both the track
+      // artist MBID and the album-artist MBID (ticket 07 splits them apart).
+      // Prefer an edited track artist MBID, falling back to the album-artist
+      // MBID to preserve the previous identification behaviour.
+      final albumArtistMbid = _textOrNull(_mbidAlbumArtistCtrl.text);
+      final artistMbid = _textOrNull(_mbidArtistCtrl.text) ?? albumArtistMbid;
 
       var coverBytes = _coverBytes;
       if (_coverUrl != null && coverBytes == null) {
@@ -317,19 +529,15 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
         trackId: st.id,
         title: _titleCtrl.text,
         artist: _artistCtrl.text,
-        artistMbid: _appliedRemoteArtistId,
+        artistMbid: artistMbid,
         album: _albumCtrl.text,
-        albumMbid: _appliedRemoteAlbumId,
+        albumMbid: _textOrNull(_mbidReleaseCtrl.text),
         albumDisambiguation: widget.album.albumDisambiguation,
-        releaseDate: _yearCtrl.text.isNotEmpty ? _yearCtrl.text : null,
-        trackNum: _trackNumCtrl.text.isNotEmpty
-            ? int.tryParse(_trackNumCtrl.text)
-            : null,
-        discNum: _discNumCtrl.text.isNotEmpty
-            ? int.tryParse(_discNumCtrl.text)
-            : null,
-        mbidRecording: _appliedRemoteRecId,
-        lyrics: _lyricsCtrl.text.isNotEmpty ? _lyricsCtrl.text : null,
+        releaseDate: _textOrNull(_dateCtrl.text),
+        trackNum: int.tryParse(_trackNumCtrl.text),
+        discNum: int.tryParse(_discNumCtrl.text),
+        mbidRecording: _textOrNull(_mbidRecordingCtrl.text),
+        lyrics: _textOrNull(_lyricsCtrl.text),
         coverBytes: coverBytes,
         filePath: _isDownloadFolder ? st.filePath : null,
         targetSourceId: _isDownloadFolder ? _targetSourceId : null,
@@ -345,17 +553,13 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
             title: _titleCtrl.text,
             artist: _artistCtrl.text,
             album: _albumCtrl.text,
-            discNum: _discNumCtrl.text.isNotEmpty
-                ? int.tryParse(_discNumCtrl.text)
-                : null,
-            trackNum: _trackNumCtrl.text.isNotEmpty
-                ? int.tryParse(_trackNumCtrl.text)
-                : null,
-            releaseDate: _yearCtrl.text.isNotEmpty ? _yearCtrl.text : null,
-            mbidRecording: _appliedRemoteRecId,
-            mbidAlbum: _appliedRemoteAlbumId,
-            mbidArtist: _appliedRemoteArtistId,
-            lyrics: _lyricsCtrl.text.isNotEmpty ? _lyricsCtrl.text : null,
+            discNum: int.tryParse(_discNumCtrl.text),
+            trackNum: int.tryParse(_trackNumCtrl.text),
+            releaseDate: _textOrNull(_dateCtrl.text),
+            mbidRecording: _textOrNull(_mbidRecordingCtrl.text),
+            mbidAlbum: _textOrNull(_mbidReleaseCtrl.text),
+            mbidArtist: albumArtistMbid,
+            lyrics: _textOrNull(_lyricsCtrl.text),
             coverBytes: coverBytes,
           ),
         );
@@ -484,105 +688,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
                 padding: const EdgeInsets.only(right: AppTheme.spaceSM),
                 child: Column(
                   children: [
-                    ComparisonEditableRow(
-                      label: 'Title',
-                      controller: _titleCtrl,
-                      remoteValue: _remoteTitle,
-                      originalValue: _origTitle,
-                      textTheme: textTheme,
-                      colors: colors,
-                    ),
-                    ComparisonEditableRow(
-                      label: 'Artist',
-                      controller: _artistCtrl,
-                      remoteValue: _remoteArtist,
-                      originalValue: _origArtist,
-                      textTheme: textTheme,
-                      colors: colors,
-                    ),
-                    ComparisonEditableRow(
-                      label: 'Album',
-                      controller: _albumCtrl,
-                      remoteValue: _remoteAlbum,
-                      originalValue: _origAlbum,
-                      textTheme: textTheme,
-                      colors: colors,
-                    ),
-                    ComparisonEditableRow(
-                      label: 'Disc #',
-                      controller: _discNumCtrl,
-                      remoteValue: _remoteDiscNum,
-                      originalValue: _origDiscNum,
-                      textTheme: textTheme,
-                      colors: colors,
-                    ),
-                    ComparisonEditableRow(
-                      label: 'Track #',
-                      controller: _trackNumCtrl,
-                      remoteValue: _remoteTrackNum,
-                      originalValue: _origTrackNum,
-                      textTheme: textTheme,
-                      colors: colors,
-                    ),
-                    ComparisonEditableRow(
-                      label: 'Date',
-                      controller: _yearCtrl,
-                      remoteValue: _remoteDate,
-                      originalValue: _origDate,
-                      textTheme: textTheme,
-                      colors: colors,
-                    ),
-                    _readonlyRow(
-                      textTheme,
-                      colors,
-                      'Duration',
-                      _fmtDuration(widget.currentTrack.durationSecs),
-                      _fmtDuration(widget.correctTrack.durationSecs),
-                    ),
-                    ComparisonReadonlyRow(
-                      label: 'MBID Rec',
-                      current:
-                          _appliedRemoteRecId ??
-                          widget.currentTrack.mbidRecording ??
-                          '',
-                      remote: _remoteMbid,
-                      applied: _appliedRemoteRecId != null,
-                      onApply: () => setState(
-                        () => _appliedRemoteRecId = widget.correctTrack.id,
-                      ),
-                      onRevert: () =>
-                          setState(() => _appliedRemoteRecId = null),
-                      textTheme: textTheme,
-                      colors: colors,
-                    ),
-                    ComparisonReadonlyRow(
-                      label: 'MBID Album',
-                      current: _appliedRemoteAlbumId ?? _origMbidAlbum ?? '',
-                      remote: widget.album.albumMbid ?? '',
-                      applied: _appliedRemoteAlbumId != null,
-                      onApply: () => setState(
-                        () => _appliedRemoteAlbumId = widget.album.albumMbid,
-                      ),
-                      onRevert: () =>
-                          setState(() => _appliedRemoteAlbumId = null),
-                      textTheme: textTheme,
-                      colors: colors,
-                    ),
-                    ComparisonReadonlyRow(
-                      label: 'MBID Artist',
-                      current: _appliedRemoteArtistId ?? _origMbidArtist ?? '',
-                      remote: widget.album.releaseArtistMbid ?? '',
-                      applied: _appliedRemoteArtistId != null,
-                      onApply: () => setState(
-                        () => _appliedRemoteArtistId =
-                            widget.album.releaseArtistMbid,
-                      ),
-                      onRevert: () =>
-                          setState(() => _appliedRemoteArtistId = null),
-                      textTheme: textTheme,
-                      colors: colors,
-                    ),
-                    _lyricsRow(textTheme, colors, _lyricsCtrl),
+                    for (final row in _rows) _buildRow(row, textTheme, colors),
                     if (_isDownloadFolder)
                       _buildTargetSourcePicker(colors, textTheme),
                   ],
@@ -612,6 +718,55 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRow(
+    _ComparisonRow row,
+    TextTheme textTheme,
+    ColorScheme colors,
+  ) {
+    switch (row) {
+      case _SectionHeader():
+        return _sectionHeader(row.title, textTheme, colors);
+      case _EditableField():
+        return ComparisonEditableRow(
+          label: row.label,
+          controller: row.controller,
+          remoteValue: row.remote(),
+          originalValue: row.original,
+          textTheme: textTheme,
+          colors: colors,
+        );
+      case _ReadonlyField():
+        return ComparisonReadonlyRow(
+          label: row.label,
+          current: row.current(),
+          remote: row.remote(),
+          textTheme: textTheme,
+          colors: colors,
+        );
+      case _LyricsField():
+        return _lyricsRow(textTheme, colors);
+    }
+  }
+
+  Widget _sectionHeader(String title, TextTheme textTheme, ColorScheme colors) {
+    return Padding(
+      padding: EdgeInsets.only(
+        top: AppTheme.spaceMD * AppTheme.spaceScale(context),
+        bottom: AppTheme.spaceXS * AppTheme.spaceScale(context),
+      ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          title,
+          style: textTheme.labelMedium?.copyWith(
+            color: colors.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );
@@ -768,28 +923,8 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     );
   }
 
-  Widget _readonlyRow(
-    TextTheme textTheme,
-    ColorScheme colors,
-    String label,
-    String current,
-    String remote,
-  ) {
-    return ComparisonReadonlyRow(
-      label: label,
-      current: current,
-      remote: remote,
-      textTheme: textTheme,
-      colors: colors,
-    );
-  }
-
-  Widget _lyricsRow(
-    TextTheme textTheme,
-    ColorScheme colors,
-    TextEditingController ctrl,
-  ) {
-    final localValue = ctrl.text;
+  Widget _lyricsRow(TextTheme textTheme, ColorScheme colors) {
+    final localValue = _lyricsCtrl.text;
     final diff = localValue != _remoteLyricsDisplay;
     final applied = !diff && localValue != _origLyrics;
 
@@ -801,12 +936,12 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     if (diff) {
       icon = Icons.arrow_back;
       iconColor = colors.primary;
-      onPress = () => setState(() => ctrl.text = _remoteLyricsDisplay);
+      onPress = () => setState(() => _lyricsCtrl.text = _remoteLyricsDisplay);
       tooltip = 'Use LRCLIB lyrics';
     } else if (applied) {
       icon = Icons.undo;
       iconColor = colors.tertiary;
-      onPress = () => setState(() => ctrl.text = _origLyrics);
+      onPress = () => setState(() => _lyricsCtrl.text = _origLyrics);
       tooltip = 'Revert to original';
     } else {
       icon = Icons.arrow_back;
@@ -833,7 +968,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
           ),
           Expanded(
             child: TextField(
-              controller: ctrl,
+              controller: _lyricsCtrl,
               style: textTheme.bodySmall,
               maxLines: null,
               minLines: 1,
