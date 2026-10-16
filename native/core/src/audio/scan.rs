@@ -139,8 +139,7 @@ async fn insert_track_to_db(
         release_group_mbid: track.mbid_release_group.clone(),
         release_artist_mbid: track.mbid_release_artist.clone(),
         release_country: track.release_country.clone(),
-        release_type: (!track.release_type.is_empty())
-            .then(|| track.release_type.join(";")),
+        release_type: (!track.release_type.is_empty()).then(|| track.release_type.join(";")),
         record_label: track.record_label.clone(),
         media: track.media.clone(),
         original_date: track.original_date.clone(),
@@ -148,28 +147,23 @@ async fn insert_track_to_db(
         total_tracks: track.total_tracks,
         total_discs: track.total_discs,
     };
-    let album_id = match library::insert_album(
-        pool,
-        &track.album,
-        &album_artist_ids[0],
-        None,
-        &album_meta,
-    )
-    .await
-    {
-        Ok(id) => {
-            let _ = library::insert_album_artists(pool, &id, &album_artist_ids).await;
-            id
-        }
-        Err(e) => {
-            stream_log(
-                log_tx,
-                "ERROR",
-                format!("Failed to insert album '{}': {}", track.album, e),
-            );
-            return InsertOutcome::Failed;
-        }
-    };
+    let album_id =
+        match library::insert_album(pool, &track.album, &album_artist_ids[0], None, &album_meta)
+            .await
+        {
+            Ok(id) => {
+                let _ = library::insert_album_artists(pool, &id, &album_artist_ids).await;
+                id
+            }
+            Err(e) => {
+                stream_log(
+                    log_tx,
+                    "ERROR",
+                    format!("Failed to insert album '{}': {}", track.album, e),
+                );
+                return InsertOutcome::Failed;
+            }
+        };
 
     let track_id = match library::insert_track(
         pool,

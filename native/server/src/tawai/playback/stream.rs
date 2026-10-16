@@ -350,7 +350,8 @@ pub async fn handle_media_dash(
 
     if file.starts_with("init-") {
         if let Err(e) =
-            ensure_dash_init_generated(&state, &track.id, &track.file_path, &dir, bitrate_kbps).await
+            ensure_dash_init_generated(&state, &track.id, &track.file_path, &dir, bitrate_kbps)
+                .await
         {
             tawai_core::utils::logger::error(&format!("dash init generation failed: {}", e));
             return (StatusCode::INTERNAL_SERVER_ERROR, Body::empty()).into_response();

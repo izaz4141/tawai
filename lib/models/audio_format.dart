@@ -55,14 +55,8 @@ const List<AudioFormat> audioFormats = [
     extensions: ['.m4b'],
     mimeTypes: ['audio/x-m4b'],
   ),
-  AudioFormat(
-    label: 'MPEG-4',
-    extensions: ['.mp4'],
-  ),
-  AudioFormat(
-    label: 'Apple Lossless',
-    extensions: ['.alac'],
-  ),
+  AudioFormat(label: 'MPEG-4', extensions: ['.mp4']),
+  AudioFormat(label: 'Apple Lossless', extensions: ['.alac']),
   AudioFormat(
     label: 'FLAC',
     extensions: ['.flac'],
@@ -98,11 +92,7 @@ const List<AudioFormat> audioFormats = [
     extensions: ['.wma'],
     mimeTypes: ['audio/x-ms-wma'],
   ),
-  AudioFormat(
-    label: 'AMR',
-    extensions: ['.amr'],
-    mimeTypes: ['audio/AMR'],
-  ),
+  AudioFormat(label: 'AMR', extensions: ['.amr'], mimeTypes: ['audio/AMR']),
   AudioFormat(
     label: 'Monkey’s Audio',
     extensions: ['.ape'],

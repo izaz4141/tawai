@@ -2,7 +2,7 @@ use anyhow::Result;
 use sqlx::{PgPool, Row};
 
 use super::library::{AlbumWriteMeta, TrackTagMeta};
-use crate::audio::tags::{derive_sort_name, AudioTag};
+use crate::audio::tags::{AudioTag, derive_sort_name};
 use crate::signals::library::*;
 use crate::utils::helper::sha256_hex;
 
@@ -998,10 +998,11 @@ t.bitrate, t.mbid_recording, t.mbid_track, t.isrc, t.comment, t.copyright, t.enc
 }
 
 pub async fn get_album_mbid(pool: &PgPool, album_id: &str) -> Result<Option<String>> {
-    let result: Option<String> = sqlx::query_scalar("SELECT release_mbid FROM albums WHERE id = $1")
-        .bind(album_id)
-        .fetch_optional(pool)
-        .await?;
+    let result: Option<String> =
+        sqlx::query_scalar("SELECT release_mbid FROM albums WHERE id = $1")
+            .bind(album_id)
+            .fetch_optional(pool)
+            .await?;
     Ok(result.filter(|s| !s.is_empty()))
 }
 
@@ -1297,8 +1298,7 @@ pub async fn update_track_tags_from_audio_tag(
             .then(|| tag.mbid_artist.as_deref())
             .flatten();
         let sort = (i == 0 && !tag.artist_sort.is_empty()).then(|| tag.artist_sort.as_str());
-        artist_ids
-            .push(upsert_artist_with_sort_in_tx(&mut *tx, name, sort, mbid).await?);
+        artist_ids.push(upsert_artist_with_sort_in_tx(&mut *tx, name, sort, mbid).await?);
     }
 
     // Album artists: same primary-MBID rule as the scan insert flow.
@@ -1314,8 +1314,7 @@ pub async fn update_track_tags_from_audio_tag(
             .flatten();
         let sort =
             (i == 0 && !tag.album_artist_sort.is_empty()).then(|| tag.album_artist_sort.as_str());
-        album_artist_ids
-            .push(upsert_artist_with_sort_in_tx(&mut *tx, name, sort, mbid).await?);
+        album_artist_ids.push(upsert_artist_with_sort_in_tx(&mut *tx, name, sort, mbid).await?);
     }
 
     let album_id = upsert_album_from_tag_in_tx(&mut *tx, tag, &album_artist_ids[0]).await?;
@@ -1390,11 +1389,13 @@ pub async fn update_track_tags_from_audio_tag(
             continue;
         }
         let genre_id = upsert_genre_in_tx(&mut *tx, name).await?;
-        sqlx::query("INSERT INTO track_genres (track_id, genre_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
-            .bind(track_id)
-            .bind(&genre_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT INTO track_genres (track_id, genre_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        )
+        .bind(track_id)
+        .bind(&genre_id)
+        .execute(&mut *tx)
+        .await?;
     }
 
     tx.commit().await?;

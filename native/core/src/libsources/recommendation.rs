@@ -9,8 +9,8 @@ use tokio::time::sleep;
 
 use crate::audio::tags::{AudioTag, derive_sort_name, parse_artists};
 use crate::db::account::DEFAULT_USERNAME;
-use crate::db::user_settings;
 use crate::db::library::{AlbumWriteMeta, TrackTagMeta};
+use crate::db::user_settings;
 use crate::db::{database::DatabasePool, library, library_source};
 use crate::dclient::nadekodon::resolve_audio_format;
 use crate::discovery::listenbrainz;
@@ -285,9 +285,11 @@ pub async fn download(
         anyhow::bail!("downloaded file is empty: {}", final_path.display());
     }
 
-    if let Err(e) =
-        crate::audio::tags::write_audio_tags(&final_path, &tag, crate::audio::tags::TagWriteMode::Patch)
-    {
+    if let Err(e) = crate::audio::tags::write_audio_tags(
+        &final_path,
+        &tag,
+        crate::audio::tags::TagWriteMode::Patch,
+    ) {
         logger::warn(&format!(
             "failed to write tags to {}: {}",
             final_path.display(),
@@ -600,14 +602,14 @@ async fn dedup_or_insert_track(
         total_discs,
         ..Default::default()
     };
-    let album_id = match library::insert_album(pool, album_title, &artist_id, None, &album_meta).await
-    {
-        Ok(id) => id,
-        Err(e) => {
-            logger::error(&format!("failed to insert album: {}", e));
-            return None;
-        }
-    };
+    let album_id =
+        match library::insert_album(pool, album_title, &artist_id, None, &album_meta).await {
+            Ok(id) => id,
+            Err(e) => {
+                logger::error(&format!("failed to insert album: {}", e));
+                return None;
+            }
+        };
 
     library::insert_album_artists(pool, &album_id, &[artist_id.clone()])
         .await

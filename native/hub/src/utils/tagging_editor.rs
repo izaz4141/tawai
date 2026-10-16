@@ -288,12 +288,8 @@ pub async fn handle_write_file_tags(context: Arc<AppContext>) {
                         }
                     }
                     if let Ok(hash) = tawai_core::libsources::local::hash_file(&path) {
-                        if let Err(e) = library::update_file_hash_by_path(
-                            db.pool(),
-                            &msg.path,
-                            &hash,
-                        )
-                        .await
+                        if let Err(e) =
+                            library::update_file_hash_by_path(db.pool(), &msg.path, &hash).await
                         {
                             logger::warn(&format!(
                                 "failed to update stored file_hash after tag write for {}: {e}",

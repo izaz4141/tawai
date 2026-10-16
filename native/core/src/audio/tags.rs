@@ -300,7 +300,10 @@ fn extract_audio_tags(
             result.genres = parse_genres(&tag.genre().unwrap_or_default());
         }
         if result.artists.is_empty() {
-            result.artists = tag.get_strings(ItemKey::TrackArtists).map(str::to_string).collect();
+            result.artists = tag
+                .get_strings(ItemKey::TrackArtists)
+                .map(str::to_string)
+                .collect();
         }
         if result.album_artists.is_empty() {
             result.album_artists = tag
@@ -334,9 +337,19 @@ fn extract_audio_tags(
         read_opt!(tag, result, mbid_recording, ItemKey::MusicBrainzRecordingId);
         read_opt!(tag, result, mbid_track, ItemKey::MusicBrainzTrackId);
         read_opt!(tag, result, mbid_artist, ItemKey::MusicBrainzArtistId);
-        read_opt!(tag, result, mbid_release_artist, ItemKey::MusicBrainzReleaseArtistId);
+        read_opt!(
+            tag,
+            result,
+            mbid_release_artist,
+            ItemKey::MusicBrainzReleaseArtistId
+        );
         read_opt!(tag, result, mbid_release, ItemKey::MusicBrainzReleaseId);
-        read_opt!(tag, result, mbid_release_group, ItemKey::MusicBrainzReleaseGroupId);
+        read_opt!(
+            tag,
+            result,
+            mbid_release_group,
+            ItemKey::MusicBrainzReleaseGroupId
+        );
         read_opt!(tag, result, release_country, ItemKey::ReleaseCountry);
         read_opt!(tag, result, record_label, ItemKey::Label);
         read_opt!(tag, result, media, ItemKey::OriginalMediaType);
@@ -347,7 +360,12 @@ fn extract_audio_tags(
         read_opt!(tag, result, encoder, ItemKey::EncodedBy);
         read_opt!(tag, result, isrc, ItemKey::Isrc);
         read_opt!(tag, result, acoust_id, ItemKey::AcoustId);
-        read_opt!(tag, result, acoust_id_fingerprint, ItemKey::AcoustIdFingerprint);
+        read_opt!(
+            tag,
+            result,
+            acoust_id_fingerprint,
+            ItemKey::AcoustIdFingerprint
+        );
         // Known limitation: ItemKey::Lyrics is a no-op on ID3v2 (MP3); other
         // formats read it normally.
         read_opt!(tag, result, lyrics, ItemKey::Lyrics);
@@ -497,7 +515,11 @@ macro_rules! write_total {
     };
 }
 
-fn apply_audio_tag(tagged_file: &mut TaggedFile, audio_tag: &AudioTag, mode: TagWriteMode) -> Result<()> {
+fn apply_audio_tag(
+    tagged_file: &mut TaggedFile,
+    audio_tag: &AudioTag,
+    mode: TagWriteMode,
+) -> Result<()> {
     let tag = if let Some(tag) = tagged_file.primary_tag_mut() {
         tag
     } else {
@@ -564,23 +586,81 @@ fn apply_audio_tag(tagged_file: &mut TaggedFile, audio_tag: &AudioTag, mode: Tag
     write_total!(tag, audio_tag.total_discs, ItemKey::DiscTotal, mode);
 
     set_text(tag, ItemKey::AlbumArtist, &audio_tag.album_artist, mode);
-    set_text(tag, ItemKey::TrackArtistSortOrder, &audio_tag.artist_sort, mode);
-    set_text(tag, ItemKey::AlbumArtistSortOrder, &audio_tag.album_artist_sort, mode);
+    set_text(
+        tag,
+        ItemKey::TrackArtistSortOrder,
+        &audio_tag.artist_sort,
+        mode,
+    );
+    set_text(
+        tag,
+        ItemKey::AlbumArtistSortOrder,
+        &audio_tag.album_artist_sort,
+        mode,
+    );
 
-    write_opt!(tag, audio_tag, mbid_recording, ItemKey::MusicBrainzRecordingId, mode);
-    write_opt!(tag, audio_tag, mbid_track, ItemKey::MusicBrainzTrackId, mode);
-    write_opt!(tag, audio_tag, mbid_artist, ItemKey::MusicBrainzArtistId, mode);
-    write_opt!(tag, audio_tag, mbid_release_artist, ItemKey::MusicBrainzReleaseArtistId, mode);
-    write_opt!(tag, audio_tag, mbid_release, ItemKey::MusicBrainzReleaseId, mode);
-    write_opt!(tag, audio_tag, mbid_release_group, ItemKey::MusicBrainzReleaseGroupId, mode);
+    write_opt!(
+        tag,
+        audio_tag,
+        mbid_recording,
+        ItemKey::MusicBrainzRecordingId,
+        mode
+    );
+    write_opt!(
+        tag,
+        audio_tag,
+        mbid_track,
+        ItemKey::MusicBrainzTrackId,
+        mode
+    );
+    write_opt!(
+        tag,
+        audio_tag,
+        mbid_artist,
+        ItemKey::MusicBrainzArtistId,
+        mode
+    );
+    write_opt!(
+        tag,
+        audio_tag,
+        mbid_release_artist,
+        ItemKey::MusicBrainzReleaseArtistId,
+        mode
+    );
+    write_opt!(
+        tag,
+        audio_tag,
+        mbid_release,
+        ItemKey::MusicBrainzReleaseId,
+        mode
+    );
+    write_opt!(
+        tag,
+        audio_tag,
+        mbid_release_group,
+        ItemKey::MusicBrainzReleaseGroupId,
+        mode
+    );
     write_opt!(tag, audio_tag, comment, ItemKey::Comment, mode);
     write_opt!(tag, audio_tag, copyright, ItemKey::CopyrightMessage, mode);
     write_opt!(tag, audio_tag, isrc, ItemKey::Isrc, mode);
     write_opt!(tag, audio_tag, record_label, ItemKey::Label, mode);
     write_opt!(tag, audio_tag, media, ItemKey::OriginalMediaType, mode);
     write_opt!(tag, audio_tag, script, ItemKey::Script, mode);
-    write_opt!(tag, audio_tag, release_country, ItemKey::ReleaseCountry, mode);
-    write_opt!(tag, audio_tag, original_date, ItemKey::OriginalReleaseDate, mode);
+    write_opt!(
+        tag,
+        audio_tag,
+        release_country,
+        ItemKey::ReleaseCountry,
+        mode
+    );
+    write_opt!(
+        tag,
+        audio_tag,
+        original_date,
+        ItemKey::OriginalReleaseDate,
+        mode
+    );
     // Known limitation: ItemKey::Lyrics is a no-op on ID3v2 (MP3); other
     // formats write it normally.
     write_opt!(tag, audio_tag, lyrics, ItemKey::Lyrics, mode);
@@ -607,7 +687,11 @@ fn apply_audio_tag(tagged_file: &mut TaggedFile, audio_tag: &AudioTag, mode: Tag
         TagWriteMode::Patch => {}
     }
     if !audio_tag.release_type.is_empty() {
-        set_multi(tag, ItemKey::MusicBrainzReleaseType, &audio_tag.release_type);
+        set_multi(
+            tag,
+            ItemKey::MusicBrainzReleaseType,
+            &audio_tag.release_type,
+        );
     } else if replace {
         tag.remove_key(ItemKey::MusicBrainzReleaseType);
     }

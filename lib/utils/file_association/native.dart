@@ -24,7 +24,8 @@ class _FileAssociationNative implements FileAssociationService {
 
   /// `HKCU\Software\Classes\.<ext>\OpenWithProgids` for every extension.
   static List<String> get _openWithPaths => [
-    for (final ext in audioExtensions) 'Software\\Classes\\$ext\\OpenWithProgids',
+    for (final ext in audioExtensions)
+      'Software\\Classes\\$ext\\OpenWithProgids',
   ];
 
   @override
@@ -59,8 +60,7 @@ class _FileAssociationNative implements FileAssociationService {
       _registerProgId(exe, command);
       _registerOpenWith();
     } catch (e, s) {
-      log('Failed to register file association: $e\n$s',
-          level: LogLevel.error);
+      log('Failed to register file association: $e\n$s', level: LogLevel.error);
       rethrow;
     }
 
