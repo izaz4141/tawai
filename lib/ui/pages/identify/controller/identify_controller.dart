@@ -20,6 +20,18 @@ class IdentifyController extends ChangeNotifier {
   final Map<String, IdentifyAlbumResult> albumResults = {};
   final Set<String> _processedTrackIds = {};
 
+  final Map<String, AlbumInfo> _albumInfoById = {};
+
+  /// Local album row for [albumId], fetched and cached lazily.
+  Future<AlbumInfo?> albumInfoFor(String? albumId) async {
+    if (albumId == null || albumId.isEmpty) return null;
+    final cached = _albumInfoById[albumId];
+    if (cached != null) return cached;
+    final info = await BridgeService.instance.getAlbumInfo(albumId);
+    if (info != null) _albumInfoById[albumId] = info;
+    return info;
+  }
+
   Future<void> loadSources() async {
     final userId = SettingsManager.currentUserId.value;
     if (userId == null || userId.isEmpty) {
@@ -224,9 +236,11 @@ class IdentifyController extends ChangeNotifier {
         releaseDate: releaseData.releaseDate,
         releaseArtist: releaseData.artist,
         releaseArtistMbid: releaseData.artistId,
+        albumDisambiguation: releaseData.disambiguation,
         expanded: true,
         userTracks: <IdentifiedUserTrack>[],
       );
+      _applyReleaseMetadata(newGroup, releaseData);
       if (ut != null) newGroup.userTracks.add(ut);
       albumResults[targetKey] = newGroup;
     } else {
@@ -240,6 +254,55 @@ class IdentifyController extends ChangeNotifier {
       if (target.releaseTracks.isEmpty) {
         target.releaseTracks = releaseData.tracks;
       }
+      _applyReleaseMetadata(target, releaseData);
+    }
+  }
+
+  /// Copies release-level metadata onto [result]; empty values don't overwrite.
+  void _applyReleaseMetadata(
+    IdentifyAlbumResult result,
+    GetReleaseTracksResponse releaseData,
+  ) {
+    if (releaseData.releaseDate != null &&
+        releaseData.releaseDate!.isNotEmpty) {
+      result.releaseDate = releaseData.releaseDate;
+    }
+    if (releaseData.artist.isNotEmpty) {
+      result.releaseArtist = releaseData.artist;
+    }
+    if (releaseData.artistId != null && releaseData.artistId!.isNotEmpty) {
+      result.releaseArtistMbid = releaseData.artistId;
+    }
+    if (releaseData.disambiguation != null &&
+        releaseData.disambiguation!.isNotEmpty) {
+      result.albumDisambiguation = releaseData.disambiguation;
+    }
+    if (releaseData.releaseCountry != null) {
+      result.releaseCountry = releaseData.releaseCountry;
+    }
+    if (releaseData.releaseType != null) {
+      result.releaseType = releaseData.releaseType;
+    }
+    if (releaseData.recordLabel != null) {
+      result.recordLabel = releaseData.recordLabel;
+    }
+    if (releaseData.media != null) {
+      result.media = releaseData.media;
+    }
+    if (releaseData.script != null) {
+      result.script = releaseData.script;
+    }
+    if (releaseData.originalDate != null) {
+      result.originalDate = releaseData.originalDate;
+    }
+    if (releaseData.releaseGroupMbid != null) {
+      result.releaseGroupMbid = releaseData.releaseGroupMbid;
+    }
+    if (releaseData.totalTracks != null) {
+      result.totalTracks = releaseData.totalTracks;
+    }
+    if (releaseData.totalDiscs != null) {
+      result.totalDiscs = releaseData.totalDiscs;
     }
   }
 
@@ -281,6 +344,7 @@ class IdentifyController extends ChangeNotifier {
       result.releaseArtist = remoteRelease.artist;
       result.releaseArtistMbid = remoteRelease.artistId;
       result.albumDisambiguation = remoteRelease.disambiguation;
+      _applyReleaseMetadata(result, remoteRelease);
       for (final ut in result.userTracks.where(
         (t) => t.isSession && t.sessionId != null,
       )) {
@@ -382,6 +446,7 @@ class IdentifyController extends ChangeNotifier {
     if (mbidAlbum != null) album.albumMbid = mbidAlbum;
     if (mbidArtist != null) album.releaseArtistMbid = mbidArtist;
     if (releaseDate != null) album.releaseDate = releaseDate;
+    _albumInfoById.remove(album.sourceAlbumId);
     sessions.remove(trackId);
     notifyListeners();
   }

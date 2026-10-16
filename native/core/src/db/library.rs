@@ -276,10 +276,11 @@ pub async fn list_tracks(
 pub async fn list_albums(
     pool: &DatabasePool,
     artist_id: Option<&str>,
+    album_id: Option<&str>,
 ) -> anyhow::Result<Vec<AlbumInfo>> {
     match pool {
-        DatabasePool::Sqlite(p) => super::library_sq::list_albums(p, artist_id).await,
-        DatabasePool::Postgres(p) => super::library_pg::list_albums(p, artist_id).await,
+        DatabasePool::Sqlite(p) => super::library_sq::list_albums(p, artist_id, album_id).await,
+        DatabasePool::Postgres(p) => super::library_pg::list_albums(p, artist_id, album_id).await,
     }
 }
 

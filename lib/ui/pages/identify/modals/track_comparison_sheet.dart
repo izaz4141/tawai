@@ -159,6 +159,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
   late final TextEditingController _lyricsCtrl;
 
   late final List<TextEditingController> _controllers;
+
   /// Controllers that feed the naming-pattern path preview.
   late final List<TextEditingController> _previewControllers;
   late final List<_ComparisonRow> _rows;
@@ -198,6 +199,19 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
   String get _remoteLyricsDisplay =>
       _remoteLyricsResult.isNotEmpty ? _remoteLyricsResult : _remoteLyrics;
   String get _remoteDate => widget.album.releaseDate ?? '';
+  String get _remoteTotalTracks => widget.album.totalTracks?.toString() ?? '';
+  String get _remoteTotalDiscs => widget.album.totalDiscs?.toString() ?? '';
+  String get _remoteOriginalDate => widget.album.originalDate ?? '';
+  String get _remoteMedia => widget.album.media ?? '';
+  String get _remoteScript => widget.album.script ?? '';
+  String get _remoteRecordLabel => widget.album.recordLabel ?? '';
+  String get _remoteReleaseCountry => widget.album.releaseCountry ?? '';
+  String get _remoteReleaseType => widget.album.releaseType ?? '';
+  String get _remoteReleaseGroupMbid => widget.album.releaseGroupMbid ?? '';
+  String get _albumDisambiguation =>
+      widget.album.albumDisambiguation ??
+      widget.albumInfo?.disambiguation ??
+      '';
 
   String _joinNames(List<ArtistInfo> artists) =>
       artists.map((a) => a.name).where((n) => n.isNotEmpty).join('; ');
@@ -325,13 +339,13 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
 
       _SectionHeader('Track / Release'),
       edit('Track #', _trackNumCtrl, () => _remoteTrackNum),
-      edit('Total Tracks', _totalTracksCtrl, () => ''),
+      edit('Total Tracks', _totalTracksCtrl, () => _remoteTotalTracks),
       edit('Disc #', _discNumCtrl, () => _remoteDiscNum),
-      edit('Total Discs', _totalDiscsCtrl, () => ''),
+      edit('Total Discs', _totalDiscsCtrl, () => _remoteTotalDiscs),
       edit('Date', _dateCtrl, () => _remoteDate),
-      edit('Original Date', _originalDateCtrl, () => ''),
-      edit('Media', _mediaCtrl, () => ''),
-      edit('Script', _scriptCtrl, () => ''),
+      edit('Original Date', _originalDateCtrl, () => _remoteOriginalDate),
+      edit('Media', _mediaCtrl, () => _remoteMedia),
+      edit('Script', _scriptCtrl, () => _remoteScript),
       ro(
         'Length',
         () => _fmtDuration(widget.currentTrack.durationSecs),
@@ -339,9 +353,9 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
       ),
 
       _SectionHeader('Release / Identifiers'),
-      edit('Record Label', _recordLabelCtrl, () => ''),
-      edit('Release Country', _releaseCountryCtrl, () => ''),
-      edit('Release Type', _releaseTypeCtrl, () => ''),
+      edit('Record Label', _recordLabelCtrl, () => _remoteRecordLabel),
+      edit('Release Country', _releaseCountryCtrl, () => _remoteReleaseCountry),
+      edit('Release Type', _releaseTypeCtrl, () => _remoteReleaseType),
       edit('ISRC', _isrcCtrl, () => ''),
       edit('Recording MBID', _mbidRecordingCtrl, () => _remoteMbid),
       edit('Track MBID', _mbidTrackCtrl, () => ''),
@@ -352,7 +366,11 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
         _mbidAlbumArtistCtrl,
         () => _remoteAlbumArtistMbid,
       ),
-      edit('Release Group MBID', _mbidReleaseGroupCtrl, () => ''),
+      edit(
+        'Release Group MBID',
+        _mbidReleaseGroupCtrl,
+        () => _remoteReleaseGroupMbid,
+      ),
 
       _SectionHeader('Sorting'),
       edit('Artist Sort', _artistSortCtrl, () => ''),
@@ -368,11 +386,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
       edit('Copyright', _copyrightCtrl, () => ''),
 
       _SectionHeader('Technical'),
-      ro(
-        'File Path',
-        () => widget.currentTrack.filePath,
-        () => _pathPreview,
-      ),
+      ro('File Path', () => widget.currentTrack.filePath, () => _pathPreview),
       ro('Encoder', () => widget.currentTrack.encoder ?? ''),
     ];
 
@@ -545,7 +559,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
         releaseDate: _textOrNull(_dateCtrl.text),
         trackNumber: int.tryParse(_trackNumCtrl.text) ?? 0,
         discNumber: int.tryParse(_discNumCtrl.text) ?? 1,
-        albumDisambiguation: widget.album.albumDisambiguation,
+        albumDisambiguation: _albumDisambiguation,
         totalDiscs: int.tryParse(_totalDiscsCtrl.text) ?? 0,
       );
       if (!mounted || seq != _previewSeq) return;
@@ -621,7 +635,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
         albumArtistSort: _textOrNull(_albumArtistSortCtrl.text),
         album: _albumCtrl.text,
         albumMbid: _textOrNull(_mbidReleaseCtrl.text),
-        albumDisambiguation: widget.album.albumDisambiguation,
+        albumDisambiguation: _albumDisambiguation,
         releaseDate: _textOrNull(_dateCtrl.text),
         originalDate: _textOrNull(_originalDateCtrl.text),
         releaseGroupMbid: _textOrNull(_mbidReleaseGroupCtrl.text),

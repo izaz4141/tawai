@@ -552,6 +552,9 @@ class AlbumResultCard extends StatelessWidget {
 
     if (!context.mounted) return;
 
+    final albumInfo = await controller.albumInfoFor(album.sourceAlbumId);
+    if (!context.mounted) return;
+
     final result = await showTrackComparisonSheet(
       context: context,
       controller: controller,
@@ -559,6 +562,7 @@ class AlbumResultCard extends StatelessWidget {
       correctTrack: remoteTrack,
       album: album,
       recordingArtist: recordingArtist,
+      albumInfo: albumInfo,
     );
     if (!context.mounted) return;
     if (result?.applied == true) {

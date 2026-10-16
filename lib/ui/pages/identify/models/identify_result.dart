@@ -46,6 +46,15 @@ class IdentifyAlbumResult {
   String? releaseArtist;
   String? releaseArtistMbid;
   String? albumDisambiguation;
+  String? releaseCountry;
+  String? releaseType;
+  String? recordLabel;
+  String? media;
+  String? script;
+  String? originalDate;
+  String? releaseGroupMbid;
+  int? totalTracks;
+  int? totalDiscs;
 
   IdentifyAlbumResult({
     required this.albumTitle,
@@ -60,6 +69,15 @@ class IdentifyAlbumResult {
     this.releaseArtist,
     this.releaseArtistMbid,
     this.albumDisambiguation,
+    this.releaseCountry,
+    this.releaseType,
+    this.recordLabel,
+    this.media,
+    this.script,
+    this.originalDate,
+    this.releaseGroupMbid,
+    this.totalTracks,
+    this.totalDiscs,
   });
 
   static String releaseKey(String? albumMbid) => 'release_${albumMbid ?? ''}';

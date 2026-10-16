@@ -651,10 +651,11 @@ class APIService {
     return [];
   }
 
-  Future<List<AlbumInfo>> getAlbums({String? artistId}) async {
+  Future<List<AlbumInfo>> getAlbums({String? artistId, String? albumId}) async {
     try {
       final queryParams = <String, String>{};
       if (artistId != null) queryParams['artist_id'] = artistId;
+      if (albumId != null) queryParams['album_id'] = albumId;
       final uri = Uri.parse(
         '$baseUrl/api/tawai/library/albums',
       ).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
@@ -1294,6 +1295,15 @@ class APIService {
                             )
                             .toList() ??
                         [],
+                    disambiguation: r['disambiguation'] as String?,
+                    totalDiscs: (r['total_discs'] as num?)?.toInt(),
+                    totalTracks: (r['total_tracks'] as num?)?.toInt(),
+                    releaseGroupMbid: r['release_group_mbid'] as String?,
+                    releaseType: r['release_type'] as String?,
+                    recordLabel: r['record_label'] as String?,
+                    media: r['media'] as String?,
+                    script: r['script'] as String?,
+                    originalDate: r['original_date'] as String?,
                   ),
                 )
                 .toList(),
@@ -1332,7 +1342,17 @@ class APIService {
           releaseDate: json['release_date'] as String?,
           artist: json['artist'] as String? ?? '',
           artistId: json['artist_id'] as String?,
+          disambiguation: json['disambiguation'] as String?,
           tracks: tracksList,
+          releaseCountry: json['release_country'] as String?,
+          releaseGroupMbid: json['release_group_mbid'] as String?,
+          releaseType: json['release_type'] as String?,
+          recordLabel: json['record_label'] as String?,
+          media: json['media'] as String?,
+          script: json['script'] as String?,
+          originalDate: json['original_date'] as String?,
+          totalTracks: (json['total_tracks'] as num?)?.toInt(),
+          totalDiscs: (json['total_discs'] as num?)?.toInt(),
         );
       }
     } catch (e) {
@@ -1345,7 +1365,17 @@ class APIService {
       releaseDate: null,
       artist: '',
       artistId: null,
+      disambiguation: null,
       tracks: [],
+      releaseCountry: null,
+      releaseGroupMbid: null,
+      releaseType: null,
+      recordLabel: null,
+      media: null,
+      script: null,
+      originalDate: null,
+      totalTracks: null,
+      totalDiscs: null,
     );
   }
 
@@ -1391,6 +1421,15 @@ class APIService {
                               )
                               .toList() ??
                           [],
+                      disambiguation: r['disambiguation'] as String?,
+                      totalDiscs: (r['total_discs'] as num?)?.toInt(),
+                      totalTracks: (r['total_tracks'] as num?)?.toInt(),
+                      releaseGroupMbid: r['release_group_mbid'] as String?,
+                      releaseType: r['release_type'] as String?,
+                      recordLabel: r['record_label'] as String?,
+                      media: r['media'] as String?,
+                      script: r['script'] as String?,
+                      originalDate: r['original_date'] as String?,
                     ),
                   )
                   .toList() ??
@@ -1578,6 +1617,15 @@ class APIService {
                           )
                           .toList() ??
                       [],
+                  disambiguation: r['disambiguation'] as String?,
+                  totalDiscs: (r['total_discs'] as num?)?.toInt(),
+                  totalTracks: (r['total_tracks'] as num?)?.toInt(),
+                  releaseGroupMbid: r['release_group_mbid'] as String?,
+                  releaseType: r['release_type'] as String?,
+                  recordLabel: r['record_label'] as String?,
+                  media: r['media'] as String?,
+                  script: r['script'] as String?,
+                  originalDate: r['original_date'] as String?,
                 ),
               )
               .toList() ??

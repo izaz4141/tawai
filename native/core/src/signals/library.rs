@@ -115,6 +115,8 @@ pub struct ListAlbumsRequest {
     #[serde(default)]
     pub id: String,
     pub artist_id: Option<String>,
+    #[serde(default)]
+    pub album_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]

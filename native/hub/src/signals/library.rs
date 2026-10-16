@@ -64,6 +64,7 @@ pub struct TrackInfo {
 pub struct ListAlbumsRequest {
     pub id: String,
     pub artist_id: Option<String>,
+    pub album_id: Option<String>,
 }
 
 #[derive(Serialize, RustSignal)]

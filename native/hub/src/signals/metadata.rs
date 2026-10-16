@@ -13,6 +13,12 @@ pub struct ReleaseInfo {
     pub disambiguation: Option<String>,
     pub total_discs: Option<i32>,
     pub total_tracks: Option<i32>,
+    pub release_group_mbid: Option<String>,
+    pub release_type: Option<String>,
+    pub record_label: Option<String>,
+    pub media: Option<String>,
+    pub script: Option<String>,
+    pub original_date: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]
@@ -71,6 +77,15 @@ pub struct GetReleaseTracksResponse {
     pub artist_id: Option<String>,
     pub disambiguation: Option<String>,
     pub tracks: Vec<ReleaseTrackInfo>,
+    pub release_country: Option<String>,
+    pub release_group_mbid: Option<String>,
+    pub release_type: Option<String>,
+    pub record_label: Option<String>,
+    pub media: Option<String>,
+    pub script: Option<String>,
+    pub original_date: Option<String>,
+    pub total_tracks: Option<i32>,
+    pub total_discs: Option<i32>,
 }
 
 // ---------------------------------------------------------------------------
@@ -90,6 +105,12 @@ impl From<tawai_core::signals::metadata::ReleaseInfo> for ReleaseInfo {
             disambiguation: r.disambiguation,
             total_discs: r.total_discs,
             total_tracks: r.total_tracks,
+            release_group_mbid: r.release_group_mbid,
+            release_type: r.release_type,
+            record_label: r.record_label,
+            media: r.media,
+            script: r.script,
+            original_date: r.original_date,
         }
     }
 }

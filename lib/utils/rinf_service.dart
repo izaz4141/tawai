@@ -173,12 +173,16 @@ class RinfService {
     return signal.message.tracks;
   }
 
-  Future<List<AlbumInfo>> getAlbums({String? artistId}) async {
+  Future<List<AlbumInfo>> getAlbums({String? artistId, String? albumId}) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = ListAlbumsResponse.rustSignalStream.where(
       (s) => s.message.id == id,
     );
-    ListAlbumsRequest(id: id, artistId: artistId).sendSignalToRust();
+    ListAlbumsRequest(
+      id: id,
+      artistId: artistId,
+      albumId: albumId,
+    ).sendSignalToRust();
     final signal = await stream.first;
     return signal.message.albums;
   }

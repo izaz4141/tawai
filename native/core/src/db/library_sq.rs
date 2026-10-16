@@ -112,40 +112,42 @@ pub async fn list_tracks(pool: &SqlitePool, album_id: Option<&str>) -> Result<Ve
     Ok(tracks)
 }
 
-pub async fn list_albums(pool: &SqlitePool, artist_id: Option<&str>) -> Result<Vec<AlbumInfo>> {
-    let rows = if let Some(aid) = artist_id {
-        sqlx::query(
-            r#"SELECT al.id, al.title, ar.name AS artists_string,
-                      al.date, al.cover,
-                      al.release_mbid, al.release_group_mbid, al.release_artist_mbid,
-                      al.release_country, al.release_type, al.record_label, al.media,
-                      al.original_date, al.total_tracks,
-                      al.disambiguation, al.total_discs,
-                      (SELECT COUNT(*) FROM tracks t WHERE t.album_id = al.id) AS track_count
-               FROM albums al
-               JOIN artists ar ON al.artist_id = ar.id
-               WHERE al.id IN (SELECT album_id FROM album_artists WHERE artist_id = ?)
-               ORDER BY al.date DESC, al.title"#,
-        )
-        .bind(aid)
-        .fetch_all(pool)
-        .await?
-    } else {
-        sqlx::query(
-            r#"SELECT al.id, al.title, ar.name AS artists_string,
-                      al.date, al.cover,
-                      al.release_mbid, al.release_group_mbid, al.release_artist_mbid,
-                      al.release_country, al.release_type, al.record_label, al.media,
-                      al.original_date, al.total_tracks,
-                      al.disambiguation, al.total_discs,
-                      (SELECT COUNT(*) FROM tracks t WHERE t.album_id = al.id) AS track_count
-               FROM albums al
-               JOIN artists ar ON al.artist_id = ar.id
-               ORDER BY al.date DESC, al.title"#,
-        )
-        .fetch_all(pool)
-        .await?
-    };
+pub async fn list_albums(
+    pool: &SqlitePool,
+    artist_id: Option<&str>,
+    album_id: Option<&str>,
+) -> Result<Vec<AlbumInfo>> {
+    let mut sql = String::from(
+        r#"SELECT al.id, al.title, ar.name AS artists_string,
+                  al.date, al.cover,
+                  al.release_mbid, al.release_group_mbid, al.release_artist_mbid,
+                  al.release_country, al.release_type, al.record_label, al.media,
+                  al.original_date, al.total_tracks,
+                  al.disambiguation, al.total_discs,
+                  (SELECT COUNT(*) FROM tracks t WHERE t.album_id = al.id) AS track_count
+           FROM albums al
+           JOIN artists ar ON al.artist_id = ar.id"#,
+    );
+    if artist_id.is_some() {
+        sql.push_str(" WHERE al.id IN (SELECT album_id FROM album_artists WHERE artist_id = ?)");
+    }
+    if album_id.is_some() {
+        if artist_id.is_some() {
+            sql.push_str(" AND al.id = ?");
+        } else {
+            sql.push_str(" WHERE al.id = ?");
+        }
+    }
+    sql.push_str(" ORDER BY al.date DESC, al.title");
+
+    let mut query = sqlx::query(&sql);
+    if let Some(aid) = artist_id {
+        query = query.bind(aid);
+    }
+    if let Some(alb) = album_id {
+        query = query.bind(alb);
+    }
+    let rows = query.fetch_all(pool).await?;
     let mut albums: Vec<AlbumInfo> = rows.into_iter().map(|row| map_album_row(row)).collect();
     batch_populate_album_artists(pool, &mut albums).await?;
     Ok(albums)

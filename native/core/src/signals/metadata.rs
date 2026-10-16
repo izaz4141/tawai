@@ -18,6 +18,18 @@ pub struct ReleaseInfo {
     pub total_discs: Option<i32>,
     #[serde(default)]
     pub total_tracks: Option<i32>,
+    #[serde(default)]
+    pub release_group_mbid: Option<String>,
+    #[serde(default)]
+    pub release_type: Option<String>,
+    #[serde(default)]
+    pub record_label: Option<String>,
+    #[serde(default)]
+    pub media: Option<String>,
+    #[serde(default)]
+    pub script: Option<String>,
+    #[serde(default)]
+    pub original_date: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
@@ -92,6 +104,24 @@ pub struct GetReleaseTracksResponse {
     pub artist_id: Option<String>,
     pub disambiguation: Option<String>,
     pub tracks: Vec<ReleaseTrackInfo>,
+    #[serde(default)]
+    pub release_country: Option<String>,
+    #[serde(default)]
+    pub release_group_mbid: Option<String>,
+    #[serde(default)]
+    pub release_type: Option<String>,
+    #[serde(default)]
+    pub record_label: Option<String>,
+    #[serde(default)]
+    pub media: Option<String>,
+    #[serde(default)]
+    pub script: Option<String>,
+    #[serde(default)]
+    pub original_date: Option<String>,
+    #[serde(default)]
+    pub total_tracks: Option<i32>,
+    #[serde(default)]
+    pub total_discs: Option<i32>,
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]

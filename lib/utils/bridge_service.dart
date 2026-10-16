@@ -193,10 +193,17 @@ class BridgeService {
         : RinfService.instance.getTracks(albumId: albumId);
   }
 
-  Future<List<AlbumInfo>> getAlbums({String? artistId}) async {
+  Future<List<AlbumInfo>> getAlbums({String? artistId, String? albumId}) async {
     return _isRemote
-        ? APIService.instance.getAlbums(artistId: artistId)
-        : RinfService.instance.getAlbums(artistId: artistId);
+        ? APIService.instance.getAlbums(artistId: artistId, albumId: albumId)
+        : RinfService.instance.getAlbums(artistId: artistId, albumId: albumId);
+  }
+
+  /// Fetches a single album row by local id, or null if absent.
+  Future<AlbumInfo?> getAlbumInfo(String albumId) async {
+    if (albumId.isEmpty) return null;
+    final albums = await getAlbums(albumId: albumId);
+    return albums.isEmpty ? null : albums.first;
   }
 
   Future<List<ArtistInfo>> getArtists() async {

@@ -64,9 +64,13 @@ pub async fn handle_list_albums(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let albums = library::list_albums(db.pool(), msg.artist_id.as_deref())
-            .await
-            .unwrap_or_default();
+        let albums = library::list_albums(
+            db.pool(),
+            msg.artist_id.as_deref(),
+            msg.album_id.as_deref(),
+        )
+        .await
+        .unwrap_or_default();
         signals::library::ListAlbumsResponse {
             id: msg.id,
             albums: albums.into_iter().map(Into::into).collect(),
