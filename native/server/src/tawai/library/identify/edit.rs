@@ -104,7 +104,11 @@ pub async fn handle_write_file_tags(
         ..Default::default()
     };
 
-    match audio::tags::write_audio_tags(&path, &tag, audio::tags::TagWritePolicy::replace()) {
+    match audio::tags::write_audio_tags(
+        &path,
+        &tag,
+        audio::tags::TagWritePolicy::replace(body.clear_cover),
+    ) {
         Ok(()) => {
             let db = state.context.db().await;
             // Mirror the edit to the remote tawai source (best-effort).
@@ -113,6 +117,7 @@ pub async fn handle_write_file_tags(
                 db.pool(),
                 &path.to_string_lossy(),
                 &tag,
+                body.clear_cover,
                 state.context.client(),
                 &mk,
             )
@@ -302,6 +307,7 @@ pub async fn handle_write_file_tags_bytes(
     let mut copyright: Option<String> = None;
     let mut lyrics: Option<String> = None;
     let mut cover: Option<Vec<u8>> = None;
+    let mut clear_cover = false;
 
     while let Some(field) = multipart.next_field().await.unwrap_or(None) {
         match field.name().unwrap_or("") {
@@ -475,6 +481,11 @@ pub async fn handle_write_file_tags_bytes(
                     cover = Some(data.to_vec());
                 }
             }
+            "clear_cover" => {
+                if let Ok(text) = field.text().await {
+                    clear_cover = text.trim().parse().unwrap_or(false);
+                }
+            }
             _ => {}
         }
     }
@@ -531,7 +542,7 @@ pub async fn handle_write_file_tags_bytes(
         &filename,
         &bytes,
         &tag,
-        audio::tags::TagWritePolicy::replace(),
+        audio::tags::TagWritePolicy::replace(clear_cover),
     ) {
         Ok(new_bytes) => (StatusCode::OK, new_bytes).into_response(),
         Err(e) => {

@@ -183,9 +183,15 @@ impl TagWritePolicy {
 
     /// Full-set write: empty fields are cleared. Cover is treated as
     /// write-if-present (patch) in replace mode to avoid touching pictures
-    /// unless explicitly requested to clear them.
-    pub fn replace() -> Self {
-        Self::new(FieldWrite::Replace).with(TagField::Cover, FieldWrite::Patch)
+    /// unless explicitly requested to clear them; with `clear_cover` set, an
+    /// absent cover removes the existing front picture.
+    pub fn replace(clear_cover: bool) -> Self {
+        let policy = Self::new(FieldWrite::Replace);
+        if clear_cover {
+            policy.with(TagField::Cover, FieldWrite::Replace)
+        } else {
+            policy.with(TagField::Cover, FieldWrite::Patch)
+        }
     }
 }
 

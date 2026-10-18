@@ -1043,6 +1043,7 @@ pub async fn mirror_tag_write(
     pool: &DatabasePool,
     local_path: &str,
     tag: &AudioTag,
+    clear_cover: bool,
     client: &reqwest::Client,
     master_key: &str,
 ) -> Result<()> {
@@ -1091,7 +1092,7 @@ pub async fn mirror_tag_write(
         "copyright": tag.copyright,
         "lyrics": tag.lyrics,
         "cover": tag.cover,
-        "clear_cover": false,
+        "clear_cover": clear_cover,
     });
     let url = format!("{}/api/tawai/library/identify/tags/write", conn.http_base);
     let resp = client
