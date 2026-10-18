@@ -9,7 +9,6 @@ import 'package:synchronized/synchronized.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/app.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
-import 'package:tawai/models/audio_format.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/image_cache.dart';
 import 'package:tawai/utils/settings.dart' show SettingsManager;

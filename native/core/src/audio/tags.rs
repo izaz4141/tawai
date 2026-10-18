@@ -568,6 +568,53 @@ fn set_multi(tag: &mut Tag, key: ItemKey, values: &[String]) {
     }
 }
 
+/// Parse a `YYYY-MM-DD` release-date string into a `Timestamp`. Missing or
+/// unparseable parts are dropped (`year` falls back to `0`); time fields are
+/// never set.
+fn parse_release_date(date: &str) -> Timestamp {
+    let parts: Vec<&str> = date.split('-').collect();
+    Timestamp {
+        year: parts.first().and_then(|y| y.parse().ok()).unwrap_or(0),
+        month: parts
+            .get(1)
+            .and_then(|m| m.parse::<u16>().ok().map(|v| v as u8)),
+        day: parts
+            .get(2)
+            .and_then(|d| d.parse::<u16>().ok().map(|v| v as u8)),
+        hour: None,
+        minute: None,
+        second: None,
+    }
+}
+
+/// Detect the image format from its magic bytes (GIF is matched via the
+/// shared `GIF8` prefix, which also covers GIF89a) and push it as a
+/// front cover picture.
+fn push_front_cover(tag: &mut Tag, bytes: &[u8]) {
+    let mime_type = if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+        MimeType::Png
+    } else if bytes.starts_with(&[0xFF, 0xD8]) {
+        MimeType::Jpeg
+    } else if bytes.starts_with(b"GIF8") {
+        MimeType::Gif
+    } else if bytes.starts_with(b"BM") {
+        MimeType::Bmp
+    } else if bytes.len() > 4
+        && (bytes[..4] == [0x49, 0x49, 0x2A, 0x00]
+            || bytes[..4] == [0x4D, 0x4D, 0x00, 0x2A])
+    {
+        MimeType::Tiff
+    } else {
+        MimeType::Jpeg
+    };
+    tag.push_picture(
+        Picture::unchecked(bytes.to_vec())
+            .pic_type(PictureType::CoverFront)
+            .mime_type(mime_type)
+            .build(),
+    );
+}
+
 /// `write_opt!` — write an `Option<String>` field via `set_opt_text`.
 /// `write_num!` — write a positive integer through lofty's track/disk accessors.
 /// `write_total!` — write a positive integer stored under a text `ItemKey`.
@@ -710,43 +757,11 @@ fn apply_audio_tag(
         FieldWrite::Keep => {}
         FieldWrite::Patch => {
             if let Some(date) = rd_str {
-                let parts: Vec<&str> = date.split('-').collect();
-                let year = parts.first().and_then(|y| y.parse().ok()).unwrap_or(0);
-                let month = parts
-                    .get(1)
-                    .and_then(|m| m.parse::<u16>().ok().map(|v| v as u8));
-                let day = parts
-                    .get(2)
-                    .and_then(|d| d.parse::<u16>().ok().map(|v| v as u8));
-                tag.set_date(Timestamp {
-                    year,
-                    month,
-                    day,
-                    hour: None,
-                    minute: None,
-                    second: None,
-                });
+                tag.set_date(parse_release_date(date));
             }
         }
         FieldWrite::Replace => match rd_str {
-            Some(date) => {
-                let parts: Vec<&str> = date.split('-').collect();
-                let year = parts.first().and_then(|y| y.parse().ok()).unwrap_or(0);
-                let month = parts
-                    .get(1)
-                    .and_then(|m| m.parse::<u16>().ok().map(|v| v as u8));
-                let day = parts
-                    .get(2)
-                    .and_then(|d| d.parse::<u16>().ok().map(|v| v as u8));
-                tag.set_date(Timestamp {
-                    year,
-                    month,
-                    day,
-                    hour: None,
-                    minute: None,
-                    second: None,
-                });
-            }
+            Some(date) => tag.set_date(parse_release_date(date)),
             None => tag.remove_date(),
         },
     }
@@ -968,56 +983,13 @@ fn apply_audio_tag(
         FieldWrite::Patch => {
             if let Some(cover_bytes) = &audio_tag.cover {
                 tag.remove_picture_type(PictureType::CoverFront);
-
-                let mime_type = if cover_bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
-                    MimeType::Png
-                } else if cover_bytes.starts_with(&[0xFF, 0xD8]) {
-                    MimeType::Jpeg
-                } else if cover_bytes.starts_with(b"GIF8") || cover_bytes.starts_with(b"GIF89") {
-                    MimeType::Gif
-                } else if cover_bytes.starts_with(b"BM") {
-                    MimeType::Bmp
-                } else if cover_bytes.len() > 4
-                    && (cover_bytes[..4] == [0x49, 0x49, 0x2A, 0x00]
-                        || cover_bytes[..4] == [0x4D, 0x4D, 0x00, 0x2A])
-                {
-                    MimeType::Tiff
-                } else {
-                    MimeType::Jpeg
-                };
-
-                let picture = Picture::unchecked(cover_bytes.to_vec())
-                    .pic_type(PictureType::CoverFront)
-                    .mime_type(mime_type)
-                    .build();
-                tag.push_picture(picture);
+                push_front_cover(tag, cover_bytes);
             }
         }
         FieldWrite::Replace => {
             tag.remove_picture_type(PictureType::CoverFront);
             if let Some(cover_bytes) = &audio_tag.cover {
-                let mime_type = if cover_bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
-                    MimeType::Png
-                } else if cover_bytes.starts_with(&[0xFF, 0xD8]) {
-                    MimeType::Jpeg
-                } else if cover_bytes.starts_with(b"GIF8") || cover_bytes.starts_with(b"GIF89") {
-                    MimeType::Gif
-                } else if cover_bytes.starts_with(b"BM") {
-                    MimeType::Bmp
-                } else if cover_bytes.len() > 4
-                    && (cover_bytes[..4] == [0x49, 0x49, 0x2A, 0x00]
-                        || cover_bytes[..4] == [0x4D, 0x4D, 0x00, 0x2A])
-                {
-                    MimeType::Tiff
-                } else {
-                    MimeType::Jpeg
-                };
-
-                let picture = Picture::unchecked(cover_bytes.to_vec())
-                    .pic_type(PictureType::CoverFront)
-                    .mime_type(mime_type)
-                    .build();
-                tag.push_picture(picture);
+                push_front_cover(tag, cover_bytes);
             }
         }
     }
