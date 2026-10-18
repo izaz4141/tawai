@@ -332,7 +332,7 @@ pub async fn handle_write_file_tags_bytes(
             }
             "artists" => {
                 if let Ok(text) = field.text().await {
-                    artists = split_multi(&text);
+                    artists.extend(split_multi(&text));
                 }
             }
             "album" => {
@@ -347,12 +347,12 @@ pub async fn handle_write_file_tags_bytes(
             }
             "album_artists" => {
                 if let Ok(text) = field.text().await {
-                    album_artists = split_multi(&text);
+                    album_artists.extend(split_multi(&text));
                 }
             }
             "genres" => {
                 if let Ok(text) = field.text().await {
-                    genres = split_multi(&text);
+                    genres.extend(split_multi(&text));
                 }
             }
             "track_number" => {
@@ -407,7 +407,7 @@ pub async fn handle_write_file_tags_bytes(
             }
             "release_type" => {
                 if let Ok(text) = field.text().await {
-                    release_type = split_multi(&text);
+                    release_type.extend(split_multi(&text));
                 }
             }
             "isrc" => {
