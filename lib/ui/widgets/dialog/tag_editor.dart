@@ -641,18 +641,24 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
         children: [
           _buildFileName(),
           EditableCover(
-            coverBytes:
-                _selectedCover ??
-                (tags.cover != null ? Uint8List.fromList(tags.cover!) : null),
+            coverBytes: _coverRemoved
+                ? null
+                : _selectedCover ??
+                      (tags.cover != null
+                          ? Uint8List.fromList(tags.cover!)
+                          : null),
             coverUrl: _coverUrl,
             replaced:
                 _selectedCover != null || _coverUrl != null || _coverRemoved,
             onPickCover: _pickCover,
-            onRevertCover: () => setState(() {
-              _selectedCover = null;
-              _coverUrl = null;
-              _coverRemoved = false;
-            }),
+            onRevertCover:
+                _selectedCover != null || _coverUrl != null || _coverRemoved
+                ? () => setState(() {
+                    _selectedCover = null;
+                    _coverUrl = null;
+                    _coverRemoved = false;
+                  })
+                : null,
             onRemoveCover: () => setState(() {
               _selectedCover = null;
               _coverUrl = null;
