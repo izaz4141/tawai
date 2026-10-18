@@ -450,7 +450,11 @@ pub async fn apply_identification(
             lyrics.as_deref(),
             params.cover_bytes.as_deref(),
             new_file_path.as_deref(),
-            params.genres.as_deref(),
+            params
+                .genres
+                .as_deref()
+                .filter(|g| !g.is_empty())
+                .map(|_| tag.genres.as_slice()),
         )
         .await?;
     }

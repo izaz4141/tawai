@@ -645,7 +645,8 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
                 _selectedCover ??
                 (tags.cover != null ? Uint8List.fromList(tags.cover!) : null),
             coverUrl: _coverUrl,
-            replaced: _selectedCover != null || _coverUrl != null || _coverRemoved,
+            replaced:
+                _selectedCover != null || _coverUrl != null || _coverRemoved,
             onPickCover: _pickCover,
             onRevertCover: () => setState(() {
               _selectedCover = null;

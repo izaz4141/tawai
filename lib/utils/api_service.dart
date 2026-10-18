@@ -2406,7 +2406,7 @@ class APIService {
         'comment': data.comment,
         'copyright': data.copyright,
         'lyrics': data.lyrics,
-      'clear_cover': data.clearCover,
+        'clear_cover': data.clearCover,
       };
       if (data.cover != null) body['cover'] = data.cover;
 
