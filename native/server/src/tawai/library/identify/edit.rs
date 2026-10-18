@@ -106,27 +106,7 @@ pub async fn handle_write_file_tags(
 
     match audio::tags::write_audio_tags(&path, &tag, audio::tags::TagWritePolicy::replace()) {
         Ok(()) => {
-            // Writing tags rewrote the file's bytes, so the stored SHA-256 is
-            // now stale. Recompute it in place, otherwise the next remote scan
-            // sees a permanent hash mismatch against freshly streamed bytes.
             let db = state.context.db().await;
-            if let Ok(hash) = tawai_core::libsources::local::hash_file(&path) {
-                if let Err(e) =
-                    library::update_file_hash_by_path(db.pool(), &path.to_string_lossy(), &hash)
-                        .await
-                {
-                    tawai_core::utils::logger::warn(&format!(
-                        "failed to update stored file_hash after tag write for {}: {}",
-                        path.display(),
-                        e
-                    ));
-                }
-            } else {
-                tawai_core::utils::logger::warn(&format!(
-                    "failed to compute file_hash after tag write for {}",
-                    path.display()
-                ));
-            }
             // Mirror the edit to the remote tawai source (best-effort).
             let mk = state.context.master_key.read().await.clone();
             if let Err(e) = tawai_core::libsources::tawai::mirror_tag_write(
@@ -142,7 +122,7 @@ pub async fn handle_write_file_tags(
             }
             // Reflect the edit in this library's row so it does not wait for a
             // rescan. Best-effort: the write already succeeded.
-            if sync_database {
+            let sync_ok = if sync_database {
                 match library::sync_track_tags_by_file_path(
                     db.pool(),
                     &body.path,
@@ -151,13 +131,43 @@ pub async fn handle_write_file_tags(
                 )
                 .await
                 {
-                    Ok(_) => {}
+                    Ok(_) => true,
                     Err(e) => {
                         tawai_core::utils::logger::warn(&format!(
                             "failed to sync library row after tag write for {}: {e}",
                             body.path
                         ));
+                        false
                     }
+                }
+            } else {
+                true
+            };
+            // Writing tags rewrote the file's bytes, so the stored SHA-256 is
+            // now stale. Refresh it only once the row's tag metadata is in
+            // place (or when DB sync is disabled), so a failed sync leaves the
+            // row in its prior, self-consistent state instead of pairing stale
+            // tags with a fresh hash.
+            if sync_ok {
+                if let Ok(hash) = tawai_core::libsources::local::hash_file(&path) {
+                    if let Err(e) = library::update_file_hash_by_path(
+                        db.pool(),
+                        &path.to_string_lossy(),
+                        &hash,
+                    )
+                    .await
+                    {
+                        tawai_core::utils::logger::warn(&format!(
+                            "failed to update stored file_hash after tag write for {}: {}",
+                            path.display(),
+                            e
+                        ));
+                    }
+                } else {
+                    tawai_core::utils::logger::warn(&format!(
+                        "failed to compute file_hash after tag write for {}",
+                        path.display()
+                    ));
                 }
             }
             Json(WriteFileTagsResponse {
