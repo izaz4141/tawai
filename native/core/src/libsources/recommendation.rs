@@ -288,7 +288,7 @@ pub async fn download(
     if let Err(e) = crate::audio::tags::write_audio_tags(
         &final_path,
         &tag,
-        crate::audio::tags::TagWriteMode::Patch,
+        crate::audio::tags::TagWritePolicy::patch(),
     ) {
         logger::warn(&format!(
             "failed to write tags to {}: {}",

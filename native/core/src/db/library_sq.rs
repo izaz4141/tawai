@@ -1285,6 +1285,7 @@ pub async fn update_track_tags_from_audio_tag(
     pool: &SqlitePool,
     track_id: &str,
     tag: &AudioTag,
+    clear_cover: bool,
 ) -> Result<()> {
     let mut tx = pool.begin().await?;
 
@@ -1336,7 +1337,7 @@ pub async fn update_track_tags_from_audio_tag(
            copyright = ?,
            script = ?,
            lyrics = ?,
-           cover = ?,
+           cover = CASE WHEN ? THEN ? ELSE COALESCE(?, tracks.cover) END,
            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
            WHERE id = ?"#,
     )
@@ -1352,6 +1353,8 @@ pub async fn update_track_tags_from_audio_tag(
     .bind(tag.copyright.as_deref())
     .bind(tag.script.as_deref())
     .bind(tag.lyrics.as_deref())
+    .bind(clear_cover)
+    .bind(tag.cover.as_deref())
     .bind(tag.cover.as_deref())
     .bind(track_id)
     .execute(&mut *tx)
@@ -1411,6 +1414,7 @@ pub async fn sync_track_tags_by_file_path(
     pool: &SqlitePool,
     file_path: &str,
     tag: &AudioTag,
+    clear_cover: bool,
 ) -> Result<bool> {
     let track_id: Option<String> =
         sqlx::query_scalar("SELECT id FROM tracks WHERE file_path = ? LIMIT 1")
@@ -1419,7 +1423,7 @@ pub async fn sync_track_tags_by_file_path(
             .await?;
     match track_id {
         Some(id) => {
-            update_track_tags_from_audio_tag(pool, &id, tag).await?;
+            update_track_tags_from_audio_tag(pool, &id, tag, clear_cover).await?;
             Ok(true)
         }
         None => Ok(false),

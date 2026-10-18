@@ -83,6 +83,7 @@ class EditableCover extends StatefulWidget {
   final VoidCallback onPickCover;
   final VoidCallback? onRevertCover;
   final VoidCallback? onPickCoverFromUrl;
+  final VoidCallback? onRemoveCover;
   final double width;
   final double height;
 
@@ -94,6 +95,7 @@ class EditableCover extends StatefulWidget {
     required this.onPickCover,
     this.onRevertCover,
     this.onPickCoverFromUrl,
+    this.onRemoveCover,
     this.width = 120,
     this.height = 120,
   });
@@ -181,10 +183,12 @@ class _EditableCoverState extends State<EditableCover> {
                     ),
                   ),
                 ),
-              if (widget.replaced && widget.onRevertCover != null)
+              if (widget.onRevertCover != null)
                 Positioned(
                   top: AppTheme.spaceXS * 0.5,
-                  right: AppTheme.spaceXS * 0.5,
+                  right: widget.onRemoveCover != null && hasArt
+                      ? AppTheme.spaceXS * 3 + AppTheme.spaceXS
+                      : AppTheme.spaceXS * 0.5,
                   child: Material(
                     color: colors.surfaceContainerHighest.withAlpha(200),
                     borderRadius: BorderRadius.circular(AppTheme.spaceXS * 3),
@@ -197,6 +201,27 @@ class _EditableCoverState extends State<EditableCover> {
                           Icons.undo,
                           size: AppTheme.iconSM,
                           color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              if (widget.onRemoveCover != null && hasArt)
+                Positioned(
+                  top: AppTheme.spaceXS * 0.5,
+                  right: AppTheme.spaceXS * 0.5,
+                  child: Material(
+                    color: colors.surfaceContainerHighest.withAlpha(200),
+                    borderRadius: BorderRadius.circular(AppTheme.spaceXS * 3),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(AppTheme.spaceXS * 3),
+                      onTap: widget.onRemoveCover,
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppTheme.spaceXS * 0.5),
+                        child: Icon(
+                          Icons.delete,
+                          size: AppTheme.iconSM,
+                          color: colors.error,
                         ),
                       ),
                     ),

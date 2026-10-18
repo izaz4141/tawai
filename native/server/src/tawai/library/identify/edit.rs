@@ -104,7 +104,7 @@ pub async fn handle_write_file_tags(
         ..Default::default()
     };
 
-    match audio::tags::write_audio_tags(&path, &tag, audio::tags::TagWriteMode::Replace) {
+    match audio::tags::write_audio_tags(&path, &tag, audio::tags::TagWritePolicy::replace()) {
         Ok(()) => {
             // Writing tags rewrote the file's bytes, so the stored SHA-256 is
             // now stale. Recompute it in place, otherwise the next remote scan
@@ -143,7 +143,14 @@ pub async fn handle_write_file_tags(
             // Reflect the edit in this library's row so it does not wait for a
             // rescan. Best-effort: the write already succeeded.
             if sync_database {
-                match library::sync_track_tags_by_file_path(db.pool(), &body.path, &tag).await {
+                match library::sync_track_tags_by_file_path(
+                    db.pool(),
+                    &body.path,
+                    &tag,
+                    body.clear_cover,
+                )
+                .await
+                {
                     Ok(_) => {}
                     Err(e) => {
                         tawai_core::utils::logger::warn(&format!(
@@ -514,7 +521,7 @@ pub async fn handle_write_file_tags_bytes(
         &filename,
         &bytes,
         &tag,
-        audio::tags::TagWriteMode::Replace,
+        audio::tags::TagWritePolicy::replace(),
     ) {
         Ok(new_bytes) => (StatusCode::OK, new_bytes).into_response(),
         Err(e) => {

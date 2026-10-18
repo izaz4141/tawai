@@ -404,6 +404,7 @@ pub struct WriteFileTagsRequest {
     pub copyright: Option<String>,
     pub lyrics: Option<String>,
     pub cover: Option<Vec<u8>>,
+    pub clear_cover: bool,
 }
 
 #[derive(Serialize, RustSignal)]
@@ -456,6 +457,7 @@ pub struct WriteFileTagsBytesRequest {
     pub copyright: Option<String>,
     pub lyrics: Option<String>,
     pub cover: Option<Vec<u8>>,
+    pub clear_cover: bool,
 }
 
 #[derive(Serialize, RustSignal)]

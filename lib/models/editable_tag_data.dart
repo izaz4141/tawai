@@ -39,6 +39,7 @@ class EditableTagData {
   final String? copyright;
   final String? lyrics;
   final List<int>? cover;
+  final bool clearCover;
 
   const EditableTagData({
     required this.title,
@@ -72,5 +73,6 @@ class EditableTagData {
     this.copyright,
     this.lyrics,
     this.cover,
+    this.clearCover = false,
   });
 }

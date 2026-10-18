@@ -319,7 +319,7 @@ pub async fn import_into_source(
     if let Err(e) = crate::audio::tags::write_audio_tags(
         &final_path,
         &tag,
-        crate::audio::tags::TagWriteMode::Patch,
+        crate::audio::tags::TagWritePolicy::patch(),
     ) {
         logger::warn(&format!(
             "failed to write tags to imported file {}: {}",
@@ -1091,6 +1091,7 @@ pub async fn mirror_tag_write(
         "copyright": tag.copyright,
         "lyrics": tag.lyrics,
         "cover": tag.cover,
+        "clear_cover": false,
     });
     let url = format!("{}/api/tawai/library/identify/tags/write", conn.http_base);
     let resp = client

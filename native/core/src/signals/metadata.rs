@@ -361,6 +361,8 @@ pub struct WriteFileTagsRequest {
     pub copyright: Option<String>,
     pub lyrics: Option<String>,
     pub cover: Option<Vec<u8>>,
+    #[serde(default)]
+    pub clear_cover: bool,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -437,6 +439,8 @@ pub struct WriteFileTagsBytesRequest {
     pub copyright: Option<String>,
     pub lyrics: Option<String>,
     pub cover: Option<Vec<u8>>,
+    #[serde(default)]
+    pub clear_cover: bool,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]

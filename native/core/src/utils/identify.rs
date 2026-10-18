@@ -269,14 +269,22 @@ pub async fn apply_identification(
         if !v.is_empty() {
             tag.artists = v.clone();
             explicit_artists = true;
+        } else {
+            tag.artists.clear();
         }
+    } else {
+        tag.artists.clear();
     }
     let mut explicit_album_artists = false;
     if let Some(v) = &params.album_artists {
         if !v.is_empty() {
             tag.album_artists = v.clone();
             explicit_album_artists = true;
+        } else {
+            tag.album_artists.clear();
         }
+    } else {
+        tag.album_artists.clear();
     }
     if let Some(v) = &params.genres {
         if !v.is_empty() {
@@ -291,14 +299,12 @@ pub async fn apply_identification(
 
     let file_path = PathBuf::from(&file_path);
     // The identify flow patches the on-disk tags but may carry explicit
-    // artist/album-artist lists from the comparison sheet, which `Patch`
-    // deliberately ignores. `PatchExplicitArtists` writes only those lists.
-    let write_mode = if explicit_artists || explicit_album_artists {
-        audio::tags::TagWriteMode::PatchExplicitArtists
-    } else {
-        audio::tags::TagWriteMode::Patch
-    };
-    audio::tags::write_audio_tags(&file_path, &tag, write_mode)?;
+    // artist/album-artist lists from the comparison sheet.
+    audio::tags::write_audio_tags(
+        &file_path,
+        &tag,
+        audio::tags::TagWritePolicy::patch_explicit_artists(),
+    )?;
 
     if let Some(cover_bytes) = &params.cover_bytes {
         if let Some(track) = &track {

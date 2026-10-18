@@ -1031,6 +1031,7 @@ class RinfService {
       copyright: data.copyright,
       lyrics: data.lyrics,
       cover: data.cover,
+      clearCover: data.clearCover,
     ).sendSignalToRust();
     final signal = await stream.first;
     return (success: signal.message.success, error: signal.message.error);
@@ -1096,6 +1097,7 @@ class RinfService {
       copyright: data.copyright,
       lyrics: data.lyrics,
       cover: data.cover,
+      clearCover: data.clearCover,
     ).sendSignalToRust();
     final signal = await stream.first;
     final result = signal.message;

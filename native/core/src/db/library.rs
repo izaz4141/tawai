@@ -513,13 +513,14 @@ pub async fn update_track_tags_from_audio_tag(
     pool: &DatabasePool,
     track_id: &str,
     tag: &crate::audio::tags::AudioTag,
+    clear_cover: bool,
 ) -> anyhow::Result<()> {
     match pool {
         DatabasePool::Sqlite(p) => {
-            super::library_sq::update_track_tags_from_audio_tag(p, track_id, tag).await
+            super::library_sq::update_track_tags_from_audio_tag(p, track_id, tag, clear_cover).await
         }
         DatabasePool::Postgres(p) => {
-            super::library_pg::update_track_tags_from_audio_tag(p, track_id, tag).await
+            super::library_pg::update_track_tags_from_audio_tag(p, track_id, tag, clear_cover).await
         }
     }
 }
@@ -530,13 +531,14 @@ pub async fn sync_track_tags_by_file_path(
     pool: &DatabasePool,
     file_path: &str,
     tag: &crate::audio::tags::AudioTag,
+    clear_cover: bool,
 ) -> anyhow::Result<bool> {
     match pool {
         DatabasePool::Sqlite(p) => {
-            super::library_sq::sync_track_tags_by_file_path(p, file_path, tag).await
+            super::library_sq::sync_track_tags_by_file_path(p, file_path, tag, clear_cover).await
         }
         DatabasePool::Postgres(p) => {
-            super::library_pg::sync_track_tags_by_file_path(p, file_path, tag).await
+            super::library_pg::sync_track_tags_by_file_path(p, file_path, tag, clear_cover).await
         }
     }
 }

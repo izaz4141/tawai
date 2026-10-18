@@ -2406,6 +2406,7 @@ class APIService {
         'comment': data.comment,
         'copyright': data.copyright,
         'lyrics': data.lyrics,
+      'clear_cover': data.clearCover,
       };
       if (data.cover != null) body['cover'] = data.cover;
 
@@ -2507,6 +2508,7 @@ class APIService {
               'comment': data.comment ?? '',
               'copyright': data.copyright ?? '',
               'lyrics': data.lyrics ?? '',
+              'clear_cover': data.clearCover.toString(),
             })
             ..files.add(
               http.MultipartFile.fromBytes('file', bytes, filename: filename),

@@ -43,6 +43,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
   ReadFileTagsResponse? _tags;
   Uint8List? _selectedCover;
   String? _coverUrl;
+  bool _coverRemoved = false;
 
   /// One controller per editable field, keyed by the field's stable id.
   final Map<String, TextEditingController> _controllers = {};
@@ -110,6 +111,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
     if (bytes == null) return;
     setState(() {
       _selectedCover = bytes;
+      _coverRemoved = false;
       _coverUrl = null;
     });
   }
@@ -119,6 +121,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
     if (url == null || !mounted) return;
     setState(() {
       _coverUrl = url;
+      _coverRemoved = false;
       _selectedCover = null;
     });
   }
@@ -141,6 +144,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
       _ctrl('date').text = result.releaseDate ?? '';
       if (result.coverBytes != null) {
         _selectedCover = result.coverBytes;
+        _coverRemoved = false;
         _coverUrl = null;
       }
     });
@@ -209,6 +213,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
       _tags = response;
       _selectedCover = null;
       _coverUrl = null;
+      _coverRemoved = false;
     });
     _ctrl('title').text = response.title;
     _ctrl('artist').text = response.artist;
@@ -267,6 +272,9 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
           return;
         }
       }
+      if (_coverRemoved) {
+        cover = null;
+      }
       // Genres are displayed joined with ", ", so they split on any of
       // ",;/"; the other multi-value fields are displayed joined with "; ".
       final genres = _ctrl('genres').text
@@ -314,6 +322,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
         copyright: textOrNull('copyright'),
         lyrics: textOrNull('lyrics'),
         cover: cover,
+        clearCover: _coverRemoved,
       );
 
       if (_fileBytes != null) {
@@ -636,11 +645,17 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
                 _selectedCover ??
                 (tags.cover != null ? Uint8List.fromList(tags.cover!) : null),
             coverUrl: _coverUrl,
-            replaced: _selectedCover != null || _coverUrl != null,
+            replaced: _selectedCover != null || _coverUrl != null || _coverRemoved,
             onPickCover: _pickCover,
             onRevertCover: () => setState(() {
               _selectedCover = null;
               _coverUrl = null;
+              _coverRemoved = false;
+            }),
+            onRemoveCover: () => setState(() {
+              _selectedCover = null;
+              _coverUrl = null;
+              _coverRemoved = true;
             }),
             onPickCoverFromUrl: _pickCoverFromUrl,
           ),

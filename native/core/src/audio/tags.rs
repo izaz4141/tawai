@@ -88,22 +88,105 @@ pub fn derive_sort_name(name: &str) -> String {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TagWriteMode {
-    /// Write-if-set: only non-empty fields are written; empty fields are left
-    /// untouched. Used by flows that build a partial `AudioTag` (download,
-    /// import, lyrics, scan, identify) where an empty field means "unknown".
+pub enum FieldWrite {
+    /// Leave the field untouched (useful for exceptions to the default).
+    Keep,
+    /// Write the field if it is set/non-empty; leave it untouched if empty.
     Patch,
-    /// Full-set: every editable field is written, and an empty field (empty
-    /// string, `None`, empty list, or `0`) removes the stored value. Used by
-    /// the tag editor, which always sends the complete editable set, so a
-    /// field the user cleared actually gets cleared. Never affects pictures or
-    /// unmanaged keys (acoustid, encoder, replaygain).
+    /// Write the field; if it is empty/absent (`None`, `""`, `0`, empty list),
+    /// remove it from the tag.
     Replace,
-    /// Like [`TagWriteMode::Patch`] for scalar fields, but the explicit
-    /// `TrackArtists` / `AlbumArtists` multi-value lists are written when
-    /// non-empty. Used by the identify flow, which supplies those lists from
-    /// the comparison sheet but otherwise patches the on-disk tags.
-    PatchExplicitArtists,
+}
+
+/// Identifies editable fields for per-field policy resolution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TagField {
+    Title,
+    Artist,
+    Artists,
+    Album,
+    AlbumArtist,
+    AlbumArtists,
+    Genres,
+    ReleaseDate,
+    TrackNumber,
+    DiscNumber,
+    TotalTracks,
+    TotalDiscs,
+    ArtistSort,
+    AlbumArtistSort,
+    MbidRecording,
+    MbidTrack,
+    MbidArtist,
+    MbidRelease,
+    MbidReleaseArtist,
+    MbidReleaseGroup,
+    Comment,
+    Copyright,
+    Isrc,
+    RecordLabel,
+    Media,
+    Script,
+    ReleaseCountry,
+    OriginalDate,
+    Lyrics,
+    ReleaseType,
+    Cover,
+}
+
+#[derive(Debug, Clone)]
+pub struct TagWritePolicy {
+    pub default: FieldWrite,
+    pub overrides: Vec<(TagField, FieldWrite)>,
+}
+
+impl TagWritePolicy {
+    pub fn new(default: FieldWrite) -> Self {
+        Self {
+            default,
+            overrides: Vec::new(),
+        }
+    }
+
+    pub fn with(mut self, field: TagField, write: FieldWrite) -> Self {
+        self.overrides.retain(|(f, _)| *f != field);
+        self.overrides.push((field, write));
+        self
+    }
+
+    pub fn resolve(&self, field: TagField) -> FieldWrite {
+        for (f, w) in &self.overrides {
+            if *f == field {
+                return *w;
+            }
+        }
+        self.default
+    }
+
+    /// Write-if-set for most fields; skip multi-artist lists (they are derived
+    /// from the single `artist`/`album_artist` in patch flows).
+    pub fn patch() -> Self {
+        Self {
+            default: FieldWrite::Patch,
+            overrides: vec![
+                (TagField::Artists, FieldWrite::Keep),
+                (TagField::AlbumArtists, FieldWrite::Keep),
+            ],
+        }
+    }
+
+    /// Write-if-set for all fields; explicitly write non-empty artist/album
+    /// artist lists when provided.
+    pub fn patch_explicit_artists() -> Self {
+        Self::new(FieldWrite::Patch)
+    }
+
+    /// Full-set write: empty fields are cleared. Cover is treated as
+    /// write-if-present (patch) in replace mode to avoid touching pictures
+    /// unless explicitly requested to clear them.
+    pub fn replace() -> Self {
+        Self::new(FieldWrite::Replace).with(TagField::Cover, FieldWrite::Patch)
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -414,15 +497,9 @@ fn extract_audio_tags(
 }
 
 /// Write tags to an audio file using lofty.
-///
-/// `mode` selects the write contract: [`TagWriteMode::Patch`] writes only
-/// non-empty fields (used by partial-tag flows); [`TagWriteMode::Replace`]
-/// writes the full editable set and clears empty ones (used by the tag editor);
-/// [`TagWriteMode::PatchExplicitArtists`] is patch-like but also writes an
-/// explicit, non-empty `artists`/`album_artists` list (used by identify).
-pub fn write_audio_tags(path: &Path, audio_tag: &AudioTag, mode: TagWriteMode) -> Result<()> {
+pub fn write_audio_tags(path: &Path, audio_tag: &AudioTag, policy: TagWritePolicy) -> Result<()> {
     let mut tagged_file = read_from_path(path)?;
-    apply_audio_tag(&mut tagged_file, audio_tag, mode)?;
+    apply_audio_tag(&mut tagged_file, audio_tag, policy)?;
     tagged_file.save_to_path(path, WriteOptions::default())?;
     Ok(())
 }
@@ -432,7 +509,7 @@ pub fn write_audio_tags_to_bytes(
     filename: &str,
     bytes: &[u8],
     audio_tag: &AudioTag,
-    mode: TagWriteMode,
+    policy: TagWritePolicy,
 ) -> Result<Vec<u8>> {
     let probe = match Probe::new(Cursor::new(bytes)).guess_file_type() {
         Ok(probe) => probe,
@@ -443,28 +520,34 @@ pub fn write_audio_tags_to_bytes(
         }
     };
     let mut tagged_file = probe.read()?;
-    apply_audio_tag(&mut tagged_file, audio_tag, mode)?;
+    apply_audio_tag(&mut tagged_file, audio_tag, policy)?;
     let mut output = Cursor::new(Vec::new());
     tagged_file.save_to(&mut output, WriteOptions::default())?;
     Ok(output.into_inner())
 }
 
-/// Set a single-value text item, replacing any existing values for the key.
-///
-/// In [`TagWriteMode::Replace`], an empty `value` removes the key instead, so a
-/// field cleared in the tag editor does not keep its previous file value. In
-/// [`TagWriteMode::Patch`] an empty value is left untouched.
-fn set_text(tag: &mut Tag, key: ItemKey, value: &str, mode: TagWriteMode) {
-    if !value.trim().is_empty() {
-        tag.insert_text(key, value.to_string());
-    } else if mode == TagWriteMode::Replace {
-        tag.remove_key(key);
+/// Set a single-value text item.
+fn set_text(tag: &mut Tag, key: ItemKey, value: &str, write: FieldWrite) {
+    match write {
+        FieldWrite::Keep => {}
+        FieldWrite::Patch => {
+            if !value.trim().is_empty() {
+                tag.insert_text(key, value.to_string());
+            }
+        }
+        FieldWrite::Replace => {
+            if !value.trim().is_empty() {
+                tag.insert_text(key, value.to_string());
+            } else {
+                tag.remove_key(key);
+            }
+        }
     }
 }
 
 /// [`set_text`] for optional fields; `None` behaves like an empty string.
-fn set_opt_text(tag: &mut Tag, key: ItemKey, value: Option<&str>, mode: TagWriteMode) {
-    set_text(tag, key, value.unwrap_or_default(), mode);
+fn set_opt_text(tag: &mut Tag, key: ItemKey, value: Option<&str>, write: FieldWrite) {
+    set_text(tag, key, value.unwrap_or_default(), write);
 }
 
 /// Write a multi-value item list under a single key, replacing any existing
@@ -492,25 +575,45 @@ fn set_multi(tag: &mut Tag, key: ItemKey, values: &[String]) {
 /// These collapse the repeated write blocks in `apply_audio_tag` into one line
 /// each; the write-if-set / clear-on-empty behaviour lives in `set_text`.
 macro_rules! write_opt {
-    ($tag:expr, $audio:expr, $field:ident, $key:expr, $mode:expr) => {
-        set_opt_text($tag, $key, $audio.$field.as_deref(), $mode);
+    ($tag:expr, $audio:expr, $field:ident, $key:expr, $write:expr) => {
+        set_opt_text($tag, $key, $audio.$field.as_deref(), $write);
     };
 }
 macro_rules! write_num {
-    ($tag:expr, $value:expr, $set:ident, $remove:ident, $mode:expr) => {
-        if $value > 0 {
-            $tag.$set($value as u32);
-        } else if $mode == TagWriteMode::Replace {
-            $tag.$remove();
+    ($tag:expr, $value:expr, $set:ident, $remove:ident, $write:expr) => {
+        match $write {
+            $crate::audio::tags::FieldWrite::Keep => {}
+            $crate::audio::tags::FieldWrite::Patch => {
+                if $value > 0 {
+                    $tag.$set($value as u32);
+                }
+            }
+            $crate::audio::tags::FieldWrite::Replace => {
+                if $value > 0 {
+                    $tag.$set($value as u32);
+                } else {
+                    $tag.$remove();
+                }
+            }
         }
     };
 }
 macro_rules! write_total {
-    ($tag:expr, $value:expr, $key:expr, $mode:expr) => {
-        if $value > 0 {
-            $tag.insert_text($key, $value.to_string());
-        } else if $mode == TagWriteMode::Replace {
-            $tag.remove_key($key);
+    ($tag:expr, $value:expr, $key:expr, $write:expr) => {
+        match $write {
+            $crate::audio::tags::FieldWrite::Keep => {}
+            $crate::audio::tags::FieldWrite::Patch => {
+                if $value > 0 {
+                    $tag.insert_text($key, $value.to_string());
+                }
+            }
+            $crate::audio::tags::FieldWrite::Replace => {
+                if $value > 0 {
+                    $tag.insert_text($key, $value.to_string());
+                } else {
+                    $tag.remove_key($key);
+                }
+            }
         }
     };
 }
@@ -518,7 +621,7 @@ macro_rules! write_total {
 fn apply_audio_tag(
     tagged_file: &mut TaggedFile,
     audio_tag: &AudioTag,
-    mode: TagWriteMode,
+    policy: TagWritePolicy,
 ) -> Result<()> {
     let tag = if let Some(tag) = tagged_file.primary_tag_mut() {
         tag
@@ -530,73 +633,168 @@ fn apply_audio_tag(
             .ok_or_else(|| anyhow::anyhow!("Failed to create tag"))?
     };
 
-    let replace = mode == TagWriteMode::Replace;
-
-    if replace && audio_tag.title.trim().is_empty() {
-        tag.remove_title();
-    } else {
-        tag.set_title(audio_tag.title.clone());
-    }
-    if replace && audio_tag.artist.trim().is_empty() {
-        tag.remove_artist();
-    } else {
-        tag.set_artist(audio_tag.artist.clone());
-    }
-    if replace && audio_tag.album.trim().is_empty() {
-        tag.remove_album();
-    } else {
-        tag.set_album(audio_tag.album.clone());
-    }
-    if replace && audio_tag.genres.iter().all(|g| g.trim().is_empty()) {
-        tag.remove_genre();
-    } else {
-        tag.set_genre(audio_tag.genres.join("; "));
+    let title_w = policy.resolve(TagField::Title);
+    match title_w {
+        FieldWrite::Keep => {}
+        FieldWrite::Patch => {
+            if !audio_tag.title.trim().is_empty() {
+                tag.set_title(audio_tag.title.clone());
+            }
+        }
+        FieldWrite::Replace => {
+            if audio_tag.title.trim().is_empty() {
+                tag.remove_title();
+            } else {
+                tag.set_title(audio_tag.title.clone());
+            }
+        }
     }
 
-    match audio_tag
+    let artist_w = policy.resolve(TagField::Artist);
+    match artist_w {
+        FieldWrite::Keep => {}
+        FieldWrite::Patch => {
+            if !audio_tag.artist.trim().is_empty() {
+                tag.set_artist(audio_tag.artist.clone());
+            }
+        }
+        FieldWrite::Replace => {
+            if audio_tag.artist.trim().is_empty() {
+                tag.remove_artist();
+            } else {
+                tag.set_artist(audio_tag.artist.clone());
+            }
+        }
+    }
+
+    let album_w = policy.resolve(TagField::Album);
+    match album_w {
+        FieldWrite::Keep => {}
+        FieldWrite::Patch => {
+            if !audio_tag.album.trim().is_empty() {
+                tag.set_album(audio_tag.album.clone());
+            }
+        }
+        FieldWrite::Replace => {
+            if audio_tag.album.trim().is_empty() {
+                tag.remove_album();
+            } else {
+                tag.set_album(audio_tag.album.clone());
+            }
+        }
+    }
+
+    let genres_w = policy.resolve(TagField::Genres);
+    match genres_w {
+        FieldWrite::Keep => {}
+        FieldWrite::Patch => {
+            if !audio_tag.genres.iter().all(|g| g.trim().is_empty()) {
+                tag.set_genre(audio_tag.genres.join("; "));
+            }
+        }
+        FieldWrite::Replace => {
+            if audio_tag.genres.iter().all(|g| g.trim().is_empty()) {
+                tag.remove_genre();
+            } else {
+                tag.set_genre(audio_tag.genres.join("; "));
+            }
+        }
+    }
+
+    let rd_w = policy.resolve(TagField::ReleaseDate);
+    let rd_str = audio_tag
         .release_date
         .as_deref()
-        .filter(|d| !d.trim().is_empty())
-    {
-        Some(date) => {
-            let parts: Vec<&str> = date.split('-').collect();
-            let year = parts.first().and_then(|y| y.parse().ok()).unwrap_or(0);
-            let month = parts
-                .get(1)
-                .and_then(|m| m.parse::<u16>().ok().map(|v| v as u8));
-            let day = parts
-                .get(2)
-                .and_then(|d| d.parse::<u16>().ok().map(|v| v as u8));
-            tag.set_date(Timestamp {
-                year,
-                month,
-                day,
-                hour: None,
-                minute: None,
-                second: None,
-            });
+        .filter(|d| !d.trim().is_empty());
+    match rd_w {
+        FieldWrite::Keep => {}
+        FieldWrite::Patch => {
+            if let Some(date) = rd_str {
+                let parts: Vec<&str> = date.split('-').collect();
+                let year = parts.first().and_then(|y| y.parse().ok()).unwrap_or(0);
+                let month = parts
+                    .get(1)
+                    .and_then(|m| m.parse::<u16>().ok().map(|v| v as u8));
+                let day = parts
+                    .get(2)
+                    .and_then(|d| d.parse::<u16>().ok().map(|v| v as u8));
+                tag.set_date(Timestamp {
+                    year,
+                    month,
+                    day,
+                    hour: None,
+                    minute: None,
+                    second: None,
+                });
+            }
         }
-        None if replace => tag.remove_date(),
-        None => {}
+        FieldWrite::Replace => match rd_str {
+            Some(date) => {
+                let parts: Vec<&str> = date.split('-').collect();
+                let year = parts.first().and_then(|y| y.parse().ok()).unwrap_or(0);
+                let month = parts
+                    .get(1)
+                    .and_then(|m| m.parse::<u16>().ok().map(|v| v as u8));
+                let day = parts
+                    .get(2)
+                    .and_then(|d| d.parse::<u16>().ok().map(|v| v as u8));
+                tag.set_date(Timestamp {
+                    year,
+                    month,
+                    day,
+                    hour: None,
+                    minute: None,
+                    second: None,
+                });
+            }
+            None => tag.remove_date(),
+        },
     }
 
-    write_num!(tag, audio_tag.track_number, set_track, remove_track, mode);
-    write_num!(tag, audio_tag.disc_number, set_disk, remove_disk, mode);
-    write_total!(tag, audio_tag.total_tracks, ItemKey::TrackTotal, mode);
-    write_total!(tag, audio_tag.total_discs, ItemKey::DiscTotal, mode);
+    write_num!(
+        tag,
+        audio_tag.track_number,
+        set_track,
+        remove_track,
+        policy.resolve(TagField::TrackNumber)
+    );
+    write_num!(
+        tag,
+        audio_tag.disc_number,
+        set_disk,
+        remove_disk,
+        policy.resolve(TagField::DiscNumber)
+    );
+    write_total!(
+        tag,
+        audio_tag.total_tracks,
+        ItemKey::TrackTotal,
+        policy.resolve(TagField::TotalTracks)
+    );
+    write_total!(
+        tag,
+        audio_tag.total_discs,
+        ItemKey::DiscTotal,
+        policy.resolve(TagField::TotalDiscs)
+    );
 
-    set_text(tag, ItemKey::AlbumArtist, &audio_tag.album_artist, mode);
+    set_text(
+        tag,
+        ItemKey::AlbumArtist,
+        &audio_tag.album_artist,
+        policy.resolve(TagField::AlbumArtist),
+    );
     set_text(
         tag,
         ItemKey::TrackArtistSortOrder,
         &audio_tag.artist_sort,
-        mode,
+        policy.resolve(TagField::ArtistSort),
     );
     set_text(
         tag,
         ItemKey::AlbumArtistSortOrder,
         &audio_tag.album_artist_sort,
-        mode,
+        policy.resolve(TagField::AlbumArtistSort),
     );
 
     write_opt!(
@@ -604,96 +802,159 @@ fn apply_audio_tag(
         audio_tag,
         mbid_recording,
         ItemKey::MusicBrainzRecordingId,
-        mode
+        policy.resolve(TagField::MbidRecording)
     );
     write_opt!(
         tag,
         audio_tag,
         mbid_track,
         ItemKey::MusicBrainzTrackId,
-        mode
+        policy.resolve(TagField::MbidTrack)
     );
     write_opt!(
         tag,
         audio_tag,
         mbid_artist,
         ItemKey::MusicBrainzArtistId,
-        mode
+        policy.resolve(TagField::MbidArtist)
     );
     write_opt!(
         tag,
         audio_tag,
         mbid_release_artist,
         ItemKey::MusicBrainzReleaseArtistId,
-        mode
+        policy.resolve(TagField::MbidReleaseArtist)
     );
     write_opt!(
         tag,
         audio_tag,
         mbid_release,
         ItemKey::MusicBrainzReleaseId,
-        mode
+        policy.resolve(TagField::MbidRelease)
     );
     write_opt!(
         tag,
         audio_tag,
         mbid_release_group,
         ItemKey::MusicBrainzReleaseGroupId,
-        mode
+        policy.resolve(TagField::MbidReleaseGroup)
     );
-    write_opt!(tag, audio_tag, comment, ItemKey::Comment, mode);
-    write_opt!(tag, audio_tag, copyright, ItemKey::CopyrightMessage, mode);
-    write_opt!(tag, audio_tag, isrc, ItemKey::Isrc, mode);
-    write_opt!(tag, audio_tag, record_label, ItemKey::Label, mode);
-    write_opt!(tag, audio_tag, media, ItemKey::OriginalMediaType, mode);
-    write_opt!(tag, audio_tag, script, ItemKey::Script, mode);
+    write_opt!(
+        tag,
+        audio_tag,
+        comment,
+        ItemKey::Comment,
+        policy.resolve(TagField::Comment)
+    );
+    write_opt!(
+        tag,
+        audio_tag,
+        copyright,
+        ItemKey::CopyrightMessage,
+        policy.resolve(TagField::Copyright)
+    );
+    write_opt!(
+        tag,
+        audio_tag,
+        isrc,
+        ItemKey::Isrc,
+        policy.resolve(TagField::Isrc)
+    );
+    write_opt!(
+        tag,
+        audio_tag,
+        record_label,
+        ItemKey::Label,
+        policy.resolve(TagField::RecordLabel)
+    );
+    write_opt!(
+        tag,
+        audio_tag,
+        media,
+        ItemKey::OriginalMediaType,
+        policy.resolve(TagField::Media)
+    );
+    write_opt!(
+        tag,
+        audio_tag,
+        script,
+        ItemKey::Script,
+        policy.resolve(TagField::Script)
+    );
     write_opt!(
         tag,
         audio_tag,
         release_country,
         ItemKey::ReleaseCountry,
-        mode
+        policy.resolve(TagField::ReleaseCountry)
     );
     write_opt!(
         tag,
         audio_tag,
         original_date,
         ItemKey::OriginalReleaseDate,
-        mode
+        policy.resolve(TagField::OriginalDate)
     );
     // Known limitation: ItemKey::Lyrics is a no-op on ID3v2 (MP3); other
     // formats write it normally.
-    write_opt!(tag, audio_tag, lyrics, ItemKey::Lyrics, mode);
+    write_opt!(
+        tag,
+        audio_tag,
+        lyrics,
+        ItemKey::Lyrics,
+        policy.resolve(TagField::Lyrics)
+    );
 
-    // Only the tag editor and the identify flow send an explicit artist list;
-    // the other flows derive `artists`/`album_artists` from
-    // `artist`/`album_artist`, and writing those derived values back would
-    // pollute the tag. `Replace` always (re)writes the lists so a cleared
-    // artist list is cleared; `PatchExplicitArtists` writes a list only when it
-    // is non-empty, leaving any existing on-disk list untouched otherwise.
-    match mode {
-        TagWriteMode::Replace => {
-            set_multi(tag, ItemKey::TrackArtists, &audio_tag.artists);
-            set_multi(tag, ItemKey::AlbumArtists, &audio_tag.album_artists);
-        }
-        TagWriteMode::PatchExplicitArtists => {
-            if !audio_tag.artists.is_empty() {
+    // Artists/album artists: policy controlled.
+    {
+        let artists_w = policy.resolve(TagField::Artists);
+        match artists_w {
+            FieldWrite::Keep => {}
+            FieldWrite::Patch => {
+                if !audio_tag.artists.is_empty() {
+                    set_multi(tag, ItemKey::TrackArtists, &audio_tag.artists);
+                }
+            }
+            FieldWrite::Replace => {
                 set_multi(tag, ItemKey::TrackArtists, &audio_tag.artists);
             }
-            if !audio_tag.album_artists.is_empty() {
+        }
+        let album_artists_w = policy.resolve(TagField::AlbumArtists);
+        match album_artists_w {
+            FieldWrite::Keep => {}
+            FieldWrite::Patch => {
+                if !audio_tag.album_artists.is_empty() {
+                    set_multi(tag, ItemKey::AlbumArtists, &audio_tag.album_artists);
+                }
+            }
+            FieldWrite::Replace => {
                 set_multi(tag, ItemKey::AlbumArtists, &audio_tag.album_artists);
             }
         }
-        TagWriteMode::Patch => {}
     }
-    if !audio_tag.release_type.is_empty() {
-        set_multi(
-            tag,
-            ItemKey::MusicBrainzReleaseType,
-            &audio_tag.release_type,
-        );
-    } else if replace {
-        tag.remove_key(ItemKey::MusicBrainzReleaseType);
+    let release_type_w = policy.resolve(TagField::ReleaseType);
+    match release_type_w {
+        FieldWrite::Keep => {}
+        FieldWrite::Patch => {
+            if !audio_tag.release_type.is_empty() {
+                set_multi(
+                    tag,
+                    ItemKey::MusicBrainzReleaseType,
+                    &audio_tag.release_type,
+                );
+            }
+        }
+        FieldWrite::Replace => {
+            if !audio_tag.release_type.is_empty() {
+                set_multi(
+                    tag,
+                    ItemKey::MusicBrainzReleaseType,
+                    &audio_tag.release_type,
+                );
+            } else {
+                tag.remove_key(ItemKey::MusicBrainzReleaseType);
+            }
+        }
     }
 
     // AcoustID is not editable in the tag editor; keep write-if-present.
@@ -701,31 +962,64 @@ fn apply_audio_tag(
         tag.insert_text(ItemKey::AcoustId, acoust_id.clone());
     }
 
-    if let Some(cover_bytes) = &audio_tag.cover {
-        tag.remove_picture_type(PictureType::CoverFront);
+    let cover_w = policy.resolve(TagField::Cover);
+    match cover_w {
+        FieldWrite::Keep => {}
+        FieldWrite::Patch => {
+            if let Some(cover_bytes) = &audio_tag.cover {
+                tag.remove_picture_type(PictureType::CoverFront);
 
-        let mime_type = if cover_bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
-            MimeType::Png
-        } else if cover_bytes.starts_with(&[0xFF, 0xD8]) {
-            MimeType::Jpeg
-        } else if cover_bytes.starts_with(b"GIF8") || cover_bytes.starts_with(b"GIF89") {
-            MimeType::Gif
-        } else if cover_bytes.starts_with(b"BM") {
-            MimeType::Bmp
-        } else if cover_bytes.len() > 4
-            && (cover_bytes[..4] == [0x49, 0x49, 0x2A, 0x00]
-                || cover_bytes[..4] == [0x4D, 0x4D, 0x00, 0x2A])
-        {
-            MimeType::Tiff
-        } else {
-            MimeType::Jpeg
-        };
+                let mime_type = if cover_bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+                    MimeType::Png
+                } else if cover_bytes.starts_with(&[0xFF, 0xD8]) {
+                    MimeType::Jpeg
+                } else if cover_bytes.starts_with(b"GIF8") || cover_bytes.starts_with(b"GIF89") {
+                    MimeType::Gif
+                } else if cover_bytes.starts_with(b"BM") {
+                    MimeType::Bmp
+                } else if cover_bytes.len() > 4
+                    && (cover_bytes[..4] == [0x49, 0x49, 0x2A, 0x00]
+                        || cover_bytes[..4] == [0x4D, 0x4D, 0x00, 0x2A])
+                {
+                    MimeType::Tiff
+                } else {
+                    MimeType::Jpeg
+                };
 
-        let picture = Picture::unchecked(cover_bytes.to_vec())
-            .pic_type(PictureType::CoverFront)
-            .mime_type(mime_type)
-            .build();
-        tag.push_picture(picture);
+                let picture = Picture::unchecked(cover_bytes.to_vec())
+                    .pic_type(PictureType::CoverFront)
+                    .mime_type(mime_type)
+                    .build();
+                tag.push_picture(picture);
+            }
+        }
+        FieldWrite::Replace => {
+            tag.remove_picture_type(PictureType::CoverFront);
+            if let Some(cover_bytes) = &audio_tag.cover {
+                let mime_type = if cover_bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+                    MimeType::Png
+                } else if cover_bytes.starts_with(&[0xFF, 0xD8]) {
+                    MimeType::Jpeg
+                } else if cover_bytes.starts_with(b"GIF8") || cover_bytes.starts_with(b"GIF89") {
+                    MimeType::Gif
+                } else if cover_bytes.starts_with(b"BM") {
+                    MimeType::Bmp
+                } else if cover_bytes.len() > 4
+                    && (cover_bytes[..4] == [0x49, 0x49, 0x2A, 0x00]
+                        || cover_bytes[..4] == [0x4D, 0x4D, 0x00, 0x2A])
+                {
+                    MimeType::Tiff
+                } else {
+                    MimeType::Jpeg
+                };
+
+                let picture = Picture::unchecked(cover_bytes.to_vec())
+                    .pic_type(PictureType::CoverFront)
+                    .mime_type(mime_type)
+                    .build();
+                tag.push_picture(picture);
+            }
+        }
     }
 
     Ok(())

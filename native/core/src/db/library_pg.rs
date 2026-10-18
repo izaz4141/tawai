@@ -1287,6 +1287,7 @@ pub async fn update_track_tags_from_audio_tag(
     pool: &PgPool,
     track_id: &str,
     tag: &AudioTag,
+    clear_cover: bool,
 ) -> Result<()> {
     let mut tx = pool.begin().await?;
 
@@ -1338,7 +1339,7 @@ pub async fn update_track_tags_from_audio_tag(
            copyright = $10,
            script = $11,
            lyrics = $12,
-           cover = $13,
+           cover = CASE WHEN $15 THEN $13 ELSE COALESCE($13, tracks.cover) END,
            updated_at = NOW()
            WHERE id = $14"#,
     )
@@ -1356,6 +1357,7 @@ pub async fn update_track_tags_from_audio_tag(
     .bind(tag.lyrics.as_deref())
     .bind(tag.cover.as_deref())
     .bind(track_id)
+    .bind(clear_cover)
     .execute(&mut *tx)
     .await?;
 
@@ -1415,6 +1417,7 @@ pub async fn sync_track_tags_by_file_path(
     pool: &PgPool,
     file_path: &str,
     tag: &AudioTag,
+    clear_cover: bool,
 ) -> Result<bool> {
     let track_id: Option<String> =
         sqlx::query_scalar("SELECT id FROM tracks WHERE file_path = $1 LIMIT 1")
@@ -1423,7 +1426,7 @@ pub async fn sync_track_tags_by_file_path(
             .await?;
     match track_id {
         Some(id) => {
-            update_track_tags_from_audio_tag(pool, &id, tag).await?;
+            update_track_tags_from_audio_tag(pool, &id, tag, clear_cover).await?;
             Ok(true)
         }
         None => Ok(false),

@@ -271,14 +271,21 @@ pub async fn handle_write_file_tags(context: Arc<AppContext>) {
             ..Default::default()
         };
 
-        match audio::tags::write_audio_tags(&path, &tag, audio::tags::TagWriteMode::Replace) {
+        match audio::tags::write_audio_tags(&path, &tag, audio::tags::TagWritePolicy::replace()) {
             Ok(()) => {
                 // The write already succeeded; a DB sync failure must not fail
                 // the save. This mirrors the file on disk into the library row
                 // so the library does not wait for a rescan.
                 if msg.sync_database {
                     let db = context.db().await;
-                    match library::sync_track_tags_by_file_path(db.pool(), &msg.path, &tag).await {
+                    match library::sync_track_tags_by_file_path(
+                        db.pool(),
+                        &msg.path,
+                        &tag,
+                        msg.clear_cover,
+                    )
+                    .await
+                    {
                         Ok(_) => {}
                         Err(e) => {
                             logger::warn(&format!(
@@ -393,7 +400,7 @@ pub async fn handle_write_file_tags_bytes(_context: Arc<AppContext>) {
             &msg.filename,
             &msg.bytes,
             &tag,
-            audio::tags::TagWriteMode::Replace,
+            audio::tags::TagWritePolicy::replace(),
         ) {
             Ok(new_bytes) => {
                 WriteFileTagsBytesResponse {

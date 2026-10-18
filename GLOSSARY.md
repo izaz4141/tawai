@@ -47,7 +47,8 @@ original year.
 ## Read set vs write set
 
 The tag editor sends the complete editable set on every write
-(`EditableTagData` / `writeFileTags`), and `TagWriteMode::Replace` writes every
-field, clearing stored values for fields the user emptied. Read-only fields are
-never sent or written; release status is not read because no `ItemKey` exists
-for it.
+(`EditableTagData` / `writeFileTags`), and `TagWritePolicy::replace()` writes
+every field, clearing stored values for fields the user emptied. Cover is
+treated as write-if-present in replace mode unless explicitly cleared;
+read-only fields are never sent or written; release status is not read because
+no `ItemKey` exists for it.
