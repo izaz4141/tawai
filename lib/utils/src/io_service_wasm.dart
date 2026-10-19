@@ -158,7 +158,10 @@ class WasmIOService implements IOService {
   }
 
   @override
-  void writeLine(String line) => print(line);
+  void writeLine(String line) {
+    // ignore: avoid_print
+    print(line);
+  }
 
   @override
   void exit(int code) {

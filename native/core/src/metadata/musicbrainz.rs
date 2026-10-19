@@ -7,6 +7,7 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
+use crate::signals::library::ArtistInfo;
 use crate::signals::metadata::{MBSearchInfo, RecordingInfo, ReleaseInfo, ReleaseTrackInfo};
 
 static MB_UA: &str = "Tawai/0.0.1 ( https://github.com/izaz4141/tawai )";
@@ -169,6 +170,50 @@ fn cover_url(release_id: &str) -> String {
     format!("https://coverartarchive.org/release/{release_id}/front-250.jpg")
 }
 
+/// Build the canonical display credit and the structured artist list from a
+/// MusicBrainz `artist-credit` array.
+///
+/// The display string concatenates each artist's name with its join phrase
+/// (e.g. `["Foo", " & "]` + `["Bar"]` → `"Foo & Bar"`), matching how
+/// MusicBrainz renders credits. Returns `("", [])` when there is no credit.
+fn artists_from_credit(
+    credits: Option<&Vec<MusicBrainzArtistCredit>>,
+) -> (String, Vec<ArtistInfo>) {
+    let Some(credits) = credits.filter(|c| !c.is_empty()) else {
+        return (String::new(), Vec::new());
+    };
+
+    let display = credits
+        .iter()
+        .map(|c| {
+            let join = c.joinphrase.as_deref().unwrap_or("");
+            format!("{}{}", c.artist.name, join)
+        })
+        .collect();
+
+    let artists = credits
+        .iter()
+        .map(|c| ArtistInfo {
+            id: c.artist.id.clone(),
+            name: c.artist.name.clone(),
+            sort_name: c.artist.sort_name.clone(),
+            mbid: Some(c.artist.id.clone()),
+            thumbnail_url: None,
+            album_count: 0,
+            track_count: 0,
+        })
+        .collect();
+
+    (display, artists)
+}
+
+/// Extract the genre names from a MusicBrainz genre array.
+fn genre_names(genres: Option<&[MusicBrainzGenre]>) -> Vec<String> {
+    genres
+        .map(|genres| genres.iter().map(|g| g.name.clone()).collect())
+        .unwrap_or_default()
+}
+
 async fn find_cover_url(client: &reqwest::Client, releases: &[ReleaseInfo]) -> Option<String> {
     for r in releases {
         let url = cover_url(&r.id);
@@ -251,17 +296,26 @@ pub async fn lookup_by_fingerprint(
 
     let id = recording.id.unwrap_or_default();
     let title = recording.title.unwrap_or_default();
-    let artist = recording
+    let artists: Vec<ArtistInfo> = recording
         .artists
-        .as_ref()
-        .and_then(|a| a.first())
-        .and_then(|a| a.name.clone())
-        .unwrap_or_default();
-    let artist_id = recording
-        .artists
-        .as_ref()
-        .and_then(|a| a.first())
-        .and_then(|a| a.id.clone());
+        .unwrap_or_default()
+        .into_iter()
+        .map(|a| ArtistInfo {
+            id: a.id.clone().unwrap_or_default(),
+            name: a.name.unwrap_or_default(),
+            sort_name: None,
+            mbid: a.id,
+            thumbnail_url: None,
+            album_count: 0,
+            track_count: 0,
+        })
+        .collect();
+    let artist = artists
+        .iter()
+        .map(|a| a.name.as_str())
+        .collect::<Vec<_>>()
+        .join("; ");
+    let artist_id = artists.first().map(|a| a.id.clone());
     let duration = recording.duration.unwrap_or(duration_secs);
 
     let releases: Vec<_> = recording
@@ -272,6 +326,7 @@ pub async fn lookup_by_fingerprint(
             let releasegroup_title = rg.title.clone();
             let artist = artist.clone();
             let artist_id = artist_id.clone();
+            let artists = artists.clone();
             let releases = rg.releases.unwrap_or_default();
             releases.into_iter().map(move |r| ReleaseInfo {
                 id: r.id.unwrap_or_default(),
@@ -282,10 +337,18 @@ pub async fn lookup_by_fingerprint(
                 country: r.country,
                 artist: artist.clone(),
                 artist_id: artist_id.clone(),
+                artists: artists.clone(),
+                genres: Vec::new(),
                 tracks: Vec::new(),
                 disambiguation: None,
                 total_discs: r.medium_count,
                 total_tracks: r.track_count,
+                release_group_mbid: None,
+                release_type: None,
+                record_label: None,
+                media: None,
+                script: None,
+                original_date: None,
             })
         })
         .collect();
@@ -298,6 +361,8 @@ pub async fn lookup_by_fingerprint(
         score: 100.0,
         artist,
         artist_id,
+        artists,
+        isrcs: Vec::new(),
         duration_secs: Some(duration),
         acoust_id,
         releases,
@@ -319,21 +384,12 @@ pub async fn lookup_by_query(client: &reqwest::Client, query: &str) -> Result<MB
     let mut out = Vec::with_capacity(recordings.len());
 
     for rec in recordings {
-        let artist = rec
-            .artist_credit
-            .as_ref()
-            .filter(|c| !c.is_empty())
-            .map(|credits| {
-                let sep = credits[0].joinphrase.as_deref().unwrap_or("");
-                let names: Vec<&str> = credits.iter().map(|c| c.artist.name.as_str()).collect();
-                names.join(sep)
-            })
-            .unwrap_or("Unknown Artist".to_string());
-        let artist_id = rec
-            .artist_credit
-            .as_ref()
-            .and_then(|c| c.first())
-            .map(|c| c.artist.id.clone());
+        let (mut artist, artists) = artists_from_credit(rec.artist_credit.as_ref());
+        if artist.is_empty() {
+            artist = "Unknown Artist".to_string();
+        }
+        let artist_id = artists.first().map(|a| a.id.clone());
+        let isrcs = rec.isrcs.unwrap_or_default();
 
         let releases: Vec<_> = rec
             .releases
@@ -346,10 +402,18 @@ pub async fn lookup_by_query(client: &reqwest::Client, query: &str) -> Result<MB
                 country: r.country,
                 artist: artist.clone(),
                 artist_id: artist_id.clone(),
+                artists: artists.clone(),
+                genres: Vec::new(),
                 tracks: Vec::new(),
                 disambiguation: r.disambiguation,
                 total_discs: None,
                 total_tracks: None,
+                release_group_mbid: None,
+                release_type: None,
+                record_label: None,
+                media: None,
+                script: None,
+                original_date: None,
             })
             .collect();
 
@@ -361,6 +425,8 @@ pub async fn lookup_by_query(client: &reqwest::Client, query: &str) -> Result<MB
             score: rec.score.unwrap_or(0.0) / 100.0,
             artist,
             artist_id,
+            artists,
+            isrcs,
             duration_secs: rec.length.map(|l| l as f64 / 1000.0),
             acoust_id: None,
             releases,
@@ -374,26 +440,15 @@ pub async fn lookup_by_query(client: &reqwest::Client, query: &str) -> Result<MB
 /// Fetch a release by MusicBrainz ID, including its tracks.
 pub async fn fetch_release(client: &reqwest::Client, release_id: &str) -> Result<ReleaseInfo> {
     let url = format!(
-        "https://musicbrainz.org/ws/2/release/{release_id}?inc=recordings+artist-credits&fmt=json"
+        "https://musicbrainz.org/ws/2/release/{release_id}?inc=recordings+artist-credits+labels+media+release-groups+isrcs+genres&fmt=json"
     );
 
     let release: MusicBrainzReleaseResponse = mb_get_json(client, &url).await?;
 
-    let artist = release
-        .artist_credit
-        .as_ref()
-        .filter(|c| !c.is_empty())
-        .map(|credits| {
-            let names: Vec<&str> = credits.iter().map(|c| c.artist.name.as_str()).collect();
-            names.join("")
-        })
-        .unwrap_or_default();
+    let (artist, artists) = artists_from_credit(release.artist_credit.as_ref());
 
-    let artist_id = release
-        .artist_credit
-        .as_ref()
-        .and_then(|c| c.first())
-        .map(|c| c.artist.id.clone());
+    let artist_id = artists.first().map(|a| a.id.clone());
+    let genres = genre_names(release.genres.as_deref());
 
     let total_discs = release
         .media
@@ -410,6 +465,22 @@ pub async fn fetch_release(client: &reqwest::Client, release_id: &str) -> Result
         }
     });
 
+    let media = release.media.as_ref().and_then(|media| {
+        let mut formats: Vec<String> = Vec::new();
+        for medium in media {
+            if let Some(format) = &medium.format {
+                if !format.is_empty() && !formats.contains(format) {
+                    formats.push(format.clone());
+                }
+            }
+        }
+        if formats.is_empty() {
+            None
+        } else {
+            Some(formats.join(" + "))
+        }
+    });
+
     let tracks = release
         .media
         .unwrap_or_default()
@@ -422,51 +493,108 @@ pub async fn fetch_release(client: &reqwest::Client, release_id: &str) -> Result
                 .map(move |t| (disc, t))
         })
         .filter_map(|(disc, t)| {
-            t.recording.map(|rec| ReleaseTrackInfo {
-                id: rec.id,
-                title: rec.title.unwrap_or(t.title.unwrap_or_default()),
+            let recording = t.recording?;
+            let credit = t
+                .artist_credit
+                .as_ref()
+                .filter(|c| !c.is_empty())
+                .or(recording.artist_credit.as_ref());
+            let (_, track_artists) = artists_from_credit(credit);
+            Some(ReleaseTrackInfo {
+                id: recording.id,
+                title: recording.title.unwrap_or(t.title.unwrap_or_default()),
                 position: t.position,
                 disc_number: disc,
-                duration_secs: rec.length.map(|l| l as f64 / 1000.0),
+                duration_secs: recording.length.map(|l| l as f64 / 1000.0),
+                artists: track_artists,
+                mbid_track: Some(t.id),
+                isrcs: recording.isrcs.unwrap_or_default(),
+                genres: genre_names(recording.genres.as_deref()),
                 ..Default::default()
             })
         })
         .collect();
 
+    let release_group = release.release_group;
+    let release_group_mbid = release_group.as_ref().map(|rg| rg.id.clone());
+    let original_date = release_group
+        .as_ref()
+        .and_then(|rg| rg.first_release_date.clone());
+    let release_type = release_group.as_ref().and_then(|rg| {
+        let mut types: Vec<String> = Vec::new();
+        if let Some(primary) = &rg.primary_type {
+            if !primary.is_empty() {
+                types.push(primary.clone());
+            }
+        }
+        if let Some(secondary) = &rg.secondary_types {
+            types.extend(secondary.iter().filter(|s| !s.is_empty()).cloned());
+        }
+        if types.is_empty() {
+            None
+        } else {
+            Some(types.join("; "))
+        }
+    });
+
+    let record_label = release.label_info.as_ref().and_then(|infos| {
+        let mut labels: Vec<String> = Vec::new();
+        for info in infos {
+            if let Some(label) = &info.label {
+                if let Some(name) = &label.name {
+                    if !name.is_empty() && !labels.contains(name) {
+                        labels.push(name.clone());
+                    }
+                }
+            }
+        }
+        if labels.is_empty() {
+            None
+        } else {
+            Some(labels.join("; "))
+        }
+    });
+
+    let script = release
+        .text_representation
+        .as_ref()
+        .and_then(|tr| tr.script.clone());
+
     Ok(ReleaseInfo {
         id: release.id,
         title: release.title.unwrap_or_default(),
         date: release.date,
-        country: None,
+        country: release.country,
         artist,
         artist_id,
+        artists,
+        genres,
         tracks,
         disambiguation: release.disambiguation,
         total_discs: Some(total_discs),
         total_tracks,
+        release_group_mbid,
+        release_type,
+        record_label,
+        media,
+        script,
+        original_date,
     })
 }
 
 /// Fetch a recording by MusicBrainz MBID along with its releases.
 pub async fn fetch_recording(client: &reqwest::Client, mbid: &str) -> Result<RecordingInfo> {
-    let url =
-        format!("https://musicbrainz.org/ws/2/recording/{mbid}?inc=artists+releases&fmt=json");
+    let url = format!(
+        "https://musicbrainz.org/ws/2/recording/{mbid}?inc=artists+releases+isrcs&fmt=json"
+    );
 
     let recording: MusicBrainzRecording = mb_get_json(client, &url).await?;
 
+    let (artist, artists) = artists_from_credit(recording.artist_credit.as_ref());
+    let artist_id = artists.first().map(|a| a.id.clone());
+    let isrcs = recording.isrcs.clone().unwrap_or_default();
     let id = recording.id;
     let title = recording.title.unwrap_or_default();
-    let artist = recording
-        .artist_credit
-        .as_ref()
-        .and_then(|c| c.first())
-        .map(|c| c.artist.name.clone())
-        .unwrap_or_default();
-    let artist_id = recording
-        .artist_credit
-        .as_ref()
-        .and_then(|c| c.first())
-        .map(|c| c.artist.id.clone());
     let duration_secs = recording.length.map(|l| l as f64 / 1000.0);
 
     let releases: Vec<_> = recording
@@ -480,10 +608,18 @@ pub async fn fetch_recording(client: &reqwest::Client, mbid: &str) -> Result<Rec
             country: r.country,
             artist: artist.clone(),
             artist_id: artist_id.clone(),
+            artists: artists.clone(),
+            genres: Vec::new(),
             tracks: Vec::new(),
             disambiguation: r.disambiguation,
             total_discs: None,
             total_tracks: None,
+            release_group_mbid: None,
+            release_type: None,
+            record_label: None,
+            media: None,
+            script: None,
+            original_date: None,
         })
         .collect();
 
@@ -495,6 +631,8 @@ pub async fn fetch_recording(client: &reqwest::Client, mbid: &str) -> Result<Rec
         score: 100.0,
         artist,
         artist_id,
+        artists,
+        isrcs,
         duration_secs,
         acoust_id: None,
         releases,
@@ -567,6 +705,8 @@ pub struct MusicBrainzRecording {
     pub length: Option<i64>,
     #[serde(rename = "artist-credit")]
     pub artist_credit: Option<Vec<MusicBrainzArtistCredit>>,
+    #[serde(default)]
+    pub isrcs: Option<Vec<String>>,
     pub releases: Option<Vec<MusicBrainzRelease>>,
 }
 
@@ -579,6 +719,14 @@ pub struct MusicBrainzArtistCredit {
 #[derive(Deserialize)]
 pub struct MusicBrainzArtist {
     pub id: String,
+    pub name: String,
+    #[serde(rename = "sort-name", default)]
+    pub sort_name: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct MusicBrainzGenre {
+    #[serde(default)]
     pub name: String,
 }
 
@@ -605,6 +753,8 @@ pub struct MusicBrainzSearchRecording {
     pub length: Option<i64>,
     #[serde(rename = "artist-credit")]
     pub artist_credit: Option<Vec<MusicBrainzArtistCredit>>,
+    #[serde(default)]
+    pub isrcs: Option<Vec<String>>,
     pub releases: Option<Vec<MusicBrainzRelease>>,
 }
 
@@ -613,11 +763,56 @@ pub struct MusicBrainzReleaseResponse {
     pub id: String,
     pub title: Option<String>,
     pub date: Option<String>,
+    #[serde(default)]
+    pub country: Option<String>,
+    #[serde(default)]
+    pub status: Option<String>,
     #[serde(rename = "artist-credit")]
     pub artist_credit: Option<Vec<MusicBrainzArtistCredit>>,
     pub media: Option<Vec<MusicBrainzMedia>>,
     #[serde(default)]
     pub disambiguation: Option<String>,
+    #[serde(rename = "text-representation", default)]
+    pub text_representation: Option<MusicBrainzTextRepresentation>,
+    #[serde(rename = "release-group", default)]
+    pub release_group: Option<MusicBrainzReleaseGroup>,
+    #[serde(rename = "label-info", default)]
+    pub label_info: Option<Vec<MusicBrainzLabelInfo>>,
+    #[serde(default)]
+    pub genres: Option<Vec<MusicBrainzGenre>>,
+}
+
+#[derive(Deserialize)]
+pub struct MusicBrainzTextRepresentation {
+    #[serde(default)]
+    pub language: Option<String>,
+    #[serde(default)]
+    pub script: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct MusicBrainzReleaseGroup {
+    pub id: String,
+    #[serde(rename = "first-release-date", default)]
+    pub first_release_date: Option<String>,
+    #[serde(rename = "primary-type", default)]
+    pub primary_type: Option<String>,
+    #[serde(rename = "secondary-types", default)]
+    pub secondary_types: Option<Vec<String>>,
+}
+
+#[derive(Deserialize)]
+pub struct MusicBrainzLabelInfo {
+    #[serde(rename = "catalog-number", default)]
+    pub catalog_number: Option<String>,
+    #[serde(default)]
+    pub label: Option<MusicBrainzLabel>,
+}
+
+#[derive(Deserialize)]
+pub struct MusicBrainzLabel {
+    #[serde(default)]
+    pub name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -625,6 +820,8 @@ pub struct MusicBrainzMedia {
     pub position: Option<i32>,
     #[serde(rename = "track-count")]
     pub track_count: Option<i32>,
+    #[serde(default)]
+    pub format: Option<String>,
     pub tracks: Option<Vec<MusicBrainzTrack>>,
 }
 
@@ -633,6 +830,8 @@ pub struct MusicBrainzTrack {
     pub id: String,
     pub position: Option<i32>,
     pub title: Option<String>,
+    #[serde(rename = "artist-credit", default)]
+    pub artist_credit: Option<Vec<MusicBrainzArtistCredit>>,
     pub recording: Option<MusicBrainzTrackRecording>,
 }
 
@@ -641,4 +840,10 @@ pub struct MusicBrainzTrackRecording {
     pub id: String,
     pub title: Option<String>,
     pub length: Option<i64>,
+    #[serde(rename = "artist-credit", default)]
+    pub artist_credit: Option<Vec<MusicBrainzArtistCredit>>,
+    #[serde(default)]
+    pub isrcs: Option<Vec<String>>,
+    #[serde(default)]
+    pub genres: Option<Vec<MusicBrainzGenre>>,
 }

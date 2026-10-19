@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:tawai/src/bindings/bindings.dart';
+import 'package:tawai/models/editable_tag_data.dart';
 import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/utils/platform_service.dart';
 import 'package:tawai/utils/api_service.dart';
@@ -192,10 +193,17 @@ class BridgeService {
         : RinfService.instance.getTracks(albumId: albumId);
   }
 
-  Future<List<AlbumInfo>> getAlbums({String? artistId}) async {
+  Future<List<AlbumInfo>> getAlbums({String? artistId, String? albumId}) async {
     return _isRemote
-        ? APIService.instance.getAlbums(artistId: artistId)
-        : RinfService.instance.getAlbums(artistId: artistId);
+        ? APIService.instance.getAlbums(artistId: artistId, albumId: albumId)
+        : RinfService.instance.getAlbums(artistId: artistId, albumId: albumId);
+  }
+
+  /// Fetches a single album row by local id, or null if absent.
+  Future<AlbumInfo?> getAlbumInfo(String albumId) async {
+    if (albumId.isEmpty) return null;
+    final albums = await getAlbums(albumId: albumId);
+    return albums.isEmpty ? null : albums.first;
   }
 
   Future<List<ArtistInfo>> getArtists() async {
@@ -275,13 +283,17 @@ class BridgeService {
   Future<({String filePath, String? error, List<List<String>>? headers})>
   playTrack(String? trackId, {TrackInfo? track, String? bitrate}) async {
     if (_isRemote) {
-      return APIService.instance.playTrack(trackId, track: track, bitrate: bitrate);
+      return APIService.instance.playTrack(
+        trackId,
+        track: track,
+        bitrate: bitrate,
+      );
     }
     // Local playback reads the file directly (no transcode needed).
     return RinfService.instance.playTrack(trackId, track: track);
   }
 
-  previewTrack(TrackInfo track) async {
+  Future<PreviewTrackResponse> previewTrack(TrackInfo track) async {
     if (_isRemote) {
       return APIService.instance.previewTrack(track);
     }
@@ -712,16 +724,35 @@ class BridgeService {
     String? title,
     String? artist,
     String? artistMbid,
+    String? albumArtist,
+    String? albumArtistMbid,
+    List<String>? artists,
+    List<String>? albumArtists,
+    String? artistSort,
+    String? albumArtistSort,
     String? album,
     String? albumMbid,
     String? albumDisambiguation,
     String? releaseDate,
+    String? originalDate,
+    String? releaseGroupMbid,
+    String? releaseCountry,
+    List<String>? releaseType,
+    String? recordLabel,
+    String? media,
     int? trackNum,
     int? discNum,
+    int? totalTracks,
+    int? totalDiscs,
     String? mbidRecording,
+    String? mbidTrack,
+    String? isrc,
+    String? comment,
+    String? copyright,
+    String? script,
+    List<String>? genres,
     String? lyrics,
     List<int>? coverBytes,
-    int? totalDiscs,
     String? filePath,
     String? targetSourceId,
   }) async {
@@ -732,16 +763,35 @@ class BridgeService {
             title: title,
             artist: artist,
             artistMbid: artistMbid,
+            albumArtist: albumArtist,
+            albumArtistMbid: albumArtistMbid,
+            artists: artists,
+            albumArtists: albumArtists,
+            artistSort: artistSort,
+            albumArtistSort: albumArtistSort,
             album: album,
             albumMbid: albumMbid,
             albumDisambiguation: albumDisambiguation,
             releaseDate: releaseDate,
+            originalDate: originalDate,
+            releaseGroupMbid: releaseGroupMbid,
+            releaseCountry: releaseCountry,
+            releaseType: releaseType,
+            recordLabel: recordLabel,
+            media: media,
             trackNum: trackNum,
             discNum: discNum,
+            totalTracks: totalTracks,
+            totalDiscs: totalDiscs,
             mbidRecording: mbidRecording,
+            mbidTrack: mbidTrack,
+            isrc: isrc,
+            comment: comment,
+            copyright: copyright,
+            script: script,
+            genres: genres,
             lyrics: lyrics,
             coverBytes: coverBytes,
-            totalDiscs: totalDiscs,
             filePath: filePath,
             targetSourceId: targetSourceId,
           )
@@ -751,16 +801,35 @@ class BridgeService {
             title: title,
             artist: artist,
             artistMbid: artistMbid,
+            albumArtist: albumArtist,
+            albumArtistMbid: albumArtistMbid,
+            artists: artists,
+            albumArtists: albumArtists,
+            artistSort: artistSort,
+            albumArtistSort: albumArtistSort,
             album: album,
             albumMbid: albumMbid,
             albumDisambiguation: albumDisambiguation,
             releaseDate: releaseDate,
+            originalDate: originalDate,
+            releaseGroupMbid: releaseGroupMbid,
+            releaseCountry: releaseCountry,
+            releaseType: releaseType,
+            recordLabel: recordLabel,
+            media: media,
             trackNum: trackNum,
             discNum: discNum,
+            totalTracks: totalTracks,
+            totalDiscs: totalDiscs,
             mbidRecording: mbidRecording,
+            mbidTrack: mbidTrack,
+            isrc: isrc,
+            comment: comment,
+            copyright: copyright,
+            script: script,
+            genres: genres,
             lyrics: lyrics,
             coverBytes: coverBytes,
-            totalDiscs: totalDiscs,
             filePath: filePath,
             targetSourceId: targetSourceId,
           );
@@ -802,44 +871,20 @@ class BridgeService {
 
   Future<({bool success, String? error})?> writeFileTags({
     required String path,
-    required String title,
-    required String artist,
-    required String album,
-    required String albumArtist,
-    required List<String> genres,
-    required int trackNumber,
-    required int discNumber,
-    String? releaseDate,
-    String? lyrics,
-    List<int>? cover,
+    required EditableTagData data,
+    bool syncDatabase = true,
   }) {
     if (_isRemote) {
       return APIService.instance.writeFileTags(
         path: path,
-        title: title,
-        artist: artist,
-        album: album,
-        albumArtist: albumArtist,
-        genres: genres,
-        trackNumber: trackNumber,
-        discNumber: discNumber,
-        releaseDate: releaseDate,
-        lyrics: lyrics,
-        cover: cover,
+        data: data,
+        syncDatabase: syncDatabase,
       );
     }
     return RinfService.instance.writeFileTags(
       path: path,
-      title: title,
-      artist: artist,
-      album: album,
-      albumArtist: albumArtist,
-      genres: genres,
-      trackNumber: trackNumber,
-      discNumber: discNumber,
-      releaseDate: releaseDate,
-      lyrics: lyrics,
-      cover: cover,
+      data: data,
+      syncDatabase: syncDatabase,
     );
   }
 
@@ -847,8 +892,9 @@ class BridgeService {
     String filename,
     Uint8List bytes,
   ) {
-    if (_isRemote)
+    if (_isRemote) {
       return APIService.instance.readFileTagsBytes(filename, bytes);
+    }
     return RinfService.instance.readFileTagsBytes(filename, bytes);
   }
 
@@ -856,46 +902,19 @@ class BridgeService {
   writeFileTagsBytes({
     required String filename,
     required Uint8List bytes,
-    required String title,
-    required String artist,
-    required String album,
-    required String albumArtist,
-    required List<String> genres,
-    required int trackNumber,
-    required int discNumber,
-    String? releaseDate,
-    String? lyrics,
-    List<int>? cover,
+    required EditableTagData data,
   }) {
     if (_isRemote) {
       return APIService.instance.writeFileTagsBytes(
         filename: filename,
         bytes: bytes,
-        title: title,
-        artist: artist,
-        album: album,
-        albumArtist: albumArtist,
-        genres: genres,
-        trackNumber: trackNumber,
-        discNumber: discNumber,
-        releaseDate: releaseDate,
-        lyrics: lyrics,
-        cover: cover,
+        data: data,
       );
     }
     return RinfService.instance.writeFileTagsBytes(
       filename: filename,
       bytes: bytes,
-      title: title,
-      artist: artist,
-      album: album,
-      albumArtist: albumArtist,
-      genres: genres,
-      trackNumber: trackNumber,
-      discNumber: discNumber,
-      releaseDate: releaseDate,
-      lyrics: lyrics,
-      cover: cover,
+      data: data,
     );
   }
 

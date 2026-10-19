@@ -1,6 +1,40 @@
 use crate::db::database::DatabasePool;
 use crate::signals::library::*;
 
+/// Track-level tag metadata written alongside the positional insert columns.
+/// `mbid_recording` lives here rather than as a positional argument so the
+/// ever-growing tag set doesn't turn `insert_track` into an unreadable list.
+#[derive(Debug, Clone, Default)]
+pub struct TrackTagMeta {
+    pub mbid_recording: Option<String>,
+    pub mbid_track: Option<String>,
+    pub isrc: Option<String>,
+    pub comment: Option<String>,
+    pub copyright: Option<String>,
+    pub encoder: Option<String>,
+    pub script: Option<String>,
+}
+
+/// Album-level metadata for `insert_album`. Absorbs the former positional
+/// `date`/`mbid`/`disambiguation`/`total_discs` arguments plus the extended
+/// release tag set.
+#[derive(Debug, Clone, Default)]
+pub struct AlbumWriteMeta {
+    pub date: Option<String>,
+    pub release_mbid: Option<String>,
+    pub release_group_mbid: Option<String>,
+    pub release_artist_mbid: Option<String>,
+    pub release_country: Option<String>,
+    /// Semicolon-separated multi-value.
+    pub release_type: Option<String>,
+    pub record_label: Option<String>,
+    pub media: Option<String>,
+    pub original_date: Option<String>,
+    pub disambiguation: Option<String>,
+    pub total_tracks: i32,
+    pub total_discs: i32,
+}
+
 pub async fn lookup_track(
     pool: &DatabasePool,
     track_id: &str,
@@ -41,38 +75,15 @@ pub async fn insert_album(
     pool: &DatabasePool,
     title: &str,
     artist_id: &str,
-    date: Option<String>,
-    mbid: Option<String>,
     cover: Option<&[u8]>,
-    disambiguation: Option<String>,
-    total_discs: i32,
+    meta: &AlbumWriteMeta,
 ) -> anyhow::Result<String> {
     match pool {
         DatabasePool::Sqlite(p) => {
-            super::library_sq::insert_album(
-                p,
-                title,
-                artist_id,
-                date,
-                mbid,
-                cover,
-                disambiguation,
-                total_discs,
-            )
-            .await
+            super::library_sq::insert_album(p, title, artist_id, cover, meta).await
         }
         DatabasePool::Postgres(p) => {
-            super::library_pg::insert_album(
-                p,
-                title,
-                artist_id,
-                date,
-                mbid,
-                cover,
-                disambiguation,
-                total_discs,
-            )
-            .await
+            super::library_pg::insert_album(p, title, artist_id, cover, meta).await
         }
     }
 }
@@ -126,11 +137,11 @@ pub async fn insert_track(
     file_size: Option<i64>,
     bitrate: Option<i32>,
     sample_rate: Option<i32>,
-    mbid_recording: Option<String>,
     cover: Option<&[u8]>,
     lyrics: Option<&str>,
     track_gain: Option<f64>,
     track_peak: Option<f64>,
+    tags: &TrackTagMeta,
 ) -> anyhow::Result<String> {
     match pool {
         DatabasePool::Sqlite(p) => {
@@ -148,11 +159,11 @@ pub async fn insert_track(
                 file_size,
                 bitrate,
                 sample_rate,
-                mbid_recording,
                 cover,
                 lyrics,
                 track_gain,
                 track_peak,
+                tags,
             )
             .await
         }
@@ -171,11 +182,11 @@ pub async fn insert_track(
                 file_size,
                 bitrate,
                 sample_rate,
-                mbid_recording,
                 cover,
                 lyrics,
                 track_gain,
                 track_peak,
+                tags,
             )
             .await
         }
@@ -265,10 +276,11 @@ pub async fn list_tracks(
 pub async fn list_albums(
     pool: &DatabasePool,
     artist_id: Option<&str>,
+    album_id: Option<&str>,
 ) -> anyhow::Result<Vec<AlbumInfo>> {
     match pool {
-        DatabasePool::Sqlite(p) => super::library_sq::list_albums(p, artist_id).await,
-        DatabasePool::Postgres(p) => super::library_pg::list_albums(p, artist_id).await,
+        DatabasePool::Sqlite(p) => super::library_sq::list_albums(p, artist_id, album_id).await,
+        DatabasePool::Postgres(p) => super::library_pg::list_albums(p, artist_id, album_id).await,
     }
 }
 
@@ -407,19 +419,17 @@ pub async fn update_track(
     pool: &DatabasePool,
     track_id: &str,
     title: &str,
-    artists: &[(String, Option<String>)],
+    artists: &[(String, Option<String>, Option<String>)],
     album_title: &str,
-    album_artists: &[(String, Option<String>)],
-    album_mbid: Option<&str>,
-    date: Option<String>,
+    album_artists: &[(String, Option<String>, Option<String>)],
+    album_meta: &AlbumWriteMeta,
+    track_meta: &TrackTagMeta,
     track_num: Option<i32>,
     disc_num: Option<i32>,
-    mbid_recording: Option<&str>,
     lyrics: Option<&str>,
     cover: Option<&[u8]>,
     new_file_path: Option<&str>,
-    album_disambiguation: Option<String>,
-    total_discs: i32,
+    genres: Option<&[String]>,
 ) -> anyhow::Result<()> {
     match pool {
         DatabasePool::Sqlite(p) => {
@@ -430,16 +440,14 @@ pub async fn update_track(
                 artists,
                 album_title,
                 album_artists,
-                album_mbid,
-                date,
+                album_meta,
+                track_meta,
                 track_num,
                 disc_num,
-                mbid_recording,
                 lyrics,
                 cover,
                 new_file_path,
-                album_disambiguation,
-                total_discs,
+                genres,
             )
             .await
         }
@@ -451,16 +459,14 @@ pub async fn update_track(
                 artists,
                 album_title,
                 album_artists,
-                album_mbid,
-                date,
+                album_meta,
+                track_meta,
                 track_num,
                 disc_num,
-                mbid_recording,
                 lyrics,
                 cover,
                 new_file_path,
-                album_disambiguation,
-                total_discs,
+                genres,
             )
             .await
         }
@@ -498,6 +504,41 @@ pub async fn update_file_hash_by_path(
         }
         DatabasePool::Postgres(p) => {
             super::library_pg::update_file_hash_by_path(p, file_path, file_hash).await
+        }
+    }
+}
+
+/// Apply a full tag-editor edit to an existing library track row.
+pub async fn update_track_tags_from_audio_tag(
+    pool: &DatabasePool,
+    track_id: &str,
+    tag: &crate::audio::tags::AudioTag,
+    clear_cover: bool,
+) -> anyhow::Result<()> {
+    match pool {
+        DatabasePool::Sqlite(p) => {
+            super::library_sq::update_track_tags_from_audio_tag(p, track_id, tag, clear_cover).await
+        }
+        DatabasePool::Postgres(p) => {
+            super::library_pg::update_track_tags_from_audio_tag(p, track_id, tag, clear_cover).await
+        }
+    }
+}
+
+/// Sync an edited tag set to the library row matching `file_path`. Returns
+/// `Ok(false)` when no library row matches (the caller should skip silently).
+pub async fn sync_track_tags_by_file_path(
+    pool: &DatabasePool,
+    file_path: &str,
+    tag: &crate::audio::tags::AudioTag,
+    clear_cover: bool,
+) -> anyhow::Result<bool> {
+    match pool {
+        DatabasePool::Sqlite(p) => {
+            super::library_sq::sync_track_tags_by_file_path(p, file_path, tag, clear_cover).await
+        }
+        DatabasePool::Postgres(p) => {
+            super::library_pg::sync_track_tags_by_file_path(p, file_path, tag, clear_cover).await
         }
     }
 }

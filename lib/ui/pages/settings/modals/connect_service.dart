@@ -160,9 +160,9 @@ class _ConnectServiceDialogState extends State<ConnectServiceDialog> {
               : () async {
                   try {
                     await widget.onConfirm(_getInputValues());
-                    if (mounted) Navigator.of(context).pop();
+                    if (context.mounted) Navigator.of(context).pop();
                   } catch (e) {
-                    if (!mounted) return;
+                    if (!context.mounted) return;
                     AppSnackBar.show(
                       context,
                       'Failed to save: $e',

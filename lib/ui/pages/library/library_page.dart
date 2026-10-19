@@ -8,7 +8,6 @@ import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/utils/logger.dart';
-import 'package:tawai/utils/log_service.dart';
 import 'package:tawai/ui/widgets/app_shell.dart';
 import 'package:tawai/ui/widgets/mini_player.dart';
 import 'package:tawai/ui/pages/library/filterable_list.dart';
@@ -368,7 +367,6 @@ class _LibraryPageState extends State<LibraryPage>
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final colors = Theme.of(context).colorScheme;
-    final isDesktop = AppTheme.isDesktop(context);
 
     final filteredTracks = _tracksFilterable.filtered(_filters);
     final filteredAlbums = _albumsFilterable.filtered(_filters);

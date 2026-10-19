@@ -33,11 +33,12 @@ class ListChoice<T> extends StatelessWidget {
   }
 
   void _reset() {
-    if (defaultValue == null || !enabled) return;
+    final value = defaultValue;
+    if (value == null || !enabled) return;
     if (onChanged != null) {
-      onChanged!(defaultValue!);
+      onChanged!(value);
     } else if (valueListenable is ValueNotifier<T>) {
-      (valueListenable as ValueNotifier<T>).value = defaultValue!;
+      (valueListenable as ValueNotifier<T>).value = value;
     }
   }
 

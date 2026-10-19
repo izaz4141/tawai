@@ -105,7 +105,7 @@ class _TrackInfoSheet extends StatelessWidget {
             _InfoRow(label: 'Album ID', value: track.albumId),
             _InfoRow(label: 'Recording MBID', value: track.mbidRecording),
             _InfoRow(label: 'Artist MBID', value: track.artistMbid),
-            _InfoRow(label: 'Album MBID', value: track.albumMbid),
+            _InfoRow(label: 'Release MBID', value: track.releaseMbid),
             _InfoRow(
               label: 'ReplayGain',
               value: track.trackGain != null ? '${track.trackGain} dB' : null,

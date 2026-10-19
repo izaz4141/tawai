@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+#[serde(default)]
 pub struct TrackInfo {
     pub id: String,
     pub title: String,
@@ -17,7 +18,7 @@ pub struct TrackInfo {
     pub bitrate: Option<i32>,
     pub mbid_recording: Option<String>,
     pub artist_mbid: Option<String>,
-    pub album_mbid: Option<String>,
+    pub release_mbid: Option<String>,
     pub lyrics: Option<String>,
     pub release_date: Option<String>,
     pub track_gain: Option<f64>,
@@ -25,19 +26,20 @@ pub struct TrackInfo {
     pub source: String,
     pub source_type: String,
     pub genres: Vec<String>,
-    /// SHA-256 of the track's audio file. `#[serde(default)]` keeps old
-    /// servers/clients compatible: absent on the wire yields `None`.
-    #[serde(default)]
     pub file_hash: Option<String>,
-    #[serde(default)]
     pub sample_rate: Option<i32>,
-    #[serde(default)]
     pub acoust_id_fingerprint: Option<String>,
-    #[serde(default)]
     pub acoust_id: Option<String>,
+    pub mbid_track: Option<String>,
+    pub isrc: Option<String>,
+    pub comment: Option<String>,
+    pub copyright: Option<String>,
+    pub encoder: Option<String>,
+    pub script: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+#[serde(default)]
 pub struct AlbumInfo {
     pub id: String,
     pub title: String,
@@ -46,6 +48,17 @@ pub struct AlbumInfo {
     pub artists_string: String,
     pub release_date: Option<String>,
     pub track_count: i64,
+    pub disambiguation: Option<String>,
+    pub release_mbid: Option<String>,
+    pub release_group_mbid: Option<String>,
+    pub release_artist_mbid: Option<String>,
+    pub release_country: Option<String>,
+    pub release_type: Option<String>,
+    pub record_label: Option<String>,
+    pub media: Option<String>,
+    pub original_date: Option<String>,
+    pub total_tracks: i64,
+    pub total_discs: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -102,6 +115,8 @@ pub struct ListAlbumsRequest {
     #[serde(default)]
     pub id: String,
     pub artist_id: Option<String>,
+    #[serde(default)]
+    pub album_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]

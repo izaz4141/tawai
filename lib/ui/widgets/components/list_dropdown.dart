@@ -133,9 +133,7 @@ class _ListDropdownState extends State<ListDropdown> {
                           opacity: disabled ? 0.4 : 1.0,
                           child: Row(
                             children: [
-                              Expanded(
-                                child: e.child ?? const SizedBox.shrink(),
-                              ),
+                              Expanded(child: e.child),
                               if (disabled)
                                 Text(
                                   '(unavailable)',
@@ -168,10 +166,10 @@ class _ListDropdownState extends State<ListDropdown> {
   }
 
   Widget _buildDropdown(String value, TextTheme textTheme, ColorScheme colors) {
-    final isDisabled = (String? v) =>
+    bool isDisabled(String? v) =>
         v != null && widget.disabledValues.contains(v);
     return DropdownButtonFormField<String>(
-      value: widget.disabledValues.contains(value) ? null : value,
+      initialValue: widget.disabledValues.contains(value) ? null : value,
       style: textTheme.bodyMedium,
       decoration: InputDecoration(
         contentPadding: EdgeInsets.symmetric(
@@ -204,7 +202,7 @@ class _ListDropdownState extends State<ListDropdown> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                item.child ?? const SizedBox.shrink(),
+                item.child,
                 if (disabled)
                   Padding(
                     padding: EdgeInsets.only(

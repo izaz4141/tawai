@@ -8,7 +8,6 @@ import 'package:archive/archive_io.dart';
 
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/logger.dart';
-import 'package:tawai/utils/log_service.dart';
 import 'package:tawai/utils/app_lifecycle.dart';
 import 'package:tawai/utils/system_service.dart';
 

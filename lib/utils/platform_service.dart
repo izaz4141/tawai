@@ -4,7 +4,6 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:tawai/utils/logger.dart';
-import 'package:tawai/utils/log_service.dart';
 
 import 'package:tawai/utils/settings.dart';
 

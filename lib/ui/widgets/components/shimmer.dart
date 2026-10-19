@@ -19,7 +19,7 @@ class ShimmerWidget extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return AnimatedBuilder(
       animation: controller,
-      builder: (_, __) => Container(
+      builder: (_, _) => Container(
         height: height,
         width: width ?? double.infinity,
         decoration: BoxDecoration(

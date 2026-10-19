@@ -6,7 +6,6 @@ import 'package:tawai/ui/widgets/components/track_list_tile.dart';
 import 'package:tawai/ui/widgets/mini_player.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/logger.dart';
-import 'package:tawai/utils/log_service.dart';
 
 class DuplicateFinderPage extends StatefulWidget {
   const DuplicateFinderPage({super.key});

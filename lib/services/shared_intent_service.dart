@@ -81,7 +81,7 @@ class SharedIntentService {
       }
       final uri = Uri.tryParse(value);
       if (uri != null && uri.scheme == 'file') {
-        return _copyToTemp(File(uri.toFilePath()));
+        return await _copyToTemp(File(uri.toFilePath()));
       }
       final src = File(value);
       if (!await src.exists()) return null;

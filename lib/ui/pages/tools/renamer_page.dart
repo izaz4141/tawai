@@ -213,7 +213,7 @@ class _RenamerPageState extends State<RenamerPage> {
   Widget _buildSourceDropdown() {
     final colors = Theme.of(context).colorScheme;
     return DropdownButtonFormField<String?>(
-      value: _selectedSourceId,
+      initialValue: _selectedSourceId,
       decoration: InputDecoration(
         labelText: 'Source',
         border: OutlineInputBorder(

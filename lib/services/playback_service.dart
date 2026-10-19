@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
@@ -9,7 +8,6 @@ import 'package:synchronized/synchronized.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/app.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
-import 'package:tawai/models/audio_format.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/image_cache.dart';
 import 'package:tawai/utils/settings.dart' show SettingsManager;
@@ -218,7 +216,7 @@ class PlaybackService {
       bitrate: null,
       mbidRecording: rec.id,
       artistMbid: rec.artistId,
-      albumMbid: null,
+      releaseMbid: null,
       lyrics: null,
       releaseDate: null,
       source: 'preview',
@@ -279,9 +277,10 @@ class PlaybackService {
 
     final filename = basename(path);
     final ext = extension(path);
-    final withoutExt =
-        ext.isEmpty ? filename : filename.substring(0, filename.length - ext.length);
-    final title = !fallback && tags!.title.isNotEmpty ? tags.title : withoutExt;
+    final withoutExt = ext.isEmpty
+        ? filename
+        : filename.substring(0, filename.length - ext.length);
+    final title = !fallback && tags.title.isNotEmpty ? tags.title : withoutExt;
     final artist = fallback ? '' : tags.artist;
 
     final id = 'external_${DateTime.now().microsecondsSinceEpoch}';
@@ -311,15 +310,15 @@ class PlaybackService {
                 trackCount: 0,
               ),
             ],
-      trackNum: fallback || tags.trackNumber <= 0 ? null : tags.trackNumber,
-      discNum: fallback || tags.discNumber <= 0 ? null : tags.discNumber,
+      trackNum: fallback ? null : tags.trackNumber,
+      discNum: fallback ? null : tags.discNumber,
       durationSecs: fallback ? null : tags.durationSecs,
       filePath: path,
       fileSize: null,
       bitrate: null,
       mbidRecording: null,
       artistMbid: null,
-      albumMbid: null,
+      releaseMbid: null,
       lyrics: fallback ? null : tags.lyrics,
       releaseDate: fallback ? null : tags.releaseDate,
       source: 'external',

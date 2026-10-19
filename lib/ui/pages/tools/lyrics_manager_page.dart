@@ -6,7 +6,6 @@ import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/widgets/dialog/language_picker_dialog.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/logger.dart';
-import 'package:tawai/utils/log_service.dart';
 import 'package:tawai/utils/settings.dart';
 
 class LyricsManagerPage extends StatefulWidget {
@@ -448,7 +447,7 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
             AppTheme.spaceXS * AppTheme.spaceScale(context),
           ),
           child: DropdownButtonFormField<String>(
-            value: _selectedSourceId,
+            initialValue: _selectedSourceId,
             decoration: InputDecoration(
               labelText: 'Source',
               isDense: true,

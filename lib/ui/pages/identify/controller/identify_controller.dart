@@ -7,7 +7,6 @@ import 'package:tawai/ui/pages/identify/models/identify_result.dart';
 import 'package:tawai/ui/pages/identify/utils/identify_helpers.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/logger.dart';
-import 'package:tawai/utils/log_service.dart';
 import 'package:tawai/utils/settings.dart';
 
 class IdentifyController extends ChangeNotifier {
@@ -19,6 +18,18 @@ class IdentifyController extends ChangeNotifier {
   final Map<String, IdentifySession> sessions = {};
   final Map<String, IdentifyAlbumResult> albumResults = {};
   final Set<String> _processedTrackIds = {};
+
+  final Map<String, AlbumInfo> _albumInfoById = {};
+
+  /// Local album row for [albumId], fetched and cached lazily.
+  Future<AlbumInfo?> albumInfoFor(String? albumId) async {
+    if (albumId == null || albumId.isEmpty) return null;
+    final cached = _albumInfoById[albumId];
+    if (cached != null) return cached;
+    final info = await BridgeService.instance.getAlbumInfo(albumId);
+    if (info != null) _albumInfoById[albumId] = info;
+    return info;
+  }
 
   Future<void> loadSources() async {
     final userId = SettingsManager.currentUserId.value;
@@ -55,10 +66,10 @@ class IdentifyController extends ChangeNotifier {
         fetched = [];
       }
       final identified = fetched
-          .where((t) => t.mbidRecording != null && t.albumMbid != null)
+          .where((t) => t.mbidRecording != null && t.releaseMbid != null)
           .toList();
       final unidentified = fetched
-          .where((t) => !(t.mbidRecording != null && t.albumMbid != null))
+          .where((t) => !(t.mbidRecording != null && t.releaseMbid != null))
           .toList();
       tracks = unidentified
           .where((t) => !_processedTrackIds.contains(t.id))
@@ -224,9 +235,11 @@ class IdentifyController extends ChangeNotifier {
         releaseDate: releaseData.releaseDate,
         releaseArtist: releaseData.artist,
         releaseArtistMbid: releaseData.artistId,
+        albumDisambiguation: releaseData.disambiguation,
         expanded: true,
         userTracks: <IdentifiedUserTrack>[],
       );
+      _applyReleaseMetadata(newGroup, releaseData);
       if (ut != null) newGroup.userTracks.add(ut);
       albumResults[targetKey] = newGroup;
     } else {
@@ -240,6 +253,61 @@ class IdentifyController extends ChangeNotifier {
       if (target.releaseTracks.isEmpty) {
         target.releaseTracks = releaseData.tracks;
       }
+      _applyReleaseMetadata(target, releaseData);
+    }
+  }
+
+  /// Copies release-level metadata onto [result]; empty values don't overwrite.
+  void _applyReleaseMetadata(
+    IdentifyAlbumResult result,
+    GetReleaseTracksResponse releaseData,
+  ) {
+    if (releaseData.releaseDate != null &&
+        releaseData.releaseDate!.isNotEmpty) {
+      result.releaseDate = releaseData.releaseDate;
+    }
+    if (releaseData.artist.isNotEmpty) {
+      result.releaseArtist = releaseData.artist;
+    }
+    if (releaseData.artistId != null && releaseData.artistId!.isNotEmpty) {
+      result.releaseArtistMbid = releaseData.artistId;
+    }
+    if (releaseData.artists.isNotEmpty) {
+      result.releaseArtists = releaseData.artists;
+    }
+    if (releaseData.genres.isNotEmpty) {
+      result.genres = releaseData.genres;
+    }
+    if (releaseData.disambiguation != null &&
+        releaseData.disambiguation!.isNotEmpty) {
+      result.albumDisambiguation = releaseData.disambiguation;
+    }
+    if (releaseData.releaseCountry != null) {
+      result.releaseCountry = releaseData.releaseCountry;
+    }
+    if (releaseData.releaseType != null) {
+      result.releaseType = releaseData.releaseType;
+    }
+    if (releaseData.recordLabel != null) {
+      result.recordLabel = releaseData.recordLabel;
+    }
+    if (releaseData.media != null) {
+      result.media = releaseData.media;
+    }
+    if (releaseData.script != null) {
+      result.script = releaseData.script;
+    }
+    if (releaseData.originalDate != null) {
+      result.originalDate = releaseData.originalDate;
+    }
+    if (releaseData.releaseGroupMbid != null) {
+      result.releaseGroupMbid = releaseData.releaseGroupMbid;
+    }
+    if (releaseData.totalTracks != null) {
+      result.totalTracks = releaseData.totalTracks;
+    }
+    if (releaseData.totalDiscs != null) {
+      result.totalDiscs = releaseData.totalDiscs;
     }
   }
 
@@ -281,6 +349,7 @@ class IdentifyController extends ChangeNotifier {
       result.releaseArtist = remoteRelease.artist;
       result.releaseArtistMbid = remoteRelease.artistId;
       result.albumDisambiguation = remoteRelease.disambiguation;
+      _applyReleaseMetadata(result, remoteRelease);
       for (final ut in result.userTracks.where(
         (t) => t.isSession && t.sessionId != null,
       )) {
@@ -382,6 +451,7 @@ class IdentifyController extends ChangeNotifier {
     if (mbidAlbum != null) album.albumMbid = mbidAlbum;
     if (mbidArtist != null) album.releaseArtistMbid = mbidArtist;
     if (releaseDate != null) album.releaseDate = releaseDate;
+    _albumInfoById.remove(album.sourceAlbumId);
     sessions.remove(trackId);
     notifyListeners();
   }
@@ -404,7 +474,7 @@ class IdentifyController extends ChangeNotifier {
       discNum: ut.discNum,
       durationSecs: remoteTrack?.durationSecs,
       mbidRecording: ut.mbidRecording ?? remoteTrack?.id,
-      albumMbid: album.albumMbid,
+      releaseMbid: album.albumMbid,
       artistMbid: album.releaseArtistMbid,
       releaseDate: album.releaseDate,
       filePath: '',
@@ -441,13 +511,33 @@ class IdentifyController extends ChangeNotifier {
     required String title,
     required String artist,
     String? artistMbid,
+    String? albumArtist,
+    String? albumArtistMbid,
+    List<String>? artists,
+    List<String>? albumArtists,
+    String? artistSort,
+    String? albumArtistSort,
     required String album,
     String? albumMbid,
     String? albumDisambiguation,
     String? releaseDate,
+    String? originalDate,
+    String? releaseGroupMbid,
+    String? releaseCountry,
+    List<String>? releaseType,
+    String? recordLabel,
+    String? media,
     int? trackNum,
     int? discNum,
+    int? totalTracks,
+    int? totalDiscs,
     String? mbidRecording,
+    String? mbidTrack,
+    String? isrc,
+    String? comment,
+    String? copyright,
+    String? script,
+    List<String>? genres,
     String? lyrics,
     Uint8List? coverBytes,
     String? filePath,
@@ -460,13 +550,33 @@ class IdentifyController extends ChangeNotifier {
       title: title,
       artist: artist,
       artistMbid: artistMbid,
+      albumArtist: albumArtist,
+      albumArtistMbid: albumArtistMbid,
+      artists: artists,
+      albumArtists: albumArtists,
+      artistSort: artistSort,
+      albumArtistSort: albumArtistSort,
       album: album,
       albumMbid: albumMbid,
       albumDisambiguation: albumDisambiguation,
       releaseDate: releaseDate,
+      originalDate: originalDate,
+      releaseGroupMbid: releaseGroupMbid,
+      releaseCountry: releaseCountry,
+      releaseType: releaseType,
+      recordLabel: recordLabel,
+      media: media,
       trackNum: trackNum,
       discNum: discNum,
+      totalTracks: totalTracks,
+      totalDiscs: totalDiscs,
       mbidRecording: mbidRecording,
+      mbidTrack: mbidTrack,
+      isrc: isrc,
+      comment: comment,
+      copyright: copyright,
+      script: script,
+      genres: genres,
       lyrics: lyrics,
       coverBytes: coverBytes,
       filePath: filePath,

@@ -60,7 +60,7 @@ pub fn scan_file(path: &Path) -> Result<ParsedTrack> {
         if fingerprint_supported_format(ext) {
             if let Ok(result) = compute_fingerprint(path) {
                 tag.acoust_id_fingerprint = Some(result.fingerprint);
-                if let Err(e) = tags::write_audio_tags(path, &tag) {
+                if let Err(e) = tags::write_audio_tags(path, &tag, tags::TagWritePolicy::patch()) {
                     logger::warn(&format!(
                         "Failed to write acoust_id_fingerprint to {}: {}",
                         path.display(),

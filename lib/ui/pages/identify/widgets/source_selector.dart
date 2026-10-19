@@ -21,7 +21,7 @@ class SourceSelector extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(AppTheme.spaceMD * AppTheme.spaceScale(context)),
       child: DropdownButtonFormField<IdentifySource>(
-        value: selected,
+        initialValue: selected,
         decoration: InputDecoration(
           labelText: 'Source',
           border: OutlineInputBorder(

@@ -161,8 +161,9 @@ class _SettingsSystemTabState extends State<SettingsSystemTab> {
                                     ],
                                   ),
                                 );
-                                if (confirmed != true || !context.mounted)
+                                if (confirmed != true || !context.mounted) {
                                   return;
+                                }
                                 final newKey =
                                     await SettingsManager.regenerateApiKey(
                                       userId,

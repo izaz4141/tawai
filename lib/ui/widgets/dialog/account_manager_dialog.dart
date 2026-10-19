@@ -40,6 +40,7 @@ class AccountManagerDialog extends StatelessWidget {
                           if (kIsWeb) {
                             await APIService.instance.logout();
                           }
+                          if (!context.mounted) return;
                           Navigator.pop(context);
                         },
                       ),

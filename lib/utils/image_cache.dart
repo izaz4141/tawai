@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -7,7 +5,6 @@ import 'package:tawai/utils/api_service.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/byte_cache.dart';
 import 'package:tawai/utils/logger.dart';
-import 'package:tawai/utils/log_service.dart';
 
 class AppImageCache {
   static final AppImageCache _instance = AppImageCache._();

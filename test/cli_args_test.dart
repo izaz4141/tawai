@@ -69,16 +69,10 @@ void main() {
     });
 
     test('several files are kept in the order given', () async {
-      final action = await parse([
-            '/music/c.mp3',
-            '/music/b.flac',
-            '/music/a.mp3',
-          ]) as OpenTarget;
-      expect(action.targets, [
-        '/music/c.mp3',
-        '/music/b.flac',
-        '/music/a.mp3',
-      ]);
+      final action =
+          await parse(['/music/c.mp3', '/music/b.flac', '/music/a.mp3'])
+              as OpenTarget;
+      expect(action.targets, ['/music/c.mp3', '/music/b.flac', '/music/a.mp3']);
     });
 
     test('a file:// URI becomes a path', () async {
@@ -102,10 +96,8 @@ void main() {
     });
 
     test('unrelated arguments are skipped, audio still opens', () async {
-      final action = await parse([
-        '--enable-logging',
-            '/music/a.mp3',
-          ]) as OpenTarget;
+      final action =
+          await parse(['--enable-logging', '/music/a.mp3']) as OpenTarget;
       expect(action.targets, ['/music/a.mp3']);
     });
 
@@ -118,8 +110,7 @@ void main() {
     });
 
     test('a stale association with no target runs normally', () async {
-      expect(await parse(['/gone/a.mp3', '/gone/b.flac']),
-          isA<RunNormally>());
+      expect(await parse(['/gone/a.mp3', '/gone/b.flac']), isA<RunNormally>());
     });
 
     test('remote urls are ignored', () async {
@@ -151,5 +142,4 @@ void main() {
       expect(service.takeStartupTargets(), isNull);
     });
   });
-
 }

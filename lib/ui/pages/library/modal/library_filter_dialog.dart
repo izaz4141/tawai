@@ -59,7 +59,6 @@ class _LibraryFilterDialogState extends State<LibraryFilterDialog> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final iconScale = AppTheme.iconScale(context);
 
     return AlertDialog(
       title: const Text('Filter'),

@@ -48,8 +48,19 @@ pub async fn handle_get_release_tracks(context: Arc<AppContext>) {
                     release_date: release.date,
                     artist: release.artist,
                     artist_id: release.artist_id,
+                    artists: release.artists.into_iter().map(Into::into).collect(),
+                    genres: release.genres,
                     disambiguation: release.disambiguation,
                     tracks: release.tracks.into_iter().map(Into::into).collect(),
+                    release_country: release.country,
+                    release_group_mbid: release.release_group_mbid,
+                    release_type: release.release_type,
+                    record_label: release.record_label,
+                    media: release.media,
+                    script: release.script,
+                    original_date: release.original_date,
+                    total_tracks: release.total_tracks,
+                    total_discs: release.total_discs,
                 };
                 resp.send_signal_to_dart();
             }
@@ -62,8 +73,19 @@ pub async fn handle_get_release_tracks(context: Arc<AppContext>) {
                     release_date: None,
                     artist: String::new(),
                     artist_id: None,
+                    artists: vec![],
+                    genres: vec![],
                     disambiguation: None,
                     tracks: vec![],
+                    release_country: None,
+                    release_group_mbid: None,
+                    release_type: None,
+                    record_label: None,
+                    media: None,
+                    script: None,
+                    original_date: None,
+                    total_tracks: None,
+                    total_discs: None,
                 }
                 .send_signal_to_dart();
             }

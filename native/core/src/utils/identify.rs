@@ -12,6 +12,8 @@ use crate::tools::rename::move_file_into_source;
 
 /// Parameters for applying a MusicBrainz identification result to a track or
 /// a standalone (download-folder) audio file.
+/// Parameters for applying a MusicBrainz identification result to a track or
+/// a standalone (download-folder) audio file.
 pub struct ApplyIdentificationParams {
     pub track_id: String,
     /// When set (download-folder flow), the audio file to write tags to and
@@ -22,16 +24,38 @@ pub struct ApplyIdentificationParams {
     pub title: Option<String>,
     pub artist: Option<String>,
     pub artist_mbid: Option<String>,
+    /// Album artist (release artist) name/mbid, kept separate from the track
+    /// artist. Falls back to `artist`/`artist_mbid` when absent.
+    pub album_artist: Option<String>,
+    pub album_artist_mbid: Option<String>,
+    /// Multi-value artist lists (`TrackArtists` / `AlbumArtists`).
+    pub artists: Option<Vec<String>>,
+    pub album_artists: Option<Vec<String>>,
+    pub artist_sort: Option<String>,
+    pub album_artist_sort: Option<String>,
     pub album: Option<String>,
     pub album_mbid: Option<String>,
     pub album_disambiguation: Option<String>,
     pub release_date: Option<String>,
+    pub original_date: Option<String>,
+    pub release_group_mbid: Option<String>,
+    pub release_country: Option<String>,
+    pub release_type: Option<Vec<String>>,
+    pub record_label: Option<String>,
+    pub media: Option<String>,
     pub track_num: Option<i32>,
     pub disc_num: Option<i32>,
-    pub mbid_recording: Option<String>,
-    pub lyrics: Option<String>,
-    pub cover_bytes: Option<Vec<u8>>,
+    pub total_tracks: Option<i32>,
     pub total_discs: Option<i32>,
+    pub mbid_recording: Option<String>,
+    pub mbid_track: Option<String>,
+    pub isrc: Option<String>,
+    pub comment: Option<String>,
+    pub copyright: Option<String>,
+    pub script: Option<String>,
+    pub lyrics: Option<String>,
+    pub genres: Option<Vec<String>>,
+    pub cover_bytes: Option<Vec<u8>>,
 }
 
 /// Result of applying an identification.
@@ -99,26 +123,35 @@ pub async fn apply_identification(
     // params override them; every omitted field keeps its existing value.
     let mut tag = audio::tags::read_audio_tags(Path::new(&file_path))?.0;
 
-    if let Some(v) = params.title.as_deref() {
-        if !v.is_empty() {
-            tag.title = v.to_string();
-        }
+    if let Some(v) = params.title.as_deref().filter(|v| !v.is_empty()) {
+        tag.title = v.to_string();
     }
-    if let Some(v) = params.artist.as_deref() {
-        if !v.is_empty() {
-            tag.artist = v.to_string();
-            tag.album_artist = v.to_string();
-        }
+    if let Some(v) = params.artist.as_deref().filter(|v| !v.is_empty()) {
+        tag.artist = v.to_string();
     }
-    if let Some(v) = params.album.as_deref() {
-        if !v.is_empty() {
-            tag.album = v.to_string();
-        }
+    // Album artist falls back to the track artist when only the track artist
+    // was supplied, which preserves the previous single-artist behaviour.
+    if let Some(v) = params.album_artist.as_deref().filter(|v| !v.is_empty()) {
+        tag.album_artist = v.to_string();
+    } else if let Some(v) = params.artist.as_deref().filter(|v| !v.is_empty()) {
+        tag.album_artist = v.to_string();
     }
-    if let Some(v) = &params.artist_mbid {
-        if !v.is_empty() {
-            tag.mbid_artist = Some(v.clone());
-            tag.mbid_release_artist = Some(v.clone());
+    if let Some(v) = params.album.as_deref().filter(|v| !v.is_empty()) {
+        tag.album = v.to_string();
+    }
+    if let Some(v) = params.artist_mbid.as_deref().filter(|v| !v.is_empty()) {
+        tag.mbid_artist = Some(v.to_string());
+    }
+    if let Some(v) = params
+        .album_artist_mbid
+        .as_deref()
+        .filter(|v| !v.is_empty())
+    {
+        tag.mbid_release_artist = Some(v.to_string());
+    } else if params.album_artist_mbid.is_none() {
+        // Keep the previous behaviour of mirroring the track artist MBID.
+        if let Some(v) = params.artist_mbid.as_deref().filter(|v| !v.is_empty()) {
+            tag.mbid_release_artist = Some(v.to_string());
         }
     }
     if let Some(v) = &params.album_mbid {
@@ -136,15 +169,94 @@ pub async fn apply_identification(
             tag.release_date = Some(v.clone());
         }
     }
+    if let Some(v) = &params.original_date {
+        if !v.is_empty() {
+            tag.original_date = Some(v.clone());
+        }
+    }
+    if let Some(v) = &params.release_group_mbid {
+        if !v.is_empty() {
+            tag.mbid_release_group = Some(v.clone());
+        }
+    }
+    if let Some(v) = &params.release_country {
+        if !v.is_empty() {
+            tag.release_country = Some(v.clone());
+        }
+    }
+    if let Some(v) = &params.release_type {
+        if !v.is_empty() {
+            tag.release_type = v.clone();
+        }
+    }
+    if let Some(v) = &params.record_label {
+        if !v.is_empty() {
+            tag.record_label = Some(v.clone());
+        }
+    }
+    if let Some(v) = &params.media {
+        if !v.is_empty() {
+            tag.media = Some(v.clone());
+        }
+    }
+    if let Some(v) = &params.artist_sort {
+        if !v.is_empty() {
+            tag.artist_sort = v.clone();
+        }
+    }
+    if let Some(v) = &params.album_artist_sort {
+        if !v.is_empty() {
+            tag.album_artist_sort = v.clone();
+        }
+    }
     if let Some(v) = params.track_num {
-        tag.track_number = v;
+        if v > 0 {
+            tag.track_number = v;
+        }
     }
     if let Some(v) = params.disc_num {
-        tag.disc_number = v;
+        if v > 0 {
+            tag.disc_number = v;
+        }
+    }
+    if let Some(v) = params.total_tracks {
+        if v > 0 {
+            tag.total_tracks = v;
+        }
+    }
+    if let Some(v) = params.total_discs {
+        if v > 0 {
+            tag.total_discs = v;
+        }
     }
     if let Some(v) = &params.mbid_recording {
         if !v.is_empty() {
             tag.mbid_recording = Some(v.clone());
+        }
+    }
+    if let Some(v) = &params.mbid_track {
+        if !v.is_empty() {
+            tag.mbid_track = Some(v.clone());
+        }
+    }
+    if let Some(v) = &params.isrc {
+        if !v.is_empty() {
+            tag.isrc = Some(v.clone());
+        }
+    }
+    if let Some(v) = &params.comment {
+        if !v.is_empty() {
+            tag.comment = Some(v.clone());
+        }
+    }
+    if let Some(v) = &params.copyright {
+        if !v.is_empty() {
+            tag.copyright = Some(v.clone());
+        }
+    }
+    if let Some(v) = &params.script {
+        if !v.is_empty() {
+            tag.script = Some(v.clone());
         }
     }
     if let Some(v) = &params.lyrics {
@@ -152,17 +264,47 @@ pub async fn apply_identification(
             tag.lyrics = Some(v.clone());
         }
     }
+    let mut explicit_artists = false;
+    if let Some(v) = &params.artists {
+        if !v.is_empty() {
+            tag.artists = v.clone();
+            explicit_artists = true;
+        } else {
+            tag.artists.clear();
+        }
+    } else {
+        tag.artists.clear();
+    }
+    let mut explicit_album_artists = false;
+    if let Some(v) = &params.album_artists {
+        if !v.is_empty() {
+            tag.album_artists = v.clone();
+            explicit_album_artists = true;
+        } else {
+            tag.album_artists.clear();
+        }
+    } else {
+        tag.album_artists.clear();
+    }
+    if let Some(v) = &params.genres {
+        if !v.is_empty() {
+            tag.genres = v.clone();
+        }
+    }
     if let Some(v) = &params.cover_bytes {
         if !v.is_empty() {
             tag.cover = Some(v.clone());
         }
     }
-    if let Some(v) = params.total_discs {
-        tag.total_discs = v;
-    }
 
     let file_path = PathBuf::from(&file_path);
-    audio::tags::write_audio_tags(&file_path, &tag)?;
+    // The identify flow patches the on-disk tags but may carry explicit
+    // artist/album-artist lists from the comparison sheet.
+    audio::tags::write_audio_tags(
+        &file_path,
+        &tag,
+        audio::tags::TagWritePolicy::patch_explicit_artists(),
+    )?;
 
     if let Some(cover_bytes) = &params.cover_bytes {
         if let Some(track) = &track {
@@ -200,59 +342,119 @@ pub async fn apply_identification(
 
     if !download_folder {
         let track_row = track.as_ref().expect("library flow always has a track row");
-        let title = params
-            .title
-            .as_deref()
-            .filter(|v| !v.is_empty())
-            .map(str::to_string)
-            .unwrap_or_else(|| track_row.title.clone());
-        let artist = params
-            .artist
-            .as_deref()
-            .filter(|v| !v.is_empty())
-            .map(str::to_string)
-            .unwrap_or_else(|| track_row.artists_string.clone());
-        let album = params
-            .album
-            .as_deref()
-            .filter(|v| !v.is_empty())
-            .map(str::to_string)
-            .unwrap_or_else(|| track_row.album_title.clone());
-        let artist_mbid = params
-            .artist_mbid
-            .clone()
-            .or_else(|| track_row.artist_mbid.clone());
-        let album_mbid = params
-            .album_mbid
-            .clone()
-            .or_else(|| track_row.album_mbid.clone());
-        let track_num = params.track_num.or(track_row.track_num);
-        let disc_num = params.disc_num.or(track_row.disc_num);
-        let mbid_recording = params
-            .mbid_recording
-            .clone()
-            .or_else(|| track_row.mbid_recording.clone());
-        let lyrics = params.lyrics.clone().or_else(|| track_row.lyrics.clone());
 
-        let artist_pairs = [(artist.clone(), artist_mbid.clone())];
-        let album_artist_pairs = [(artist.clone(), artist_mbid.clone())];
+        // Prefer what was written to disk (`tag`, already merged with the
+        // provided params) and fall back to the existing DB row so a field the
+        // file had nothing for is never blanked.
+        let title = if tag.title.is_empty() {
+            track_row.title.clone()
+        } else {
+            tag.title.clone()
+        };
+        let artist = if tag.artist.is_empty() {
+            track_row.artists_string.clone()
+        } else {
+            tag.artist.clone()
+        };
+        let album = if tag.album.is_empty() {
+            track_row.album_title.clone()
+        } else {
+            tag.album.clone()
+        };
+        let album_artist = if tag.album_artist.is_empty() {
+            artist.clone()
+        } else {
+            tag.album_artist.clone()
+        };
+
+        // Artist / album-artist links, primary entry carrying the MBID and sort.
+        let artist_names = if tag.artists.is_empty() {
+            vec![artist.clone()]
+        } else {
+            tag.artists.clone()
+        };
+        let artists: Vec<(String, Option<String>, Option<String>)> = artist_names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                let mbid = (i == 0 || artist_names.len() == 1)
+                    .then(|| tag.mbid_artist.clone())
+                    .flatten();
+                let sort = (i == 0 && !tag.artist_sort.is_empty()).then(|| tag.artist_sort.clone());
+                (name.clone(), mbid, sort)
+            })
+            .collect();
+
+        let album_artist_names = if tag.album_artists.is_empty() {
+            vec![album_artist.clone()]
+        } else {
+            tag.album_artists.clone()
+        };
+        let album_artists: Vec<(String, Option<String>, Option<String>)> = album_artist_names
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                let mbid = (i == 0 || album_artist_names.len() == 1)
+                    .then(|| tag.mbid_release_artist.clone())
+                    .flatten();
+                let sort = (i == 0 && !tag.album_artist_sort.is_empty())
+                    .then(|| tag.album_artist_sort.clone());
+                (name.clone(), mbid, sort)
+            })
+            .collect();
+
+        let album_meta = library::AlbumWriteMeta {
+            date: tag.release_date.clone(),
+            release_mbid: tag.mbid_release.clone(),
+            release_group_mbid: tag.mbid_release_group.clone(),
+            release_artist_mbid: tag.mbid_release_artist.clone(),
+            release_country: tag.release_country.clone(),
+            release_type: (!tag.release_type.is_empty()).then(|| tag.release_type.join(";")),
+            record_label: tag.record_label.clone(),
+            media: tag.media.clone(),
+            original_date: tag.original_date.clone(),
+            disambiguation: tag.album_disambiguation.clone(),
+            total_tracks: tag.total_tracks,
+            total_discs: tag.total_discs,
+        };
+        let track_meta = library::TrackTagMeta {
+            mbid_recording: tag.mbid_recording.clone(),
+            mbid_track: tag.mbid_track.clone(),
+            isrc: tag.isrc.clone(),
+            comment: tag.comment.clone(),
+            copyright: tag.copyright.clone(),
+            // Encoder is read-only; apply never writes it.
+            encoder: None,
+            script: tag.script.clone(),
+        };
+
+        let track_num = (tag.track_number > 0)
+            .then_some(tag.track_number)
+            .or(track_row.track_num);
+        let disc_num = (tag.disc_number > 0)
+            .then_some(tag.disc_number)
+            .or(track_row.disc_num);
+        let lyrics = tag.lyrics.clone().or_else(|| track_row.lyrics.clone());
+
         library::update_track(
             pool,
             &params.track_id,
             &title,
-            &artist_pairs,
+            &artists,
             &album,
-            &album_artist_pairs,
-            album_mbid.as_deref(),
-            params.release_date.clone(),
+            &album_artists,
+            &album_meta,
+            &track_meta,
             track_num,
             disc_num,
-            mbid_recording.as_deref(),
             lyrics.as_deref(),
             params.cover_bytes.as_deref(),
             new_file_path.as_deref(),
-            params.album_disambiguation.clone(),
-            params.total_discs.unwrap_or(0),
+            params
+                .genres
+                .as_deref()
+                .filter(|g| !g.is_empty())
+                .map(|_| tag.genres.as_slice()),
         )
         .await?;
     }
@@ -324,7 +526,7 @@ pub fn parsed_track_to_info(track: libsources::ParsedTrack) -> TrackInfo {
         bitrate: track.bitrate.map(|b| b as i32),
         mbid_recording: tag.mbid_recording.clone(),
         artist_mbid: tag.mbid_artist.clone(),
-        album_mbid: tag.mbid_release.clone(),
+        release_mbid: tag.mbid_release.clone(),
         lyrics: tag.lyrics.clone(),
         release_date: tag.release_date.clone(),
         track_gain: tag.track_gain,
@@ -336,6 +538,12 @@ pub fn parsed_track_to_info(track: libsources::ParsedTrack) -> TrackInfo {
         sample_rate: track.sample_rate.map(|s| s as i32),
         acoust_id_fingerprint: tag.acoust_id_fingerprint.clone(),
         acoust_id: tag.acoust_id.clone(),
+        mbid_track: tag.mbid_track.clone(),
+        isrc: tag.isrc.clone(),
+        comment: tag.comment.clone(),
+        copyright: tag.copyright.clone(),
+        encoder: tag.encoder.clone(),
+        script: tag.script.clone(),
     }
 }
 

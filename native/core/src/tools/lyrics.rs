@@ -113,7 +113,7 @@ pub async fn write_track_lyrics(
 
     audio_tag.lyrics = Some(lyrics.to_string());
 
-    tags::write_audio_tags(path, &audio_tag)?;
+    tags::write_audio_tags(path, &audio_tag, tags::TagWritePolicy::patch())?;
 
     match pool {
         DatabasePool::Sqlite(p) => {

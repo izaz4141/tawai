@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
-import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/utils/bridge_service.dart';
 
 class SearchLyricsDialog extends StatefulWidget {
