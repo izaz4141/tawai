@@ -162,7 +162,6 @@ class _QueueViewState extends State<QueueView> {
 
 class _QueueTrackTile extends StatelessWidget {
   const _QueueTrackTile({
-    super.key,
     required this.track,
     required this.onTap,
     required this.onRemove,

@@ -12,7 +12,6 @@ import 'package:tawai/utils/bindings_json.dart';
 import 'package:tawai/utils/helper.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/utils/logger.dart';
-import 'package:tawai/utils/log_service.dart';
 import 'package:tawai/utils/rinf_service.dart';
 import 'package:tawai/utils/system_service.dart';
 import 'package:tawai/models/fs.dart';
@@ -1547,8 +1546,9 @@ class APIService {
       }
       if (releaseDate != null) body['release_date'] = releaseDate;
       if (originalDate != null) body['original_date'] = originalDate;
-      if (releaseGroupMbid != null)
+      if (releaseGroupMbid != null) {
         body['release_group_mbid'] = releaseGroupMbid;
+      }
       if (releaseCountry != null) body['release_country'] = releaseCountry;
       if (releaseType != null) body['release_type'] = releaseType;
       if (recordLabel != null) body['record_label'] = recordLabel;
@@ -2286,7 +2286,7 @@ class APIService {
             },
           );
 
-      return completer.future.timeout(
+      return await completer.future.timeout(
         const Duration(seconds: 60),
         onTimeout: () {
           subscription?.cancel();
@@ -2562,11 +2562,10 @@ class APIService {
           'artist': artist,
           'album_artist': albumArtist,
           'album': album,
-          if (releaseDate != null) 'release_date': releaseDate,
+          'release_date': ?releaseDate,
           'track_number': trackNumber,
           'disc_number': discNumber,
-          if (albumDisambiguation != null)
-            'album_disambiguation': albumDisambiguation,
+          'album_disambiguation': ?albumDisambiguation,
           'total_discs': totalDiscs,
         }),
       );
@@ -2673,7 +2672,7 @@ class APIService {
         body: jsonEncode({
           'id': _newId(),
           'pattern': pattern,
-          if (sourceId != null) 'source_id': sourceId,
+          'source_id': ?sourceId,
         }),
       );
       if (response.statusCode != 200) return null;

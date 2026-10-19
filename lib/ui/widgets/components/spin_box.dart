@@ -149,7 +149,6 @@ class _SpinBoxState<T extends num> extends State<SpinBox<T>> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final iconScale = AppTheme.iconScale(context);
     final spaceScale = AppTheme.spaceScale(context);
 
     return ListTile(

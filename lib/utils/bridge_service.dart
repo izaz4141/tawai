@@ -293,7 +293,7 @@ class BridgeService {
     return RinfService.instance.playTrack(trackId, track: track);
   }
 
-  previewTrack(TrackInfo track) async {
+  Future<PreviewTrackResponse> previewTrack(TrackInfo track) async {
     if (_isRemote) {
       return APIService.instance.previewTrack(track);
     }
@@ -892,8 +892,9 @@ class BridgeService {
     String filename,
     Uint8List bytes,
   ) {
-    if (_isRemote)
+    if (_isRemote) {
       return APIService.instance.readFileTagsBytes(filename, bytes);
+    }
     return RinfService.instance.readFileTagsBytes(filename, bytes);
   }
 

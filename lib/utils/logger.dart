@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:intl/intl.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/log_service.dart';
@@ -10,13 +8,12 @@ export 'package:tawai/utils/log_service.dart' show LogLevel;
 void log(String message, {LogLevel level = LogLevel.debug}) {
   final timestamp = DateFormat('yy/MM/dd|HH:mm:ss').format(DateTime.now());
   final logMessage = '[${logLevelLabel(level)}][$timestamp] $message';
+  // ignore: avoid_print
   print(logMessage);
 }
 
-StreamSubscription? _logSub;
-
 void initRustSignalLogger() {
-  _logSub = BridgeService.instance.logSignal.listen((signal) {
+  BridgeService.instance.logSignal.listen((signal) {
     log(signal.message, level: logLevelFromString(signal.level));
   });
 }

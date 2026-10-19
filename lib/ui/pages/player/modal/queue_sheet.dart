@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/services/playback_service.dart';
-import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/pages/player/widgets/queue_view.dart';
 import 'package:tawai/ui/widgets/components/sheet.dart';

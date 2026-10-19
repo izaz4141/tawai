@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 
 import 'package:tawai/utils/platform_service.dart';
 import 'package:tawai/utils/logger.dart';
-import 'package:tawai/utils/log_service.dart';
 import 'package:tawai/utils/io_service.dart';
 import 'package:tawai/utils/api_service.dart';
 import 'package:tawai/utils/bridge_service.dart';

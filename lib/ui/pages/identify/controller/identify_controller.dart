@@ -7,7 +7,6 @@ import 'package:tawai/ui/pages/identify/models/identify_result.dart';
 import 'package:tawai/ui/pages/identify/utils/identify_helpers.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/logger.dart';
-import 'package:tawai/utils/log_service.dart';
 import 'package:tawai/utils/settings.dart';
 
 class IdentifyController extends ChangeNotifier {

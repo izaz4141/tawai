@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:tawai/models/editable_tag_data.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/utils/logger.dart';
-import 'package:tawai/utils/log_service.dart';
 
 class RinfService {
   static final RinfService _instance = RinfService._();

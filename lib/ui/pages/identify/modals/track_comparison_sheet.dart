@@ -743,7 +743,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
         vertical: AppTheme.spaceSM * AppTheme.spaceScale(context),
       ),
       child: DropdownButtonFormField<String>(
-        value: _targetSourceId,
+        initialValue: _targetSourceId,
         decoration: InputDecoration(
           labelText: 'Move into library source',
           border: OutlineInputBorder(
