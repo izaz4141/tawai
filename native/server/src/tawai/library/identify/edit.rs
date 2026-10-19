@@ -155,12 +155,9 @@ pub async fn handle_write_file_tags(
             // tags with a fresh hash.
             if sync_ok {
                 if let Ok(hash) = tawai_core::libsources::local::hash_file(&path) {
-                    if let Err(e) = library::update_file_hash_by_path(
-                        db.pool(),
-                        &path.to_string_lossy(),
-                        &hash,
-                    )
-                    .await
+                    if let Err(e) =
+                        library::update_file_hash_by_path(db.pool(), &path.to_string_lossy(), &hash)
+                            .await
                     {
                         tawai_core::utils::logger::warn(&format!(
                             "failed to update stored file_hash after tag write for {}: {}",

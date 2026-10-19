@@ -606,8 +606,7 @@ fn push_front_cover(tag: &mut Tag, bytes: &[u8]) {
     } else if bytes.starts_with(b"BM") {
         MimeType::Bmp
     } else if bytes.len() > 4
-        && (bytes[..4] == [0x49, 0x49, 0x2A, 0x00]
-            || bytes[..4] == [0x4D, 0x4D, 0x00, 0x2A])
+        && (bytes[..4] == [0x49, 0x49, 0x2A, 0x00] || bytes[..4] == [0x4D, 0x4D, 0x00, 0x2A])
     {
         MimeType::Tiff
     } else {
