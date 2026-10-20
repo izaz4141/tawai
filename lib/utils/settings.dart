@@ -295,7 +295,6 @@ class SettingsManager {
   }
 
   static void syncNamingPatternToRust(String pattern) {
-    if (PlatformService().isRemote) return;
     final userId = currentUserId.value ?? '';
     if (userId.isEmpty) return;
     unawaited(

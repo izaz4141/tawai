@@ -1460,6 +1460,10 @@ class RinfService {
     required int discNumber,
     String? albumDisambiguation,
     int totalDiscs = 0,
+    String? trackId,
+    String? targetSourceId,
+    String? filePath,
+    String userId = '',
   }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = FormatNamingPreviewResponse.rustSignalStream.where(
@@ -1477,6 +1481,10 @@ class RinfService {
       discNumber: discNumber,
       albumDisambiguation: albumDisambiguation,
       totalDiscs: totalDiscs,
+      trackId: trackId,
+      targetSourceId: targetSourceId,
+      filePath: filePath,
+      userId: userId,
     ).sendSignalToRust();
     final signal = await stream.first;
     return signal.message.result;

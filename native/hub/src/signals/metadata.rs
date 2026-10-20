@@ -485,6 +485,17 @@ pub struct FormatNamingPreviewRequest {
     pub disc_number: i32,
     pub album_disambiguation: Option<String>,
     pub total_discs: i32,
+    /// Library track to preview the destination for. When set, the source root
+    /// and file extension are resolved the same way `apply_identification` does.
+    pub track_id: Option<String>,
+    /// Download-folder flow: the library source the file will be moved into.
+    pub target_source_id: Option<String>,
+    /// Audio file being identified; supplies the extension and the current path
+    /// shown when Apply would not move the file.
+    pub file_path: Option<String>,
+    /// User requesting the preview. Used to authorize the source whose root is
+    /// resolved; this is local identity context, not a server credential.
+    pub user_id: String,
 }
 
 #[derive(Serialize, RustSignal)]

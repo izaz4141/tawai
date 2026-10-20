@@ -2550,6 +2550,9 @@ class APIService {
     required int discNumber,
     String? albumDisambiguation,
     int totalDiscs = 0,
+    String? trackId,
+    String? targetSourceId,
+    String? filePath,
   }) async {
     try {
       final response = await http.post(
@@ -2567,6 +2570,9 @@ class APIService {
           'disc_number': discNumber,
           'album_disambiguation': ?albumDisambiguation,
           'total_discs': totalDiscs,
+          'track_id': ?trackId,
+          'target_source_id': ?targetSourceId,
+          'file_path': ?filePath,
         }),
       );
       if (response.statusCode == 200) {

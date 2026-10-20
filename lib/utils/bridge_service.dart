@@ -991,6 +991,9 @@ class BridgeService {
     required int discNumber,
     String? albumDisambiguation,
     int totalDiscs = 0,
+    String? trackId,
+    String? targetSourceId,
+    String? filePath,
   }) async {
     if (_isRemote) {
       return APIService.instance.formatNamingPreview(
@@ -1004,6 +1007,9 @@ class BridgeService {
         discNumber: discNumber,
         albumDisambiguation: albumDisambiguation,
         totalDiscs: totalDiscs,
+        trackId: trackId,
+        targetSourceId: targetSourceId,
+        filePath: filePath,
       );
     }
     return RinfService.instance.formatNamingPreview(
@@ -1017,6 +1023,10 @@ class BridgeService {
       discNumber: discNumber,
       albumDisambiguation: albumDisambiguation,
       totalDiscs: totalDiscs,
+      trackId: trackId,
+      targetSourceId: targetSourceId,
+      filePath: filePath,
+      userId: SettingsManager.currentUserId.value ?? '',
     );
   }
 

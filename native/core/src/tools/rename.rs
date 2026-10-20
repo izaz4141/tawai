@@ -229,6 +229,31 @@ pub(crate) fn expected_path_from_root(
     dest_from_root(source_root, pattern, tag, ext, "track")
 }
 
+/// Destination path for `old_path` rooted at `source_root`, without touching
+/// the filesystem. `pattern: None` keeps the file's current stem name; when a
+/// pattern is given its formatted result becomes the stem. The extension comes
+/// from `old_path` (falling back to `mp3`) so the apply move and its preview
+/// always agree.
+pub(crate) fn destination_for(
+    source_root: &str,
+    pattern: Option<&str>,
+    old_path: &Path,
+    tag: &AudioTag,
+) -> PathBuf {
+    let ext = old_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("mp3");
+    let stem = old_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("track");
+    match pattern {
+        Some(p) => dest_from_root(source_root, p, tag, ext, stem),
+        None => Path::new(source_root).join(format!("{}.{}", stem, ext)),
+    }
+}
+
 /// Move (and rename) an audio file into `source_root`, rooting the naming
 /// pattern's subdirectories at that folder. Callers resolve the source root
 /// first via `SourceUrlResolver`.
@@ -248,19 +273,7 @@ pub fn move_file_into_source(
     if !Path::new(source_root).is_dir() {
         anyhow::bail!("source root is not a directory: {}", source_root);
     }
-    let ext = old_path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("mp3");
-    let stem = old_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("track")
-        .to_string();
-    let new_path = match pattern {
-        Some(p) => dest_from_root(source_root, p, tag, &ext, &stem),
-        None => Path::new(source_root).join(format!("{}.{}", stem, ext)),
-    };
+    let new_path = destination_for(source_root, pattern, old_path, tag);
     if new_path == old_path {
         return Ok(new_path);
     }

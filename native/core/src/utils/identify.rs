@@ -3,12 +3,13 @@ use std::path::{Path, PathBuf};
 use anyhow::{Result, anyhow};
 
 use crate::audio;
-use crate::db::account::DEFAULT_USERNAME;
 use crate::db::database::DatabasePool;
 use crate::db::{library, library_source, user_settings};
 use crate::libsources;
-use crate::signals::library::TrackInfo;
-use crate::tools::rename::move_file_into_source;
+use crate::signals::library::{LibrarySourceInfo, TrackInfo};
+use crate::tools::rename::{
+    DEFAULT_PATTERN, destination_for, format_naming_pattern, move_file_into_source,
+};
 
 /// Parameters for applying a MusicBrainz identification result to a track or
 /// a standalone (download-folder) audio file.
@@ -60,12 +61,41 @@ pub struct ApplyIdentificationParams {
 
 /// Result of applying an identification.
 pub struct ApplyIdentificationOutcome {
-    /// The new file path after the optional rename/move, if one happened.
+    /// The file path after the rename/move.
     pub new_file_path: Option<String>,
     /// True when the apply targeted a standalone download-folder file. The
     /// caller should trigger an incremental scan of the target source to
     /// register it in the library.
     pub download_folder: bool,
+}
+
+/// Where `apply_identification` will move a file, without performing the move.
+struct MovePlan {
+    source_root: String,
+    pattern: String,
+    local_path: PathBuf,
+}
+
+/// Resolve the pattern and source root, probing the root before any write.
+async fn resolve_move_plan(
+    pool: &DatabasePool,
+    user_id: &str,
+    source: &LibrarySourceInfo,
+    local_path: &Path,
+) -> Result<MovePlan> {
+    let pattern = user_settings::get_setting(pool, user_id, "identify_naming_pattern")
+        .await
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| DEFAULT_PATTERN.to_string());
+
+    let mut resolver = crate::libsources::SourceUrlResolver::new();
+    let source_root = resolver.resolve(&source.urls, None, None).await?;
+
+    Ok(MovePlan {
+        source_root,
+        pattern,
+        local_path: local_path.to_path_buf(),
+    })
 }
 
 /// Apply a MusicBrainz identification to a single audio file.
@@ -76,8 +106,8 @@ pub struct ApplyIdentificationOutcome {
 ///   folder (rooted at the source url). No database row is created; the
 ///   caller triggers an incremental scan of the target source afterwards.
 /// - **Library track** (`track_id` set): writes tags to the track's file,
-///   moves it relative to its source root when a naming pattern is set, and
-///   updates the library database row.
+///   moves it relative to its source root, and updates the library database
+///   row.
 ///
 /// The user must have access to the affected source, and the source must be
 /// local (non-local sources cannot have their tags rewritten or files moved).
@@ -118,6 +148,10 @@ pub async fn apply_identification(
             source.source_type
         ));
     }
+
+    let move_plan = resolve_move_plan(pool, user_id, &source, Path::new(&file_path))
+        .await
+        .map_err(|e| anyhow!("No reachable source directory for '{}': {}", source.name, e))?;
 
     // Start from the file's current on-disk tags. Only the explicitly provided
     // params override them; every omitted field keeps its existing value.
@@ -314,31 +348,16 @@ pub async fn apply_identification(
         }
     }
 
-    let pattern = user_settings::get_setting(pool, DEFAULT_USERNAME, "identify_naming_pattern")
-        .await
-        .filter(|s| !s.is_empty());
-
-    let mut resolver = crate::libsources::SourceUrlResolver::new();
-    let source_root = resolver
-        .resolve(&source.urls, None, None)
-        .await
-        .map_err(|e| anyhow!("No reachable source directory for '{}': {}", source.name, e))?;
-
-    let new_file_path = if download_folder {
-        Some(
-            move_file_into_source(&file_path, &source_root, pattern.as_deref(), &tag)?
-                .to_string_lossy()
-                .to_string(),
-        )
-    } else if let Some(pattern) = pattern {
-        Some(
-            move_file_into_source(&file_path, &source_root, Some(&pattern), &tag)?
-                .to_string_lossy()
-                .to_string(),
-        )
-    } else {
-        None
-    };
+    let new_file_path = Some(
+        move_file_into_source(
+            &move_plan.local_path,
+            &move_plan.source_root,
+            Some(&move_plan.pattern),
+            &tag,
+        )?
+        .to_string_lossy()
+        .to_string(),
+    );
 
     if !download_folder {
         let track_row = track.as_ref().expect("library flow always has a track row");
@@ -463,6 +482,80 @@ pub async fn apply_identification(
         new_file_path,
         download_folder,
     })
+}
+
+/// Naming preview entry point shared by the hub and HTTP handlers.
+///
+/// With no `file_path` (naming-format help dialog, download previews that join
+/// their own root) this renders `plain_pattern` relative to nothing, without an
+/// extension. With a file it computes the destination [`apply_identification`]
+/// would produce.
+///
+/// Resolution ladder for the file case, matching what Apply would do:
+/// - Unresolved role (unknown user), a file without a source context
+///   (download-folder row before a target source is picked), or a source the
+///   caller cannot access: the current file path, since nothing would move.
+/// - Unresolvable, non-editable, or unreachable source: the current path.
+/// - Otherwise the full destination path (missing/empty naming setting falls
+///   back to `DEFAULT_PATTERN`).
+pub async fn preview_naming(
+    pool: &DatabasePool,
+    master_key: &str,
+    user_id: &str,
+    role: Option<&str>,
+    track_id: Option<&str>,
+    target_source_id: Option<&str>,
+    file_path: Option<&str>,
+    plain_pattern: &str,
+    tag: &audio::tags::AudioTag,
+) -> String {
+    let Some(file_path) = file_path else {
+        return format_naming_pattern(plain_pattern, tag);
+    };
+    // Without a resolved role the source can't be authorized; don't resolve or
+    // disclose its root.
+    let Some(role) = role else {
+        return file_path.to_string();
+    };
+
+    let (source, local_path) = if let Some(source_id) = target_source_id {
+        match library_source::get_source_by_id(pool, source_id, master_key).await {
+            Ok(Some(source)) => (source, file_path.to_string()),
+            _ => return file_path.to_string(),
+        }
+    } else if let Some(track_id) = track_id {
+        let track = match library::lookup_track(pool, track_id).await {
+            Ok(Some(track)) => track,
+            _ => return file_path.to_string(),
+        };
+        match library_source::get_source_info_by_track_id(pool, track_id, master_key).await {
+            Ok(Some(source)) => (source, track.file_path),
+            _ => return track.file_path,
+        }
+    } else {
+        // A standalone file with no target source chosen yet: nothing moves.
+        return file_path.to_string();
+    };
+
+    if !library_source::can_access_source(&source.owner_id, user_id, role, &source.access_rule) {
+        return file_path.to_string();
+    }
+
+    if !libsources::is_editable(&source.source_type) {
+        return local_path;
+    }
+
+    match resolve_move_plan(pool, user_id, &source, Path::new(&local_path)).await {
+        Ok(plan) => destination_for(
+            &plan.source_root,
+            Some(&plan.pattern),
+            &plan.local_path,
+            tag,
+        )
+        .to_string_lossy()
+        .to_string(),
+        Err(_) => local_path,
+    }
 }
 
 /// Build a `TrackInfo` from a scanned audio file. Used when listing download

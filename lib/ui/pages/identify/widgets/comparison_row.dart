@@ -122,6 +122,10 @@ class ComparisonReadonlyRow extends StatelessWidget {
   final TextTheme textTheme;
   final ColorScheme colors;
 
+  /// Renders [remote] in a muted tone — used when the remote value is an
+  /// unresolved destination rather than a real one.
+  final bool remoteMuted;
+
   const ComparisonReadonlyRow({
     super.key,
     required this.label,
@@ -132,6 +136,7 @@ class ComparisonReadonlyRow extends StatelessWidget {
     this.onRevert,
     required this.textTheme,
     required this.colors,
+    this.remoteMuted = false,
   });
 
   @override
@@ -206,7 +211,11 @@ class ComparisonReadonlyRow extends StatelessWidget {
               ),
               child: Text(
                 remote,
-                style: textTheme.bodySmall,
+                style: remoteMuted
+                    ? textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      )
+                    : textTheme.bodySmall,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
