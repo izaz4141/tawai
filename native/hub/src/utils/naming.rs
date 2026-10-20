@@ -28,6 +28,8 @@ pub async fn handle_format_naming_preview(context: Arc<AppContext>) {
 
         let db = context.db().await;
         let master_key = context.master_key.read().await.clone();
+        let cfg = context.cfg().await;
+        let global_pattern = tawai_core::tools::rename::naming_pattern_from_config(cfg.as_ref());
 
         // Only the file-path preview resolves a source, so skip the lookup for
         // the naming-format help dialog.
@@ -46,6 +48,7 @@ pub async fn handle_format_naming_preview(context: Arc<AppContext>) {
             msg.target_source_id.as_deref(),
             msg.file_path.as_deref(),
             &msg.pattern,
+            &global_pattern,
             &tag,
         )
         .await;

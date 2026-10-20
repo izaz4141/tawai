@@ -4,12 +4,10 @@ use anyhow::{Result, anyhow};
 
 use crate::audio;
 use crate::db::database::DatabasePool;
-use crate::db::{library, library_source, user_settings};
+use crate::db::{library, library_source};
 use crate::libsources;
 use crate::signals::library::{LibrarySourceInfo, TrackInfo};
-use crate::tools::rename::{
-    DEFAULT_PATTERN, destination_for, format_naming_pattern, move_file_into_source,
-};
+use crate::tools::rename::{destination_for, format_naming_pattern, move_file_into_source};
 
 /// Parameters for applying a MusicBrainz identification result to a track or
 /// a standalone (download-folder) audio file.
@@ -77,16 +75,19 @@ struct MovePlan {
 }
 
 /// Resolve the pattern and source root, probing the root before any write.
+///
+/// `pattern_override` wins when it is non-empty; otherwise the global pattern
+/// resolved by [`crate::tools::rename::naming_pattern_from_config`] is used.
 async fn resolve_move_plan(
-    pool: &DatabasePool,
-    user_id: &str,
     source: &LibrarySourceInfo,
     local_path: &Path,
+    pattern_override: Option<&str>,
+    global_pattern: &str,
 ) -> Result<MovePlan> {
-    let pattern = user_settings::get_setting(pool, user_id, "identify_naming_pattern")
-        .await
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| DEFAULT_PATTERN.to_string());
+    let pattern = pattern_override
+        .filter(|p| !p.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| global_pattern.to_string());
 
     let mut resolver = crate::libsources::SourceUrlResolver::new();
     let source_root = resolver.resolve(&source.urls, None, None).await?;
@@ -111,12 +112,15 @@ async fn resolve_move_plan(
 ///
 /// The user must have access to the affected source, and the source must be
 /// local (non-local sources cannot have their tags rewritten or files moved).
+/// The destination is built from `global_pattern`, resolved by the caller with
+/// [`crate::tools::rename::naming_pattern_from_config`].
 pub async fn apply_identification(
     pool: &DatabasePool,
     user_id: &str,
     role: &str,
     params: &ApplyIdentificationParams,
     master_key: &str,
+    global_pattern: &str,
 ) -> Result<ApplyIdentificationOutcome> {
     let (source, file_path, track, download_folder) =
         if let Some(source_id) = params.target_source_id.as_deref() {
@@ -149,7 +153,7 @@ pub async fn apply_identification(
         ));
     }
 
-    let move_plan = resolve_move_plan(pool, user_id, &source, Path::new(&file_path))
+    let move_plan = resolve_move_plan(&source, Path::new(&file_path), None, global_pattern)
         .await
         .map_err(|e| anyhow!("No reachable source directory for '{}': {}", source.name, e))?;
 
@@ -496,8 +500,8 @@ pub async fn apply_identification(
 ///   (download-folder row before a target source is picked), or a source the
 ///   caller cannot access: the current file path, since nothing would move.
 /// - Unresolvable, non-editable, or unreachable source: the current path.
-/// - Otherwise the full destination path (missing/empty naming setting falls
-///   back to `DEFAULT_PATTERN`).
+/// - Otherwise the full destination path (a missing/empty global naming
+///   pattern falls back to `DEFAULT_PATTERN`).
 pub async fn preview_naming(
     pool: &DatabasePool,
     master_key: &str,
@@ -507,6 +511,7 @@ pub async fn preview_naming(
     target_source_id: Option<&str>,
     file_path: Option<&str>,
     plain_pattern: &str,
+    global_pattern: &str,
     tag: &audio::tags::AudioTag,
 ) -> String {
     let Some(file_path) = file_path else {
@@ -545,7 +550,14 @@ pub async fn preview_naming(
         return local_path;
     }
 
-    match resolve_move_plan(pool, user_id, &source, Path::new(&local_path)).await {
+    match resolve_move_plan(
+        &source,
+        Path::new(&local_path),
+        Some(plain_pattern),
+        global_pattern,
+    )
+    .await
+    {
         Ok(plan) => destination_for(
             &plan.source_root,
             Some(&plan.pattern),

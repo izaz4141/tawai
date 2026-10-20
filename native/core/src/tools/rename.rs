@@ -8,10 +8,24 @@ use crate::audio::tags::{AudioTag, derive_sort_name, parse_artists};
 use crate::db::database::DatabasePool;
 use crate::libsources::SourceUrlResolver;
 use crate::signals::tools::{NamingViolation, RenamePreview};
+use crate::utils::config::AppConfig;
 
 /// The default library naming pattern, used everywhere a naming schema is
 /// required but none is configured. May contain subdirectories (`/`).
 pub(crate) const DEFAULT_PATTERN: &str = "{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}";
+
+/// Resolve the global library naming pattern, falling back to
+/// [`DEFAULT_PATTERN`] when the key is missing, not a string, empty, or
+/// whitespace-only.
+pub fn naming_pattern_from_config(cfg: &AppConfig) -> String {
+    cfg.value
+        .get("naming_pattern")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .unwrap_or(DEFAULT_PATTERN)
+        .to_string()
+}
 
 /// Format a naming pattern with tag values.
 ///
@@ -713,6 +727,38 @@ pub(crate) fn rename_track_from_pg_row(row: &sqlx::postgres::PgRow) -> RenameTra
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn config(value: serde_json::Value) -> AppConfig {
+        AppConfig {
+            value,
+            path: PathBuf::new(),
+            mtime: 0,
+        }
+    }
+
+    #[test]
+    fn naming_pattern_from_config_missing_key_falls_back() {
+        let cfg = config(serde_json::json!({}));
+        assert_eq!(naming_pattern_from_config(&cfg), DEFAULT_PATTERN);
+    }
+
+    #[test]
+    fn naming_pattern_from_config_empty_falls_back() {
+        let cfg = config(serde_json::json!({ "naming_pattern": "" }));
+        assert_eq!(naming_pattern_from_config(&cfg), DEFAULT_PATTERN);
+    }
+
+    #[test]
+    fn naming_pattern_from_config_whitespace_falls_back() {
+        let cfg = config(serde_json::json!({ "naming_pattern": "  \t\n" }));
+        assert_eq!(naming_pattern_from_config(&cfg), DEFAULT_PATTERN);
+    }
+
+    #[test]
+    fn naming_pattern_from_config_valid_value_is_trimmed() {
+        let cfg = config(serde_json::json!({ "naming_pattern": "  {artist}/{title}  " }));
+        assert_eq!(naming_pattern_from_config(&cfg), "{artist}/{title}");
+    }
 
     fn tag(
         title: &str,

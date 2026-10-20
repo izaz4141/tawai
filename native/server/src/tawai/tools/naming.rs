@@ -26,6 +26,8 @@ pub async fn handle_format_naming_preview(
 
     let db = state.context.db().await;
     let master_key = state.context.master_key.read().await.clone();
+    let cfg = state.context.cfg().await;
+    let global_pattern = tawai_core::tools::rename::naming_pattern_from_config(cfg.as_ref());
 
     // Only the file-path preview resolves a source, so skip the lookup for the
     // naming-format help dialog.
@@ -47,6 +49,7 @@ pub async fn handle_format_naming_preview(
         body.target_source_id.as_deref(),
         body.file_path.as_deref(),
         &body.pattern,
+        &global_pattern,
         &tag,
     )
     .await;

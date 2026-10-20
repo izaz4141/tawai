@@ -57,6 +57,8 @@ pub async fn handle_apply_identification(context: Arc<AppContext>) {
         let msg = signal_pack.message;
         let db = context.db().await;
         let mk = context.master_key.read().await.clone();
+        let cfg = context.cfg().await;
+        let pattern = tawai_core::tools::rename::naming_pattern_from_config(cfg.as_ref());
 
         let user = match tawai_core::db::account::get_user_by_id(db.pool(), &msg.user_id, &mk).await
         {
@@ -122,6 +124,7 @@ pub async fn handle_apply_identification(context: Arc<AppContext>) {
             &user.role,
             &params,
             &mk,
+            &pattern,
         )
         .await
         {
