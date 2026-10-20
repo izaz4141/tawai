@@ -99,6 +99,10 @@ fn resolve_preview_pattern<'a>(
 ///
 /// `pattern_override` wins when it is non-empty; otherwise the global pattern
 /// resolved by [`crate::tools::rename::naming_pattern_from_config`] is used.
+///
+/// For `tawai` sources the editable copy is the local backup directory, so its
+/// local root is preferred over URL probing: preview and apply must never
+/// resolve a remote root for a backup path.
 async fn resolve_move_plan(
     source: &LibrarySourceInfo,
     local_path: &Path,
@@ -107,14 +111,29 @@ async fn resolve_move_plan(
 ) -> Result<MovePlan> {
     let pattern = resolve_preview_pattern(pattern_override, global_pattern).to_string();
 
-    let mut resolver = crate::libsources::SourceUrlResolver::new();
-    let source_root = resolver.resolve(&source.urls, None, None).await?;
+    let source_root = match tawai_local_root(source) {
+        Some(root) => root,
+        None => {
+            let mut resolver = crate::libsources::SourceUrlResolver::new();
+            resolver.resolve(&source.urls, None, None).await?
+        }
+    };
 
     Ok(MovePlan {
         source_root,
         pattern,
         local_path: local_path.to_path_buf(),
     })
+}
+
+/// The local backup directory of a `tawai` source, when it exists on disk.
+fn tawai_local_root(source: &LibrarySourceInfo) -> Option<String> {
+    if source.source_type != "tawai" {
+        return None;
+    }
+    crate::libsources::tawai::local_root(&source.urls)
+        .filter(|root| Path::new(root).is_dir())
+        .map(str::to_string)
 }
 
 /// Apply a MusicBrainz identification to a single audio file.
