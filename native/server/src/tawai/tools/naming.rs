@@ -48,7 +48,7 @@ pub async fn handle_format_naming_preview(
         body.track_id.as_deref(),
         body.target_source_id.as_deref(),
         body.file_path.as_deref(),
-        &body.pattern,
+        body.pattern.as_deref(),
         &global_pattern,
         &tag,
     )

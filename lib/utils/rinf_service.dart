@@ -1450,7 +1450,7 @@ class RinfService {
   // ---------------------------------------------------------------------------
 
   Future<String> formatNamingPreview({
-    required String pattern,
+    String? pattern,
     required String title,
     required String artist,
     required String albumArtist,

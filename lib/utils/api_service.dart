@@ -2540,7 +2540,7 @@ class APIService {
   // ---------------------------------------------------------------------------
 
   Future<String> formatNamingPreview({
-    required String pattern,
+    String? pattern,
     required String title,
     required String artist,
     required String albumArtist,
@@ -2560,7 +2560,7 @@ class APIService {
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
         body: jsonEncode({
           'id': _newId(),
-          'pattern': pattern,
+          'pattern': ?pattern,
           'title': title,
           'artist': artist,
           'album_artist': albumArtist,

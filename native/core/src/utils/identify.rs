@@ -7,7 +7,9 @@ use crate::db::database::DatabasePool;
 use crate::db::{library, library_source};
 use crate::libsources;
 use crate::signals::library::{LibrarySourceInfo, TrackInfo};
-use crate::tools::rename::{destination_for, format_naming_pattern, move_file_into_source};
+use crate::tools::rename::{
+    DEFAULT_PATTERN, destination_for, format_naming_pattern, move_file_into_source,
+};
 
 /// Parameters for applying a MusicBrainz identification result to a track or
 /// a standalone (download-folder) audio file.
@@ -74,6 +76,25 @@ struct MovePlan {
     local_path: PathBuf,
 }
 
+/// Resolve a naming pattern for a preview or an apply.
+///
+/// A non-empty `pattern_override` is used as-is. Otherwise the global pattern
+/// resolved by [`crate::tools::rename::naming_pattern_from_config`] is used,
+/// falling back to [`DEFAULT_PATTERN`] when that is empty too.
+fn resolve_preview_pattern<'a>(
+    pattern_override: Option<&'a str>,
+    global_pattern: &'a str,
+) -> &'a str {
+    if let Some(pattern) = pattern_override.filter(|p| !p.trim().is_empty()) {
+        return pattern;
+    }
+    if global_pattern.trim().is_empty() {
+        DEFAULT_PATTERN
+    } else {
+        global_pattern
+    }
+}
+
 /// Resolve the pattern and source root, probing the root before any write.
 ///
 /// `pattern_override` wins when it is non-empty; otherwise the global pattern
@@ -84,10 +105,7 @@ async fn resolve_move_plan(
     pattern_override: Option<&str>,
     global_pattern: &str,
 ) -> Result<MovePlan> {
-    let pattern = pattern_override
-        .filter(|p| !p.trim().is_empty())
-        .map(str::to_string)
-        .unwrap_or_else(|| global_pattern.to_string());
+    let pattern = resolve_preview_pattern(pattern_override, global_pattern).to_string();
 
     let mut resolver = crate::libsources::SourceUrlResolver::new();
     let source_root = resolver.resolve(&source.urls, None, None).await?;
@@ -490,18 +508,21 @@ pub async fn apply_identification(
 
 /// Naming preview entry point shared by the hub and HTTP handlers.
 ///
+/// Pattern resolution, for both cases: a non-empty `pattern_override` is used
+/// as-is, otherwise the global naming pattern, falling back to
+/// `DEFAULT_PATTERN` when that is missing/empty.
+///
 /// With no `file_path` (naming-format help dialog, download previews that join
-/// their own root) this renders `plain_pattern` relative to nothing, without an
-/// extension. With a file it computes the destination [`apply_identification`]
-/// would produce.
+/// their own root) this renders the resolved pattern relative to nothing,
+/// without an extension. With a file it computes the destination
+/// [`apply_identification`] would produce.
 ///
 /// Resolution ladder for the file case, matching what Apply would do:
 /// - Unresolved role (unknown user), a file without a source context
 ///   (download-folder row before a target source is picked), or a source the
 ///   caller cannot access: the current file path, since nothing would move.
 /// - Unresolvable, non-editable, or unreachable source: the current path.
-/// - Otherwise the full destination path (a missing/empty global naming
-///   pattern falls back to `DEFAULT_PATTERN`).
+/// - Otherwise the full destination path.
 pub async fn preview_naming(
     pool: &DatabasePool,
     master_key: &str,
@@ -510,12 +531,15 @@ pub async fn preview_naming(
     track_id: Option<&str>,
     target_source_id: Option<&str>,
     file_path: Option<&str>,
-    plain_pattern: &str,
+    pattern_override: Option<&str>,
     global_pattern: &str,
     tag: &audio::tags::AudioTag,
 ) -> String {
     let Some(file_path) = file_path else {
-        return format_naming_pattern(plain_pattern, tag);
+        return format_naming_pattern(
+            resolve_preview_pattern(pattern_override, global_pattern),
+            tag,
+        );
     };
     // Without a resolved role the source can't be authorized; don't resolve or
     // disclose its root.
@@ -553,7 +577,7 @@ pub async fn preview_naming(
     match resolve_move_plan(
         &source,
         Path::new(&local_path),
-        Some(plain_pattern),
+        pattern_override,
         global_pattern,
     )
     .await
@@ -683,4 +707,55 @@ pub fn list_download_folder_tracks(dir: &Path) -> Result<Vec<TrackInfo>> {
         }
     }
     Ok(tracks)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preview_pattern_prefers_non_empty_override() {
+        assert_eq!(
+            resolve_preview_pattern(Some("{artist}/{title}"), "{album}/{title}"),
+            "{artist}/{title}"
+        );
+    }
+
+    #[test]
+    fn preview_pattern_uses_override_as_is() {
+        assert_eq!(
+            resolve_preview_pattern(Some(" {artist}/{title} "), "{album}/{title}"),
+            " {artist}/{title} "
+        );
+    }
+
+    #[test]
+    fn preview_pattern_missing_override_uses_global() {
+        assert_eq!(
+            resolve_preview_pattern(None, "{album}/{title}"),
+            "{album}/{title}"
+        );
+    }
+
+    #[test]
+    fn preview_pattern_empty_override_uses_global() {
+        assert_eq!(
+            resolve_preview_pattern(Some(""), "{album}/{title}"),
+            "{album}/{title}"
+        );
+    }
+
+    #[test]
+    fn preview_pattern_whitespace_override_uses_global() {
+        assert_eq!(
+            resolve_preview_pattern(Some("  \t\n"), "{album}/{title}"),
+            "{album}/{title}"
+        );
+    }
+
+    #[test]
+    fn preview_pattern_empty_global_falls_back_to_default() {
+        assert_eq!(resolve_preview_pattern(None, ""), DEFAULT_PATTERN);
+        assert_eq!(resolve_preview_pattern(Some("   "), ""), DEFAULT_PATTERN);
+    }
 }

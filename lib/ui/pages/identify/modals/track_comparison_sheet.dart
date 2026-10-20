@@ -672,11 +672,12 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
   }
 
   /// Recompute the destination preview from the currently edited values using
-  /// the configured naming pattern. Mirrors the inputs `_apply` sends so the
-  /// preview matches where `Apply` will place the file: the backend resolves
-  /// the source root, reads the same naming-pattern setting Apply reads, and
-  /// appends the file extension. When Apply would not move the file the current
-  /// path is shown instead. No preview is shown when the track has no path.
+  /// the global naming pattern. Mirrors the inputs `_apply` sends so the preview
+  /// matches where `Apply` will place the file: no pattern is supplied, so the
+  /// backend resolves the same global setting Apply reads, resolves the source
+  /// root, and appends the file extension. When Apply would not move the file
+  /// the current path is shown instead. No preview is shown when the track has
+  /// no path.
   Future<void> _updatePathPreview() async {
     if (widget.currentTrack.filePath.isEmpty) {
       if (mounted && _pathPreview.isNotEmpty) {
@@ -687,7 +688,6 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     final seq = ++_previewSeq;
     try {
       final result = await BridgeService.instance.formatNamingPreview(
-        pattern: SettingsManager.namingPattern.value,
         title: _titleCtrl.text,
         artist: _artistCtrl.text,
         albumArtist: _albumArtistCtrl.text.isNotEmpty

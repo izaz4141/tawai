@@ -47,7 +47,7 @@ pub async fn handle_format_naming_preview(context: Arc<AppContext>) {
             msg.track_id.as_deref(),
             msg.target_source_id.as_deref(),
             msg.file_path.as_deref(),
-            &msg.pattern,
+            msg.pattern.as_deref(),
             &global_pattern,
             &tag,
         )

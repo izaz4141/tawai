@@ -130,7 +130,6 @@ class _DownloadTrackSheetState extends State<_DownloadTrackSheet> {
       late String dest;
       try {
         final formattedName = await BridgeService.instance.formatNamingPreview(
-          pattern: SettingsManager.namingPattern.value,
           title: widget.track.title,
           artist: widget.track.artistsString,
           albumArtist: widget.track.artistsString,

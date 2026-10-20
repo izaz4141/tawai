@@ -475,7 +475,10 @@ pub struct WriteFileTagsBytesResponse {
 #[derive(Deserialize, DartSignal)]
 pub struct FormatNamingPreviewRequest {
     pub id: String,
-    pub pattern: String,
+    /// Explicit pattern to render. When omitted or empty, the global naming
+    /// pattern (falling back to `DEFAULT_PATTERN`) is used.
+    #[serde(default)]
+    pub pattern: Option<String>,
     pub title: String,
     pub artist: String,
     pub album_artist: String,
