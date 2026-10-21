@@ -166,6 +166,7 @@ pub async fn handle_apply_identification(
         &params,
         &mk,
         &pattern,
+        state.context.client(),
     )
     .await
     {

@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
+use serde::Serialize;
 
 use crate::audio;
 use crate::db::database::DatabasePool;
@@ -13,8 +14,10 @@ use crate::tools::rename::{
 
 /// Parameters for applying a MusicBrainz identification result to a track or
 /// a standalone (download-folder) audio file.
-/// Parameters for applying a MusicBrainz identification result to a track or
-/// a standalone (download-folder) audio file.
+///
+/// Field names mirror the HTTP `ApplyIdentificationRequest` body so a params
+/// value can be serialized straight into a remote apply mirror.
+#[derive(Debug, Clone, Serialize)]
 pub struct ApplyIdentificationParams {
     pub track_id: String,
     /// When set (download-folder flow), the audio file to write tags to and
@@ -158,6 +161,7 @@ pub async fn apply_identification(
     params: &ApplyIdentificationParams,
     master_key: &str,
     global_pattern: &str,
+    client: &reqwest::Client,
 ) -> Result<ApplyIdentificationOutcome> {
     let (source, file_path, track, download_folder) =
         if let Some(source_id) = params.target_source_id.as_deref() {
@@ -189,6 +193,46 @@ pub async fn apply_identification(
             source.source_type
         ));
     }
+
+    // Tawai tracks live in a local backup of a remote tawai library. Resolve
+    // the remote track backing this file *before* any local retag/rename:
+    // matching recomputes `dest_for(root, pattern, remote metadata)` and the
+    // pre-apply path/tags are the only state that still lines up. The mirror
+    // itself is best-effort — any failure below just drops it.
+    let remote_backing: Option<(crate::libsources::tawai::RemoteConn, TrackInfo)> =
+        if source.source_type == "tawai" && params.target_source_id.is_none() {
+            match crate::libsources::tawai::resolve_remote_track(
+                pool,
+                client,
+                &source.urls,
+                &file_path,
+                Some(global_pattern),
+            )
+            .await
+            {
+                Ok(pair) => Some(pair),
+                Err(e) => {
+                    // Backup paths are still named by the legacy setting until
+                    // the scan migration lands; retry with it before giving up.
+                    match crate::libsources::tawai::resolve_remote_track(
+                        pool, client, &source.urls, &file_path, None,
+                    )
+                    .await
+                    {
+                        Ok(pair) => Some(pair),
+                        Err(e2) => {
+                            crate::utils::logger::debug(&format!(
+                                "tawai apply mirror skipped for '{}': {e} / {e2}",
+                                source.name
+                            ));
+                            None
+                        }
+                    }
+                }
+            }
+        } else {
+            None
+        };
 
     let move_plan = resolve_move_plan(&source, Path::new(&file_path), None, global_pattern)
         .await
@@ -519,10 +563,56 @@ pub async fn apply_identification(
         .await?;
     }
 
+    if let Some((conn, rt)) = &remote_backing {
+        mirror_apply_to_remote(client, conn, params, &rt.id).await;
+    }
+
     Ok(ApplyIdentificationOutcome {
         new_file_path,
         download_folder,
     })
+}
+
+/// Best-effort mirror of an identification apply to the remote tawai server
+/// backing a local backup track, analogous to delete's remote mirror. The
+/// remote re-runs its own apply with its own configured pattern (no pattern
+/// crosses the wire); a failure only logs a warning, never failing the
+/// already-successful local apply.
+async fn mirror_apply_to_remote(
+    client: &reqwest::Client,
+    conn: &crate::libsources::tawai::RemoteConn,
+    params: &ApplyIdentificationParams,
+    remote_track_id: &str,
+) {
+    let mut body = match serde_json::to_value(params) {
+        Ok(body) => body,
+        Err(e) => {
+            crate::utils::logger::warn(&format!("tawai remote apply mirror failed: {e}"));
+            return;
+        }
+    };
+    // `id` is required by the remote's request body (it only echoes it);
+    // track flow addresses the remote library track by its own row id.
+    body["id"] = serde_json::Value::String(String::new());
+    body["track_id"] = serde_json::Value::String(remote_track_id.to_string());
+    body["file_path"] = serde_json::Value::Null;
+    body["target_source_id"] = serde_json::Value::Null;
+
+    let url = format!("{}/api/tawai/library/identify/apply", conn.http_base);
+    match client
+        .post(&url)
+        .header("X-API-Key", &conn.api_key)
+        .json(&body)
+        .send()
+        .await
+    {
+        Ok(resp) if resp.status().is_success() => {}
+        Ok(resp) => crate::utils::logger::warn(&format!(
+            "tawai remote apply mirror failed: {}",
+            resp.status()
+        )),
+        Err(e) => crate::utils::logger::warn(&format!("tawai remote apply mirror failed: {e}")),
+    }
 }
 
 /// Naming preview entry point shared by the hub and HTTP handlers.

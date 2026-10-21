@@ -125,6 +125,7 @@ pub async fn handle_apply_identification(context: Arc<AppContext>) {
             &params,
             &mk,
             &pattern,
+            context.client(),
         )
         .await
         {

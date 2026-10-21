@@ -806,7 +806,7 @@ async fn download_chunk(
 ///
 /// `naming_pattern` is the pattern used for local backup paths: `Some` wins,
 /// `None` keeps the legacy per-user setting lookup.
-async fn resolve_remote_track(
+pub(crate) async fn resolve_remote_track(
     pool: &DatabasePool,
     client: &reqwest::Client,
     urls: &[String],
