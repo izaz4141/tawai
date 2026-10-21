@@ -121,7 +121,6 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
   void _handleApply() {
     final pattern = _patternNotifier.value;
     SettingsManager.namingPattern.value = pattern;
-    SettingsManager.syncNamingPatternToRust(pattern);
     Navigator.of(context).pop();
   }
 
@@ -129,6 +128,7 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
+    final isAdmin = SettingsManager.currentUser.value?.role == 'admin';
 
     return AlertDialog(
       titlePadding: EdgeInsets.fromLTRB(
@@ -183,17 +183,18 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),
         ),
-        ValueListenableBuilder<String>(
-          valueListenable: _patternNotifier,
-          builder: (context, localPattern, _) {
-            final hasChanges =
-                localPattern != SettingsManager.namingPattern.value;
-            return FilledButton(
-              onPressed: hasChanges ? _handleApply : null,
-              child: const Text('Apply'),
-            );
-          },
-        ),
+        if (isAdmin)
+          ValueListenableBuilder<String>(
+            valueListenable: _patternNotifier,
+            builder: (context, localPattern, _) {
+              final hasChanges =
+                  localPattern != SettingsManager.namingPattern.value;
+              return FilledButton(
+                onPressed: hasChanges ? _handleApply : null,
+                child: const Text('Apply'),
+              );
+            },
+          ),
       ],
     );
   }

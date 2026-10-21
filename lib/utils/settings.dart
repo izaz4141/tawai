@@ -350,9 +350,13 @@ class SettingsManager {
     if (PlatformService().isRemote) {
       if (deviceLocalKeys.contains(key)) {
         await _saveLocal({key: value});
-      } else {
-        await _saveToBackend({key: value});
+        return;
       }
+      final isAdmin = currentUser.value?.role == 'admin';
+      if (!isAdmin) {
+        return;
+      }
+      await _saveToBackend({key: value});
       return;
     }
 
@@ -423,17 +427,7 @@ class SettingsManager {
         '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}';
   }
 
-  static void syncNamingPatternToRust(String pattern) {
-    final userId = currentUserId.value ?? '';
-    if (userId.isEmpty) return;
-    unawaited(
-      BridgeService.instance.setUserSetting(
-        userId,
-        'identify_naming_pattern',
-        pattern,
-      ),
-    );
-  }
+  // syncNamingPatternToRust removed (legacy identify_naming_pattern). Use global naming_pattern instead.
 
   static Future<void> loadAllUserSettings() async {
     final userId = currentUserId.value ?? '';
