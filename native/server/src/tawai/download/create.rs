@@ -33,7 +33,6 @@ pub async fn handle_create(
         let result = if let Some(parser) = tawai_core::libsources::get_parser(
             &req.source_type,
             client.clone(),
-            pool,
             Arc::downgrade(&state.context),
         ) {
             parser

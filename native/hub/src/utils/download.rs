@@ -82,7 +82,6 @@ pub async fn handle_download_create(context: Arc<AppContext>) {
             let result = if let Some(parser) = tawai_core::libsources::get_parser(
                 &source_type,
                 context.client().clone(),
-                pool,
                 Arc::downgrade(&context),
             ) {
                 parser

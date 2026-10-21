@@ -208,7 +208,6 @@ pub async fn apply_identification(
     let remote_backing: Option<(crate::libsources::tawai::RemoteConn, TrackInfo)> =
         if source.source_type == "tawai" && params.target_source_id.is_none() {
             match crate::libsources::tawai::resolve_remote_track(
-                pool,
                 client,
                 &source.urls,
                 &file_path,

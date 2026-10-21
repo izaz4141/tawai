@@ -303,22 +303,18 @@ pub async fn run_scan(
             },
         );
 
-        let parser = match libsources::get_parser(
-            &source.source_type,
-            client.clone(),
-            pool,
-            context.clone(),
-        ) {
-            Some(p) => p,
-            None => {
-                stream_log(
-                    &log_tx,
-                    "ERROR",
-                    format!("Unknown source type: {}", source.source_type),
-                );
-                continue;
-            }
-        };
+        let parser =
+            match libsources::get_parser(&source.source_type, client.clone(), context.clone()) {
+                Some(p) => p,
+                None => {
+                    stream_log(
+                        &log_tx,
+                        "ERROR",
+                        format!("Unknown source type: {}", source.source_type),
+                    );
+                    continue;
+                }
+            };
 
         let mut resolver = libsources::SourceUrlResolver::new();
         let url = match resolver.resolve(&source.urls, Some(&client), None).await {
@@ -410,12 +406,9 @@ pub async fn run_scan(
     let mut to_delete_set: HashSet<String> = HashSet::new();
     let mut replace_set: HashSet<String> = HashSet::new();
     for source in &sources {
-        let Some(parser) = libsources::get_parser(
-            &source.source_type,
-            client.clone(),
-            pool,
-            context.clone(),
-        ) else {
+        let Some(parser) =
+            libsources::get_parser(&source.source_type, client.clone(), context.clone())
+        else {
             continue;
         };
         let Some(enumerated) = source_paths.get(&source.id) else {
@@ -502,15 +495,11 @@ pub async fn run_scan(
             continue;
         }
 
-        let parser = match libsources::get_parser(
-            &source.source_type,
-            client.clone(),
-            pool,
-            context.clone(),
-        ) {
-            Some(p) => p,
-            None => continue,
-        };
+        let parser =
+            match libsources::get_parser(&source.source_type, client.clone(), context.clone()) {
+                Some(p) => p,
+                None => continue,
+            };
 
         let mut resolver = libsources::SourceUrlResolver::new();
         for file_path in &new_paths {
@@ -541,7 +530,7 @@ pub async fn run_scan(
             };
 
             let mut track = match parser
-                .scan_file(pool, &url, &source.urls, file_path, &log_tx)
+                .scan_file(&url, &source.urls, file_path, &log_tx)
                 .await
             {
                 Ok(t) => t,

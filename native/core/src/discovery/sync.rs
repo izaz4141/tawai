@@ -39,7 +39,7 @@ async fn sync_one_source(
     source_collection_id: &str,
     context: &Weak<AppContext>,
 ) -> Result<(u32, u32), String> {
-    let parser = get_parser(source_type, client.clone(), pool, context.clone())
+    let parser = get_parser(source_type, client.clone(), context.clone())
         .ok_or_else(|| "no parser for source".to_string())?;
 
     let (added, removed) = parser

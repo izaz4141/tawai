@@ -813,11 +813,7 @@ async fn download_chunk(
 /// `naming_pattern` is the explicit pattern for local backup paths: a
 /// non-empty value wins as-is. Otherwise the pattern is read live from the app
 /// config through `context`.
-///
-/// `_pool` is only kept for signature stability: the legacy per-user setting
-/// lookup that used it is gone (removed in ticket 07).
 pub(crate) async fn resolve_remote_track(
-    _pool: &DatabasePool,
     client: &reqwest::Client,
     urls: &[String],
     local_path: &str,
@@ -859,12 +855,7 @@ impl TawaiParser {
 
     /// Enumerate deterministic local dest paths from the remote's track list,
     /// falling back to the local backup walk when unreachable.
-    pub async fn enumerate_paths(
-        &self,
-        _pool: &DatabasePool,
-        _url: &str,
-        urls: &[String],
-    ) -> Result<Vec<String>> {
+    pub async fn enumerate_paths(&self, _url: &str, urls: &[String]) -> Result<Vec<String>> {
         if let Some(conn) = pick_remote(urls, &self.client).await {
             let root = local_root(urls).unwrap_or("/tmp");
             // Resolved fresh on every call: the pattern is live at every scan
@@ -907,14 +898,13 @@ impl TawaiParser {
     /// Bulk scan paths (unused by current scan pipeline but kept for completeness).
     pub async fn scan_paths(
         &self,
-        pool: &DatabasePool,
         _url: &str,
         urls: &[String],
         paths: &[String],
     ) -> Result<Vec<ParsedTrack>> {
         let mut tracks = Vec::new();
         for p in paths {
-            match self.scan_file(pool, _url, urls, p, &None).await {
+            match self.scan_file(_url, urls, p, &None).await {
                 Ok(t) => tracks.push(t),
                 Err(e) => logger::warn(&format!("tawai scan_paths skip {}: {}", p, e)),
             }
@@ -927,14 +917,13 @@ impl TawaiParser {
     /// local scan when the remote is unreachable or the hash never matches.
     pub async fn scan_file(
         &self,
-        pool: &DatabasePool,
         _url: &str,
         urls: &[String],
         file_path: &str,
         log_tx: &Option<LogSender>,
     ) -> Result<ParsedTrack> {
         let dest = Path::new(file_path);
-        match resolve_remote_track(pool, &self.client, urls, file_path, None, &self.context).await {
+        match resolve_remote_track(&self.client, urls, file_path, None, &self.context).await {
             Ok((conn, rt)) => {
                 let Some(remote_hash) = rt.file_hash.as_deref() else {
                     // No remote hash to verify against: download a missing file
@@ -997,7 +986,6 @@ impl TawaiParser {
     /// Resolve stream URL: local file if present, else remote stream.
     pub async fn resolve_stream_url(
         &self,
-        pool: &DatabasePool,
         file_path: &str,
         _url: &str,
         urls: &[String],
@@ -1009,8 +997,7 @@ impl TawaiParser {
             return Ok((file_path.to_string(), vec![]));
         }
         // Fallback: remote stream
-        let (conn, rt) =
-            resolve_remote_track(pool, client, urls, file_path, None, &self.context).await?;
+        let (conn, rt) = resolve_remote_track(client, urls, file_path, None, &self.context).await?;
         let stream_url = format!("{}/api/tawai/playback/stream/{}", conn.http_base, rt.id);
         Ok((stream_url, vec![("X-API-Key".into(), conn.api_key)]))
     }
@@ -1019,15 +1006,13 @@ impl TawaiParser {
     /// is set (best-effort).
     pub async fn delete(
         &self,
-        pool: &DatabasePool,
         file_path: &str,
         _url: &str,
         urls: &[String],
         mirror_remote: bool,
     ) -> Result<()> {
         if mirror_remote {
-            match resolve_remote_track(pool, &self.client, urls, file_path, None, &self.context).await
-            {
+            match resolve_remote_track(&self.client, urls, file_path, None, &self.context).await {
                 Ok((conn, rt)) => {
                     let delete_url =
                         format!("{}/api/tawai/library/tracks/{}", conn.http_base, rt.id);
@@ -1089,8 +1074,7 @@ pub async fn mirror_tag_write(
         None => return Ok(()),
     };
 
-    let (conn, rt) =
-        resolve_remote_track(pool, client, &source.urls, local_path, None, &context).await?;
+    let (conn, rt) = resolve_remote_track(client, &source.urls, local_path, None, &context).await?;
     let body = serde_json::json!({
         "path": rt.file_path,
         "title": tag.title,
