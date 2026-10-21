@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use axum::{
     Json,
     extract::{Extension, Path, Query, State},
@@ -7,8 +5,8 @@ use axum::{
 };
 use tawai_core::db::user_settings;
 use tawai_core::signals::settings::{
-    GetAllUserSettingsRequest, GetAllUserSettingsResponse, GetUserSettingRequest,
-    GetUserSettingResponse, SetUserSettingRequest, SetUserSettingResponse,
+    GetAllUserSettingsRequest, GetAllUserSettingsResponse, GetUserSettingResponse,
+    SetUserSettingRequest, SetUserSettingResponse,
 };
 
 use crate::server::SharedState;
@@ -28,8 +26,8 @@ pub async fn handle_get_all_user_settings(
     Query(query): Query<GetAllUserSettingsRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    let pairs = user_settings::get_all_settings(db.pool(), &user_id).await;
-    let settings: HashMap<_, _> = pairs.into_iter().collect();
+    let mk = state.context.master_key.read().await.clone();
+    let settings = user_settings::get_all_user_settings(db.pool(), &user_id, &mk).await;
     Json(GetAllUserSettingsResponse {
         id: query.id,
         settings,
@@ -56,7 +54,8 @@ pub async fn handle_get_user_setting(
     Path(key): Path<String>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    match user_settings::get_setting(db.pool(), &user_id, &key).await {
+    let mk = state.context.master_key.read().await.clone();
+    match user_settings::get_user_setting(db.pool(), &user_id, &key, &mk).await {
         Some(value) => Json(GetUserSettingResponse {
             id: String::new(),
             key: key.clone(),
@@ -93,12 +92,14 @@ pub async fn handle_set_user_setting(
     Json(payload): Json<SetUserSettingRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
+    let mk = state.context.master_key.read().await.clone();
     let set_key = if payload.key.is_empty() {
         key
     } else {
         payload.key
     };
-    match user_settings::set_setting(db.pool(), &user_id, &set_key, &payload.value).await {
+    match user_settings::set_user_setting(db.pool(), &user_id, &set_key, &payload.value, &mk).await
+    {
         Ok(()) => Json(SetUserSettingResponse {
             id: payload.id,
             success: true,

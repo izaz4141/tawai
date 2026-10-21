@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use rinf::{DartSignal, RustSignal};
@@ -6,7 +5,6 @@ use rinf::{DartSignal, RustSignal};
 use crate::signals;
 use crate::utils::logger;
 use tawai_core::app_context::AppContext;
-use tawai_core::utils::encryption;
 
 pub async fn handle_set_user_setting(context: Arc<AppContext>) {
     use signals::settings::*;
@@ -14,17 +12,16 @@ pub async fn handle_set_user_setting(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
+        let mk = context.master_key.read().await.clone();
 
-        let value = if msg.key == "listenbrainz_token" && !msg.value.is_empty() {
-            let mk = context.master_key.read().await.clone();
-            encryption::encrypt(&msg.value, &mk).unwrap_or(msg.value.clone())
-        } else {
-            msg.value.clone()
-        };
-
-        let result =
-            tawai_core::db::user_settings::set_setting(db.pool(), &msg.user_id, &msg.key, &value)
-                .await;
+        let result = tawai_core::db::user_settings::set_user_setting(
+            db.pool(),
+            &msg.user_id,
+            &msg.key,
+            &msg.value,
+            &mk,
+        )
+        .await;
 
         match result {
             Ok(()) => {
@@ -52,9 +49,15 @@ pub async fn handle_get_user_setting(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
+        let mk = context.master_key.read().await.clone();
 
-        let value =
-            tawai_core::db::user_settings::get_setting(db.pool(), &msg.user_id, &msg.key).await;
+        let value = tawai_core::db::user_settings::get_user_setting(
+            db.pool(),
+            &msg.user_id,
+            &msg.key,
+            &mk,
+        )
+        .await;
 
         GetUserSettingResponse {
             id: msg.id,
@@ -71,9 +74,10 @@ pub async fn handle_get_all_user_settings(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
+        let mk = context.master_key.read().await.clone();
 
-        let pairs = tawai_core::db::user_settings::get_all_settings(db.pool(), &msg.user_id).await;
-        let settings: HashMap<_, _> = pairs.into_iter().collect();
+        let settings =
+            tawai_core::db::user_settings::get_all_user_settings(db.pool(), &msg.user_id, &mk).await;
 
         GetAllUserSettingsResponse {
             id: msg.id,

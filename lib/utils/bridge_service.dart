@@ -526,17 +526,24 @@ class BridgeService {
         : _localRestartServer();
   }
 
+  /// Sets a per-user setting.
+  ///
+  /// In remote mode the user is derived from the request credentials, so
+  /// [userId] is ignored: a remote client can only ever write its own row.
   Future<bool> setUserSetting(String userId, String key, String value) async {
     if (_isRemote) {
-      return APIService.instance.saveSettings({key: value});
+      return APIService.instance.setUserSetting(key, value);
     }
     return RinfService.instance.setUserSetting(userId, key, value);
   }
 
+  /// Reads a per-user setting.
+  ///
+  /// In remote mode the user is derived from the request credentials, so
+  /// [userId] is ignored and a missing setting comes back as an empty string.
   Future<String> getUserSetting(String userId, String key) async {
     if (_isRemote) {
-      final settings = await APIService.instance.getSettings();
-      return settings?[key]?.toString() ?? '';
+      return await APIService.instance.getUserSetting(key) ?? '';
     }
     return RinfService.instance.getUserSetting(userId, key);
   }

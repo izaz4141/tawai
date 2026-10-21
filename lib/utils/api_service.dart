@@ -407,6 +407,52 @@ class APIService {
     return {};
   }
 
+  /// Reads a single per-user setting from the per-user endpoint.
+  ///
+  /// Returns `null` when the setting is not set for the current user or the
+  /// request failed. The user is resolved from the request credentials, so
+  /// this can never expose another user's setting.
+  Future<String?> getUserSetting(String key) async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '$baseUrl/api/tawai/settings/user/${Uri.encodeComponent(key)}',
+        ),
+        headers: _authHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return json['value'] as String? ?? '';
+      }
+    } catch (e) {
+      log("Error getting user setting: $e", level: LogLevel.error);
+    }
+    return null;
+  }
+
+  /// Writes a single per-user setting through the per-user endpoint.
+  ///
+  /// The server scopes the row to the authenticated user, so this never
+  /// touches the global settings.
+  Future<bool> setUserSetting(String key, String value) async {
+    try {
+      final response = await http.put(
+        Uri.parse(
+          '$baseUrl/api/tawai/settings/user/${Uri.encodeComponent(key)}',
+        ),
+        headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
+        body: jsonEncode({'id': _newId(), 'key': key, 'value': value}),
+      );
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return json['success'] as bool? ?? false;
+      }
+    } catch (e) {
+      log("Error saving user setting: $e", level: LogLevel.error);
+    }
+    return false;
+  }
+
   Future<String?> generateMasterKey() async {
     try {
       final response = await http.get(
