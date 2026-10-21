@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -426,8 +425,6 @@ class SettingsManager {
         defaults['naming_pattern'] ??
         '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}';
   }
-
-  // syncNamingPatternToRust removed (legacy identify_naming_pattern). Use global naming_pattern instead.
 
   static Future<void> loadAllUserSettings() async {
     final userId = currentUserId.value ?? '';
