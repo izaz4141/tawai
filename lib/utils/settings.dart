@@ -17,7 +17,14 @@ import 'package:tawai/models/user.dart';
 
 class SettingsManager {
   static const String masterKeyFile = 'master.key';
-  static late IOService _ioService;
+  static IOService? _ioServiceInstance;
+
+  /// Platform IO service. Created on first use: the web client attaches
+  /// autosave during the login that runs before [init], so a device-only
+  /// setting can change before the service exists.
+  static IOService get _ioService =>
+      _ioServiceInstance ??= IOServiceFactory.create();
+
   static late String configPath;
   static bool isFirstRun = false;
   static Map<String, dynamic> defaults = {};
@@ -39,13 +46,26 @@ class SettingsManager {
     'retreat_to_tray',
   };
 
+  /// Device-only settings the web client keeps in the browser's local
+  /// storage. The account list is left out because it carries API keys, the
+  /// user id comes from the session cookie, and login / host / port / tray
+  /// are fixed on web.
+  static const Set<String> webLocalKeys = {
+    'playback_volume',
+    'check_nightly',
+    'theme_mode',
+    'use_dynamic_color',
+    'custom_color',
+  };
+
   /// Global settings this device loaded from the backend, with the values it
   /// saw. Only globals that changed on this device are pushed back, so a
   /// device never overwrites the server's config with its own stale copy.
   static final Map<String, dynamic> _backendGlobals = {};
 
   // Your ValueNotifiers
-  static final retreatToTray = ValueNotifier<bool>(true);
+  // A browser has no system tray.
+  static final retreatToTray = ValueNotifier<bool>(!kIsWeb);
   static final downloadFolder = ValueNotifier<String>('');
   static final serverHost = ValueNotifier<String>('127.0.0.1');
   static final serverPort = ValueNotifier<int>(8181);
@@ -53,6 +73,10 @@ class SettingsManager {
 
   static final accounts = ValueNotifier<List<Account>>([]);
   static final Map<ValueNotifier, VoidCallback> _autoSaveListeners = {};
+
+  /// Set while the server's settings are applied, so the values the server
+  /// just sent are not pushed straight back to it.
+  static bool _applyingBackend = false;
 
   // Theme Settings
   static final themeMode = ValueNotifier<ThemeMode>(ThemeMode.system);
@@ -114,10 +138,16 @@ class SettingsManager {
   }
 
   static Future<void> init() async {
-    _ioService = IOServiceFactory.create();
+    _ioServiceInstance = IOServiceFactory.create();
     await _loadDefaults();
 
     if (kIsWeb) {
+      // The web client keeps its device-only settings in the browser's
+      // local storage. Load them before autosave is attached so the stored
+      // values are not written straight back.
+      detachAutoSave();
+      await _loadLocalSettings();
+      attachAutoSave();
       return;
     }
 
@@ -162,6 +192,18 @@ class SettingsManager {
     attachAutoSave();
   }
 
+  /// Loads this device's own settings from the platform's local store.
+  static Future<void> _loadLocalSettings() async {
+    final data = await _ioService.readLocalSettings();
+    // Only the keys that may live in the browser store are read back; a
+    // foreign or corrupted entry must not inject settings into this client.
+    final local = Map<String, dynamic>.fromEntries(
+      data.entries.where((e) => webLocalKeys.contains(e.key)),
+    );
+    if (local.isEmpty) return;
+    await _applyFromJson(local);
+  }
+
   static ThemeMode _themeModeFrom(Object? value, Object? fallback) {
     if (value is int && value >= 0 && value < ThemeMode.values.length) {
       return ThemeMode.values[value];
@@ -181,8 +223,10 @@ class SettingsManager {
     if (!fromBackend) {
       // Device-local settings only ever come from this device's own config.
       // A backend payload must never overwrite them.
-      retreatToTray.value =
-          json['retreat_to_tray'] ?? defaults['retreat_to_tray'] ?? true;
+      // A browser has no system tray, so the flag is always false there.
+      retreatToTray.value = kIsWeb
+          ? false
+          : (json['retreat_to_tray'] ?? defaults['retreat_to_tray'] ?? true);
       themeMode.value = _themeModeFrom(
         json['theme_mode'],
         defaults['theme_mode'],
@@ -196,7 +240,9 @@ class SettingsManager {
       if (json.containsKey('require_login')) {
         requireLogin.value = json['require_login'] ?? false;
       }
-      currentUserId.value = json['current_user'] as String?;
+      if (json.containsKey('current_user')) {
+        currentUserId.value = json['current_user'] as String?;
+      }
       if (json['playback_volume'] is num) {
         playbackVolume.value = (json['playback_volume'] as num).toDouble();
       } else if (defaults['playback_volume'] is num) {
@@ -263,7 +309,12 @@ class SettingsManager {
   static Future<void> reloadConfig() async {
     final data = await BridgeService.instance.getGlobalSettings();
     if (data != null) {
-      await _applyFromJson(data, fromBackend: true);
+      _applyingBackend = true;
+      try {
+        await _applyFromJson(data, fromBackend: true);
+      } finally {
+        _applyingBackend = false;
+      }
     }
   }
 
@@ -317,8 +368,10 @@ class SettingsManager {
     detachAutoSave();
 
     void add(ValueNotifier n, String key, [dynamic Function()? getValue]) {
-      void listener() =>
-          saveChanged(key, getValue != null ? getValue() : n.value);
+      void listener() {
+        if (_applyingBackend) return;
+        saveChanged(key, getValue != null ? getValue() : n.value);
+      }
       n.addListener(listener);
       _autoSaveListeners[n] = listener;
     }
@@ -557,7 +610,12 @@ class SettingsManager {
           ),
         ),
       );
-      await _applyFromJson(data, fromBackend: true);
+      _applyingBackend = true;
+      try {
+        await _applyFromJson(data, fromBackend: true);
+      } finally {
+        _applyingBackend = false;
+      }
     } else {
       log('Failed to load settings from backend', level: LogLevel.error);
     }
@@ -577,11 +635,28 @@ class SettingsManager {
     }
   }
 
-  /// Persists device-local settings in this device's own config.
+  /// Persists device-local settings on this device.
+  ///
+  /// Native keeps them in the device's own config file (through Rinf); the
+  /// web client keeps the ones that may live in the browser in its local
+  /// storage.
   static Future<void> _saveLocal(Map<String, dynamic> values) async {
     if (values.isEmpty) return;
     if (kIsWeb) {
-      // The web client has no config file of its own yet.
+      // Only the settings that may live in the browser are stored: the
+      // account list carries API keys, the user id comes from the session
+      // cookie, and login / host / port / tray are fixed on web.
+      final storable = Map<String, dynamic>.fromEntries(
+        values.entries.where((e) => webLocalKeys.contains(e.key)),
+      );
+      if (storable.isEmpty) return;
+      final saved = await _ioService.writeLocalSettings(storable);
+      if (!saved) {
+        log(
+          'Failed to persist local settings in browser storage',
+          level: LogLevel.error,
+        );
+      }
       return;
     }
     await RinfService.instance.saveLocalConfig(values);

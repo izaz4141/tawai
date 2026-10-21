@@ -128,6 +128,16 @@ class NativeIOService implements IOService {
   @override
   Future<void> downloadBytes(String name, Uint8List bytes) async {}
 
+  /// Native keeps the device-local settings in its own config file, written
+  /// through Rinf (`RinfService.saveLocalConfig`), so there is nothing to
+  /// keep here.
+  @override
+  Future<Map<String, dynamic>> readLocalSettings() async =>
+      <String, dynamic>{};
+
+  @override
+  Future<bool> writeLocalSettings(Map<String, dynamic> values) async => false;
+
   @override
   void writeLine(String line) => stdout.writeln(line);
 

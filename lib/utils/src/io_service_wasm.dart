@@ -163,6 +163,56 @@ class WasmIOService implements IOService {
     print(line);
   }
 
+  /// Prefix of the browser entries holding this device's settings.
+  static const String _localSettingsPrefix = 'tawai.settings.';
+
+  @override
+  Future<Map<String, dynamic>> readLocalSettings() async {
+    final result = <String, dynamic>{};
+    try {
+      final storage = html.window.localStorage;
+      for (var i = 0; i < storage.length; i++) {
+        final name = storage.key(i);
+        if (name == null || !name.startsWith(_localSettingsPrefix)) continue;
+        final raw = storage.getItem(name);
+        if (raw == null) continue;
+        try {
+          result[name.substring(_localSettingsPrefix.length)] = jsonDecode(raw);
+        } catch (_) {
+          // One unreadable entry must not lose the rest.
+        }
+      }
+    } catch (_) {
+      // localStorage can be missing or blocked (private mode, cookie
+      // settings, quota). Degrade to "no local settings".
+      return <String, dynamic>{};
+    }
+    return result;
+  }
+
+  @override
+  Future<bool> writeLocalSettings(Map<String, dynamic> values) async {
+    if (values.isEmpty) return true;
+    var failed = false;
+    try {
+      final storage = html.window.localStorage;
+      for (final entry in values.entries) {
+        try {
+          storage.setItem(
+            '$_localSettingsPrefix${entry.key}',
+            jsonEncode(entry.value),
+          );
+        } catch (_) {
+          // Keep the other entries; report the partial failure.
+          failed = true;
+        }
+      }
+    } catch (_) {
+      return false;
+    }
+    return !failed;
+  }
+
   @override
   void exit(int code) {
     throw UnsupportedError('Cannot exit the process in WASM.');

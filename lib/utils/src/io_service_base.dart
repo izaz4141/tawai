@@ -27,6 +27,17 @@ abstract class IOService {
   String? getCookie(String name);
   Future<PickFileResult?> pickFile({List<String>? allowedExtensions});
 
+  /// Device-local settings persisted by the platform itself.
+  ///
+  /// On web these live in the browser's local storage (one entry per
+  /// setting); on native the device's own config file already holds them
+  /// (written through Rinf), so the native implementation is a no-op.
+  Future<Map<String, dynamic>> readLocalSettings();
+
+  /// Persists [values] in the platform's device-local settings, one entry
+  /// per key. Returns false when the platform cannot persist them.
+  Future<bool> writeLocalSettings(Map<String, dynamic> values);
+
   /// App-scoped temporary cache directory. Contents may be cleared by the
   /// system at any time. Not supported on web/wasm.
   Future<String> getTempDir();
