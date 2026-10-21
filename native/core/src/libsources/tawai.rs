@@ -17,7 +17,7 @@ use crate::signals::discovery::{JellyfinLibraryInfo, ServerTestResult};
 use crate::signals::library::{
     LibrarySourceInfo, ListLibrarySourcesResponse, ListTracksResponse, TrackInfo,
 };
-use crate::tools::rename::{DEFAULT_PATTERN, dest_from_root};
+use crate::tools::rename::{config_naming_pattern, dest_from_root};
 use crate::utils::config::AppConfig;
 use crate::utils::logger;
 
@@ -283,6 +283,10 @@ pub async fn upload_to_remote(
 
 /// Import an audio file into an editable local source: tag it, move it into
 /// the source root, rescan, and return the final path.
+///
+/// `context` is the live app context handle: the destination scheme is read
+/// from the app config at the moment of the import, so an imported file lands
+/// exactly where the next scan enumerates it.
 pub async fn import_into_source(
     pool: &DatabasePool,
     source: &LibrarySourceInfo,
@@ -290,6 +294,7 @@ pub async fn import_into_source(
     filename: &str,
     client: &reqwest::Client,
     master_key: &str,
+    context: Weak<AppContext>,
 ) -> Result<String> {
     if !crate::libsources::is_editable(&source.source_type) {
         anyhow::bail!(
@@ -308,10 +313,10 @@ pub async fn import_into_source(
     tokio::fs::write(&temp_path, file_bytes).await?;
 
     let (tag, _, _, _) = crate::audio::tags::read_audio_tags(&temp_path)?;
-    // The legacy per-user setting is gone: the default scheme is the
-    // behavior-preserving choice until the live config seam is wired here
-    // (ticket 06). `None` would mean "flat, keep the original stem".
-    let pattern = Some(DEFAULT_PATTERN.to_string());
+    // The naming scheme is the live global config pattern, re-read at the
+    // point of use: the import must land under the same layout the scan
+    // enumerates. `None` would mean "flat, keep the original stem".
+    let pattern = Some(config_naming_pattern(&context).await);
 
     let final_path =
         crate::tools::rename::move_file_into_source(&temp_path, root, pattern.as_deref(), &tag)?;
@@ -336,7 +341,7 @@ pub async fn import_into_source(
         None,
         master_key,
         None,
-        Weak::new(),
+        context,
     )
     .await;
     if let Some(err) = scan_result.error {
@@ -838,22 +843,6 @@ pub(crate) async fn resolve_remote_track(
     Ok((conn, rt))
 }
 
-/// Resolve the library naming pattern from the live app config.
-///
-/// The config is re-read at every use, so a pattern change takes effect on the
-/// next operation without a scan-start snapshot. A context that cannot be
-/// upgraded means the call site is not wired to the app yet (see ticket 06)
-/// and the default pattern is used.
-pub(crate) async fn config_naming_pattern(context: &Weak<AppContext>) -> String {
-    match context.upgrade() {
-        Some(ctx) => {
-            let cfg = ctx.cfg().await;
-            crate::tools::rename::naming_pattern_from_config(cfg.as_ref())
-        }
-        None => crate::tools::rename::DEFAULT_PATTERN.to_string(),
-    }
-}
-
 // ── Parser struct──────────────────────────────────────────────────────
 
 pub struct TawaiParser {
@@ -1076,6 +1065,10 @@ impl TawaiParser {
 
 /// Forward a local tag write to the remote source so the remote copy stays in
 /// sync; no-op for non-tawai files.
+///
+/// `context` is the live app context handle: the backing remote track is
+/// resolved through the global naming pattern read from the config at the
+/// moment of the lookup.
 pub async fn mirror_tag_write(
     pool: &DatabasePool,
     local_path: &str,
@@ -1083,6 +1076,7 @@ pub async fn mirror_tag_write(
     clear_cover: bool,
     client: &reqwest::Client,
     master_key: &str,
+    context: Weak<AppContext>,
 ) -> Result<()> {
     let sources = library_source::list_all_sources(pool, master_key).await?;
     let source = match sources.iter().find(|s| {
@@ -1096,7 +1090,7 @@ pub async fn mirror_tag_write(
     };
 
     let (conn, rt) =
-        resolve_remote_track(pool, client, &source.urls, local_path, None, &Weak::new()).await?;
+        resolve_remote_track(pool, client, &source.urls, local_path, None, &context).await?;
     let body = serde_json::json!({
         "path": rt.file_path,
         "title": tag.title,
@@ -1149,16 +1143,6 @@ pub async fn mirror_tag_write(
 mod tests {
     use super::*;
     use crate::tools::rename::DEFAULT_PATTERN;
-
-    #[tokio::test]
-    async fn config_naming_pattern_without_context_falls_back_to_default() {
-        // An un-upgradable context means the call site isn't wired to the app
-        // yet; the default pattern is the only sane answer.
-        assert_eq!(
-            config_naming_pattern(&Weak::new()).await,
-            DEFAULT_PATTERN
-        );
-    }
 
     #[test]
     fn parse_tawai_url_valid() {

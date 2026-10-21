@@ -83,7 +83,7 @@ pub async fn handle_download_create(context: Arc<AppContext>) {
                 &source_type,
                 context.client().clone(),
                 pool,
-                std::sync::Weak::new(),
+                Arc::downgrade(&context),
             ) {
                 parser
                     .download(
@@ -95,6 +95,7 @@ pub async fn handle_download_create(context: Arc<AppContext>) {
                         &user_id,
                         msg.extra.as_deref(),
                         &mk,
+                        Arc::downgrade(&context),
                     )
                     .await
             } else {
@@ -107,6 +108,7 @@ pub async fn handle_download_create(context: Arc<AppContext>) {
                     &user_id,
                     msg.extra.as_deref(),
                     &mk,
+                    Arc::downgrade(&context),
                 )
                 .await
             };

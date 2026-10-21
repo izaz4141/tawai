@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     extract::{Extension, Path, State},
     http::StatusCode,
@@ -30,7 +32,16 @@ pub async fn handle_delete_track(
     let db = state.context.db().await;
     let client = state.context.client().clone();
     let mk = state.context.master_key.read().await.clone();
-    match library::delete_track(db.pool(), &client, &user_id, &id, &mk).await {
+    match library::delete_track(
+        db.pool(),
+        &client,
+        &user_id,
+        &id,
+        &mk,
+        Arc::downgrade(&state.context),
+    )
+    .await
+    {
         Ok(()) => StatusCode::OK.into_response(),
         Err(e) => {
             tawai_core::utils::logger::error(&format!("delete track failed: {}", e));

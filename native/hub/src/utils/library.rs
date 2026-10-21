@@ -35,6 +35,7 @@ pub async fn handle_delete_track(context: Arc<AppContext>) {
             &msg.user_id,
             &msg.track_id,
             &mk,
+            Arc::downgrade(&context),
         )
         .await
         {

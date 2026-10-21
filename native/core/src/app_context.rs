@@ -485,6 +485,7 @@ impl AppContext {
                                 master_key: &mk,
                                 user_id: &user.id,
                                 included_keys: &included,
+                                context: Arc::downgrade(&inner_ctx),
                             })
                             .await;
                         }

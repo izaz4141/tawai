@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Weak;
 
 use anyhow::Result;
 use sqlx::Row;
 
+use crate::app_context::AppContext;
 use crate::audio::tags::{AudioTag, derive_sort_name, parse_artists};
 use crate::db::database::DatabasePool;
 use crate::libsources::SourceUrlResolver;
@@ -25,6 +27,23 @@ pub fn naming_pattern_from_config(cfg: &AppConfig) -> String {
         .filter(|p| !p.is_empty())
         .unwrap_or(DEFAULT_PATTERN)
         .to_string()
+}
+
+/// Resolve the global library naming pattern from the live app config.
+///
+/// This is the single config→pattern reader for every naming-pattern
+/// consumer: the config is re-read at every use, so a pattern change takes
+/// effect on the next operation without a scan-start snapshot. A context that
+/// cannot be upgraded means the call site is not wired to the app yet, and
+/// the default pattern is used.
+pub(crate) async fn config_naming_pattern(context: &Weak<AppContext>) -> String {
+    match context.upgrade() {
+        Some(ctx) => {
+            let cfg = ctx.cfg().await;
+            naming_pattern_from_config(cfg.as_ref())
+        }
+        None => DEFAULT_PATTERN.to_string(),
+    }
 }
 
 /// Format a naming pattern with tag values.
@@ -758,6 +777,13 @@ mod tests {
     fn naming_pattern_from_config_valid_value_is_trimmed() {
         let cfg = config(serde_json::json!({ "naming_pattern": "  {artist}/{title}  " }));
         assert_eq!(naming_pattern_from_config(&cfg), "{artist}/{title}");
+    }
+
+    #[tokio::test]
+    async fn config_naming_pattern_without_context_falls_back_to_default() {
+        // An un-upgradable context means the call site isn't wired to the app
+        // yet; the default pattern is the only sane answer.
+        assert_eq!(config_naming_pattern(&Weak::new()).await, DEFAULT_PATTERN);
     }
 
     fn tag(

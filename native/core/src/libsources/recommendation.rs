@@ -8,6 +8,7 @@ use futures::StreamExt;
 use tokio::io::AsyncWriteExt;
 use tokio::time::sleep;
 
+use crate::app_context::AppContext;
 use crate::audio::tags::{AudioTag, derive_sort_name, parse_artists};
 use crate::db::library::{AlbumWriteMeta, TrackTagMeta};
 use crate::db::{database::DatabasePool, library, library_source};
@@ -17,7 +18,7 @@ use crate::metadata::musicbrainz;
 use crate::signals::library::TrackInfo;
 use crate::signals::metadata::RecordingInfo;
 use crate::tools::duplicates;
-use crate::tools::rename::{dest_from_root, naming_pattern_from_config};
+use crate::tools::rename::dest_from_root;
 use crate::utils::config::AppConfig;
 use crate::utils::logger;
 
@@ -198,6 +199,10 @@ pub async fn delete(pool: &DatabasePool, file_path: &str) -> Result<()> {
 /// track's tags, and register a completed download row. Returns the download ID.
 /// When the track has no library row (discovery previews), `extra` supplies
 /// `{"title", "artist", "mbid", "album"}` as the metadata fallback.
+///
+/// `context` is the live app context handle: the destination scheme is read
+/// from the app config at the moment of the download (never from a snapshot
+/// taken by the caller), and the post-download rescan uses the same seam.
 pub async fn download(
     pool: &DatabasePool,
     file_path: &str,
@@ -207,6 +212,7 @@ pub async fn download(
     user_id: &str,
     extra: Option<&str>,
     master_key: &str,
+    context: Weak<AppContext>,
 ) -> Result<String> {
     let track = match library::lookup_track_by_file_path(pool, file_path).await? {
         Some(track) => track,
@@ -237,7 +243,9 @@ pub async fn download(
         .ok_or_else(|| anyhow::anyhow!("no audio stream found for {}", file_path))?;
 
     let tag = audio_tag_for_track(&track);
-    let pattern = naming_pattern_from_config(cfg);
+    // The naming scheme comes from the live config seam, re-read here at the
+    // point of use — not from the caller's config snapshot.
+    let pattern = crate::tools::rename::config_naming_pattern(&context).await;
     let fallback_stem = format!("{} - {}", track.artists_string, track.title);
     let ext = if format.ext.is_empty() {
         "mp3"
@@ -346,7 +354,7 @@ pub async fn download(
         None,
         master_key,
         None,
-        Weak::new(),
+        context,
     )
     .await;
     if let Some(err) = scan_result.error {

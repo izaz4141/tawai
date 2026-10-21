@@ -1,3 +1,6 @@
+use std::sync::Weak;
+
+use crate::app_context::AppContext;
 use crate::db::database::DatabasePool;
 use crate::signals::library::*;
 
@@ -560,12 +563,16 @@ pub async fn delete_tracks_by_source_id(
 /// Deletes a single track after verifying the requesting user can access its
 /// source. Physical deletion happens on the source itself , then the
 /// library row (and its related rows) are removed.
+///
+/// `context` is the live app context handle: sources that derive paths from
+/// the global naming pattern (tawai) read it from the config at every use.
 pub async fn delete_track(
     pool: &DatabasePool,
     client: &reqwest::Client,
     user_id: &str,
     track_id: &str,
     master_key: &str,
+    context: Weak<AppContext>,
 ) -> anyhow::Result<()> {
     let source = super::library_source::get_source_info_by_track_id(pool, track_id, master_key)
         .await?
@@ -596,7 +603,7 @@ pub async fn delete_track(
         &source.source_type,
         client.clone(),
         pool,
-        std::sync::Weak::new(),
+        context,
     ) {
         let mut resolver = crate::libsources::SourceUrlResolver::new();
         if let Ok(url) = resolver

@@ -292,6 +292,7 @@ impl SourceParser {
         user_id: &str,
         extra: Option<&str>,
         master_key: &str,
+        context: Weak<AppContext>,
     ) -> Result<String> {
         match self {
             SourceParser::Local | SourceParser::Jellyfin(_) | SourceParser::Tawai(_) => {
@@ -299,7 +300,7 @@ impl SourceParser {
             }
             SourceParser::Recommendation(_) => {
                 recommendation::download(
-                    pool, file_path, dest_path, client, cfg, user_id, extra, master_key,
+                    pool, file_path, dest_path, client, cfg, user_id, extra, master_key, context,
                 )
                 .await
             }
