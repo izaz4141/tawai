@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::Weak;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -8,9 +9,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::time::sleep;
 
 use crate::audio::tags::{AudioTag, derive_sort_name, parse_artists};
-use crate::db::account::DEFAULT_USERNAME;
 use crate::db::library::{AlbumWriteMeta, TrackTagMeta};
-use crate::db::user_settings;
 use crate::db::{database::DatabasePool, library, library_source};
 use crate::dclient::nadekodon::resolve_audio_format;
 use crate::discovery::listenbrainz;
@@ -18,7 +17,7 @@ use crate::metadata::musicbrainz;
 use crate::signals::library::TrackInfo;
 use crate::signals::metadata::RecordingInfo;
 use crate::tools::duplicates;
-use crate::tools::rename::{DEFAULT_PATTERN, dest_from_root};
+use crate::tools::rename::{dest_from_root, naming_pattern_from_config};
 use crate::utils::config::AppConfig;
 use crate::utils::logger;
 
@@ -238,10 +237,7 @@ pub async fn download(
         .ok_or_else(|| anyhow::anyhow!("no audio stream found for {}", file_path))?;
 
     let tag = audio_tag_for_track(&track);
-    let pattern = user_settings::get_setting(pool, DEFAULT_USERNAME, "identify_naming_pattern")
-        .await
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| DEFAULT_PATTERN.to_string());
+    let pattern = naming_pattern_from_config(cfg);
     let fallback_stem = format!("{} - {}", track.artists_string, track.title);
     let ext = if format.ext.is_empty() {
         "mp3"
@@ -350,6 +346,7 @@ pub async fn download(
         None,
         master_key,
         None,
+        Weak::new(),
     )
     .await;
     if let Some(err) = scan_result.error {

@@ -33,7 +33,7 @@ async fn sync_one_source(
     discovery_collection_id: &str,
     source_collection_id: &str,
 ) -> Result<(u32, u32), String> {
-    let parser = get_parser(source_type, client.clone(), pool)
+    let parser = get_parser(source_type, client.clone(), pool, std::sync::Weak::new())
         .ok_or_else(|| "no parser for source".to_string())?;
 
     let (added, removed) = parser

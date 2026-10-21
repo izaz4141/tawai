@@ -592,7 +592,12 @@ pub async fn delete_track(
         .await?
         .ok_or_else(|| anyhow::anyhow!("Track {} not found", track_id))?;
 
-    if let Some(parser) = crate::libsources::get_parser(&source.source_type, client.clone(), pool) {
+    if let Some(parser) = crate::libsources::get_parser(
+        &source.source_type,
+        client.clone(),
+        pool,
+        std::sync::Weak::new(),
+    ) {
         let mut resolver = crate::libsources::SourceUrlResolver::new();
         if let Ok(url) = resolver
             .resolve(&source.urls, Some(client), Some(&track.file_path))

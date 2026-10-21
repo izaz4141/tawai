@@ -1,24 +1,23 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex, Weak};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use tokio::io::AsyncWriteExt;
 
+use crate::app_context::AppContext;
 use crate::audio::scan::{LogSender, stream_log};
 use crate::audio::tags::{AudioTag, derive_sort_name, parse_artists};
-use crate::db::account::DEFAULT_USERNAME;
 use crate::db::database::DatabasePool;
 use crate::db::library_source;
-use crate::db::user_settings;
 use crate::libsources::{ParsedTrack, ScanDiff, local};
 use crate::signals::discovery::{JellyfinLibraryInfo, ServerTestResult};
 use crate::signals::library::{
     LibrarySourceInfo, ListLibrarySourcesResponse, ListTracksResponse, TrackInfo,
 };
-use crate::tools::rename::{dest_from_root, resolve_naming_pattern};
+use crate::tools::rename::{DEFAULT_PATTERN, dest_from_root};
 use crate::utils::config::AppConfig;
 use crate::utils::logger;
 
@@ -309,9 +308,10 @@ pub async fn import_into_source(
     tokio::fs::write(&temp_path, file_bytes).await?;
 
     let (tag, _, _, _) = crate::audio::tags::read_audio_tags(&temp_path)?;
-    let pattern = user_settings::get_setting(pool, DEFAULT_USERNAME, "identify_naming_pattern")
-        .await
-        .filter(|s| !s.is_empty());
+    // The legacy per-user setting is gone: the default scheme is the
+    // behavior-preserving choice until the live config seam is wired here
+    // (ticket 06). `None` would mean "flat, keep the original stem".
+    let pattern = Some(DEFAULT_PATTERN.to_string());
 
     let final_path =
         crate::tools::rename::move_file_into_source(&temp_path, root, pattern.as_deref(), &tag)?;
@@ -336,6 +336,7 @@ pub async fn import_into_source(
         None,
         master_key,
         None,
+        Weak::new(),
     )
     .await;
     if let Some(err) = scan_result.error {
@@ -804,14 +805,19 @@ async fn download_chunk(
 
 /// Map a local backup path back to the remote connection + track that backs it.
 ///
-/// `naming_pattern` is the pattern used for local backup paths: `Some` wins,
-/// `None` keeps the legacy per-user setting lookup.
+/// `naming_pattern` is the explicit pattern for local backup paths: a
+/// non-empty value wins as-is. Otherwise the pattern is read live from the app
+/// config through `context`.
+///
+/// `_pool` is only kept for signature stability: the legacy per-user setting
+/// lookup that used it is gone (removed in ticket 07).
 pub(crate) async fn resolve_remote_track(
-    pool: &DatabasePool,
+    _pool: &DatabasePool,
     client: &reqwest::Client,
     urls: &[String],
     local_path: &str,
     naming_pattern: Option<&str>,
+    context: &Weak<AppContext>,
 ) -> Result<(RemoteConn, TrackInfo)> {
     let root = local_root(urls).unwrap_or("/tmp");
     let conn = pick_remote(urls, client)
@@ -820,7 +826,10 @@ pub(crate) async fn resolve_remote_track(
     let tracks = cached_remote_tracks(client, &conn)
         .await
         .context("tawai remote track list failed")?;
-    let pattern = resolve_naming_pattern(pool, naming_pattern).await;
+    let pattern = match naming_pattern.filter(|p| !p.trim().is_empty()) {
+        Some(p) => p.to_string(),
+        None => config_naming_pattern(context).await,
+    };
     let dest = Path::new(local_path);
     let rt = tracks
         .into_iter()
@@ -829,35 +838,49 @@ pub(crate) async fn resolve_remote_track(
     Ok((conn, rt))
 }
 
+/// Resolve the library naming pattern from the live app config.
+///
+/// The config is re-read at every use, so a pattern change takes effect on the
+/// next operation without a scan-start snapshot. A context that cannot be
+/// upgraded means the call site is not wired to the app yet (see ticket 06)
+/// and the default pattern is used.
+pub(crate) async fn config_naming_pattern(context: &Weak<AppContext>) -> String {
+    match context.upgrade() {
+        Some(ctx) => {
+            let cfg = ctx.cfg().await;
+            crate::tools::rename::naming_pattern_from_config(cfg.as_ref())
+        }
+        None => crate::tools::rename::DEFAULT_PATTERN.to_string(),
+    }
+}
+
 // ── Parser struct──────────────────────────────────────────────────────
 
 pub struct TawaiParser {
     pub client: reqwest::Client,
-    /// Explicit local naming pattern for the paths this parser derives (backup
-    /// enumeration, remote-track resolution). `None` keeps the legacy per-user
-    /// setting behavior.
-    pub naming_pattern: Option<String>,
+    /// Handle to the live app context. The naming pattern is read from the
+    /// config at every use; the parser never holds the context strongly.
+    pub context: Weak<AppContext>,
 }
 
 impl TawaiParser {
-    pub fn new(client: reqwest::Client) -> Self {
-        Self {
-            client,
-            naming_pattern: None,
-        }
+    pub fn new(client: reqwest::Client, context: Weak<AppContext>) -> Self {
+        Self { client, context }
     }
 
     /// Enumerate deterministic local dest paths from the remote's track list,
     /// falling back to the local backup walk when unreachable.
     pub async fn enumerate_paths(
         &self,
-        pool: &DatabasePool,
+        _pool: &DatabasePool,
         _url: &str,
         urls: &[String],
     ) -> Result<Vec<String>> {
         if let Some(conn) = pick_remote(urls, &self.client).await {
             let root = local_root(urls).unwrap_or("/tmp");
-            let pattern = resolve_naming_pattern(pool, self.naming_pattern.as_deref()).await;
+            // Resolved fresh on every call: the pattern is live at every scan
+            // phase by design.
+            let pattern = config_naming_pattern(&self.context).await;
             let tracks = cached_remote_tracks(&self.client, &conn)
                 .await
                 .context("tawai remote track list failed for remote source")?;
@@ -922,15 +945,7 @@ impl TawaiParser {
         log_tx: &Option<LogSender>,
     ) -> Result<ParsedTrack> {
         let dest = Path::new(file_path);
-        match resolve_remote_track(
-            pool,
-            &self.client,
-            urls,
-            file_path,
-            self.naming_pattern.as_deref(),
-        )
-        .await
-        {
+        match resolve_remote_track(pool, &self.client, urls, file_path, None, &self.context).await {
             Ok((conn, rt)) => {
                 let Some(remote_hash) = rt.file_hash.as_deref() else {
                     // No remote hash to verify against: download a missing file
@@ -1005,14 +1020,8 @@ impl TawaiParser {
             return Ok((file_path.to_string(), vec![]));
         }
         // Fallback: remote stream
-        let (conn, rt) = resolve_remote_track(
-            pool,
-            client,
-            urls,
-            file_path,
-            self.naming_pattern.as_deref(),
-        )
-        .await?;
+        let (conn, rt) =
+            resolve_remote_track(pool, client, urls, file_path, None, &self.context).await?;
         let stream_url = format!("{}/api/tawai/playback/stream/{}", conn.http_base, rt.id);
         Ok((stream_url, vec![("X-API-Key".into(), conn.api_key)]))
     }
@@ -1028,14 +1037,7 @@ impl TawaiParser {
         mirror_remote: bool,
     ) -> Result<()> {
         if mirror_remote {
-            match resolve_remote_track(
-                pool,
-                &self.client,
-                urls,
-                file_path,
-                self.naming_pattern.as_deref(),
-            )
-            .await
+            match resolve_remote_track(pool, &self.client, urls, file_path, None, &self.context).await
             {
                 Ok((conn, rt)) => {
                     let delete_url =
@@ -1093,7 +1095,8 @@ pub async fn mirror_tag_write(
         None => return Ok(()),
     };
 
-    let (conn, rt) = resolve_remote_track(pool, client, &source.urls, local_path, None).await?;
+    let (conn, rt) =
+        resolve_remote_track(pool, client, &source.urls, local_path, None, &Weak::new()).await?;
     let body = serde_json::json!({
         "path": rt.file_path,
         "title": tag.title,
@@ -1146,6 +1149,16 @@ pub async fn mirror_tag_write(
 mod tests {
     use super::*;
     use crate::tools::rename::DEFAULT_PATTERN;
+
+    #[tokio::test]
+    async fn config_naming_pattern_without_context_falls_back_to_default() {
+        // An un-upgradable context means the call site isn't wired to the app
+        // yet; the default pattern is the only sane answer.
+        assert_eq!(
+            config_naming_pattern(&Weak::new()).await,
+            DEFAULT_PATTERN
+        );
+    }
 
     #[test]
     fn parse_tawai_url_valid() {

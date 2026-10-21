@@ -79,9 +79,12 @@ pub async fn handle_download_create(context: Arc<AppContext>) {
             let pool = db.pool();
             let cfg = context.cfg().await;
             let mk = context.master_key.read().await.clone();
-            let result = if let Some(parser) =
-                tawai_core::libsources::get_parser(&source_type, context.client().clone(), pool)
-            {
+            let result = if let Some(parser) = tawai_core::libsources::get_parser(
+                &source_type,
+                context.client().clone(),
+                pool,
+                std::sync::Weak::new(),
+            ) {
                 parser
                     .download(
                         pool,

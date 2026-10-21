@@ -5,9 +5,7 @@ use anyhow::Result;
 use sqlx::Row;
 
 use crate::audio::tags::{AudioTag, derive_sort_name, parse_artists};
-use crate::db::account::DEFAULT_USERNAME;
 use crate::db::database::DatabasePool;
-use crate::db::user_settings;
 use crate::libsources::SourceUrlResolver;
 use crate::signals::tools::{NamingViolation, RenamePreview};
 use crate::utils::config::AppConfig;
@@ -27,30 +25,6 @@ pub fn naming_pattern_from_config(cfg: &AppConfig) -> String {
         .filter(|p| !p.is_empty())
         .unwrap_or(DEFAULT_PATTERN)
         .to_string()
-}
-
-/// Resolve the naming pattern for a source operation, reusable anywhere a
-/// database pool is available.
-///
-/// A non-empty `explicit` pattern wins as-is (callers that already resolved the
-/// local config pass it here). Otherwise the legacy per-user
-/// `identify_naming_pattern` setting is read, falling back to
-/// [`DEFAULT_PATTERN`]. The legacy read stays until the old paths are migrated.
-pub async fn resolve_naming_pattern(pool: &DatabasePool, explicit: Option<&str>) -> String {
-    let legacy = if explicit.filter(|p| !p.trim().is_empty()).is_some() {
-        None
-    } else {
-        user_settings::get_setting(pool, DEFAULT_USERNAME, "identify_naming_pattern").await
-    };
-    select_naming_pattern(explicit, legacy)
-}
-
-/// Effective pattern choice, split out so it can be tested without I/O.
-fn select_naming_pattern(explicit: Option<&str>, legacy: Option<String>) -> String {
-    if let Some(pattern) = explicit.filter(|p| !p.trim().is_empty()) {
-        return pattern.to_string();
-    }
-    legacy.unwrap_or_else(|| DEFAULT_PATTERN.to_string())
 }
 
 /// Format a naming pattern with tag values.
@@ -784,39 +758,6 @@ mod tests {
     fn naming_pattern_from_config_valid_value_is_trimmed() {
         let cfg = config(serde_json::json!({ "naming_pattern": "  {artist}/{title}  " }));
         assert_eq!(naming_pattern_from_config(&cfg), "{artist}/{title}");
-    }
-
-    #[test]
-    fn select_naming_pattern_prefers_explicit() {
-        assert_eq!(
-            select_naming_pattern(
-                Some("{artist}/{title}"),
-                Some("{legacy}/{title}".to_string())
-            ),
-            "{artist}/{title}"
-        );
-    }
-
-    #[test]
-    fn select_naming_pattern_uses_legacy_when_no_explicit() {
-        assert_eq!(
-            select_naming_pattern(None, Some("{legacy}/{title}".to_string())),
-            "{legacy}/{title}"
-        );
-    }
-
-    #[test]
-    fn select_naming_pattern_empty_explicit_falls_back_to_legacy() {
-        assert_eq!(
-            select_naming_pattern(Some("  \t"), Some("{legacy}/{title}".to_string())),
-            "{legacy}/{title}"
-        );
-    }
-
-    #[test]
-    fn select_naming_pattern_falls_back_to_default() {
-        assert_eq!(select_naming_pattern(None, None), DEFAULT_PATTERN);
-        assert_eq!(select_naming_pattern(Some(""), None), DEFAULT_PATTERN);
     }
 
     fn tag(

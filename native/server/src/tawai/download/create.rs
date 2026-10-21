@@ -28,9 +28,12 @@ pub async fn handle_create(
         let db = state.context.db().await;
         let pool = db.pool();
         let client = state.context.client().clone();
-        let result = if let Some(parser) =
-            tawai_core::libsources::get_parser(&req.source_type, client.clone(), pool)
-        {
+        let result = if let Some(parser) = tawai_core::libsources::get_parser(
+            &req.source_type,
+            client.clone(),
+            pool,
+            std::sync::Weak::new(),
+        ) {
             parser
                 .download(
                     pool,

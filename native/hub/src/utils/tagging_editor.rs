@@ -126,6 +126,7 @@ pub async fn handle_apply_identification(context: Arc<AppContext>) {
             &mk,
             &pattern,
             context.client(),
+            Arc::downgrade(&context),
         )
         .await
         {

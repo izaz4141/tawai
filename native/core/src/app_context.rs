@@ -452,6 +452,7 @@ impl AppContext {
                         Some(tx),
                         &mk_scan,
                         None,
+                        Arc::downgrade(&inner_ctx),
                     )
                     .await;
 

@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::Arc;
 
 use axum::{
     Json,
@@ -167,6 +168,7 @@ pub async fn handle_apply_identification(
         &mk,
         &pattern,
         state.context.client(),
+        Arc::downgrade(&state.context),
     )
     .await
     {

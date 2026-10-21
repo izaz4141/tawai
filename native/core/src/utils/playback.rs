@@ -34,7 +34,7 @@ pub async fn resolve_track_source(
     let Some(pool) = pool else {
         return (file_path.to_string(), None);
     };
-    let Some(parser) = get_parser(source_type, client.clone(), pool) else {
+    let Some(parser) = get_parser(source_type, client.clone(), pool, std::sync::Weak::new()) else {
         return if is_recommendation {
             (String::new(), None)
         } else {

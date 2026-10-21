@@ -8,9 +8,11 @@ pub use recommendation::{ALL_RECOMMENDATION_SOURCES, ApiType, RecommendationSour
 use std::collections::HashSet;
 use std::ops::Deref;
 use std::path::Path;
+use std::sync::Weak;
 
 use anyhow::{Result, anyhow};
 
+use crate::app_context::AppContext;
 use crate::audio::scan::LogSender;
 use crate::audio::tags::AudioTag;
 use crate::db::database::DatabasePool;
@@ -321,17 +323,23 @@ impl SourceParser {
     }
 }
 
+/// Build the parser for a source type.
+///
+/// `context` is the live app context handle: parsers that need the global
+/// naming pattern read it from the config at every use. Sources that don't
+/// ignore it.
 pub fn get_parser(
     source_type: &str,
     client: reqwest::Client,
     _pool: &DatabasePool,
+    context: Weak<AppContext>,
 ) -> Option<SourceParser> {
     match source_type {
         "local" => Some(SourceParser::Local),
         "jellyfin" => Some(SourceParser::Jellyfin(jellyfin::JellyfinParser::new(
             client,
         ))),
-        "tawai" => Some(SourceParser::Tawai(tawai::TawaiParser::new(client))),
+        "tawai" => Some(SourceParser::Tawai(tawai::TawaiParser::new(client, context))),
         _ => RecommendationSource::from_key(source_type)
             .map(|rec| SourceParser::Recommendation(*rec)),
     }

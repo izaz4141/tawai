@@ -1,8 +1,10 @@
 use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
+use std::sync::Weak;
 
 use image::GenericImageView;
 
+use crate::app_context::AppContext;
 use crate::audio::ffmpeg;
 use crate::audio::tags::derive_sort_name;
 use crate::db::database::DatabasePool;
@@ -230,6 +232,11 @@ async fn insert_track_to_db(
     InsertOutcome::Inserted { track_id, album_id }
 }
 
+/// Scan every source and reconcile the library with what is on disk.
+///
+/// `context` is the live app context handle: parsers that derive paths from
+/// the naming pattern (tawai) read it from the config at every use, so a
+/// pattern change mid-scan is picked up by the next phase.
 pub async fn run_scan(
     pool: &DatabasePool,
     client: reqwest::Client,
@@ -238,6 +245,7 @@ pub async fn run_scan(
     progress: Option<tokio::sync::watch::Sender<ScanProgress>>,
     master_key: &str,
     log_tx: Option<LogSender>,
+    context: Weak<AppContext>,
 ) -> ScanResult {
     let sources: Vec<LibrarySourceInfo> = sources
         .iter()
@@ -295,7 +303,12 @@ pub async fn run_scan(
             },
         );
 
-        let parser = match libsources::get_parser(&source.source_type, client.clone(), pool) {
+        let parser = match libsources::get_parser(
+            &source.source_type,
+            client.clone(),
+            pool,
+            context.clone(),
+        ) {
             Some(p) => p,
             None => {
                 stream_log(
@@ -397,7 +410,12 @@ pub async fn run_scan(
     let mut to_delete_set: HashSet<String> = HashSet::new();
     let mut replace_set: HashSet<String> = HashSet::new();
     for source in &sources {
-        let Some(parser) = libsources::get_parser(&source.source_type, client.clone(), pool) else {
+        let Some(parser) = libsources::get_parser(
+            &source.source_type,
+            client.clone(),
+            pool,
+            context.clone(),
+        ) else {
             continue;
         };
         let Some(enumerated) = source_paths.get(&source.id) else {
@@ -484,7 +502,12 @@ pub async fn run_scan(
             continue;
         }
 
-        let parser = match libsources::get_parser(&source.source_type, client.clone(), pool) {
+        let parser = match libsources::get_parser(
+            &source.source_type,
+            client.clone(),
+            pool,
+            context.clone(),
+        ) {
             Some(p) => p,
             None => continue,
         };
