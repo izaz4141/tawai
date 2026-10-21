@@ -22,6 +22,28 @@ class SettingsManager {
   static bool isFirstRun = false;
   static Map<String, dynamic> defaults = {};
 
+  /// Settings that belong to this device only. They are never sent to the
+  /// global settings endpoint; in remote mode they are stored in this
+  /// device's own config instead. Mirrors the server's device-only list.
+  static const Set<String> deviceLocalKeys = {
+    'playback_volume',
+    'current_user',
+    'require_login',
+    'check_nightly',
+    'accounts',
+    'server_host',
+    'server_port',
+    'theme_mode',
+    'use_dynamic_color',
+    'custom_color',
+    'retreat_to_tray',
+  };
+
+  /// Global settings this device loaded from the backend, with the values it
+  /// saw. Only globals that changed on this device are pushed back, so a
+  /// device never overwrites the server's config with its own stale copy.
+  static final Map<String, dynamic> _backendGlobals = {};
+
   // Your ValueNotifiers
   static final retreatToTray = ValueNotifier<bool>(true);
   static final downloadFolder = ValueNotifier<String>('');
@@ -140,54 +162,81 @@ class SettingsManager {
     attachAutoSave();
   }
 
+  static ThemeMode _themeModeFrom(Object? value, Object? fallback) {
+    if (value is int && value >= 0 && value < ThemeMode.values.length) {
+      return ThemeMode.values[value];
+    }
+    if (fallback is int &&
+        fallback >= 0 &&
+        fallback < ThemeMode.values.length) {
+      return ThemeMode.values[fallback];
+    }
+    return ThemeMode.system;
+  }
+
   static Future<void> _applyFromJson(
     Map<String, dynamic> json, {
     bool fromBackend = false,
   }) async {
-    retreatToTray.value =
-        json['retreat_to_tray'] ?? defaults['retreat_to_tray'];
-    downloadFolder.value = json['download_folder'] ?? '';
-
-    // Theme Settings
-    if (json['theme_mode'] != null) {
-      themeMode.value = ThemeMode.values[json['theme_mode']];
-    } else if (defaults['theme_mode'] != null) {
-      themeMode.value = ThemeMode.values[defaults['theme_mode']];
-    }
-    useDynamicColor.value =
-        json['use_dynamic_color'] ?? defaults['use_dynamic_color'];
-    customColor.value = json['custom_color'] ?? defaults['custom_color'];
     if (!fromBackend) {
-      checkNightly.value = json['check_nightly'] ?? defaults['check_nightly'];
+      // Device-local settings only ever come from this device's own config.
+      // A backend payload must never overwrite them.
+      retreatToTray.value =
+          json['retreat_to_tray'] ?? defaults['retreat_to_tray'] ?? true;
+      themeMode.value = _themeModeFrom(
+        json['theme_mode'],
+        defaults['theme_mode'],
+      );
+      useDynamicColor.value =
+          json['use_dynamic_color'] ?? defaults['use_dynamic_color'] ?? true;
+      customColor.value =
+          json['custom_color'] ?? defaults['custom_color'] ?? 0xFFFF4081;
+      checkNightly.value =
+          json['check_nightly'] ?? defaults['check_nightly'] ?? false;
       if (json.containsKey('require_login')) {
         requireLogin.value = json['require_login'] ?? false;
       }
       currentUserId.value = json['current_user'] as String?;
-    }
-
-    slskdUrl.value = json['slskd_url'] ?? '';
-    nadekodonUrl.value = json['nadekodon_url'] ?? '';
-    desiredAudioQuality.value = json['desired_audio_quality'] ?? 'best';
-    defaultDownloadSource.value = json['default_download_source'] ?? 'slskd';
-    namingPattern.value =
-        json['naming_pattern'] ??
-        defaults['naming_pattern'] ??
-        '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}';
-
-    if (!fromBackend) {
       if (json['playback_volume'] is num) {
         playbackVolume.value = (json['playback_volume'] as num).toDouble();
       } else if (defaults['playback_volume'] is num) {
         playbackVolume.value = (defaults['playback_volume'] as num).toDouble();
       }
 
-      if (json['accounts'] != null) {
+      if (json['accounts'] is List) {
         final accountList = <Account>[];
         for (final accJson in json['accounts']) {
-          accountList.add(Account.fromJson(accJson));
+          if (accJson is Map<String, dynamic> && accJson['id'] is String) {
+            accountList.add(Account.fromJson(accJson));
+          }
         }
         accounts.value = accountList;
       }
+    }
+
+    // Global settings are only applied when the payload actually contains
+    // them, so a partial response (e.g. the non-admin allowlist) never
+    // resets unrelated settings.
+    if (json.containsKey('download_folder')) {
+      downloadFolder.value = json['download_folder'] ?? '';
+    }
+    if (json.containsKey('slskd_url')) {
+      slskdUrl.value = json['slskd_url'] ?? '';
+    }
+    if (json.containsKey('nadekodon_url')) {
+      nadekodonUrl.value = json['nadekodon_url'] ?? '';
+    }
+    if (json.containsKey('desired_audio_quality')) {
+      desiredAudioQuality.value = json['desired_audio_quality'] ?? 'best';
+    }
+    if (json.containsKey('default_download_source')) {
+      defaultDownloadSource.value = json['default_download_source'] ?? 'slskd';
+    }
+    if (json.containsKey('naming_pattern')) {
+      namingPattern.value =
+          json['naming_pattern'] ??
+          defaults['naming_pattern'] ??
+          '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}';
     }
   }
 
@@ -219,23 +268,49 @@ class SettingsManager {
   }
 
   static Future<void> saveAll() async {
-    if (kIsWeb) {
-      await _saveToBackend();
+    final jsonMap = await _toJson();
+
+    // The device's own config is also the server's config when the app runs
+    // the server locally, so everything goes to a single file there.
+    if (!kIsWeb && !PlatformService().isRemote) {
+      await RinfService.instance.saveLocalConfig(jsonMap);
       return;
     }
-    final jsonMap = await _toJson();
-    await RinfService.instance.saveConfig(jsonMap);
+
+    final localPart = <String, dynamic>{};
+    final globalPart = <String, dynamic>{};
+    for (final entry in jsonMap.entries) {
+      if (deviceLocalKeys.contains(entry.key)) {
+        localPart[entry.key] = entry.value;
+        continue;
+      }
+      if (!_backendGlobals.containsKey(entry.key)) continue;
+      // Only push what changed on this device; the server already has the rest.
+      if (_backendGlobals[entry.key] != entry.value) {
+        globalPart[entry.key] = entry.value;
+      }
+    }
+
+    await _saveLocal(localPart);
+    await _saveToBackend(globalPart);
   }
 
   static Future<void> saveChanged(String key, dynamic value) async {
     if (PlatformService().isRemote) {
-      if (key != 'accounts') {
-        await _saveToBackend();
+      if (deviceLocalKeys.contains(key)) {
+        await _saveLocal({key: value});
+      } else {
+        await _saveToBackend({key: value});
       }
       return;
     }
 
-    await RinfService.instance.saveConfig({key: value});
+    await RinfService.instance.saveLocalConfig({key: value});
+  }
+
+  /// Persists the current user id on this device. Never sent to the server.
+  static Future<void> saveCurrentUser(String? userId) async {
+    await _saveLocal({'current_user': userId ?? ''});
   }
 
   static void attachAutoSave() {
@@ -263,6 +338,7 @@ class SettingsManager {
     add(defaultDownloadSource, 'default_download_source');
     add(playbackVolume, 'playback_volume');
     add(namingPattern, 'naming_pattern');
+    add(currentUserId, 'current_user');
     add(
       accounts,
       'accounts',
@@ -470,26 +546,45 @@ class SettingsManager {
 
   static Future<void> loadFromBackend() async {
     if (!PlatformService().isRemote) return;
+    // Drop the snapshot of whichever server we talked to before.
+    _backendGlobals.clear();
     final data = await APIService.instance.getSettings();
     if (data != null) {
+      _backendGlobals.addAll(
+        Map.fromEntries(
+          data.entries.where(
+            (entry) => !deviceLocalKeys.contains(entry.key),
+          ),
+        ),
+      );
       await _applyFromJson(data, fromBackend: true);
     } else {
       log('Failed to load settings from backend', level: LogLevel.error);
     }
   }
 
-  static Future<void> _saveToBackend() async {
-    final jsonMap = await _toJson();
-    jsonMap.remove('accounts');
-    if (PlatformService().isRemote) {
-      jsonMap.remove('server_host');
-      jsonMap.remove('server_port');
-      jsonMap.remove('require_login');
-    }
-    final success = await APIService.instance.saveSettings(jsonMap);
-    if (!success) {
+  /// Sends global settings to the server. Device-local keys are stripped and
+  /// never leave this device.
+  static Future<void> _saveToBackend(Map<String, dynamic> values) async {
+    final payload = Map<String, dynamic>.from(values)
+      ..removeWhere((key, _) => deviceLocalKeys.contains(key));
+    if (payload.isEmpty) return;
+    final success = await APIService.instance.saveSettings(payload);
+    if (success) {
+      _backendGlobals.addAll(payload);
+    } else {
       log('Failed to save settings to backend', level: LogLevel.error);
     }
+  }
+
+  /// Persists device-local settings in this device's own config.
+  static Future<void> _saveLocal(Map<String, dynamic> values) async {
+    if (values.isEmpty) return;
+    if (kIsWeb) {
+      // The web client has no config file of its own yet.
+      return;
+    }
+    await RinfService.instance.saveLocalConfig(values);
   }
 
   static void addAccount(Account account) {
@@ -560,9 +655,7 @@ class SettingsManager {
       currentUserId.value = account.id;
       isLoggedIn.value = true;
     }
-    if (!kIsWeb) {
-      await RinfService.instance.saveConfig({'current_user': account.id});
-    }
+    await saveCurrentUser(account.id);
     await loadFromBackend();
     SystemService().refreshVersions();
     attachAutoSave();

@@ -1355,6 +1355,19 @@ class RinfService {
     return (success: signal.message.success, error: signal.message.error);
   }
 
+  /// Persists device-local settings in this device's own config file.
+  /// The given values are merged into the existing config.
+  Future<bool> saveLocalConfig(Map<String, dynamic> settings) async {
+    final result = await saveConfig(settings);
+    if (!result.success) {
+      log(
+        'Failed to save local config: ${result.error ?? 'unknown error'}',
+        level: LogLevel.error,
+      );
+    }
+    return result.success;
+  }
+
   Stream<LogSignal> get logSignal =>
       LogSignal.rustSignalStream.map((s) => s.message);
 
