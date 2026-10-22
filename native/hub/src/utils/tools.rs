@@ -92,7 +92,8 @@ pub async fn handle_batch_rename_preview(context: Arc<AppContext>) {
         let msg = signal_pack.message;
         let db = context.db().await;
         // The client pattern is an explicit override; without one the global
-        // pattern from the live config is used.
+        // pattern from the live config is used. This is a dry-run route, so an
+        // override never mutates anything.
         let pattern = tools::rename::resolve_naming_pattern_from_context(
             &Arc::downgrade(&context),
             msg.pattern.as_deref(),
@@ -136,7 +137,9 @@ pub async fn handle_batch_rename_apply(context: Arc<AppContext>) {
         let msg = signal_pack.message;
         let db = context.db().await;
         // The apply always renames with the global naming pattern: a
-        // client-supplied pattern is only an override for the preview.
+        // client-supplied pattern is only an override for the preview, and the
+        // request carries no pattern field at all — a client snapshot can
+        // never drive a mutation.
         let pattern =
             tools::rename::resolve_naming_pattern_from_context(&Arc::downgrade(&context), None)
                 .await;
@@ -176,6 +179,9 @@ pub async fn handle_check_naming_convention(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
+        // The client pattern is an explicit override; without one the global
+        // pattern from the live config is used. This is a read-only route, so
+        // an override never mutates anything.
         let pattern = tools::rename::resolve_naming_pattern_from_context(
             &Arc::downgrade(&context),
             msg.pattern.as_deref(),

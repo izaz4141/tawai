@@ -210,9 +210,10 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
             valueListenable: _patternNotifier,
             builder: (context, localPattern, _) {
               // The base is the pattern the server reported, so the button is
-              // only enabled for a real change.
-              final base =
-                  _effectivePattern ?? SettingsManager.namingPattern.value;
+              // only enabled for a real change. The local cache is never the
+              // baseline: it can be stale, and it holds the default pattern
+              // for a user who may not read the global settings.
+              final base = _effectivePattern ?? '';
               final hasChanges =
                   localPattern.isNotEmpty && localPattern != base;
               return FilledButton(

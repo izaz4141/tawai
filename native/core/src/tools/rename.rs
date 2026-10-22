@@ -70,6 +70,13 @@ pub fn resolve_naming_pattern(override_pattern: Option<&str>, global_pattern: &s
 ///
 /// `override_pattern` is the client's explicit override (may be `None`); when
 /// it is absent the global pattern from the config seam is used.
+///
+/// The mutating callers — the batch-rename apply — pass `None`, so they
+/// always rename with the global pattern and no client snapshot can drive a
+/// mutation. The dry-run callers — the rename preview, the convention check
+/// and the library stats — pass the client's override through, so a caller can
+/// try out a pattern without it becoming a second source of truth for the
+/// global one.
 pub async fn resolve_naming_pattern_from_context(
     context: &Weak<AppContext>,
     override_pattern: Option<&str>,
