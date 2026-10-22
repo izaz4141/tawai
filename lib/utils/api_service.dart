@@ -179,7 +179,7 @@ class APIService {
           );
           await SettingsManager.loadFromBackend();
           await SettingsManager.loadAllUserSettings();
-          SettingsManager.attachAutoSave();
+          await SettingsManager.attachAutoSave();
           return true;
         }
       } else {

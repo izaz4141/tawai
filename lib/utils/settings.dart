@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -72,6 +73,21 @@ class SettingsManager {
 
   static final accounts = ValueNotifier<List<Account>>([]);
   static final Map<ValueNotifier, VoidCallback> _autoSaveListeners = {};
+
+  /// How long the autosave waits after the last change before it writes.
+  static const Duration saveDebounceWindow = Duration(milliseconds: 400);
+
+  /// Changed settings that have been recorded but not written yet. The last
+  /// value of a key wins, so a burst of changes on one key is a single write.
+  static final Map<String, dynamic> _pendingSaves = {};
+
+  /// The trailing timer that flushes [_pendingSaves].
+  static Timer? _saveTimer;
+
+  /// Serializes the flushes, so two writes never race on the same config
+  /// file. It also makes `await flushPendingSaves()` mean "everything
+  /// recorded so far is on disk".
+  static Future<void> _flushChain = Future<void>.value();
 
   /// Set while the server's settings are applied, so the values the server
   /// just sent are not pushed straight back to it.
@@ -149,9 +165,9 @@ class SettingsManager {
       // The web client keeps its device-only settings in the browser's
       // local storage. Load them before autosave is attached so the stored
       // values are not written straight back.
-      detachAutoSave();
+      await detachAutoSave();
       await _loadLocalSettings();
-      attachAutoSave();
+      await attachAutoSave();
       return;
     }
 
@@ -193,7 +209,7 @@ class SettingsManager {
       await saveAll();
     }
 
-    attachAutoSave();
+    await attachAutoSave();
   }
 
   /// Loads this device's own settings from the platform's local store.
@@ -311,6 +327,8 @@ class SettingsManager {
   };
 
   static Future<void> reloadConfig() async {
+    // Write the pending changes first, so the reload reflects them.
+    await flushPendingSaves();
     final data = await BridgeService.instance.getGlobalSettings();
     if (data != null) {
       _applyingBackend = true;
@@ -323,6 +341,8 @@ class SettingsManager {
   }
 
   static Future<void> saveAll() async {
+    // The full config written below supersedes anything still pending.
+    await flushPendingSaves();
     final jsonMap = await _toJson();
 
     // The device's own config is also the server's config when the app runs
@@ -350,21 +370,74 @@ class SettingsManager {
     await _saveToBackend(globalPart);
   }
 
-  static Future<void> saveChanged(String key, dynamic value) async {
-    if (PlatformService().isRemote) {
-      if (deviceLocalKeys.contains(key)) {
-        await _saveLocal({key: value});
-        return;
+  /// Records a changed setting.
+  ///
+  /// The write is debounced: the change is persisted when no further change
+  /// arrives for [saveDebounceWindow]. The notifier itself is already
+  /// updated by the caller, so the UI is never delayed by this.
+  static void saveChanged(String key, dynamic value) {
+    _pendingSaves[key] = value;
+    _saveTimer?.cancel();
+    _saveTimer = Timer(saveDebounceWindow, () {
+      _saveTimer = null;
+      unawaited(flushPendingSaves());
+    });
+  }
+
+  /// Writes every pending change as one batched write.
+  ///
+  /// Returns a future that completes when the write is done, so a caller
+  /// that is about to switch accounts, quit the app or rewrite the whole
+  /// config can wait for it.
+  static Future<void> flushPendingSaves() {
+    _saveTimer?.cancel();
+    _saveTimer = null;
+
+    final pending = Map<String, dynamic>.from(_pendingSaves);
+    _pendingSaves.clear();
+    if (pending.isEmpty) return _flushChain;
+
+    _flushChain = _flushChain.then((_) async {
+      try {
+        await _writePending(pending);
+      } catch (error) {
+        log('Failed to flush pending settings: $error', level: LogLevel.error);
       }
-      final isAdmin = currentUser.value?.role == 'admin';
-      if (!isAdmin) {
-        return;
-      }
-      await _saveToBackend({key: value});
+    });
+    return _flushChain;
+  }
+
+  /// Writes one batch of pending changes.
+  static Future<void> _writePending(Map<String, dynamic> pending) async {
+    // The device's own config is also the server's config when the app runs
+    // the server locally, so everything goes to a single file there.
+    if (!kIsWeb && !PlatformService().isRemote) {
+      await RinfService.instance.saveLocalConfig(pending);
       return;
     }
 
-    await RinfService.instance.saveLocalConfig({key: value});
+    final localPart = <String, dynamic>{};
+    final globalPart = <String, dynamic>{};
+    for (final entry in pending.entries) {
+      if (deviceLocalKeys.contains(entry.key)) {
+        localPart[entry.key] = entry.value;
+        continue;
+      }
+      globalPart[entry.key] = entry.value;
+    }
+
+    await _saveLocal(localPart);
+
+    if (globalPart.isEmpty) return;
+    // Global settings are admin-only.
+    if (currentUser.value?.role != 'admin') {
+      log(
+        'Skipped global settings write: the current user is not an admin',
+        level: LogLevel.warning,
+      );
+      return;
+    }
+    await _saveToBackend(globalPart);
   }
 
   /// Persists the current user id on this device. Never sent to the server.
@@ -372,8 +445,8 @@ class SettingsManager {
     await _saveLocal({'current_user': userId ?? ''});
   }
 
-  static void attachAutoSave() {
-    detachAutoSave();
+  static Future<void> attachAutoSave() async {
+    await detachAutoSave();
 
     void add(ValueNotifier n, String key, [dynamic Function()? getValue]) {
       void listener() {
@@ -408,7 +481,11 @@ class SettingsManager {
     );
   }
 
-  static void detachAutoSave() {
+  /// Stops the autosave listeners and writes everything still pending.
+  static Future<void> detachAutoSave() async {
+    // Flush first: a value captured before an account switch would otherwise
+    // be written after the switch, with the new account's context.
+    await flushPendingSaves();
     _autoSaveListeners.forEach((notifier, listener) {
       notifier.removeListener(listener);
     });
@@ -594,6 +671,8 @@ class SettingsManager {
 
   static Future<void> loadFromBackend() async {
     if (!PlatformService().isRemote) return;
+    // Write the pending changes first, so the reload reflects them.
+    await flushPendingSaves();
     // Drop the snapshot of whichever server we talked to before.
     _backendGlobals.clear();
     final data = await APIService.instance.getSettings();
@@ -680,7 +759,7 @@ class SettingsManager {
   static Future<void> switchAccount(Account account) async {
     isLoggedIn.value = false;
     APIService.instance.clearAuth();
-    detachAutoSave();
+    await detachAutoSave();
     serverHost.value = account.host;
     serverPort.value = account.port;
 
@@ -705,7 +784,7 @@ class SettingsManager {
       APIService.isOnline.value = false;
       APIService.serverVersion.value = null;
       SystemService().refreshVersions();
-      attachAutoSave();
+      await attachAutoSave();
       APIService.instance.restartPolling();
       return;
     }
@@ -726,7 +805,7 @@ class SettingsManager {
     await saveCurrentUser(account.id);
     await loadFromBackend();
     SystemService().refreshVersions();
-    attachAutoSave();
+    await attachAutoSave();
     APIService.instance.restartPolling();
   }
 }
