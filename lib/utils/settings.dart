@@ -108,9 +108,14 @@ class SettingsManager {
   static final includedRecommendations = ValueNotifier<String>('');
 
   // Naming Pattern
-  static final namingPattern = ValueNotifier<String>(
-    '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}',
-  );
+  ///
+  /// The fallback pattern used when nothing else is configured. It mirrors
+  /// `DEFAULT_PATTERN` in `native/core/src/tools/rename.rs`; the two are kept
+  /// in sync by `tool/check_default_naming_pattern.sh`.
+  static const String defaultNamingPattern =
+      '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}';
+
+  static final namingPattern = ValueNotifier<String>(defaultNamingPattern);
 
   // Per-user metadata preferences
   static final lyricsPrefersync = ValueNotifier<bool>(true);
@@ -281,7 +286,7 @@ class SettingsManager {
       namingPattern.value =
           json['naming_pattern'] ??
           defaults['naming_pattern'] ??
-          '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}';
+          defaultNamingPattern;
     }
   }
 
@@ -375,6 +380,7 @@ class SettingsManager {
         if (_applyingBackend) return;
         saveChanged(key, getValue != null ? getValue() : n.value);
       }
+
       n.addListener(listener);
       _autoSaveListeners[n] = listener;
     }
@@ -421,9 +427,7 @@ class SettingsManager {
     useDynamicColor.value = defaults['use_dynamic_color'] ?? true;
     customColor.value = defaults['custom_color'] ?? 0xFFFF4081;
     checkNightly.value = defaults['check_nightly'] ?? false;
-    namingPattern.value =
-        defaults['naming_pattern'] ??
-        '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}';
+    namingPattern.value = defaults['naming_pattern'] ?? defaultNamingPattern;
   }
 
   static Future<void> loadAllUserSettings() async {
@@ -596,9 +600,7 @@ class SettingsManager {
     if (data != null) {
       _backendGlobals.addAll(
         Map.fromEntries(
-          data.entries.where(
-            (entry) => !deviceLocalKeys.contains(entry.key),
-          ),
+          data.entries.where((entry) => !deviceLocalKeys.contains(entry.key)),
         ),
       );
       _applyingBackend = true;

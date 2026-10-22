@@ -28,6 +28,10 @@ pub async fn handle_format_naming_preview(
     let master_key = state.context.master_key.read().await.clone();
     let cfg = state.context.cfg().await;
     let global_pattern = tawai_core::tools::rename::naming_pattern_from_config(cfg.as_ref());
+    // The pattern the preview actually uses: the client's override when it
+    // supplied one, the global pattern otherwise.
+    let effective_pattern =
+        tawai_core::tools::rename::resolve_naming_pattern(body.pattern.as_deref(), &global_pattern);
 
     // Only the file-path preview resolves a source, so skip the lookup for the
     // naming-format help dialog.
@@ -57,5 +61,6 @@ pub async fn handle_format_naming_preview(
     Json(FormatNamingPreviewResponse {
         id: body.id,
         result,
+        pattern: effective_pattern,
     })
 }

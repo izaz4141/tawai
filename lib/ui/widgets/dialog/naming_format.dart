@@ -33,11 +33,22 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
   late ValueNotifier<String> _patternNotifier;
   late TextEditingController _patternCtrl;
 
+  /// Whether the user typed their own pattern. An untouched field means "use
+  /// the server's naming pattern" — the server resolves it from its live
+  /// config, so the preview never renders a stale local copy.
+  bool _patternEdited = false;
+
+  /// The naming pattern the server reported for the last preview.
+  String? _effectivePattern;
+
   @override
   void initState() {
     super.initState();
-    _patternNotifier = ValueNotifier(SettingsManager.namingPattern.value);
-    _patternCtrl = TextEditingController(text: _patternNotifier.value);
+    // Not seeded from the local cache: that cache holds the default pattern
+    // for a user who may not read the global settings, and a stale snapshot
+    // for everyone else. The server reports the pattern it actually used.
+    _patternNotifier = ValueNotifier('');
+    _patternCtrl = TextEditingController();
     _patternNotifier.addListener(_updatePreview);
     _loadTracks();
   }
@@ -97,8 +108,10 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
     if (track == null) return;
     setState(() => _previewLoading = true);
     try {
-      final result = await BridgeService.instance.formatNamingPreview(
-        pattern: _patternNotifier.value,
+      final preview = await BridgeService.instance.formatNamingPreview(
+        // An untouched field means "no override": the server resolves the
+        // global pattern, so the preview shows the admin's layout.
+        pattern: _patternEdited ? _patternNotifier.value : null,
         title: track.title,
         artist: track.artistsString,
         albumArtist: track.artistsString,
@@ -110,8 +123,17 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
       );
       if (!mounted) return;
       setState(() {
-        _previewResult = result;
+        _previewResult = preview.result;
         _previewLoading = false;
+        final effective = preview.pattern;
+        if (effective.isNotEmpty) {
+          _effectivePattern = effective;
+          // Show the pattern the server used, but never overwrite an explicit
+          // override the user typed.
+          if (!_patternEdited && _patternCtrl.text != effective) {
+            _patternCtrl.text = effective;
+          }
+        }
       });
     } catch (_) {
       if (mounted) setState(() => _previewLoading = false);
@@ -187,8 +209,12 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
           ValueListenableBuilder<String>(
             valueListenable: _patternNotifier,
             builder: (context, localPattern, _) {
+              // The base is the pattern the server reported, so the button is
+              // only enabled for a real change.
+              final base =
+                  _effectivePattern ?? SettingsManager.namingPattern.value;
               final hasChanges =
-                  localPattern != SettingsManager.namingPattern.value;
+                  localPattern.isNotEmpty && localPattern != base;
               return FilledButton(
                 onPressed: hasChanges ? _handleApply : null,
                 child: const Text('Apply'),
@@ -212,6 +238,11 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
           style: textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
           decoration: InputDecoration(
             border: const OutlineInputBorder(),
+            hintText: 'Leave empty to use the server naming pattern',
+            helperText: _effectivePattern == null
+                ? null
+                : 'In use: $_effectivePattern',
+            helperMaxLines: 2,
             contentPadding: EdgeInsets.symmetric(
               horizontal: AppTheme.spaceSM,
               vertical: AppTheme.spaceSM,
@@ -220,15 +251,16 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
               icon: const Icon(Icons.arrow_drop_down),
               tooltip: 'Presets',
               onSelected: (entry) {
+                setState(() => _patternEdited = true);
                 _patternCtrl.text = entry.value;
+                // The notifier listener triggers the preview.
                 _patternNotifier.value = entry.value;
-                _updatePreview();
               },
               itemBuilder: (_) => [
                 PopupMenuItem(
                   value: const MapEntry(
                     'Picard-style',
-                    '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}',
+                    SettingsManager.defaultNamingPattern,
                   ),
                   child: const Text('Picard-style'),
                 ),
@@ -278,8 +310,9 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
             ),
           ),
           onChanged: (v) {
+            setState(() => _patternEdited = true);
+            // The notifier listener triggers the preview.
             _patternNotifier.value = v;
-            _updatePreview();
           },
         ),
       ],

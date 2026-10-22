@@ -1443,17 +1443,12 @@ class RinfService {
   // Tools
   // ---------------------------------------------------------------------------
 
-  Future<GetLibraryStatsResponse?> getLibraryStats({
-    String? namingPattern,
-  }) async {
+  Future<GetLibraryStatsResponse?> getLibraryStats() async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = GetLibraryStatsResponse.rustSignalStream.where(
       (s) => s.message.id == id,
     );
-    GetLibraryStatsRequest(
-      id: id,
-      namingPattern: namingPattern,
-    ).sendSignalToRust();
+    GetLibraryStatsRequest(id: id).sendSignalToRust();
     final signal = await stream.first;
     return signal.message;
   }
@@ -1462,7 +1457,13 @@ class RinfService {
   // Naming format preview
   // ---------------------------------------------------------------------------
 
-  Future<String> formatNamingPreview({
+  /// Preview a naming pattern.
+  ///
+  /// [pattern] is an explicit override. When it is `null` the hub resolves the
+  /// global naming pattern from the live config.
+  ///
+  /// Returns the rendered name and the pattern that was actually used.
+  Future<({String result, String pattern})> formatNamingPreview({
     String? pattern,
     required String title,
     required String artist,
@@ -1500,16 +1501,22 @@ class RinfService {
       userId: userId,
     ).sendSignalToRust();
     final signal = await stream.first;
-    return signal.message.result;
+    return (result: signal.message.result, pattern: signal.message.pattern);
   }
 
   // ---------------------------------------------------------------------------
   // Rename
   // ---------------------------------------------------------------------------
 
+  /// Preview a batch rename.
+  ///
+  /// [pattern] is an explicit override. When it is `null` the hub resolves the
+  /// global naming pattern from the live config, so the preview always uses the
+  /// admin-configured pattern.
   Future<BatchRenamePreviewResponse?> batchRenamePreview({
     required List<String> filePaths,
-    required String pattern,
+    required String userId,
+    String? pattern,
     String? sourceId,
   }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
@@ -1519,6 +1526,7 @@ class RinfService {
     BatchRenamePreviewRequest(
       id: id,
       filePaths: filePaths,
+      userId: userId,
       pattern: pattern,
       sourceId: sourceId,
     ).sendSignalToRust();
@@ -1526,10 +1534,15 @@ class RinfService {
     return signal.message;
   }
 
+  /// Apply a batch rename.
+  ///
+  /// The apply always renames with the global naming pattern from the hub's
+  /// live config — the request carries no pattern, so a client snapshot can
+  /// never drive a mutation.
   Future<BatchRenameApplyResponse?> batchRenameApply({
     required List<String> filePaths,
     required List<String> trackIds,
-    required String pattern,
+    required String userId,
   }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = BatchRenameApplyResponse.rustSignalStream.where(
@@ -1539,15 +1552,20 @@ class RinfService {
       id: id,
       filePaths: filePaths,
       trackIds: trackIds,
-      pattern: pattern,
+      userId: userId,
     ).sendSignalToRust();
     final signal = await stream.first;
     return signal.message;
   }
 
+  /// Check which files don't follow the naming convention.
+  ///
+  /// [pattern] is an explicit override. When it is `null` the hub resolves the
+  /// global naming pattern from the live config.
   Future<CheckNamingConventionResponse?> checkNamingConvention({
+    required String userId,
     String? sourceId,
-    required String pattern,
+    String? pattern,
   }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = CheckNamingConventionResponse.rustSignalStream.where(
@@ -1556,6 +1574,7 @@ class RinfService {
     CheckNamingConventionRequest(
       id: id,
       sourceId: sourceId,
+      userId: userId,
       pattern: pattern,
     ).sendSignalToRust();
     final signal = await stream.first;

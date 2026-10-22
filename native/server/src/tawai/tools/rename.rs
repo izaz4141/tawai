@@ -1,10 +1,13 @@
-use axum::{Json, extract::State, response::IntoResponse};
+use std::sync::Arc;
+
+use axum::{Extension, Json, extract::State, response::IntoResponse};
 
 use crate::server::SharedState;
 use tawai_core::signals::tools::{
     BatchRenameApplyRequest, BatchRenameApplyResponse, BatchRenamePreviewRequest,
     BatchRenamePreviewResponse, CheckNamingConventionRequest, CheckNamingConventionResponse,
 };
+use tawai_core::tools::rename::resolve_naming_pattern_from_context;
 
 #[utoipa::path(
     post,
@@ -16,24 +19,35 @@ use tawai_core::signals::tools::{
 )]
 pub async fn handle_batch_rename_preview(
     State(state): State<SharedState>,
+    Extension(user_id): Extension<String>,
     Json(body): Json<BatchRenamePreviewRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
+    // The client pattern is an explicit override; without one the global
+    // pattern from the live config is used.
+    let pattern = resolve_naming_pattern_from_context(
+        &Arc::downgrade(&state.context),
+        body.pattern.as_deref(),
+    )
+    .await;
     let result = tawai_core::tools::rename::batch_rename_preview(
         db.pool(),
         body.source_id.as_deref(),
-        &body.pattern,
+        &pattern,
+        &user_id,
     )
     .await;
     match result {
         Ok(previews) => Json(BatchRenamePreviewResponse {
             id: body.id,
             previews,
+            pattern,
             error: None,
         }),
         Err(e) => Json(BatchRenamePreviewResponse {
             id: body.id,
             previews: vec![],
+            pattern,
             error: Some(e.to_string()),
         }),
     }
@@ -49,14 +63,19 @@ pub async fn handle_batch_rename_preview(
 )]
 pub async fn handle_batch_rename_apply(
     State(state): State<SharedState>,
+    Extension(user_id): Extension<String>,
     Json(body): Json<BatchRenameApplyRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
+    // The apply always renames with the global naming pattern: a
+    // client-supplied pattern is only an override for the preview.
+    let pattern = resolve_naming_pattern_from_context(&Arc::downgrade(&state.context), None).await;
     match tawai_core::tools::rename::batch_rename_apply(
         db.pool(),
         &body.file_paths,
         &body.track_ids,
-        &body.pattern,
+        &pattern,
+        &user_id,
     )
     .await
     {
@@ -83,13 +102,20 @@ pub async fn handle_batch_rename_apply(
 )]
 pub async fn handle_check_naming_convention(
     State(state): State<SharedState>,
+    Extension(user_id): Extension<String>,
     Json(query): Json<CheckNamingConventionRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
+    let pattern = resolve_naming_pattern_from_context(
+        &Arc::downgrade(&state.context),
+        query.pattern.as_deref(),
+    )
+    .await;
     match tawai_core::tools::rename::check_naming_convention(
         db.pool(),
         query.source_id.as_deref(),
-        &query.pattern,
+        &pattern,
+        &user_id,
     )
     .await
     {

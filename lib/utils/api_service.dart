@@ -2582,7 +2582,14 @@ class APIService {
   // Naming format preview
   // ---------------------------------------------------------------------------
 
-  Future<String> formatNamingPreview({
+  /// Preview a naming pattern.
+  ///
+  /// [pattern] is an explicit override. When it is `null` the key is omitted
+  /// from the body so the server resolves the global naming pattern from the
+  /// live config.
+  ///
+  /// Returns the rendered name and the pattern that was actually used.
+  Future<({String result, String pattern})> formatNamingPreview({
     String? pattern,
     required String title,
     required String artist,
@@ -2619,13 +2626,16 @@ class APIService {
         }),
       );
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['result'] as String;
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return (
+          result: data['result'] as String? ?? '',
+          pattern: data['pattern'] as String? ?? '',
+        );
       }
-      return '';
+      return (result: '', pattern: '');
     } catch (e) {
       log('formatNamingPreview error: $e', level: LogLevel.error);
-      return '';
+      return (result: '', pattern: '');
     }
   }
 
@@ -2633,16 +2643,22 @@ class APIService {
   // Rename
   // ---------------------------------------------------------------------------
 
+  /// Preview a batch rename.
+  ///
+  /// [pattern] is an explicit override. When it is `null` the key is omitted
+  /// from the body so the server resolves the global naming pattern from the
+  /// live config.
   Future<BatchRenamePreviewResponse?> batchRenamePreview({
     required List<String> filePaths,
-    required String pattern,
+    String? pattern,
     String? sourceId,
   }) async {
     try {
       final body = <String, dynamic>{
         'id': _newId(),
         'file_paths': filePaths,
-        'pattern': pattern,
+        'user_id': SettingsManager.currentUserId.value ?? '',
+        'pattern': ?pattern,
       };
       if (sourceId != null) body['source_id'] = sourceId;
       final response = await http.post(
@@ -2664,6 +2680,7 @@ class APIService {
       return BatchRenamePreviewResponse(
         id: '',
         previews: previews,
+        pattern: data['pattern'] as String? ?? '',
         error: data['error'] as String?,
       );
     } catch (e) {
@@ -2672,10 +2689,13 @@ class APIService {
     }
   }
 
+  /// Apply a batch rename.
+  ///
+  /// The apply always renames with the global naming pattern from the
+  /// server's live config — the body carries no pattern.
   Future<BatchRenameApplyResponse?> batchRenameApply({
     required List<String> filePaths,
     required List<String> trackIds,
-    required String pattern,
   }) async {
     try {
       final response = await http.post(
@@ -2685,7 +2705,7 @@ class APIService {
           'id': _newId(),
           'file_paths': filePaths,
           'track_ids': trackIds,
-          'pattern': pattern,
+          'user_id': SettingsManager.currentUserId.value ?? '',
         }),
       );
       if (response.statusCode != 200) return null;
@@ -2710,9 +2730,14 @@ class APIService {
     }
   }
 
+  /// Check which files don't follow the naming convention.
+  ///
+  /// [pattern] is an explicit override. When it is `null` the key is omitted
+  /// from the body so the server resolves the global naming pattern from the
+  /// live config.
   Future<CheckNamingConventionResponse?> checkNamingConvention({
     String? sourceId,
-    required String pattern,
+    String? pattern,
   }) async {
     try {
       final response = await http.post(
@@ -2720,7 +2745,8 @@ class APIService {
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
         body: jsonEncode({
           'id': _newId(),
-          'pattern': pattern,
+          'user_id': SettingsManager.currentUserId.value ?? '',
+          'pattern': ?pattern,
           'source_id': ?sourceId,
         }),
       );
@@ -2797,15 +2823,13 @@ class APIService {
     }
   }
 
-  Future<GetLibraryStatsResponse?> getLibraryStats({
-    String? namingPattern,
-  }) async {
+  /// Library statistics.
+  ///
+  /// The conformity figure is always computed against the server's effective
+  /// naming pattern, so no pattern is sent from the client.
+  Future<GetLibraryStatsResponse?> getLibraryStats() async {
     try {
-      final uri = Uri.parse('$baseUrl/api/tawai/tools/stats').replace(
-        queryParameters: namingPattern != null
-            ? {'naming_pattern': namingPattern}
-            : null,
-      );
+      final uri = Uri.parse('$baseUrl/api/tawai/tools/stats');
       final response = await http.get(uri, headers: _authHeaders());
       if (response.statusCode != 200) return null;
       final data = jsonDecode(response.body) as Map<String, dynamic>;

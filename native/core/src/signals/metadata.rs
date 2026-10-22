@@ -484,4 +484,7 @@ pub struct FormatNamingPreviewResponse {
     #[serde(default)]
     pub id: String,
     pub result: String,
+    /// The naming pattern the server actually used, so the client can show it
+    /// without being able to read the global settings.
+    pub pattern: String,
 }

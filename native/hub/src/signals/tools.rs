@@ -9,7 +9,12 @@ use serde::{Deserialize, Serialize};
 pub struct BatchRenamePreviewRequest {
     pub id: String,
     pub file_paths: Vec<String>,
-    pub pattern: String,
+    /// The caller of the request. The hub has no auth layer, so it uses this
+    /// id to authorize the rename against the library sources.
+    pub user_id: String,
+    /// An explicit naming-pattern override. When absent the hub resolves the
+    /// global pattern from the live config.
+    pub pattern: Option<String>,
     pub source_id: Option<String>,
 }
 
@@ -17,6 +22,8 @@ pub struct BatchRenamePreviewRequest {
 pub struct BatchRenamePreviewResponse {
     pub id: String,
     pub previews: Vec<RenamePreview>,
+    /// The naming pattern the hub actually used.
+    pub pattern: String,
     pub error: Option<String>,
 }
 
@@ -25,7 +32,11 @@ pub struct BatchRenameApplyRequest {
     pub id: String,
     pub file_paths: Vec<String>,
     pub track_ids: Vec<String>,
-    pub pattern: String,
+    /// The caller of the request. The hub has no auth layer, so it uses this
+    /// id to authorize the rename against the library sources.
+    pub user_id: String,
+    // No pattern: the apply always renames with the global naming pattern
+    // from the live config, so a client snapshot can never drive a mutation.
 }
 
 #[derive(Serialize, RustSignal)]
@@ -39,7 +50,12 @@ pub struct BatchRenameApplyResponse {
 pub struct CheckNamingConventionRequest {
     pub id: String,
     pub source_id: Option<String>,
-    pub pattern: String,
+    /// The caller of the request. The hub has no auth layer, so it uses this
+    /// id to authorize the check against the library sources.
+    pub user_id: String,
+    /// An explicit naming-pattern override. When absent the hub resolves the
+    /// global pattern from the live config.
+    pub pattern: Option<String>,
 }
 
 #[derive(Serialize, RustSignal)]

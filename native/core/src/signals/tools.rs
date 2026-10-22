@@ -136,7 +136,14 @@ pub struct BatchRenamePreviewRequest {
     #[serde(default)]
     pub id: String,
     pub file_paths: Vec<String>,
-    pub pattern: String,
+    /// The caller of the request. The server ignores this field and uses the
+    /// authenticated user instead.
+    #[serde(default)]
+    pub user_id: String,
+    /// An explicit naming-pattern override. When absent the server resolves
+    /// the global pattern from the live config.
+    #[serde(default)]
+    pub pattern: Option<String>,
     pub source_id: Option<String>,
 }
 
@@ -145,6 +152,8 @@ pub struct BatchRenamePreviewResponse {
     #[serde(default)]
     pub id: String,
     pub previews: Vec<RenamePreview>,
+    /// The naming pattern the server actually used.
+    pub pattern: String,
     pub error: Option<String>,
 }
 
@@ -155,7 +164,12 @@ pub struct BatchRenameApplyRequest {
     pub file_paths: Vec<String>,
     #[serde(default)]
     pub track_ids: Vec<String>,
-    pub pattern: String,
+    /// The caller of the request. The server ignores this field and uses the
+    /// authenticated user instead.
+    #[serde(default)]
+    pub user_id: String,
+    // No pattern: the apply always renames with the global naming pattern
+    // from the live config, so a client snapshot can never drive a mutation.
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -171,7 +185,14 @@ pub struct CheckNamingConventionRequest {
     #[serde(default)]
     pub id: String,
     pub source_id: Option<String>,
-    pub pattern: String,
+    /// The caller of the request. The server ignores this field and uses the
+    /// authenticated user instead.
+    #[serde(default)]
+    pub user_id: String,
+    /// An explicit naming-pattern override. When absent the server resolves
+    /// the global pattern from the live config.
+    #[serde(default)]
+    pub pattern: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]

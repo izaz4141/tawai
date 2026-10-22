@@ -290,7 +290,9 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     final fileTotalDiscs = lt?.totalDiscs;
 
     _titleCtrl = TextEditingController(text: pick(lt?.title, t.title));
-    _artistCtrl = TextEditingController(text: pick(lt?.artist, t.artistsString));
+    _artistCtrl = TextEditingController(
+      text: pick(lt?.artist, t.artistsString),
+    );
     _artistsCtrl = TextEditingController(
       text: (lt != null && lt.artists.isNotEmpty)
           ? joinStrings(lt.artists)
@@ -687,7 +689,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     }
     final seq = ++_previewSeq;
     try {
-      final result = await BridgeService.instance.formatNamingPreview(
+      final preview = await BridgeService.instance.formatNamingPreview(
         title: _titleCtrl.text,
         artist: _artistCtrl.text,
         albumArtist: _albumArtistCtrl.text.isNotEmpty
@@ -704,7 +706,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
         filePath: widget.currentTrack.filePath,
       );
       if (!mounted || seq != _previewSeq) return;
-      setState(() => _pathPreview = result);
+      setState(() => _pathPreview = preview.result);
     } catch (_) {
       if (!mounted || seq != _previewSeq) return;
       setState(() => _pathPreview = '');

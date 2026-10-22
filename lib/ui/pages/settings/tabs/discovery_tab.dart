@@ -617,8 +617,7 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
               valueListenable: SettingsManager.namingPattern,
               items: const [
                 DropdownMenuItem(
-                  value:
-                      '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}',
+                  value: SettingsManager.defaultNamingPattern,
                   child: Text('Picard-style'),
                 ),
                 DropdownMenuItem(

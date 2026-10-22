@@ -505,4 +505,7 @@ pub struct FormatNamingPreviewRequest {
 pub struct FormatNamingPreviewResponse {
     pub id: String,
     pub result: String,
+    /// The naming pattern the hub actually used, so the client can show it
+    /// without being able to read the global settings.
+    pub pattern: String,
 }

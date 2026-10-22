@@ -16,9 +16,15 @@ pub async fn handle_get_library_stats(context: Arc<AppContext>) {
         let msg = signal_pack.message;
         let db = context.db().await;
 
-        let pattern = msg.naming_pattern.filter(|p| !p.is_empty());
+        // The client pattern is an explicit override; without one the global
+        // pattern from the live config is used.
+        let pattern = tools::rename::resolve_naming_pattern_from_context(
+            &Arc::downgrade(&context),
+            msg.naming_pattern.as_deref(),
+        )
+        .await;
 
-        match tools::stats::get_library_stats(db.pool(), pattern.as_deref()).await {
+        match tools::stats::get_library_stats(db.pool(), &pattern).await {
             Ok(stats) => {
                 GetLibraryStatsResponse {
                     id: msg.id,
@@ -85,14 +91,26 @@ pub async fn handle_batch_rename_preview(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let result =
-            tools::rename::batch_rename_preview(db.pool(), msg.source_id.as_deref(), &msg.pattern)
-                .await;
+        // The client pattern is an explicit override; without one the global
+        // pattern from the live config is used.
+        let pattern = tools::rename::resolve_naming_pattern_from_context(
+            &Arc::downgrade(&context),
+            msg.pattern.as_deref(),
+        )
+        .await;
+        let result = tools::rename::batch_rename_preview(
+            db.pool(),
+            msg.source_id.as_deref(),
+            &pattern,
+            &msg.user_id,
+        )
+        .await;
         match result {
             Ok(previews) => {
                 BatchRenamePreviewResponse {
                     id: msg.id,
                     previews: previews.into_iter().map(Into::into).collect(),
+                    pattern,
                     error: None,
                 }
                 .send_signal_to_dart();
@@ -102,6 +120,7 @@ pub async fn handle_batch_rename_preview(context: Arc<AppContext>) {
                 BatchRenamePreviewResponse {
                     id: msg.id,
                     previews: vec![],
+                    pattern,
                     error: Some(e.to_string()),
                 }
                 .send_signal_to_dart();
@@ -116,11 +135,17 @@ pub async fn handle_batch_rename_apply(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
+        // The apply always renames with the global naming pattern: a
+        // client-supplied pattern is only an override for the preview.
+        let pattern =
+            tools::rename::resolve_naming_pattern_from_context(&Arc::downgrade(&context), None)
+                .await;
         match tools::rename::batch_rename_apply(
             db.pool(),
             &msg.file_paths,
             &msg.track_ids,
-            &msg.pattern,
+            &pattern,
+            &msg.user_id,
         )
         .await
         {
@@ -151,10 +176,16 @@ pub async fn handle_check_naming_convention(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
+        let pattern = tools::rename::resolve_naming_pattern_from_context(
+            &Arc::downgrade(&context),
+            msg.pattern.as_deref(),
+        )
+        .await;
         match tools::rename::check_naming_convention(
             db.pool(),
             msg.source_id.as_deref(),
-            &msg.pattern,
+            &pattern,
+            &msg.user_id,
         )
         .await
         {

@@ -30,6 +30,12 @@ pub async fn handle_format_naming_preview(context: Arc<AppContext>) {
         let master_key = context.master_key.read().await.clone();
         let cfg = context.cfg().await;
         let global_pattern = tawai_core::tools::rename::naming_pattern_from_config(cfg.as_ref());
+        // The pattern the preview actually uses: the client's override when it
+        // supplied one, the global pattern otherwise.
+        let effective_pattern = tawai_core::tools::rename::resolve_naming_pattern(
+            msg.pattern.as_deref(),
+            &global_pattern,
+        );
 
         // Only the file-path preview resolves a source, so skip the lookup for
         // the naming-format help dialog.
@@ -53,6 +59,11 @@ pub async fn handle_format_naming_preview(context: Arc<AppContext>) {
         )
         .await;
 
-        FormatNamingPreviewResponse { id: msg.id, result }.send_signal_to_dart();
+        FormatNamingPreviewResponse {
+            id: msg.id,
+            result,
+            pattern: effective_pattern,
+        }
+        .send_signal_to_dart();
     }
 }

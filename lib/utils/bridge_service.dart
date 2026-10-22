@@ -987,7 +987,13 @@ class BridgeService {
   // Naming format preview
   // ---------------------------------------------------------------------------
 
-  Future<String> formatNamingPreview({
+  /// Preview a naming pattern.
+  ///
+  /// [pattern] is an explicit override. When it is `null` the backend resolves
+  /// the global naming pattern from its live config.
+  ///
+  /// Returns the rendered name and the pattern that was actually used.
+  Future<({String result, String pattern})> formatNamingPreview({
     String? pattern,
     required String title,
     required String artist,
@@ -1041,9 +1047,13 @@ class BridgeService {
   // Rename
   // ---------------------------------------------------------------------------
 
+  /// Preview a batch rename.
+  ///
+  /// [pattern] is an explicit override. When it is `null` the backend resolves
+  /// the global naming pattern from the live config.
   Future<BatchRenamePreviewResponse?> batchRenamePreview({
     required List<String> filePaths,
-    required String pattern,
+    String? pattern,
     String? sourceId,
   }) async {
     if (_isRemote) {
@@ -1057,31 +1067,38 @@ class BridgeService {
       filePaths: filePaths,
       pattern: pattern,
       sourceId: sourceId,
+      userId: SettingsManager.currentUserId.value ?? '',
     );
   }
 
+  /// Apply a batch rename.
+  ///
+  /// The apply always renames with the global naming pattern from the
+  /// backend's live config — the request carries no pattern.
   Future<BatchRenameApplyResponse?> batchRenameApply({
     required List<String> filePaths,
     required List<String> trackIds,
-    required String pattern,
   }) async {
     if (_isRemote) {
       return APIService.instance.batchRenameApply(
         filePaths: filePaths,
         trackIds: trackIds,
-        pattern: pattern,
       );
     }
     return RinfService.instance.batchRenameApply(
       filePaths: filePaths,
       trackIds: trackIds,
-      pattern: pattern,
+      userId: SettingsManager.currentUserId.value ?? '',
     );
   }
 
+  /// Check which files don't follow the naming convention.
+  ///
+  /// [pattern] is an explicit override. When it is `null` the backend resolves
+  /// the global naming pattern from the live config.
   Future<CheckNamingConventionResponse?> checkNamingConvention({
     String? sourceId,
-    required String pattern,
+    String? pattern,
   }) async {
     if (_isRemote) {
       return APIService.instance.checkNamingConvention(
@@ -1092,16 +1109,15 @@ class BridgeService {
     return RinfService.instance.checkNamingConvention(
       sourceId: sourceId,
       pattern: pattern,
+      userId: SettingsManager.currentUserId.value ?? '',
     );
   }
 
-  Future<GetLibraryStatsResponse?> getLibraryStats({
-    String? namingPattern,
-  }) async {
+  Future<GetLibraryStatsResponse?> getLibraryStats() async {
     if (_isRemote) {
-      return APIService.instance.getLibraryStats(namingPattern: namingPattern);
+      return APIService.instance.getLibraryStats();
     }
-    return RinfService.instance.getLibraryStats(namingPattern: namingPattern);
+    return RinfService.instance.getLibraryStats();
   }
 
   Future<FindMissingMetadataResponse?> findMissingMetadata({

@@ -129,7 +129,7 @@ class _DownloadTrackSheetState extends State<_DownloadTrackSheet> {
 
       late String dest;
       try {
-        final formattedName = await BridgeService.instance.formatNamingPreview(
+        final preview = await BridgeService.instance.formatNamingPreview(
           title: widget.track.title,
           artist: widget.track.artistsString,
           albumArtist: widget.track.artistsString,
@@ -138,7 +138,7 @@ class _DownloadTrackSheetState extends State<_DownloadTrackSheet> {
           trackNumber: widget.track.trackNum ?? 0,
           discNumber: widget.track.discNum ?? 1,
         );
-        dest = '${SettingsManager.downloadFolder.value}/$formattedName';
+        dest = '${SettingsManager.downloadFolder.value}/${preview.result}';
       } catch (_) {
         dest =
             '${SettingsManager.downloadFolder.value}/${_sanitizeFilename(widget.track.title)}';

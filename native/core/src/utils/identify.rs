@@ -10,9 +10,7 @@ use crate::db::database::DatabasePool;
 use crate::db::{library, library_source};
 use crate::libsources;
 use crate::signals::library::{LibrarySourceInfo, TrackInfo};
-use crate::tools::rename::{
-    DEFAULT_PATTERN, destination_for, format_naming_pattern, move_file_into_source,
-};
+use crate::tools::rename::{destination_for, format_naming_pattern, move_file_into_source};
 
 /// Parameters for applying a MusicBrainz identification result to a track or
 /// a standalone (download-folder) audio file.
@@ -86,18 +84,11 @@ struct MovePlan {
 /// A non-empty `pattern_override` is used as-is. Otherwise the global pattern
 /// resolved by [`crate::tools::rename::naming_pattern_from_config`] is used,
 /// falling back to [`DEFAULT_PATTERN`] when that is empty too.
-fn resolve_preview_pattern<'a>(
-    pattern_override: Option<&'a str>,
-    global_pattern: &'a str,
-) -> &'a str {
-    if let Some(pattern) = pattern_override.filter(|p| !p.trim().is_empty()) {
-        return pattern;
-    }
-    if global_pattern.trim().is_empty() {
-        DEFAULT_PATTERN
-    } else {
-        global_pattern
-    }
+///
+/// Delegates to [`crate::tools::rename::resolve_naming_pattern`] so every
+/// naming-pattern consumer shares one ladder.
+fn resolve_preview_pattern(pattern_override: Option<&str>, global_pattern: &str) -> String {
+    crate::tools::rename::resolve_naming_pattern(pattern_override, global_pattern)
 }
 
 /// Resolve the pattern and source root, probing the root before any write.
@@ -114,7 +105,7 @@ async fn resolve_move_plan(
     pattern_override: Option<&str>,
     global_pattern: &str,
 ) -> Result<MovePlan> {
-    let pattern = resolve_preview_pattern(pattern_override, global_pattern).to_string();
+    let pattern = resolve_preview_pattern(pattern_override, global_pattern);
 
     let source_root = match tawai_local_root(source) {
         Some(root) => root,
@@ -640,10 +631,8 @@ pub async fn preview_naming(
     tag: &audio::tags::AudioTag,
 ) -> String {
     let Some(file_path) = file_path else {
-        return format_naming_pattern(
-            resolve_preview_pattern(pattern_override, global_pattern),
-            tag,
-        );
+        let pattern = resolve_preview_pattern(pattern_override, global_pattern);
+        return format_naming_pattern(&pattern, tag);
     };
     // Without a resolved role the source can't be authorized; don't resolve or
     // disclose its root.
@@ -816,6 +805,7 @@ pub fn list_download_folder_tracks(dir: &Path) -> Result<Vec<TrackInfo>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::rename::DEFAULT_PATTERN;
 
     #[test]
     fn preview_pattern_prefers_non_empty_override() {
