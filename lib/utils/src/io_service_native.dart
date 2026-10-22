@@ -132,8 +132,7 @@ class NativeIOService implements IOService {
   /// through Rinf (`RinfService.saveLocalConfig`), so there is nothing to
   /// keep here.
   @override
-  Future<Map<String, dynamic>> readLocalSettings() async =>
-      <String, dynamic>{};
+  Future<Map<String, dynamic>> readLocalSettings() async => <String, dynamic>{};
 
   @override
   Future<bool> writeLocalSettings(Map<String, dynamic> values) async => false;

@@ -337,7 +337,9 @@ pub fn get_parser(
         "jellyfin" => Some(SourceParser::Jellyfin(jellyfin::JellyfinParser::new(
             client,
         ))),
-        "tawai" => Some(SourceParser::Tawai(tawai::TawaiParser::new(client, context))),
+        "tawai" => Some(SourceParser::Tawai(tawai::TawaiParser::new(
+            client, context,
+        ))),
         _ => RecommendationSource::from_key(source_type)
             .map(|rec| SourceParser::Recommendation(*rec)),
     }

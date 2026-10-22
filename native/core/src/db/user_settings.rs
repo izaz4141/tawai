@@ -64,11 +64,7 @@ pub(crate) async fn set_setting(
 
 /// Raw storage access. Does not apply any secret handling, use
 /// `get_user_setting` instead.
-pub(crate) async fn get_setting(
-    pool: &DatabasePool,
-    user_id: &str,
-    key: &str,
-) -> Option<String> {
+pub(crate) async fn get_setting(pool: &DatabasePool, user_id: &str, key: &str) -> Option<String> {
     match pool {
         DatabasePool::Sqlite(p) => super::user_settings_sq::get_setting(p, user_id, key).await,
         DatabasePool::Postgres(p) => super::user_settings_pg::get_setting(p, user_id, key).await,
@@ -77,10 +73,7 @@ pub(crate) async fn get_setting(
 
 /// Raw storage access. Does not apply any secret handling, use
 /// `get_all_user_settings` instead.
-pub(crate) async fn get_all_settings(
-    pool: &DatabasePool,
-    user_id: &str,
-) -> Vec<(String, String)> {
+pub(crate) async fn get_all_settings(pool: &DatabasePool, user_id: &str) -> Vec<(String, String)> {
     match pool {
         DatabasePool::Sqlite(p) => super::user_settings_sq::get_all_settings(p, user_id).await,
         DatabasePool::Postgres(p) => super::user_settings_pg::get_all_settings(p, user_id).await,

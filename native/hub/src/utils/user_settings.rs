@@ -51,13 +51,9 @@ pub async fn handle_get_user_setting(context: Arc<AppContext>) {
         let db = context.db().await;
         let mk = context.master_key.read().await.clone();
 
-        let value = tawai_core::db::user_settings::get_user_setting(
-            db.pool(),
-            &msg.user_id,
-            &msg.key,
-            &mk,
-        )
-        .await;
+        let value =
+            tawai_core::db::user_settings::get_user_setting(db.pool(), &msg.user_id, &msg.key, &mk)
+                .await;
 
         GetUserSettingResponse {
             id: msg.id,
@@ -77,7 +73,8 @@ pub async fn handle_get_all_user_settings(context: Arc<AppContext>) {
         let mk = context.master_key.read().await.clone();
 
         let settings =
-            tawai_core::db::user_settings::get_all_user_settings(db.pool(), &msg.user_id, &mk).await;
+            tawai_core::db::user_settings::get_all_user_settings(db.pool(), &msg.user_id, &mk)
+                .await;
 
         GetAllUserSettingsResponse {
             id: msg.id,
