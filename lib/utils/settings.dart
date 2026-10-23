@@ -757,9 +757,9 @@ class SettingsManager {
   }
 
   static Future<void> switchAccount(Account account) async {
+    await detachAutoSave();
     isLoggedIn.value = false;
     APIService.instance.clearAuth();
-    await detachAutoSave();
     serverHost.value = account.host;
     serverPort.value = account.port;
 
