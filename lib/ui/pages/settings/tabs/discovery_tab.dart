@@ -586,14 +586,38 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
           valueListenable: SettingsManager.namingPattern,
           builder: (context, value, _) {
             final isAdmin = SettingsManager.currentUser.value?.role == 'admin';
+            if (!isAdmin) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ListTile(
+                    title: Text(
+                      'Naming Format',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    subtitle: Text(
+                      'Managed by an admin',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    trailing: TextButton.icon(
+                      onPressed: () => showNamingFormatHelpDialog(context),
+                      icon: Icon(
+                        Icons.help_outline,
+                        size: AppTheme.iconSM * AppTheme.iconScale(context),
+                      ),
+                      label: const Text('Naming Format Help'),
+                    ),
+                  ),
+                ],
+              );
+            }
             return ListDropdown(
               title: 'Naming Format',
               subtitle: 'Pattern for organizing files.',
               valueListenable: SettingsManager.namingPattern,
               items: const [
                 DropdownMenuItem(
-                  value:
-                      '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}',
+                  value: SettingsManager.defaultNamingPattern,
                   child: Text('Picard-style'),
                 ),
                 DropdownMenuItem(
@@ -623,7 +647,7 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                 ),
               ],
               editable: true,
-              enabled: isAdmin,
+              enabled: true,
               suffixWidgets: [
                 IconButton(
                   icon: Icon(
@@ -636,7 +660,6 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
               ],
               onChange: (v) {
                 SettingsManager.namingPattern.value = v;
-                SettingsManager.syncNamingPatternToRust(v);
               },
             );
           },

@@ -1,24 +1,23 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex, Weak};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use tokio::io::AsyncWriteExt;
 
+use crate::app_context::AppContext;
 use crate::audio::scan::{LogSender, stream_log};
 use crate::audio::tags::{AudioTag, derive_sort_name, parse_artists};
-use crate::db::account::DEFAULT_USERNAME;
 use crate::db::database::DatabasePool;
 use crate::db::library_source;
-use crate::db::user_settings;
 use crate::libsources::{ParsedTrack, ScanDiff, local};
 use crate::signals::discovery::{JellyfinLibraryInfo, ServerTestResult};
 use crate::signals::library::{
     LibrarySourceInfo, ListLibrarySourcesResponse, ListTracksResponse, TrackInfo,
 };
-use crate::tools::rename::{DEFAULT_PATTERN, dest_from_root};
+use crate::tools::rename::{config_naming_pattern, dest_from_root};
 use crate::utils::config::AppConfig;
 use crate::utils::logger;
 
@@ -242,7 +241,7 @@ pub async fn pick_remote(urls: &[String], client: &reqwest::Client) -> Option<Re
 }
 
 /// The first non-tawai:// URL in the list is the local backup root.
-fn local_root(urls: &[String]) -> Option<&str> {
+pub(crate) fn local_root(urls: &[String]) -> Option<&str> {
     urls.iter()
         .find(|u| !u.starts_with("tawai://"))
         .map(|s| s.as_str())
@@ -284,6 +283,10 @@ pub async fn upload_to_remote(
 
 /// Import an audio file into an editable local source: tag it, move it into
 /// the source root, rescan, and return the final path.
+///
+/// `context` is the live app context handle: the destination scheme is read
+/// from the app config at the moment of the import, so an imported file lands
+/// exactly where the next scan enumerates it.
 pub async fn import_into_source(
     pool: &DatabasePool,
     source: &LibrarySourceInfo,
@@ -291,6 +294,7 @@ pub async fn import_into_source(
     filename: &str,
     client: &reqwest::Client,
     master_key: &str,
+    context: Weak<AppContext>,
 ) -> Result<String> {
     if !crate::libsources::is_editable(&source.source_type) {
         anyhow::bail!(
@@ -309,9 +313,10 @@ pub async fn import_into_source(
     tokio::fs::write(&temp_path, file_bytes).await?;
 
     let (tag, _, _, _) = crate::audio::tags::read_audio_tags(&temp_path)?;
-    let pattern = user_settings::get_setting(pool, DEFAULT_USERNAME, "identify_naming_pattern")
-        .await
-        .filter(|s| !s.is_empty());
+    // The naming scheme is the live global config pattern, re-read at the
+    // point of use: the import must land under the same layout the scan
+    // enumerates. `None` would mean "flat, keep the original stem".
+    let pattern = Some(config_naming_pattern(&context).await);
 
     let final_path =
         crate::tools::rename::move_file_into_source(&temp_path, root, pattern.as_deref(), &tag)?;
@@ -336,6 +341,7 @@ pub async fn import_into_source(
         None,
         master_key,
         None,
+        context,
     )
     .await;
     if let Some(err) = scan_result.error {
@@ -436,6 +442,27 @@ static REACH_CACHE: LazyLock<Mutex<HashMap<String, ReachEntry>>> =
 const CACHE_TTL: Duration = Duration::from_secs(60);
 
 const REACH_TTL: Duration = Duration::from_secs(60);
+
+fn remote_track_cache_key(conn: &RemoteConn) -> Option<String> {
+    let source_id = conn.source_id.as_deref()?;
+    Some(format!("{}|{}", conn.http_base, source_id))
+}
+
+/// Invalidate cached remote track lists for this connection (both the
+/// successful list cache and the cached-failure list cache).
+pub fn invalidate_remote_track_caches(conn: &RemoteConn) {
+    let Some(key) = remote_track_cache_key(conn) else {
+        return;
+    };
+    {
+        let mut cache = REMOTE_CACHE.lock().unwrap();
+        cache.remove(&key);
+    }
+    {
+        let mut fails = REMOTE_FAIL_CACHE.lock().unwrap();
+        fails.remove(&key);
+    }
+}
 
 /// Max redownload attempts per track; download errors and hash mismatches
 /// share this budget.
@@ -803,11 +830,16 @@ async fn download_chunk(
 }
 
 /// Map a local backup path back to the remote connection + track that backs it.
-async fn resolve_remote_track(
-    pool: &DatabasePool,
+///
+/// `naming_pattern` is the explicit pattern for local backup paths: a
+/// non-empty value wins as-is. Otherwise the pattern is read live from the app
+/// config through `context`.
+pub(crate) async fn resolve_remote_track(
     client: &reqwest::Client,
     urls: &[String],
     local_path: &str,
+    naming_pattern: Option<&str>,
+    context: &Weak<AppContext>,
 ) -> Result<(RemoteConn, TrackInfo)> {
     let root = local_root(urls).unwrap_or("/tmp");
     let conn = pick_remote(urls, client)
@@ -816,9 +848,10 @@ async fn resolve_remote_track(
     let tracks = cached_remote_tracks(client, &conn)
         .await
         .context("tawai remote track list failed")?;
-    let pattern = user_settings::get_setting(pool, DEFAULT_USERNAME, "identify_naming_pattern")
-        .await
-        .unwrap_or_else(|| DEFAULT_PATTERN.to_string());
+    let pattern = match naming_pattern.filter(|p| !p.trim().is_empty()) {
+        Some(p) => p.to_string(),
+        None => config_naming_pattern(context).await,
+    };
     let dest = Path::new(local_path);
     let rt = tracks
         .into_iter()
@@ -831,27 +864,24 @@ async fn resolve_remote_track(
 
 pub struct TawaiParser {
     pub client: reqwest::Client,
+    /// Handle to the live app context. The naming pattern is read from the
+    /// config at every use; the parser never holds the context strongly.
+    pub context: Weak<AppContext>,
 }
 
 impl TawaiParser {
-    pub fn new(client: reqwest::Client) -> Self {
-        Self { client }
+    pub fn new(client: reqwest::Client, context: Weak<AppContext>) -> Self {
+        Self { client, context }
     }
 
     /// Enumerate deterministic local dest paths from the remote's track list,
     /// falling back to the local backup walk when unreachable.
-    pub async fn enumerate_paths(
-        &self,
-        pool: &DatabasePool,
-        _url: &str,
-        urls: &[String],
-    ) -> Result<Vec<String>> {
+    pub async fn enumerate_paths(&self, _url: &str, urls: &[String]) -> Result<Vec<String>> {
         if let Some(conn) = pick_remote(urls, &self.client).await {
             let root = local_root(urls).unwrap_or("/tmp");
-            let pattern =
-                user_settings::get_setting(pool, DEFAULT_USERNAME, "identify_naming_pattern")
-                    .await
-                    .unwrap_or_else(|| DEFAULT_PATTERN.to_string());
+            // Resolved fresh on every call: the pattern is live at every scan
+            // phase by design.
+            let pattern = config_naming_pattern(&self.context).await;
             let tracks = cached_remote_tracks(&self.client, &conn)
                 .await
                 .context("tawai remote track list failed for remote source")?;
@@ -889,14 +919,13 @@ impl TawaiParser {
     /// Bulk scan paths (unused by current scan pipeline but kept for completeness).
     pub async fn scan_paths(
         &self,
-        pool: &DatabasePool,
         _url: &str,
         urls: &[String],
         paths: &[String],
     ) -> Result<Vec<ParsedTrack>> {
         let mut tracks = Vec::new();
         for p in paths {
-            match self.scan_file(pool, _url, urls, p, &None).await {
+            match self.scan_file(_url, urls, p, &None).await {
                 Ok(t) => tracks.push(t),
                 Err(e) => logger::warn(&format!("tawai scan_paths skip {}: {}", p, e)),
             }
@@ -909,14 +938,13 @@ impl TawaiParser {
     /// local scan when the remote is unreachable or the hash never matches.
     pub async fn scan_file(
         &self,
-        pool: &DatabasePool,
         _url: &str,
         urls: &[String],
         file_path: &str,
         log_tx: &Option<LogSender>,
     ) -> Result<ParsedTrack> {
         let dest = Path::new(file_path);
-        match resolve_remote_track(pool, &self.client, urls, file_path).await {
+        match resolve_remote_track(&self.client, urls, file_path, None, &self.context).await {
             Ok((conn, rt)) => {
                 let Some(remote_hash) = rt.file_hash.as_deref() else {
                     // No remote hash to verify against: download a missing file
@@ -979,7 +1007,6 @@ impl TawaiParser {
     /// Resolve stream URL: local file if present, else remote stream.
     pub async fn resolve_stream_url(
         &self,
-        pool: &DatabasePool,
         file_path: &str,
         _url: &str,
         urls: &[String],
@@ -991,7 +1018,7 @@ impl TawaiParser {
             return Ok((file_path.to_string(), vec![]));
         }
         // Fallback: remote stream
-        let (conn, rt) = resolve_remote_track(pool, client, urls, file_path).await?;
+        let (conn, rt) = resolve_remote_track(client, urls, file_path, None, &self.context).await?;
         let stream_url = format!("{}/api/tawai/playback/stream/{}", conn.http_base, rt.id);
         Ok((stream_url, vec![("X-API-Key".into(), conn.api_key)]))
     }
@@ -1000,14 +1027,13 @@ impl TawaiParser {
     /// is set (best-effort).
     pub async fn delete(
         &self,
-        pool: &DatabasePool,
         file_path: &str,
         _url: &str,
         urls: &[String],
         mirror_remote: bool,
     ) -> Result<()> {
         if mirror_remote {
-            match resolve_remote_track(pool, &self.client, urls, file_path).await {
+            match resolve_remote_track(&self.client, urls, file_path, None, &self.context).await {
                 Ok((conn, rt)) => {
                     let delete_url =
                         format!("{}/api/tawai/library/tracks/{}", conn.http_base, rt.id);
@@ -1045,6 +1071,10 @@ impl TawaiParser {
 
 /// Forward a local tag write to the remote source so the remote copy stays in
 /// sync; no-op for non-tawai files.
+///
+/// `context` is the live app context handle: the backing remote track is
+/// resolved through the global naming pattern read from the config at the
+/// moment of the lookup.
 pub async fn mirror_tag_write(
     pool: &DatabasePool,
     local_path: &str,
@@ -1052,6 +1082,7 @@ pub async fn mirror_tag_write(
     clear_cover: bool,
     client: &reqwest::Client,
     master_key: &str,
+    context: Weak<AppContext>,
 ) -> Result<()> {
     let sources = library_source::list_all_sources(pool, master_key).await?;
     let source = match sources.iter().find(|s| {
@@ -1064,7 +1095,7 @@ pub async fn mirror_tag_write(
         None => return Ok(()),
     };
 
-    let (conn, rt) = resolve_remote_track(pool, client, &source.urls, local_path).await?;
+    let (conn, rt) = resolve_remote_track(client, &source.urls, local_path, None, &context).await?;
     let body = serde_json::json!({
         "path": rt.file_path,
         "title": tag.title,
@@ -1110,12 +1141,14 @@ pub async fn mirror_tag_write(
     if !resp.status().is_success() {
         anyhow::bail!("tawai remote tag write failed: {}", resp.status());
     }
+    invalidate_remote_track_caches(&conn);
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::rename::DEFAULT_PATTERN;
 
     #[test]
     fn parse_tawai_url_valid() {

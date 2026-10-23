@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     Json,
     extract::{Query, State},
@@ -6,6 +8,7 @@ use axum::{
 
 use crate::server::SharedState;
 use tawai_core::signals::tools::{GetLibraryStatsRequest, GetLibraryStatsResponse};
+use tawai_core::tools::rename::resolve_naming_pattern_from_context;
 
 #[utoipa::path(
     get,
@@ -20,9 +23,14 @@ pub async fn handle_get_library_stats(
     Query(query): Query<GetLibraryStatsRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    match tawai_core::tools::stats::get_library_stats(db.pool(), query.naming_pattern.as_deref())
-        .await
-    {
+    // The query parameter is an explicit override; without one the global
+    // pattern from the live config is used.
+    let pattern = resolve_naming_pattern_from_context(
+        &Arc::downgrade(&state.context),
+        query.naming_pattern.as_deref(),
+    )
+    .await;
+    match tawai_core::tools::stats::get_library_stats(db.pool(), &pattern).await {
         Ok(stats) => Json(GetLibraryStatsResponse {
             id: String::new(),
             stats: Some(stats),

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:tawai/ui/theme/app_theme.dart';
@@ -47,28 +48,32 @@ class SettingsGlobalTab extends StatelessWidget {
           ),
         ),
         SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-        ListTextField(
-          title: 'Server Host',
-          subtitle: 'Hostname or IP address of the server',
-          valueListenable: SettingsManager.serverHost,
-          defaultValue: SettingsManager.defaults['server_host'] as String?,
-        ),
-        SpinBox<int>(
-          title: 'Server Port',
-          subtitle: 'Port the server listens on',
-          valueListenable: SettingsManager.serverPort,
-          min: 1,
-          max: 65535,
-          defaultValue: SettingsManager.defaults['server_port'] as int?,
-        ),
-        SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
-        ListSwitch(
-          title: 'Require Login',
-          subtitle: 'Enforce authentication for remote access',
-          valueListenable: SettingsManager.requireLogin,
-          defaultValue: SettingsManager.defaults['require_login'] as bool?,
-        ),
-        SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
+        // On web the origin decides where the server lives and login is
+        // always required, so these controls cannot mean anything there.
+        if (!kIsWeb) ...[
+          ListTextField(
+            title: 'Server Host',
+            subtitle: 'Hostname or IP address of the server',
+            valueListenable: SettingsManager.serverHost,
+            defaultValue: SettingsManager.defaults['server_host'] as String?,
+          ),
+          SpinBox<int>(
+            title: 'Server Port',
+            subtitle: 'Port the server listens on',
+            valueListenable: SettingsManager.serverPort,
+            min: 1,
+            max: 65535,
+            defaultValue: SettingsManager.defaults['server_port'] as int?,
+          ),
+          SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
+          ListSwitch(
+            title: 'Require Login',
+            subtitle: 'Enforce authentication for remote access',
+            valueListenable: SettingsManager.requireLogin,
+            defaultValue: SettingsManager.defaults['require_login'] as bool?,
+          ),
+          SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
+        ],
         OutlinedButton.icon(
           onPressed: () {
             showDialog(

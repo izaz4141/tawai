@@ -8,9 +8,11 @@ pub use recommendation::{ALL_RECOMMENDATION_SOURCES, ApiType, RecommendationSour
 use std::collections::HashSet;
 use std::ops::Deref;
 use std::path::Path;
+use std::sync::Weak;
 
 use anyhow::{Result, anyhow};
 
+use crate::app_context::AppContext;
 use crate::audio::scan::LogSender;
 use crate::audio::tags::AudioTag;
 use crate::db::database::DatabasePool;
@@ -179,7 +181,7 @@ impl SourceParser {
         match self {
             SourceParser::Local => local::enumerate_paths(url),
             SourceParser::Jellyfin(p) => p.enumerate_paths(url).await,
-            SourceParser::Tawai(p) => p.enumerate_paths(pool, url, urls).await,
+            SourceParser::Tawai(p) => p.enumerate_paths(url, urls).await,
             SourceParser::Recommendation(rec) => {
                 recommendation::enumerate_paths(pool, rec, master_key).await
             }
@@ -188,7 +190,6 @@ impl SourceParser {
 
     pub async fn scan_paths(
         &self,
-        pool: &DatabasePool,
         url: &str,
         urls: &[String],
         paths: &[String],
@@ -196,7 +197,7 @@ impl SourceParser {
         match self {
             SourceParser::Local => local::scan_paths(url, paths),
             SourceParser::Jellyfin(p) => p.scan_paths(url, paths).await,
-            SourceParser::Tawai(p) => p.scan_paths(pool, url, urls, paths).await,
+            SourceParser::Tawai(p) => p.scan_paths(url, urls, paths).await,
             SourceParser::Recommendation(_) => Ok(vec![]),
         }
     }
@@ -222,7 +223,6 @@ impl SourceParser {
 
     pub async fn scan_file(
         &self,
-        pool: &DatabasePool,
         url: &str,
         urls: &[String],
         file_path: &str,
@@ -231,7 +231,7 @@ impl SourceParser {
         match self {
             SourceParser::Local => local::scan_file(Path::new(file_path)),
             SourceParser::Jellyfin(p) => p.scan_file(url, file_path, log_tx).await,
-            SourceParser::Tawai(p) => p.scan_file(pool, url, urls, file_path, log_tx).await,
+            SourceParser::Tawai(p) => p.scan_file(url, urls, file_path, log_tx).await,
             SourceParser::Recommendation(_) => {
                 anyhow::bail!("recommendation sources are synced, not scanned")
             }
@@ -251,7 +251,7 @@ impl SourceParser {
             SourceParser::Local => Ok((file_path.to_string(), vec![])),
             SourceParser::Jellyfin(p) => p.resolve_stream_url(file_path, url).await,
             SourceParser::Tawai(p) => {
-                p.resolve_stream_url(pool, file_path, url, urls, client, cfg)
+                p.resolve_stream_url(file_path, url, urls, client, cfg)
                     .await
             }
             SourceParser::Recommendation(_) => {
@@ -275,7 +275,7 @@ impl SourceParser {
         match self {
             SourceParser::Local => local::delete_file(file_path),
             SourceParser::Jellyfin(p) => p.delete(file_path, url, mirror_remote).await,
-            SourceParser::Tawai(p) => p.delete(pool, file_path, url, urls, mirror_remote).await,
+            SourceParser::Tawai(p) => p.delete(file_path, url, urls, mirror_remote).await,
             SourceParser::Recommendation(_) => recommendation::delete(pool, file_path).await,
         }
     }
@@ -290,6 +290,7 @@ impl SourceParser {
         user_id: &str,
         extra: Option<&str>,
         master_key: &str,
+        context: Weak<AppContext>,
     ) -> Result<String> {
         match self {
             SourceParser::Local | SourceParser::Jellyfin(_) | SourceParser::Tawai(_) => {
@@ -297,7 +298,7 @@ impl SourceParser {
             }
             SourceParser::Recommendation(_) => {
                 recommendation::download(
-                    pool, file_path, dest_path, client, cfg, user_id, extra, master_key,
+                    pool, file_path, dest_path, client, cfg, user_id, extra, master_key, context,
                 )
                 .await
             }
@@ -321,17 +322,24 @@ impl SourceParser {
     }
 }
 
+/// Build the parser for a source type.
+///
+/// `context` is the live app context handle: parsers that need the global
+/// naming pattern read it from the config at every use. Sources that don't
+/// ignore it.
 pub fn get_parser(
     source_type: &str,
     client: reqwest::Client,
-    _pool: &DatabasePool,
+    context: Weak<AppContext>,
 ) -> Option<SourceParser> {
     match source_type {
         "local" => Some(SourceParser::Local),
         "jellyfin" => Some(SourceParser::Jellyfin(jellyfin::JellyfinParser::new(
             client,
         ))),
-        "tawai" => Some(SourceParser::Tawai(tawai::TawaiParser::new(client))),
+        "tawai" => Some(SourceParser::Tawai(tawai::TawaiParser::new(
+            client, context,
+        ))),
         _ => RecommendationSource::from_key(source_type)
             .map(|rec| SourceParser::Recommendation(*rec)),
     }

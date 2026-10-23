@@ -227,7 +227,7 @@ Future<void> _resolveCurrentUser() async {
         SettingsManager.isLoggedIn.value = true;
       }
       await SettingsManager.loadFromBackend();
-      SettingsManager.attachAutoSave();
+      await SettingsManager.attachAutoSave();
       APIService.instance.restartPolling();
       return;
     }

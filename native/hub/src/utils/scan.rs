@@ -86,6 +86,9 @@ pub async fn handle_scan_library(context: Arc<AppContext>) {
             }
         });
         let ctx = context.clone();
+        // The scan runs in a spawned task: hand it a weak handle to the live
+        // context so the naming pattern is read from the config as it is.
+        let weak_ctx = Arc::downgrade(&context);
         tokio::spawn(async move {
             let core_result = tawai_core::audio::scan::run_scan(
                 db.pool(),
@@ -95,6 +98,7 @@ pub async fn handle_scan_library(context: Arc<AppContext>) {
                 Some(tx),
                 &mk,
                 Some(log_tx),
+                weak_ctx,
             )
             .await;
 
@@ -226,6 +230,9 @@ pub async fn handle_scan_source(context: Arc<AppContext>) {
             }
         });
         let ctx = context.clone();
+        // The scan runs in a spawned task: hand it a weak handle to the live
+        // context so the naming pattern is read from the config as it is.
+        let weak_ctx = Arc::downgrade(&context);
         tokio::spawn(async move {
             let pool = db.pool();
             let result = tawai_core::audio::scan::run_scan(
@@ -236,6 +243,7 @@ pub async fn handle_scan_source(context: Arc<AppContext>) {
                 Some(tx),
                 &mk,
                 Some(log_tx),
+                weak_ctx,
             )
             .await;
             *ctx.scan_progress.write().await = Some(tawai_core::signals::library::ScanProgress {

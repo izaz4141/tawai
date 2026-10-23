@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     Json,
     extract::{Extension, Multipart, State},
@@ -92,6 +94,7 @@ pub async fn handle_import_track(
         &filename,
         state.context.client(),
         &mk,
+        Arc::downgrade(&state.context),
     )
     .await
     {

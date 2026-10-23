@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -35,10 +36,18 @@ class _TawaiState extends State<Tawai> {
     super.initState();
     _listener = AppLifecycleListener(
       onExitRequested: () async {
+        // Flush before the Rust runtime is torn down: a pending local write
+        // goes through Rinf and would fail afterwards.
+        await SettingsManager.flushPendingSaves();
         if (!kIsWeb) {
           finalizeRust(); // This line shuts down the async Rust runtime.
         }
         return AppExitResponse.exit;
+      },
+      onHide: () {
+        // The app is going to the background. A mobile OS may kill it
+        // without ever calling the exit callback.
+        unawaited(SettingsManager.flushPendingSaves());
       },
     );
 

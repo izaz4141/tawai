@@ -5,6 +5,7 @@
   "custom_color": 4294934657,
   "default_download_source": "slskd",
   "desired_audio_quality": "best",
+  "download_folder": "",
   "nadekodon_api_key": "",
   "nadekodon_url": "",
   "naming_pattern": "{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}",

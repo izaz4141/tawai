@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::Arc;
 
 use axum::{
     Json,
@@ -101,6 +102,8 @@ pub async fn handle_apply_identification(
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     let mk = state.context.master_key.read().await.clone();
+    let cfg = state.context.cfg().await;
+    let pattern = tawai_core::tools::rename::naming_pattern_from_config(cfg.as_ref());
 
     let user = match account::get_user_by_id(db.pool(), &user_id, &mk).await {
         Ok(u) => u,
@@ -163,6 +166,9 @@ pub async fn handle_apply_identification(
         &user.role,
         &params,
         &mk,
+        &pattern,
+        state.context.client(),
+        Arc::downgrade(&state.context),
     )
     .await
     {

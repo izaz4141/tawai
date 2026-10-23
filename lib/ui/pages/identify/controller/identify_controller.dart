@@ -48,6 +48,14 @@ class IdentifyController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Load library sources only when they haven't been fetched yet. Callers
+  /// that need a populated list (the comparison sheet's target picker) await
+  /// this before showing UI.
+  Future<void> ensureSourcesLoaded() async {
+    if (librarySources.isNotEmpty) return;
+    await loadSources();
+  }
+
   Future<void> loadTracks() async {
     loadingTracks = true;
     notifyListeners();

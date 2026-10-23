@@ -54,6 +54,13 @@ pub struct DecadeEntry {
 pub struct GetLibraryStatsRequest {
     #[serde(default)]
     pub id: String,
+    /// An explicit naming-pattern override. When absent the server resolves
+    /// the global pattern from the live config, so the naming-conformity
+    /// figure is computed against the admin-configured pattern instead of
+    /// being silently skipped.
+    ///
+    /// This is a read-only route that never mutates anything, so an override
+    /// is safe here.
     pub naming_pattern: Option<String>,
 }
 
@@ -136,7 +143,17 @@ pub struct BatchRenamePreviewRequest {
     #[serde(default)]
     pub id: String,
     pub file_paths: Vec<String>,
-    pub pattern: String,
+    /// The caller of the request. The server ignores this field and uses the
+    /// authenticated user instead.
+    #[serde(default)]
+    pub user_id: String,
+    /// An explicit naming-pattern override. When absent the server resolves
+    /// the global pattern from the live config.
+    ///
+    /// This is a dry-run route, so an override is safe here: the mutating
+    /// apply takes no pattern at all.
+    #[serde(default)]
+    pub pattern: Option<String>,
     pub source_id: Option<String>,
 }
 
@@ -145,6 +162,15 @@ pub struct BatchRenamePreviewResponse {
     #[serde(default)]
     pub id: String,
     pub previews: Vec<RenamePreview>,
+    /// The naming pattern the server actually used.
+    ///
+    /// This is how the client learns the effective pattern: a client may not
+    /// be allowed to read the global settings (`naming_pattern` is
+    /// deliberately absent from the non-admin allowlist), so this response is
+    /// the only source of truth for it. The renamer page shows it read-only,
+    /// and the rename apply uses the very same pattern — what it previews is
+    /// what gets renamed.
+    pub pattern: String,
     pub error: Option<String>,
 }
 
@@ -155,7 +181,17 @@ pub struct BatchRenameApplyRequest {
     pub file_paths: Vec<String>,
     #[serde(default)]
     pub track_ids: Vec<String>,
-    pub pattern: String,
+    /// The caller of the request. The server ignores this field and uses the
+    /// authenticated user instead.
+    #[serde(default)]
+    pub user_id: String,
+    // No pattern: the apply always renames with the global naming pattern
+    // from the live config, so a client snapshot can never drive a mutation.
+    //
+    // The client learns the effective pattern from
+    // [`BatchRenamePreviewResponse::pattern`] and previews with it, so what
+    // it previews is what gets renamed. A pattern sent here by an older
+    // client is ignored: the field does not exist.
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -171,7 +207,17 @@ pub struct CheckNamingConventionRequest {
     #[serde(default)]
     pub id: String,
     pub source_id: Option<String>,
-    pub pattern: String,
+    /// The caller of the request. The server ignores this field and uses the
+    /// authenticated user instead.
+    #[serde(default)]
+    pub user_id: String,
+    /// An explicit naming-pattern override. When absent the server resolves
+    /// the global pattern from the live config.
+    ///
+    /// This is a read-only route that never mutates anything, so an override
+    /// is safe here — unlike the rename apply, which takes no pattern.
+    #[serde(default)]
+    pub pattern: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -276,4 +322,72 @@ pub struct FindDuplicatesResponse {
     pub total_duplicates: u32,
     pub total_groups: u32,
     pub error: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn batch_rename_apply_request_ignores_a_client_pattern() {
+        // An older client still sends its cached pattern on the apply. The
+        // field does not exist on the request, so serde drops it: a client
+        // snapshot can never drive a mutation.
+        let req: BatchRenameApplyRequest = serde_json::from_str(
+            r#"{"id":"1","file_paths":["/music/a.mp3"],"track_ids":["t1"],"user_id":"u","pattern":"{artist}/{title}"}"#,
+        )
+        .expect("an apply request carrying a stale pattern still deserializes");
+        assert_eq!(req.file_paths, vec!["/music/a.mp3".to_string()]);
+        assert_eq!(req.track_ids, vec!["t1".to_string()]);
+    }
+
+    #[test]
+    fn batch_rename_preview_request_pattern_is_optional() {
+        let without: BatchRenamePreviewRequest =
+            serde_json::from_str(r#"{"id":"1","file_paths":[]}"#).expect("no pattern");
+        assert!(without.pattern.is_none());
+
+        let with: BatchRenamePreviewRequest =
+            serde_json::from_str(r#"{"id":"1","file_paths":[],"pattern":"{artist}/{title}"}"#)
+                .expect("an explicit override");
+        assert_eq!(with.pattern.as_deref(), Some("{artist}/{title}"));
+    }
+
+    #[test]
+    fn check_naming_convention_request_pattern_is_optional() {
+        let without: CheckNamingConventionRequest =
+            serde_json::from_str(r#"{"id":"1"}"#).expect("no pattern");
+        assert!(without.pattern.is_none());
+
+        let with: CheckNamingConventionRequest =
+            serde_json::from_str(r#"{"id":"1","pattern":"{artist}/{title}"}"#)
+                .expect("an explicit override");
+        assert_eq!(with.pattern.as_deref(), Some("{artist}/{title}"));
+    }
+
+    #[test]
+    fn get_library_stats_request_pattern_is_optional() {
+        let without: GetLibraryStatsRequest =
+            serde_json::from_str(r#"{"id":"1"}"#).expect("no pattern");
+        assert!(without.naming_pattern.is_none());
+
+        let with: GetLibraryStatsRequest =
+            serde_json::from_str(r#"{"id":"1","naming_pattern":"{artist}/{title}"}"#)
+                .expect("an explicit override");
+        assert_eq!(with.naming_pattern.as_deref(), Some("{artist}/{title}"));
+    }
+
+    #[test]
+    fn batch_rename_preview_response_carries_the_effective_pattern() {
+        // The client cannot read the global settings, so the response is the
+        // only way it learns which pattern is in use. It must not be dropped.
+        let response = BatchRenamePreviewResponse {
+            id: "1".to_string(),
+            previews: vec![],
+            pattern: "{artist}/{title}".to_string(),
+            error: None,
+        };
+        let value = serde_json::to_value(&response).expect("the response serializes");
+        assert_eq!(value["pattern"], serde_json::json!("{artist}/{title}"));
+    }
 }

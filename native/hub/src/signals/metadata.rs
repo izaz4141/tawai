@@ -475,7 +475,10 @@ pub struct WriteFileTagsBytesResponse {
 #[derive(Deserialize, DartSignal)]
 pub struct FormatNamingPreviewRequest {
     pub id: String,
-    pub pattern: String,
+    /// Explicit pattern to render. When omitted or empty, the global naming
+    /// pattern (falling back to `DEFAULT_PATTERN`) is used.
+    #[serde(default)]
+    pub pattern: Option<String>,
     pub title: String,
     pub artist: String,
     pub album_artist: String,
@@ -485,10 +488,24 @@ pub struct FormatNamingPreviewRequest {
     pub disc_number: i32,
     pub album_disambiguation: Option<String>,
     pub total_discs: i32,
+    /// Library track to preview the destination for. When set, the source root
+    /// and file extension are resolved the same way `apply_identification` does.
+    pub track_id: Option<String>,
+    /// Download-folder flow: the library source the file will be moved into.
+    pub target_source_id: Option<String>,
+    /// Audio file being identified; supplies the extension and the current path
+    /// shown when Apply would not move the file.
+    pub file_path: Option<String>,
+    /// User requesting the preview. Used to authorize the source whose root is
+    /// resolved; this is local identity context, not a server credential.
+    pub user_id: String,
 }
 
 #[derive(Serialize, RustSignal)]
 pub struct FormatNamingPreviewResponse {
     pub id: String,
     pub result: String,
+    /// The naming pattern the hub actually used, so the client can show it
+    /// without being able to read the global settings.
+    pub pattern: String,
 }

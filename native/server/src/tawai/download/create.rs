@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use tawai_core::dclient::DownloadClient;
 use tawai_core::signals::download::{DownloadCreateRequest, DownloadCreateResponse};
@@ -28,9 +30,11 @@ pub async fn handle_create(
         let db = state.context.db().await;
         let pool = db.pool();
         let client = state.context.client().clone();
-        let result = if let Some(parser) =
-            tawai_core::libsources::get_parser(&req.source_type, client.clone(), pool)
-        {
+        let result = if let Some(parser) = tawai_core::libsources::get_parser(
+            &req.source_type,
+            client.clone(),
+            Arc::downgrade(&state.context),
+        ) {
             parser
                 .download(
                     pool,
@@ -41,6 +45,7 @@ pub async fn handle_create(
                     &req.user_id,
                     req.extra.as_deref(),
                     &mk,
+                    Arc::downgrade(&state.context),
                 )
                 .await
         } else {
@@ -53,6 +58,7 @@ pub async fn handle_create(
                 &req.user_id,
                 req.extra.as_deref(),
                 &mk,
+                Arc::downgrade(&state.context),
             )
             .await
         };

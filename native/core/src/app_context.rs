@@ -452,6 +452,7 @@ impl AppContext {
                         Some(tx),
                         &mk_scan,
                         None,
+                        Arc::downgrade(&inner_ctx),
                     )
                     .await;
 
@@ -471,10 +472,11 @@ impl AppContext {
                     let mk = inner_ctx.master_key.read().await.clone();
                     if let Ok(users) = account::get_all_users(pool).await {
                         for user in &users {
-                            let included = user_settings::get_setting(
+                            let included = user_settings::get_user_setting(
                                 pool,
                                 &user.id,
                                 "included_recommendations",
+                                &mk,
                             )
                             .await
                             .unwrap_or_default();
@@ -484,6 +486,7 @@ impl AppContext {
                                 master_key: &mk,
                                 user_id: &user.id,
                                 included_keys: &included,
+                                context: Arc::downgrade(&inner_ctx),
                             })
                             .await;
                         }

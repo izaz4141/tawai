@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     Json,
     extract::{Multipart, State},
@@ -120,6 +122,7 @@ pub async fn handle_write_file_tags(
                 body.clear_cover,
                 state.context.client(),
                 &mk,
+                Arc::downgrade(&state.context),
             )
             .await
             {

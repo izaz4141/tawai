@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::Weak;
 
+use crate::app_context::AppContext;
 use crate::db::{database::DatabasePool, history, library, library_source};
 use crate::discovery::listenbrainz;
 use crate::libsources::{RecommendationSource, get_parser};
@@ -11,6 +13,9 @@ pub struct SyncRecsParams<'a> {
     pub master_key: &'a str,
     pub user_id: &'a str,
     pub included_keys: &'a str,
+    /// Live app context handle: sources that derive paths from the global
+    /// naming pattern read it from the config at every use.
+    pub context: Weak<AppContext>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -32,8 +37,9 @@ async fn sync_one_source(
     source_id: &str,
     discovery_collection_id: &str,
     source_collection_id: &str,
+    context: &Weak<AppContext>,
 ) -> Result<(u32, u32), String> {
-    let parser = get_parser(source_type, client.clone(), pool)
+    let parser = get_parser(source_type, client.clone(), context.clone())
         .ok_or_else(|| "no parser for source".to_string())?;
 
     let (added, removed) = parser
@@ -192,6 +198,7 @@ pub async fn sync_recs(params: SyncRecsParams<'_>) -> SyncRecsResult {
                 &source_id,
                 &discovery_collection_id,
                 &source_collection_id,
+                &params.context,
             )
             .await
             {
@@ -234,6 +241,7 @@ pub async fn sync_recs(params: SyncRecsParams<'_>) -> SyncRecsResult {
                 &source_id,
                 &discovery_collection_id,
                 &source_collection_id,
+                &params.context,
             )
             .await
             {

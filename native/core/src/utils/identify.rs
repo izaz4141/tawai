@@ -1,19 +1,23 @@
 use std::path::{Path, PathBuf};
+use std::sync::Weak;
 
 use anyhow::{Result, anyhow};
+use serde::Serialize;
 
+use crate::app_context::AppContext;
 use crate::audio;
-use crate::db::account::DEFAULT_USERNAME;
 use crate::db::database::DatabasePool;
-use crate::db::{library, library_source, user_settings};
+use crate::db::{library, library_source};
 use crate::libsources;
-use crate::signals::library::TrackInfo;
-use crate::tools::rename::move_file_into_source;
+use crate::signals::library::{LibrarySourceInfo, TrackInfo};
+use crate::tools::rename::{destination_for, format_naming_pattern, move_file_into_source};
 
 /// Parameters for applying a MusicBrainz identification result to a track or
 /// a standalone (download-folder) audio file.
-/// Parameters for applying a MusicBrainz identification result to a track or
-/// a standalone (download-folder) audio file.
+///
+/// Field names mirror the HTTP `ApplyIdentificationRequest` body so a params
+/// value can be serialized straight into a remote apply mirror.
+#[derive(Debug, Clone, Serialize)]
 pub struct ApplyIdentificationParams {
     pub track_id: String,
     /// When set (download-folder flow), the audio file to write tags to and
@@ -60,12 +64,72 @@ pub struct ApplyIdentificationParams {
 
 /// Result of applying an identification.
 pub struct ApplyIdentificationOutcome {
-    /// The new file path after the optional rename/move, if one happened.
+    /// The file path after the rename/move.
     pub new_file_path: Option<String>,
     /// True when the apply targeted a standalone download-folder file. The
     /// caller should trigger an incremental scan of the target source to
     /// register it in the library.
     pub download_folder: bool,
+}
+
+/// Where `apply_identification` will move a file, without performing the move.
+struct MovePlan {
+    source_root: String,
+    pattern: String,
+    local_path: PathBuf,
+}
+
+/// Resolve a naming pattern for a preview or an apply.
+///
+/// A non-empty `pattern_override` is used as-is. Otherwise the global pattern
+/// resolved by [`crate::tools::rename::naming_pattern_from_config`] is used,
+/// falling back to [`DEFAULT_PATTERN`] when that is empty too.
+///
+/// Delegates to [`crate::tools::rename::resolve_naming_pattern`] so every
+/// naming-pattern consumer shares one ladder.
+fn resolve_preview_pattern(pattern_override: Option<&str>, global_pattern: &str) -> String {
+    crate::tools::rename::resolve_naming_pattern(pattern_override, global_pattern)
+}
+
+/// Resolve the pattern and source root, probing the root before any write.
+///
+/// `pattern_override` wins when it is non-empty; otherwise the global pattern
+/// resolved by [`crate::tools::rename::naming_pattern_from_config`] is used.
+///
+/// For `tawai` sources the editable copy is the local backup directory, so its
+/// local root is preferred over URL probing: preview and apply must never
+/// resolve a remote root for a backup path.
+async fn resolve_move_plan(
+    source: &LibrarySourceInfo,
+    local_path: &Path,
+    pattern_override: Option<&str>,
+    global_pattern: &str,
+) -> Result<MovePlan> {
+    let pattern = resolve_preview_pattern(pattern_override, global_pattern);
+
+    let source_root = match tawai_local_root(source) {
+        Some(root) => root,
+        None => {
+            let mut resolver = crate::libsources::SourceUrlResolver::new();
+            resolver.resolve(&source.urls, None, None).await?
+        }
+    };
+
+    Ok(MovePlan {
+        source_root,
+        pattern,
+        local_path: local_path.to_path_buf(),
+    })
+}
+
+/// The local backup directory of a `tawai` source, when it exists on disk.
+fn tawai_local_root(source: &LibrarySourceInfo) -> Option<String> {
+    if source.source_type != "tawai" {
+        return None;
+    }
+    crate::libsources::tawai::local_root(&source.urls)
+        .filter(|root| Path::new(root).is_dir())
+        .map(str::to_string)
 }
 
 /// Apply a MusicBrainz identification to a single audio file.
@@ -76,17 +140,25 @@ pub struct ApplyIdentificationOutcome {
 ///   folder (rooted at the source url). No database row is created; the
 ///   caller triggers an incremental scan of the target source afterwards.
 /// - **Library track** (`track_id` set): writes tags to the track's file,
-///   moves it relative to its source root when a naming pattern is set, and
-///   updates the library database row.
+///   moves it relative to its source root, and updates the library database
+///   row.
 ///
 /// The user must have access to the affected source, and the source must be
 /// local (non-local sources cannot have their tags rewritten or files moved).
+/// The destination is built from `global_pattern`, resolved by the caller with
+/// [`crate::tools::rename::naming_pattern_from_config`].
+///
+/// `context` is the live app context handle; the tawai mirror resolves the
+/// backing remote track through it when no explicit pattern applies.
 pub async fn apply_identification(
     pool: &DatabasePool,
     user_id: &str,
     role: &str,
     params: &ApplyIdentificationParams,
     master_key: &str,
+    global_pattern: &str,
+    client: &reqwest::Client,
+    context: Weak<AppContext>,
 ) -> Result<ApplyIdentificationOutcome> {
     let (source, file_path, track, download_folder) =
         if let Some(source_id) = params.target_source_id.as_deref() {
@@ -118,6 +190,39 @@ pub async fn apply_identification(
             source.source_type
         ));
     }
+
+    // Tawai tracks live in a local backup of a remote tawai library. Resolve
+    // the remote track backing this file *before* any local retag/rename:
+    // matching recomputes `dest_for(root, pattern, remote metadata)` and the
+    // pre-apply path/tags are the only state that still lines up. The mirror
+    // itself is best-effort — any failure below just drops it.
+    let remote_backing: Option<(crate::libsources::tawai::RemoteConn, TrackInfo)> =
+        if source.source_type == "tawai" && params.target_source_id.is_none() {
+            match crate::libsources::tawai::resolve_remote_track(
+                client,
+                &source.urls,
+                &file_path,
+                Some(global_pattern),
+                &context,
+            )
+            .await
+            {
+                Ok(pair) => Some(pair),
+                Err(e) => {
+                    crate::utils::logger::debug(&format!(
+                        "tawai apply mirror skipped for '{}': {e}",
+                        source.name
+                    ));
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+    let move_plan = resolve_move_plan(&source, Path::new(&file_path), None, global_pattern)
+        .await
+        .map_err(|e| anyhow!("No reachable source directory for '{}': {}", source.name, e))?;
 
     // Start from the file's current on-disk tags. Only the explicitly provided
     // params override them; every omitted field keeps its existing value.
@@ -314,31 +419,16 @@ pub async fn apply_identification(
         }
     }
 
-    let pattern = user_settings::get_setting(pool, DEFAULT_USERNAME, "identify_naming_pattern")
-        .await
-        .filter(|s| !s.is_empty());
-
-    let mut resolver = crate::libsources::SourceUrlResolver::new();
-    let source_root = resolver
-        .resolve(&source.urls, None, None)
-        .await
-        .map_err(|e| anyhow!("No reachable source directory for '{}': {}", source.name, e))?;
-
-    let new_file_path = if download_folder {
-        Some(
-            move_file_into_source(&file_path, &source_root, pattern.as_deref(), &tag)?
-                .to_string_lossy()
-                .to_string(),
-        )
-    } else if let Some(pattern) = pattern {
-        Some(
-            move_file_into_source(&file_path, &source_root, Some(&pattern), &tag)?
-                .to_string_lossy()
-                .to_string(),
-        )
-    } else {
-        None
-    };
+    let new_file_path = Some(
+        move_file_into_source(
+            &move_plan.local_path,
+            &move_plan.source_root,
+            Some(&move_plan.pattern),
+            &tag,
+        )?
+        .to_string_lossy()
+        .to_string(),
+    );
 
     if !download_folder {
         let track_row = track.as_ref().expect("library flow always has a track row");
@@ -459,10 +549,150 @@ pub async fn apply_identification(
         .await?;
     }
 
+    if let Some((conn, rt)) = &remote_backing {
+        if mirror_apply_to_remote(client, conn, params, &rt.id).await {
+            crate::libsources::tawai::invalidate_remote_track_caches(conn);
+        }
+    }
+
     Ok(ApplyIdentificationOutcome {
         new_file_path,
         download_folder,
     })
+}
+
+/// Best-effort mirror of an identification apply to the remote tawai server
+/// backing a local backup track, analogous to delete's remote mirror. The
+/// remote re-runs its own apply with its own configured pattern (no pattern
+/// crosses the wire); a failure only logs a warning, never failing the
+/// already-successful local apply.
+async fn mirror_apply_to_remote(
+    client: &reqwest::Client,
+    conn: &crate::libsources::tawai::RemoteConn,
+    params: &ApplyIdentificationParams,
+    remote_track_id: &str,
+) -> bool {
+    let mut body = match serde_json::to_value(params) {
+        Ok(body) => body,
+        Err(e) => {
+            crate::utils::logger::warn(&format!("tawai remote apply mirror failed: {e}"));
+            return false;
+        }
+    };
+    // `id` is required by the remote's request body (it only echoes it);
+    // track flow addresses the remote library track by its own row id.
+    body["id"] = serde_json::Value::String(String::new());
+    body["track_id"] = serde_json::Value::String(remote_track_id.to_string());
+    body["file_path"] = serde_json::Value::Null;
+    body["target_source_id"] = serde_json::Value::Null;
+
+    let url = format!("{}/api/tawai/library/identify/apply", conn.http_base);
+    match client
+        .post(&url)
+        .header("X-API-Key", &conn.api_key)
+        .json(&body)
+        .send()
+        .await
+    {
+        Ok(resp) if resp.status().is_success() => true,
+        Ok(resp) => {
+            crate::utils::logger::warn(&format!(
+                "tawai remote apply mirror failed: {}",
+                resp.status()
+            ));
+            false
+        }
+        Err(e) => {
+            crate::utils::logger::warn(&format!("tawai remote apply mirror failed: {e}"));
+            false
+        }
+    }
+}
+
+/// Naming preview entry point shared by the hub and HTTP handlers.
+///
+/// Pattern resolution, for both cases: a non-empty `pattern_override` is used
+/// as-is, otherwise the global naming pattern, falling back to
+/// `DEFAULT_PATTERN` when that is missing/empty.
+///
+/// With no `file_path` (naming-format help dialog, download previews that join
+/// their own root) this renders the resolved pattern relative to nothing,
+/// without an extension. With a file it computes the destination
+/// [`apply_identification`] would produce.
+///
+/// Resolution ladder for the file case, matching what Apply would do:
+/// - Unresolved role (unknown user), a file without a source context
+///   (download-folder row before a target source is picked), or a source the
+///   caller cannot access: the current file path, since nothing would move.
+/// - Unresolvable, non-editable, or unreachable source: the current path.
+/// - Otherwise the full destination path.
+pub async fn preview_naming(
+    pool: &DatabasePool,
+    master_key: &str,
+    user_id: &str,
+    role: Option<&str>,
+    track_id: Option<&str>,
+    target_source_id: Option<&str>,
+    file_path: Option<&str>,
+    pattern_override: Option<&str>,
+    global_pattern: &str,
+    tag: &audio::tags::AudioTag,
+) -> String {
+    let Some(file_path) = file_path else {
+        let pattern = resolve_preview_pattern(pattern_override, global_pattern);
+        return format_naming_pattern(&pattern, tag);
+    };
+    // Without a resolved role the source can't be authorized; don't resolve or
+    // disclose its root.
+    let Some(role) = role else {
+        return file_path.to_string();
+    };
+
+    let (source, local_path) = if let Some(source_id) = target_source_id {
+        match library_source::get_source_by_id(pool, source_id, master_key).await {
+            Ok(Some(source)) => (source, file_path.to_string()),
+            _ => return file_path.to_string(),
+        }
+    } else if let Some(track_id) = track_id {
+        let track = match library::lookup_track(pool, track_id).await {
+            Ok(Some(track)) => track,
+            _ => return file_path.to_string(),
+        };
+        match library_source::get_source_info_by_track_id(pool, track_id, master_key).await {
+            Ok(Some(source)) => (source, track.file_path),
+            _ => return track.file_path,
+        }
+    } else {
+        // A standalone file with no target source chosen yet: nothing moves.
+        return file_path.to_string();
+    };
+
+    if !library_source::can_access_source(&source.owner_id, user_id, role, &source.access_rule) {
+        return file_path.to_string();
+    }
+
+    if !libsources::is_editable(&source.source_type) {
+        return local_path;
+    }
+
+    match resolve_move_plan(
+        &source,
+        Path::new(&local_path),
+        pattern_override,
+        global_pattern,
+    )
+    .await
+    {
+        Ok(plan) => destination_for(
+            &plan.source_root,
+            Some(&plan.pattern),
+            &plan.local_path,
+            tag,
+        )
+        .to_string_lossy()
+        .to_string(),
+        Err(_) => local_path,
+    }
 }
 
 /// Build a `TrackInfo` from a scanned audio file. Used when listing download
@@ -578,4 +808,56 @@ pub fn list_download_folder_tracks(dir: &Path) -> Result<Vec<TrackInfo>> {
         }
     }
     Ok(tracks)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tools::rename::DEFAULT_PATTERN;
+
+    #[test]
+    fn preview_pattern_prefers_non_empty_override() {
+        assert_eq!(
+            resolve_preview_pattern(Some("{artist}/{title}"), "{album}/{title}"),
+            "{artist}/{title}"
+        );
+    }
+
+    #[test]
+    fn preview_pattern_uses_override_as_is() {
+        assert_eq!(
+            resolve_preview_pattern(Some(" {artist}/{title} "), "{album}/{title}"),
+            " {artist}/{title} "
+        );
+    }
+
+    #[test]
+    fn preview_pattern_missing_override_uses_global() {
+        assert_eq!(
+            resolve_preview_pattern(None, "{album}/{title}"),
+            "{album}/{title}"
+        );
+    }
+
+    #[test]
+    fn preview_pattern_empty_override_uses_global() {
+        assert_eq!(
+            resolve_preview_pattern(Some(""), "{album}/{title}"),
+            "{album}/{title}"
+        );
+    }
+
+    #[test]
+    fn preview_pattern_whitespace_override_uses_global() {
+        assert_eq!(
+            resolve_preview_pattern(Some("  \t\n"), "{album}/{title}"),
+            "{album}/{title}"
+        );
+    }
+
+    #[test]
+    fn preview_pattern_empty_global_falls_back_to_default() {
+        assert_eq!(resolve_preview_pattern(None, ""), DEFAULT_PATTERN);
+        assert_eq!(resolve_preview_pattern(Some("   "), ""), DEFAULT_PATTERN);
+    }
 }

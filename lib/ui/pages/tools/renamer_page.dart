@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
+import 'package:tawai/ui/widgets/dialog/naming_format.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/helper.dart';
 import 'package:tawai/utils/settings.dart';
@@ -19,7 +20,11 @@ class _RenamerPageState extends State<RenamerPage> {
   _Phase _phase = _Phase.idle;
   String? _error;
 
-  final _patternController = TextEditingController();
+  /// The naming pattern the server reported for the last preview. The rename
+  /// applies the same pattern — the server resolves it from its live config
+  /// on every call — so what the preview shows is what gets renamed.
+  String? _effectivePattern;
+
   List<LibrarySourceInfo> _sources = [];
   String? _selectedSourceId;
 
@@ -30,14 +35,7 @@ class _RenamerPageState extends State<RenamerPage> {
   @override
   void initState() {
     super.initState();
-    _patternController.text = SettingsManager.namingPattern.value;
     _loadSources();
-  }
-
-  @override
-  void dispose() {
-    _patternController.dispose();
-    super.dispose();
   }
 
   bool get _allSelected =>
@@ -69,7 +67,6 @@ class _RenamerPageState extends State<RenamerPage> {
     try {
       final response = await BridgeService.instance.batchRenamePreview(
         filePaths: const [],
-        pattern: _patternController.text,
         sourceId: _selectedSourceId,
       );
       if (!mounted) return;
@@ -94,10 +91,12 @@ class _RenamerPageState extends State<RenamerPage> {
         }
       }
 
+      final effective = response?.pattern ?? '';
       setState(() {
         _previews = nonConforming;
         _selectedIndices = Set.from(Iterable.generate(nonConforming.length));
         _conformingCount = conforming.length;
+        _effectivePattern = effective.isEmpty ? null : effective;
         _phase = _Phase.result;
       });
     } catch (e) {
@@ -124,7 +123,8 @@ class _RenamerPageState extends State<RenamerPage> {
       await BridgeService.instance.batchRenameApply(
         filePaths: selectedPaths,
         trackIds: selectedTrackIds,
-        pattern: _patternController.text,
+        // The apply takes no pattern: the server renames with the global
+        // pattern from its live config — the same one the preview used.
       );
       if (!mounted) return;
       AppSnackBar.show(
@@ -267,14 +267,53 @@ class _RenamerPageState extends State<RenamerPage> {
   }
 
   Widget _buildPatternField() {
-    return TextField(
-      controller: _patternController,
-      decoration: const InputDecoration(
-        labelText: 'Naming Pattern',
-        helperText: '{artist} {album} {title} {track_padded} {year}',
-        border: OutlineInputBorder(),
-        isDense: true,
-      ),
+    final colors = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final effective = _effectivePattern;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('Naming Pattern', style: textTheme.titleSmall),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: () => showNamingFormatHelpDialog(context),
+              icon: Icon(
+                Icons.help_outline,
+                size: AppTheme.iconSM * AppTheme.iconScale(context),
+              ),
+              label: const Text('Help'),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: AppTheme.spaceXS),
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(AppTheme.spaceSM),
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerHighest.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+            border: Border.all(color: colors.outlineVariant),
+          ),
+          child: Text(
+            effective ?? 'Run Preview to load the pattern from the server.',
+            style: effective != null
+                ? textTheme.bodyMedium?.copyWith(fontFamily: 'monospace')
+                : textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+          ),
+        ),
+        SizedBox(height: AppTheme.spaceXS),
+        Text(
+          'Files are renamed to the pattern configured in Settings.',
+          style: textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+        ),
+      ],
     );
   }
 

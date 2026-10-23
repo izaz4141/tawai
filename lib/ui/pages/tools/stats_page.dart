@@ -4,7 +4,6 @@ import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/components/section_header.dart';
 import 'package:tawai/utils/bridge_service.dart';
-import 'package:tawai/utils/settings.dart';
 
 class StatsPage extends StatefulWidget {
   const StatsPage({super.key});
@@ -44,9 +43,10 @@ class _StatsPageState extends State<StatsPage>
       _error = null;
     });
     try {
-      final response = await BridgeService.instance.getLibraryStats(
-        namingPattern: SettingsManager.namingPattern.value,
-      );
+      // No pattern is sent: the server resolves the effective naming pattern
+      // from its live config, so the conformity figure always matches the
+      // admin-configured pattern.
+      final response = await BridgeService.instance.getLibraryStats();
       if (!mounted) return;
       if (response?.stats != null) {
         setState(() {

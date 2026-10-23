@@ -456,7 +456,10 @@ pub struct WriteFileTagsBytesResponse {
 pub struct FormatNamingPreviewRequest {
     #[serde(default)]
     pub id: String,
-    pub pattern: String,
+    /// Explicit pattern to render. When omitted or empty, the global naming
+    /// pattern (falling back to `DEFAULT_PATTERN`) is used.
+    #[serde(default)]
+    pub pattern: Option<String>,
     pub title: String,
     pub artist: String,
     pub album_artist: String,
@@ -466,6 +469,14 @@ pub struct FormatNamingPreviewRequest {
     pub disc_number: i32,
     pub album_disambiguation: Option<String>,
     pub total_discs: i32,
+    /// Library track to preview the destination for. When set, the source root
+    /// and file extension are resolved the same way `apply_identification` does.
+    pub track_id: Option<String>,
+    /// Download-folder flow: the library source the file will be moved into.
+    pub target_source_id: Option<String>,
+    /// Audio file being identified; supplies the extension and the current path
+    /// shown when Apply would not move the file.
+    pub file_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -473,4 +484,7 @@ pub struct FormatNamingPreviewResponse {
     #[serde(default)]
     pub id: String,
     pub result: String,
+    /// The naming pattern the server actually used, so the client can show it
+    /// without being able to read the global settings.
+    pub pattern: String,
 }

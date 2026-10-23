@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{Json, extract::State};
 use tawai_core::discovery::sync::{SyncRecsParams, sync_recs};
 use tawai_core::signals::discovery::{SyncRecsRequest, SyncRecsResponse};
@@ -18,6 +20,7 @@ pub async fn handle_sync_recs(
         master_key: &mk,
         user_id: &payload.user_id,
         included_keys: &payload.included_keys,
+        context: Arc::downgrade(&ctx),
     })
     .await;
 

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -193,36 +194,42 @@ class _SettingsSystemTabState extends State<SettingsSystemTab> {
           },
         ),
         SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
-        ListSwitch(
-          title: 'Retreat to Tray',
-          subtitle: 'Minimize to system tray instead of quitting',
-          valueListenable: SettingsManager.retreatToTray,
-          defaultValue: SettingsManager.defaults['retreat_to_tray'] as bool?,
-        ),
-        SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
+        // A browser has no system tray, so the switch is hidden there.
+        if (!kIsWeb) ...[
+          ListSwitch(
+            title: 'Retreat to Tray',
+            subtitle: 'Minimize to system tray instead of quitting',
+            valueListenable: SettingsManager.retreatToTray,
+            defaultValue: SettingsManager.defaults['retreat_to_tray'] as bool?,
+          ),
+          SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
+        ],
         ListSwitch(
           title: 'Nightly Updates',
           subtitle: 'Check for pre-release updates',
           valueListenable: SettingsManager.checkNightly,
           defaultValue: SettingsManager.defaults['check_nightly'] as bool?,
         ),
-        SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
-        FutureBuilder<String>(
-          future: SettingsManager.getDatabasePath(),
-          builder: (context, snapshot) {
-            return TextField(
-              decoration: InputDecoration(
-                labelText: 'Database Path',
-                helperText: 'Location of the local SQLite database',
-                border: const OutlineInputBorder(),
-                enabled: false,
-              ),
-              controller: TextEditingController.fromValue(
-                TextEditingValue(text: snapshot.data ?? 'Loading...'),
-              ),
-            );
-          },
-        ),
+        // The database lives on the server's disk, not in the browser.
+        if (!kIsWeb) ...[
+          SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
+          FutureBuilder<String>(
+            future: SettingsManager.getDatabasePath(),
+            builder: (context, snapshot) {
+              return TextField(
+                decoration: InputDecoration(
+                  labelText: 'Database Path',
+                  helperText: 'Location of the local SQLite database',
+                  border: const OutlineInputBorder(),
+                  enabled: false,
+                ),
+                controller: TextEditingController.fromValue(
+                  TextEditingValue(text: snapshot.data ?? 'Loading...'),
+                ),
+              );
+            },
+          ),
+        ],
         SizedBox(height: AppTheme.spaceXL * AppTheme.spaceScale(context)),
         SectionHeader(title: 'Appearance', leading: const Icon(Icons.palette)),
         SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
