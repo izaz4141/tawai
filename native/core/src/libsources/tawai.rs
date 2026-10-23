@@ -443,6 +443,27 @@ const CACHE_TTL: Duration = Duration::from_secs(60);
 
 const REACH_TTL: Duration = Duration::from_secs(60);
 
+fn remote_track_cache_key(conn: &RemoteConn) -> Option<String> {
+    let source_id = conn.source_id.as_deref()?;
+    Some(format!("{}|{}", conn.http_base, source_id))
+}
+
+/// Invalidate cached remote track lists for this connection (both the
+/// successful list cache and the cached-failure list cache).
+pub fn invalidate_remote_track_caches(conn: &RemoteConn) {
+    let Some(key) = remote_track_cache_key(conn) else {
+        return;
+    };
+    {
+        let mut cache = REMOTE_CACHE.lock().unwrap();
+        cache.remove(&key);
+    }
+    {
+        let mut fails = REMOTE_FAIL_CACHE.lock().unwrap();
+        fails.remove(&key);
+    }
+}
+
 /// Max redownload attempts per track; download errors and hash mismatches
 /// share this budget.
 const MAX_DOWNLOAD_ATTEMPTS: u32 = 5;
@@ -1120,6 +1141,7 @@ pub async fn mirror_tag_write(
     if !resp.status().is_success() {
         anyhow::bail!("tawai remote tag write failed: {}", resp.status());
     }
+    invalidate_remote_track_caches(&conn);
     Ok(())
 }
 

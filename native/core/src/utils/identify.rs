@@ -550,7 +550,9 @@ pub async fn apply_identification(
     }
 
     if let Some((conn, rt)) = &remote_backing {
-        mirror_apply_to_remote(client, conn, params, &rt.id).await;
+        if mirror_apply_to_remote(client, conn, params, &rt.id).await {
+            crate::libsources::tawai::invalidate_remote_track_caches(conn);
+        }
     }
 
     Ok(ApplyIdentificationOutcome {
@@ -569,12 +571,12 @@ async fn mirror_apply_to_remote(
     conn: &crate::libsources::tawai::RemoteConn,
     params: &ApplyIdentificationParams,
     remote_track_id: &str,
-) {
+) -> bool {
     let mut body = match serde_json::to_value(params) {
         Ok(body) => body,
         Err(e) => {
             crate::utils::logger::warn(&format!("tawai remote apply mirror failed: {e}"));
-            return;
+            return false;
         }
     };
     // `id` is required by the remote's request body (it only echoes it);
@@ -592,12 +594,18 @@ async fn mirror_apply_to_remote(
         .send()
         .await
     {
-        Ok(resp) if resp.status().is_success() => {}
-        Ok(resp) => crate::utils::logger::warn(&format!(
-            "tawai remote apply mirror failed: {}",
-            resp.status()
-        )),
-        Err(e) => crate::utils::logger::warn(&format!("tawai remote apply mirror failed: {e}")),
+        Ok(resp) if resp.status().is_success() => true,
+        Ok(resp) => {
+            crate::utils::logger::warn(&format!(
+                "tawai remote apply mirror failed: {}",
+                resp.status()
+            ));
+            false
+        }
+        Err(e) => {
+            crate::utils::logger::warn(&format!("tawai remote apply mirror failed: {e}"));
+            false
+        }
     }
 }
 
