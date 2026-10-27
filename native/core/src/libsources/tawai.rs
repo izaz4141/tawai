@@ -950,7 +950,7 @@ impl TawaiParser {
                 })
                 .collect());
         }
-        // Offline fallback: enumerate the local backup dir.
+        // Offline fallback: enumerate the local backup dir (path-only, no ids).
         if let Some(root) = local_root(urls) {
             return Ok(local::enumerate_paths(root)?
                 .into_iter()
@@ -983,26 +983,14 @@ impl TawaiParser {
             return Ok(detect_id_difference(entries, own_rows, foreign_ids));
         }
 
+        // Offline/unreachable: enumerate the local backup dir for presence checks,
+        // but do not add untracked files. Delete tracked rows if their files are
+        // missing from disk.
         let enumerated: HashSet<String> = entries.iter().map(|e| e.path.clone()).collect();
-        let own_by_path: HashMap<&str, &str> = own_rows
-            .iter()
-            .map(|(id, path)| (path.as_str(), id.as_str()))
-            .collect();
         let mut diff = ScanDiff::default();
-        for path in &enumerated {
-            match own_by_path.get(path.as_str()) {
-                Some(id) => {
-                    if !Path::new(path).is_file() {
-                        diff.to_scan.push(path.clone());
-                        diff.replace_ids.insert((*id).to_string());
-                    }
-                }
-                None => diff.to_scan.push(path.clone()),
-            }
-        }
-        for (path, id) in &own_by_path {
-            if !enumerated.contains(*path) {
-                diff.to_delete_ids.insert((*id).to_string());
+        for (id, path) in own_rows {
+            if !enumerated.contains(path.as_str()) || !Path::new(path).is_file() {
+                diff.to_delete_ids.insert(id.clone());
             }
         }
         Ok(diff)
@@ -1563,8 +1551,8 @@ mod tests {
             .await
             .expect("diff");
 
-        assert_eq!(diff.to_scan, vec![as_string(&missing)]);
-        assert!(diff.replace_ids.contains("t1"));
-        assert!(diff.to_delete.is_empty());
+        assert!(diff.to_scan.is_empty());
+        assert!(diff.replace_ids.is_empty());
+        assert!(diff.to_delete_ids.contains("t1"));
     }
 }
