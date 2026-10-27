@@ -124,10 +124,6 @@ class SettingsManager {
   static final includedRecommendations = ValueNotifier<String>('');
 
   // Naming Pattern
-  ///
-  /// The fallback pattern used when nothing else is configured. It mirrors
-  /// `DEFAULT_PATTERN` in `native/core/src/tools/rename.rs`; the two are kept
-  /// in sync by `tool/check_default_naming_pattern.sh`.
   static const String defaultNamingPattern =
       '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}';
 
