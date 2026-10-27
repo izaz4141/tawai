@@ -744,30 +744,7 @@ pub async fn delete_track_by_file_path(pool: &SqlitePool, file_path: &str) -> Re
         .await?;
 
     if let Some(track_id) = id {
-        sqlx::query("DELETE FROM track_genres WHERE track_id = ?")
-            .bind(&track_id)
-            .execute(pool)
-            .await?;
-        sqlx::query("DELETE FROM track_artists WHERE track_id = ?")
-            .bind(&track_id)
-            .execute(pool)
-            .await?;
-        sqlx::query("DELETE FROM fingerprints WHERE track_id = ?")
-            .bind(&track_id)
-            .execute(pool)
-            .await?;
-        sqlx::query("DELETE FROM playback_history WHERE track_id = ?")
-            .bind(&track_id)
-            .execute(pool)
-            .await?;
-        sqlx::query("DELETE FROM collection_tracks WHERE track_id = ?")
-            .bind(&track_id)
-            .execute(pool)
-            .await?;
-        sqlx::query("DELETE FROM tracks WHERE id = ?")
-            .bind(&track_id)
-            .execute(pool)
-            .await?;
+        delete_track_by_id(pool, &track_id).await?;
     }
     Ok(())
 }
