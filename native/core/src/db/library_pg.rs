@@ -194,10 +194,6 @@ pub async fn create_playlist(pool: &PgPool, user_id: &str, name: &str) -> Result
 }
 
 pub async fn delete_playlist(pool: &PgPool, playlist_id: &str) -> Result<()> {
-    sqlx::query("DELETE FROM collection_tracks WHERE collection_id = $1")
-        .bind(playlist_id)
-        .execute(pool)
-        .await?;
     sqlx::query("DELETE FROM collections WHERE id = $1")
         .bind(playlist_id)
         .execute(pool)
@@ -743,38 +739,14 @@ pub async fn delete_tracks_by_source_id(pool: &PgPool, source_id: &str) -> Resul
 }
 
 pub async fn delete_track_by_file_path(pool: &PgPool, file_path: &str) -> Result<()> {
-    let id: Option<String> = sqlx::query_scalar("SELECT id FROM tracks WHERE file_path = $1")
+    sqlx::query("DELETE FROM tracks WHERE file_path = $1")
         .bind(file_path)
-        .fetch_optional(pool)
+        .execute(pool)
         .await?;
-
-    if let Some(track_id) = id {
-        delete_track_by_id(pool, &track_id).await?;
-    }
     Ok(())
 }
 
 pub async fn delete_track_by_id(pool: &PgPool, track_id: &str) -> Result<()> {
-    sqlx::query("DELETE FROM track_genres WHERE track_id = $1")
-        .bind(track_id)
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM track_artists WHERE track_id = $1")
-        .bind(track_id)
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM fingerprints WHERE track_id = $1")
-        .bind(track_id)
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM playback_history WHERE track_id = $1")
-        .bind(track_id)
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM collection_tracks WHERE track_id = $1")
-        .bind(track_id)
-        .execute(pool)
-        .await?;
     sqlx::query("DELETE FROM tracks WHERE id = $1")
         .bind(track_id)
         .execute(pool)
@@ -783,25 +755,14 @@ pub async fn delete_track_by_id(pool: &PgPool, track_id: &str) -> Result<()> {
 }
 
 pub async fn delete_all_library(pool: &PgPool) -> Result<()> {
-    sqlx::query("DELETE FROM track_genres")
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM track_artists")
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM album_artists")
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM fingerprints")
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM playback_history")
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM tracks").execute(pool).await?;
-    sqlx::query("DELETE FROM albums").execute(pool).await?;
-    sqlx::query("DELETE FROM artists").execute(pool).await?;
-    sqlx::query("DELETE FROM genres").execute(pool).await?;
+    let mut tx = pool.begin().await?;
+
+    sqlx::query("DELETE FROM tracks").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM albums").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM artists").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM genres").execute(&mut *tx).await?;
+
+    tx.commit().await?;
     Ok(())
 }
 
