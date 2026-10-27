@@ -9,7 +9,15 @@ use serde::{Deserialize, Serialize};
 pub struct BatchRenamePreviewRequest {
     pub id: String,
     pub file_paths: Vec<String>,
-    pub pattern: String,
+    /// The caller of the request. The hub has no auth layer, so it uses this
+    /// id to authorize the rename against the library sources.
+    pub user_id: String,
+    /// An explicit naming-pattern override. When absent the hub resolves the
+    /// global pattern from the live config.
+    ///
+    /// This is a dry-run route, so an override is safe here: the mutating
+    /// apply takes no pattern at all.
+    pub pattern: Option<String>,
     pub source_id: Option<String>,
 }
 
@@ -17,6 +25,15 @@ pub struct BatchRenamePreviewRequest {
 pub struct BatchRenamePreviewResponse {
     pub id: String,
     pub previews: Vec<RenamePreview>,
+    /// The naming pattern the hub actually used.
+    ///
+    /// This is how the client learns the effective pattern: a client may not
+    /// be allowed to read the global settings (`naming_pattern` is
+    /// deliberately absent from the non-admin allowlist), so this response is
+    /// the only source of truth for it. The renamer page shows it read-only,
+    /// and the rename apply uses the very same pattern — what it previews is
+    /// what gets renamed.
+    pub pattern: String,
     pub error: Option<String>,
 }
 
@@ -25,7 +42,16 @@ pub struct BatchRenameApplyRequest {
     pub id: String,
     pub file_paths: Vec<String>,
     pub track_ids: Vec<String>,
-    pub pattern: String,
+    /// The caller of the request. The hub has no auth layer, so it uses this
+    /// id to authorize the rename against the library sources.
+    pub user_id: String,
+    // No pattern: the apply always renames with the global naming pattern
+    // from the live config, so a client snapshot can never drive a mutation.
+    //
+    // The client learns the effective pattern from
+    // [`BatchRenamePreviewResponse::pattern`] and previews with it, so what
+    // it previews is what gets renamed. A pattern sent here by an older
+    // client is ignored: the field does not exist.
 }
 
 #[derive(Serialize, RustSignal)]
@@ -39,7 +65,15 @@ pub struct BatchRenameApplyResponse {
 pub struct CheckNamingConventionRequest {
     pub id: String,
     pub source_id: Option<String>,
-    pub pattern: String,
+    /// The caller of the request. The hub has no auth layer, so it uses this
+    /// id to authorize the check against the library sources.
+    pub user_id: String,
+    /// An explicit naming-pattern override. When absent the hub resolves the
+    /// global pattern from the live config.
+    ///
+    /// This is a read-only route that never mutates anything, so an override
+    /// is safe here — unlike the rename apply, which takes no pattern.
+    pub pattern: Option<String>,
 }
 
 #[derive(Serialize, RustSignal)]
@@ -138,6 +172,13 @@ impl From<tawai_core::signals::tools::MissingMetadataEntry> for MissingMetadataE
 #[derive(Deserialize, DartSignal)]
 pub struct GetLibraryStatsRequest {
     pub id: String,
+    /// An explicit naming-pattern override. When absent the hub resolves the
+    /// global pattern from the live config, so the naming-conformity figure is
+    /// computed against the admin-configured pattern instead of being
+    /// silently skipped.
+    ///
+    /// This is a read-only route that never mutates anything, so an override
+    /// is safe here.
     pub naming_pattern: Option<String>,
 }
 

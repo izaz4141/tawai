@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     Json,
     extract::{Path, State},
@@ -56,6 +58,7 @@ pub async fn handle_get_track(
                 state.context.client(),
                 Some(db.pool()),
                 Some(&cfg),
+                Arc::downgrade(&state.context),
             )
             .await;
             t.file_path = resolved_path;

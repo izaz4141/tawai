@@ -1,4 +1,5 @@
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use tawai_core::signals::library::{ScanLibraryRequest, ScanLibraryResponse, ScanProgress};
 use tawai_core::{
@@ -78,10 +79,22 @@ pub async fn handle_scan(
     let client = state.context.client().clone();
     let sources2 = sources.clone();
     let ctx = state.context.clone();
+    // The scan runs in a spawned task: hand it a weak handle to the live
+    // context so the naming pattern is read from the config as it is.
+    let weak_ctx = Arc::downgrade(&state.context);
 
     tokio::spawn(async move {
-        tawai_core::audio::scan::run_scan(db.pool(), client, &sources2, force, Some(tx), &mk, None)
-            .await;
+        tawai_core::audio::scan::run_scan(
+            db.pool(),
+            client,
+            &sources2,
+            force,
+            Some(tx),
+            &mk,
+            None,
+            weak_ctx,
+        )
+        .await;
         ctx.scan_running.store(false, Ordering::SeqCst);
     });
 

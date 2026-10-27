@@ -59,6 +59,20 @@ pub fn can_access_source(owner_id: &str, user_id: &str, role: &str, access_rule:
     }
 }
 
+/// A tawai source's identity is the remote source id from its `tawai://` URL,
+/// so peers and backups agree on one id across the network. Other source types
+/// (and URLs without `?source_id=`) get a locally generated UUID.
+fn federated_source_id(source_type: &str, urls: &[String]) -> Option<String> {
+    if source_type != "tawai" {
+        return None;
+    }
+    urls.iter().find_map(|u| {
+        crate::libsources::tawai::parse_tawai_url(u)
+            .ok()
+            .and_then(|conn| conn.source_id)
+    })
+}
+
 pub async fn add_source(
     pool: &DatabasePool,
     user_id: &str,
@@ -68,6 +82,7 @@ pub async fn add_source(
     access_rule: &str,
     master_key: &str,
 ) -> std::result::Result<String, AddSourceError> {
+    let id = federated_source_id(source_type, urls);
     match pool {
         DatabasePool::Sqlite(p) => {
             super::library_source_sq::add_source(
@@ -78,6 +93,7 @@ pub async fn add_source(
                 source_type,
                 access_rule,
                 master_key,
+                id.as_deref(),
             )
             .await
         }
@@ -90,6 +106,7 @@ pub async fn add_source(
                 source_type,
                 access_rule,
                 master_key,
+                id.as_deref(),
             )
             .await
         }

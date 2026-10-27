@@ -1,3 +1,6 @@
+use std::sync::Weak;
+
+use crate::app_context::AppContext;
 use crate::db::{database::DatabasePool, library, library_source};
 use crate::dclient::nadekodon;
 use crate::libsources::{SourceUrlResolver, get_parser};
@@ -13,6 +16,10 @@ pub struct PlayTrackResult {
     pub error: Option<String>,
 }
 
+/// Resolve a track's playable source URL.
+///
+/// `context` is the live app context handle: sources that derive paths from
+/// the global naming pattern (tawai) read it from the config at every use.
 pub async fn resolve_track_source(
     file_path: &str,
     source_type: &str,
@@ -21,6 +28,7 @@ pub async fn resolve_track_source(
     client: &reqwest::Client,
     pool: Option<&DatabasePool>,
     cfg: Option<&AppConfig>,
+    context: Weak<AppContext>,
 ) -> (String, Option<Vec<(String, String)>>) {
     let is_recommendation = file_path.starts_with("recommendation://");
     // `tawai` tracks are local backup files, but resolve through the parser so
@@ -34,7 +42,7 @@ pub async fn resolve_track_source(
     let Some(pool) = pool else {
         return (file_path.to_string(), None);
     };
-    let Some(parser) = get_parser(source_type, client.clone(), pool) else {
+    let Some(parser) = get_parser(source_type, client.clone(), context) else {
         return if is_recommendation {
             (String::new(), None)
         } else {
@@ -63,6 +71,7 @@ async fn resolve_and_fallback(
     track: &TrackInfo,
     cfg: Option<&AppConfig>,
     master_key: &str,
+    context: &Weak<AppContext>,
 ) -> PlayTrackResult {
     let (source_type, urls_json) =
         library_source::get_source_by_track_id(pool, &track.id, master_key)
@@ -94,6 +103,7 @@ async fn resolve_and_fallback(
         client,
         Some(pool),
         cfg,
+        context.clone(),
     )
     .await;
 
@@ -136,6 +146,11 @@ async fn resolve_and_fallback(
     }
 }
 
+/// Resolve a playable track (by id, or by title/artist/album lookup) to a
+/// streamable path.
+///
+/// `context` is the live app context handle: sources that derive paths from
+/// the global naming pattern (tawai) read it from the config at every use.
 pub async fn resolve_playable_track(
     pool: &DatabasePool,
     client: &reqwest::Client,
@@ -146,10 +161,13 @@ pub async fn resolve_playable_track(
     mbid_recording: Option<&str>,
     cfg: Option<&AppConfig>,
     master_key: &str,
+    context: Weak<AppContext>,
 ) -> PlayTrackResult {
     if let Some(tid) = track_id {
         match library::lookup_track(pool, tid).await {
-            Ok(Some(t)) => return resolve_and_fallback(pool, client, &t, cfg, master_key).await,
+            Ok(Some(t)) => {
+                return resolve_and_fallback(pool, client, &t, cfg, master_key, &context).await;
+            }
             Ok(None) => {}
             Err(e) => {
                 return PlayTrackResult {
@@ -173,7 +191,8 @@ pub async fn resolve_playable_track(
 
     match duplicates::find_matching_track(pool, t, a, Some(al), mbid_recording, 0.9).await {
         Ok(Some((matched_track, _))) => {
-            return resolve_and_fallback(pool, client, &matched_track, cfg, master_key).await;
+            return resolve_and_fallback(pool, client, &matched_track, cfg, master_key, &context)
+                .await;
         }
         Ok(None) => {}
         Err(e) => {

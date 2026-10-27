@@ -6,14 +6,20 @@ pub use user::*;
 
 use crate::security::{check_api_key, require_admin};
 use crate::server::SharedState;
-use axum::{Router, middleware, routing::get};
+use axum::{
+    Router, middleware,
+    routing::{get, put},
+};
 
 pub fn create_settings_router(state: SharedState) -> Router<SharedState> {
-    let global_router = Router::new()
-        .route(
-            "/global",
-            get(handle_get_global_settings).put(handle_update_global_settings),
-        )
+    // Any authenticated user may read the global settings (with a reduced key
+    // set for non-admins); only admins may change them.
+    let global_read_router = Router::new()
+        .route("/global", get(handle_get_global_settings))
+        .layer(middleware::from_fn_with_state(state.clone(), check_api_key));
+
+    let global_write_router = Router::new()
+        .route("/global", put(handle_update_global_settings))
         .layer(middleware::from_fn_with_state(state.clone(), require_admin));
 
     let user_router = Router::new()
@@ -25,7 +31,8 @@ pub fn create_settings_router(state: SharedState) -> Router<SharedState> {
         .layer(middleware::from_fn_with_state(state.clone(), check_api_key));
 
     Router::new()
-        .merge(global_router)
+        .merge(global_read_router)
+        .merge(global_write_router)
         .merge(user_router)
         .with_state(state)
 }

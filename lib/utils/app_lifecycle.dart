@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:tawai/utils/single_instance.dart';
+import 'package:tawai/utils/settings.dart';
 
 final _trayListener = _AppTrayListener();
 
@@ -69,6 +70,8 @@ Future<void> cleanupIntegrations() async {
 
 Future<void> closeApp() async {
   if (kIsWeb) return;
+  // Write everything still pending before the window goes away.
+  await SettingsManager.flushPendingSaves();
   await cleanupIntegrations();
   await windowManager.destroy();
 }

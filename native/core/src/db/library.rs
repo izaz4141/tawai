@@ -1,3 +1,6 @@
+use std::sync::Weak;
+
+use crate::app_context::AppContext;
 use crate::db::database::DatabasePool;
 use crate::signals::library::*;
 
@@ -125,6 +128,7 @@ pub async fn update_album_cover(
 
 pub async fn insert_track(
     pool: &DatabasePool,
+    id: Option<&str>,
     title: &str,
     album_id: &str,
     artist_id: &str,
@@ -147,6 +151,7 @@ pub async fn insert_track(
         DatabasePool::Sqlite(p) => {
             super::library_sq::insert_track(
                 p,
+                id,
                 title,
                 album_id,
                 artist_id,
@@ -170,6 +175,7 @@ pub async fn insert_track(
         DatabasePool::Postgres(p) => {
             super::library_pg::insert_track(
                 p,
+                id,
                 title,
                 album_id,
                 artist_id,
@@ -214,13 +220,15 @@ pub async fn track_exists_by_fingerprint(
     }
 }
 
-pub async fn fingerprint_paths_of(
+/// Map the fingerprints of rows sitting at `paths` to the track id that owns
+/// each one, so stale rows can be dropped by id rather than by path.
+pub async fn fingerprint_ids_of(
     pool: &DatabasePool,
     paths: &std::collections::HashSet<String>,
 ) -> anyhow::Result<std::collections::HashMap<String, String>> {
     match pool {
-        DatabasePool::Sqlite(p) => super::library_sq::fingerprint_paths_of(p, paths).await,
-        DatabasePool::Postgres(p) => super::library_pg::fingerprint_paths_of(p, paths).await,
+        DatabasePool::Sqlite(p) => super::library_sq::fingerprint_ids_of(p, paths).await,
+        DatabasePool::Postgres(p) => super::library_pg::fingerprint_ids_of(p, paths).await,
     }
 }
 
@@ -244,6 +252,32 @@ pub async fn all_track_file_paths(pool: &DatabasePool) -> anyhow::Result<Vec<Str
     match pool {
         DatabasePool::Sqlite(p) => super::library_sq::all_track_file_paths(p).await,
         DatabasePool::Postgres(p) => super::library_pg::all_track_file_paths(p).await,
+    }
+}
+
+pub async fn all_track_source_keys(
+    pool: &DatabasePool,
+) -> anyhow::Result<Vec<(String, String, String)>> {
+    match pool {
+        DatabasePool::Sqlite(p) => super::library_sq::all_track_source_keys(p).await,
+        DatabasePool::Postgres(p) => super::library_pg::all_track_source_keys(p).await,
+    }
+}
+
+pub async fn track_id_by_file_path(
+    pool: &DatabasePool,
+    file_path: &str,
+) -> anyhow::Result<Option<String>> {
+    match pool {
+        DatabasePool::Sqlite(p) => super::library_sq::track_id_by_file_path(p, file_path).await,
+        DatabasePool::Postgres(p) => super::library_pg::track_id_by_file_path(p, file_path).await,
+    }
+}
+
+pub async fn delete_track_by_id(pool: &DatabasePool, track_id: &str) -> anyhow::Result<()> {
+    match pool {
+        DatabasePool::Sqlite(p) => super::library_sq::delete_track_by_id(p, track_id).await,
+        DatabasePool::Postgres(p) => super::library_pg::delete_track_by_id(p, track_id).await,
     }
 }
 
@@ -560,12 +594,16 @@ pub async fn delete_tracks_by_source_id(
 /// Deletes a single track after verifying the requesting user can access its
 /// source. Physical deletion happens on the source itself , then the
 /// library row (and its related rows) are removed.
+///
+/// `context` is the live app context handle: sources that derive paths from
+/// the global naming pattern (tawai) read it from the config at every use.
 pub async fn delete_track(
     pool: &DatabasePool,
     client: &reqwest::Client,
     user_id: &str,
     track_id: &str,
     master_key: &str,
+    context: Weak<AppContext>,
 ) -> anyhow::Result<()> {
     let source = super::library_source::get_source_info_by_track_id(pool, track_id, master_key)
         .await?
@@ -592,7 +630,9 @@ pub async fn delete_track(
         .await?
         .ok_or_else(|| anyhow::anyhow!("Track {} not found", track_id))?;
 
-    if let Some(parser) = crate::libsources::get_parser(&source.source_type, client.clone(), pool) {
+    if let Some(parser) =
+        crate::libsources::get_parser(&source.source_type, client.clone(), context)
+    {
         let mut resolver = crate::libsources::SourceUrlResolver::new();
         if let Ok(url) = resolver
             .resolve(&source.urls, Some(client), Some(&track.file_path))

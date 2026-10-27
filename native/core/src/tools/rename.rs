@@ -1,17 +1,89 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Weak;
 
 use anyhow::Result;
 use sqlx::Row;
 
+use crate::app_context::AppContext;
 use crate::audio::tags::{AudioTag, derive_sort_name, parse_artists};
 use crate::db::database::DatabasePool;
 use crate::libsources::SourceUrlResolver;
 use crate::signals::tools::{NamingViolation, RenamePreview};
+use crate::utils::config::AppConfig;
 
 /// The default library naming pattern, used everywhere a naming schema is
 /// required but none is configured. May contain subdirectories (`/`).
 pub(crate) const DEFAULT_PATTERN: &str = "{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}";
+
+/// Resolve the global library naming pattern, falling back to
+/// [`DEFAULT_PATTERN`] when the key is missing, not a string, empty, or
+/// whitespace-only.
+pub fn naming_pattern_from_config(cfg: &AppConfig) -> String {
+    cfg.value
+        .get("naming_pattern")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .unwrap_or(DEFAULT_PATTERN)
+        .to_string()
+}
+
+/// Resolve the global library naming pattern from the live app config.
+///
+/// This is the single config→pattern reader for every naming-pattern
+/// consumer: the config is re-read at every use, so a pattern change takes
+/// effect on the next operation without a scan-start snapshot. A context that
+/// cannot be upgraded means the call site is not wired to the app yet, and
+/// the default pattern is used.
+pub async fn config_naming_pattern(context: &Weak<AppContext>) -> String {
+    match context.upgrade() {
+        Some(ctx) => {
+            let cfg = ctx.cfg().await;
+            naming_pattern_from_config(cfg.as_ref())
+        }
+        None => DEFAULT_PATTERN.to_string(),
+    }
+}
+
+/// Resolve the naming pattern a request should use.
+///
+/// A client-supplied pattern is an *explicit override*: a non-empty override
+/// wins and is used as-is, otherwise the global pattern is used, falling back
+/// to [`DEFAULT_PATTERN`] when that is empty too.
+///
+/// This is the one ladder every naming-pattern consumer shares, so a preview,
+/// an apply and a stats figure can never disagree about the pattern in use.
+pub fn resolve_naming_pattern(override_pattern: Option<&str>, global_pattern: &str) -> String {
+    if let Some(pattern) = override_pattern.filter(|p| !p.trim().is_empty()) {
+        return pattern.to_string();
+    }
+    if global_pattern.trim().is_empty() {
+        DEFAULT_PATTERN.to_string()
+    } else {
+        global_pattern.to_string()
+    }
+}
+
+/// Resolve the naming pattern for a request, reading the global pattern from
+/// the live app config.
+///
+/// `override_pattern` is the client's explicit override (may be `None`); when
+/// it is absent the global pattern from the config seam is used.
+///
+/// The mutating callers — the batch-rename apply — pass `None`, so they
+/// always rename with the global pattern and no client snapshot can drive a
+/// mutation. The dry-run callers — the rename preview, the convention check
+/// and the library stats — pass the client's override through, so a caller can
+/// try out a pattern without it becoming a second source of truth for the
+/// global one.
+pub async fn resolve_naming_pattern_from_context(
+    context: &Weak<AppContext>,
+    override_pattern: Option<&str>,
+) -> String {
+    let global = config_naming_pattern(context).await;
+    resolve_naming_pattern(override_pattern, &global)
+}
 
 /// Format a naming pattern with tag values.
 ///
@@ -229,6 +301,31 @@ pub(crate) fn expected_path_from_root(
     dest_from_root(source_root, pattern, tag, ext, "track")
 }
 
+/// Destination path for `old_path` rooted at `source_root`, without touching
+/// the filesystem. `pattern: None` keeps the file's current stem name; when a
+/// pattern is given its formatted result becomes the stem. The extension comes
+/// from `old_path` (falling back to `mp3`) so the apply move and its preview
+/// always agree.
+pub(crate) fn destination_for(
+    source_root: &str,
+    pattern: Option<&str>,
+    old_path: &Path,
+    tag: &AudioTag,
+) -> PathBuf {
+    let ext = old_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("mp3");
+    let stem = old_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("track");
+    match pattern {
+        Some(p) => dest_from_root(source_root, p, tag, ext, stem),
+        None => Path::new(source_root).join(format!("{}.{}", stem, ext)),
+    }
+}
+
 /// Move (and rename) an audio file into `source_root`, rooting the naming
 /// pattern's subdirectories at that folder. Callers resolve the source root
 /// first via `SourceUrlResolver`.
@@ -248,19 +345,7 @@ pub fn move_file_into_source(
     if !Path::new(source_root).is_dir() {
         anyhow::bail!("source root is not a directory: {}", source_root);
     }
-    let ext = old_path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("mp3");
-    let stem = old_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("track")
-        .to_string();
-    let new_path = match pattern {
-        Some(p) => dest_from_root(source_root, p, tag, &ext, &stem),
-        None => Path::new(source_root).join(format!("{}.{}", stem, ext)),
-    };
+    let new_path = destination_for(source_root, pattern, old_path, tag);
     if new_path == old_path {
         return Ok(new_path);
     }
@@ -277,12 +362,21 @@ pub fn move_file_into_source(
 /// the same database metadata as [`batch_rename_preview`], so preview and apply
 /// agree. Only tracks with a matching database record are renamed; anything
 /// else produces an `<error: ...>` entry.
+///
+/// `user_id` identifies the caller: only sources the user may access are
+/// renamed, the others are reported as `<error: no access to source>`. The
+/// file that is renamed is the one the database record points at, never a path
+/// supplied by the caller, so a request cannot move a file outside the
+/// caller's accessible sources. `file_paths` only pairs the requests with
+/// their track ids.
 pub async fn batch_rename_apply(
     pool: &DatabasePool,
     file_paths: &[String],
     track_ids: &[String],
     pattern: &str,
+    user_id: &str,
 ) -> Result<Vec<RenamePreview>> {
+    let role = rename_access_role(pool, user_id).await?;
     let ids: Vec<String> = track_ids
         .iter()
         .filter(|s| !s.is_empty())
@@ -298,13 +392,19 @@ pub async fn batch_rename_apply(
     let mut resolver = SourceUrlResolver::new();
 
     let mut results = Vec::new();
-    for (i, path_str) in file_paths.iter().enumerate() {
+    for i in 0..file_paths.len() {
         let track_id = track_ids.get(i).map(String::as_str).unwrap_or("");
-        let path = Path::new(path_str);
         let result = match by_id.get(track_id) {
+            Some(row) if !can_access_rename_row(row, user_id, &role) => {
+                Err(anyhow::anyhow!("no access to source"))
+            }
             Some(row) => {
+                // The database record is authoritative for which file a track
+                // is, so a request cannot move a file outside the caller's
+                // accessible sources.
+                let path = Path::new(&row.file_path);
                 match resolver
-                    .resolve(&row.urls, None, Some(path_str.as_str()))
+                    .resolve(&row.urls, None, Some(row.file_path.as_str()))
                     .await
                 {
                     Ok(root) => {
@@ -316,6 +416,10 @@ pub async fn batch_rename_apply(
             }
             None => Err(anyhow::anyhow!("no database record for track")),
         };
+        let file_path = by_id
+            .get(track_id)
+            .map(|row| row.file_path.clone())
+            .unwrap_or_else(|| file_paths.get(i).cloned().unwrap_or_default());
         match result {
             Ok(new_path) => {
                 if let Err(e) = crate::db::library::set_track_file_path(
@@ -331,13 +435,13 @@ pub async fn batch_rename_apply(
                     ));
                 }
                 results.push(RenamePreview {
-                    file_path: path_str.clone(),
+                    file_path,
                     expected_path: new_path.to_string_lossy().to_string(),
                     track_id: track_id.to_string(),
                 });
             }
             Err(e) => results.push(RenamePreview {
-                file_path: path_str.clone(),
+                file_path,
                 expected_path: format!("<error: {}>", e),
                 track_id: track_id.to_string(),
             }),
@@ -348,29 +452,70 @@ pub async fn batch_rename_apply(
 }
 
 /// Preview renaming using database metadata (fast, no file I/O).
+///
+/// Only sources `user_id` may access are listed, so the preview never
+/// discloses the layout of a source the caller cannot see.
 pub async fn batch_rename_preview(
     pool: &DatabasePool,
     source_id: Option<&str>,
     pattern: &str,
+    user_id: &str,
 ) -> Result<Vec<RenamePreview>> {
+    let role = rename_access_role(pool, user_id).await?;
     let rows = match pool {
         DatabasePool::Sqlite(p) => fetch_rename_tracks_sq(p, source_id).await?,
         DatabasePool::Postgres(p) => fetch_rename_tracks_pg(p, source_id).await?,
     };
+    let rows = rows
+        .into_iter()
+        .filter(|row| can_access_rename_row(row, user_id, &role))
+        .collect();
     Ok(build_previews(rows, pattern).await)
 }
 
 /// Check which files in the library don't follow the naming convention.
+///
+/// Only sources `user_id` may access are checked.
 pub async fn check_naming_convention(
     pool: &DatabasePool,
     source_id: Option<&str>,
     pattern: &str,
+    user_id: &str,
 ) -> Result<Vec<NamingViolation>> {
+    let role = rename_access_role(pool, user_id).await?;
     let rows = match pool {
         DatabasePool::Sqlite(p) => fetch_rename_tracks_sq(p, source_id).await?,
         DatabasePool::Postgres(p) => fetch_rename_tracks_pg(p, source_id).await?,
     };
+    let rows = rows
+        .into_iter()
+        .filter(|row| can_access_rename_row(row, user_id, &role))
+        .collect();
     Ok(build_violations(rows, pattern).await)
+}
+
+/// Resolve the caller's role for the per-source access check.
+///
+/// An unknown user is an error rather than an empty result: without a role no
+/// source can be authorized. Mirrors `delete_track`.
+async fn rename_access_role(pool: &DatabasePool, user_id: &str) -> Result<String> {
+    crate::db::account::get_user_role(pool, user_id)
+        .await
+        .map_err(|_| anyhow::anyhow!("user lookup failed"))?
+        .ok_or_else(|| anyhow::anyhow!("user {user_id} not found"))
+}
+
+/// Whether the caller may act on the library source the row belongs to.
+///
+/// Uses the same predicate as the rest of the library surface (`delete_track`,
+/// `list_sources`, `preview_naming`, playback).
+fn can_access_rename_row(row: &RenameTrackDb, user_id: &str, role: &str) -> bool {
+    crate::db::library_source::can_access_source(
+        &row.source_owner_id,
+        user_id,
+        role,
+        &row.source_access_rule,
+    )
 }
 
 /// Naming-relevant track data loaded from the database. Built once per row and
@@ -381,6 +526,12 @@ pub(crate) struct RenameTrackDb {
     pub track_id: String,
     pub file_path: String,
     pub urls: Vec<String>,
+    /// Owner of the library source the track belongs to, used for the
+    /// per-source access check.
+    pub source_owner_id: String,
+    /// Access rule of the library source the track belongs to (`""`/`"all"`,
+    /// `"owner"`, `"role:<role>"` or a JSON list of user ids).
+    pub source_access_rule: String,
     pub title: String,
     pub artist: String,
     pub album_artist: String,
@@ -535,6 +686,8 @@ const SQ_RENAME_TRACK_SELECT: &str = r#"SELECT t.id AS track_id, t.file_path, t.
     COALESCE(a.title, '') AS album_title,
     t.track_num, t.disc_num, a.date, a.disambiguation, a.total_discs,
     ls.urls AS source_urls,
+    COALESCE(ls.owner_id, '') AS source_owner_id,
+    COALESCE(ls.access_rule, '') AS source_access_rule,
     COALESCE((SELECT GROUP_CONCAT(ta2.name, '||') FROM track_artists ta1 JOIN artists ta2 ON ta1.artist_id = ta2.id WHERE ta1.track_id = t.id), '') AS track_artists,
     COALESCE((SELECT GROUP_CONCAT(aa2.name, '||') FROM album_artists aa1 JOIN artists aa2 ON aa1.artist_id = aa2.id WHERE aa1.album_id = a.id), '') AS album_artists,
     COALESCE((SELECT GROUP_CONCAT(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id), '') AS genres,
@@ -552,6 +705,8 @@ const PG_RENAME_TRACK_SELECT: &str = r#"SELECT t.id AS track_id, t.file_path, t.
     COALESCE(a.title, '') AS album_title,
     t.track_num, t.disc_num, a.date, a.disambiguation, a.total_discs,
     ls.urls::text AS source_urls,
+    COALESCE(ls.owner_id, '') AS source_owner_id,
+    COALESCE(ls.access_rule, '') AS source_access_rule,
     COALESCE((SELECT string_agg(ta2.name, '||') FROM track_artists ta1 JOIN artists ta2 ON ta1.artist_id = ta2.id WHERE ta1.track_id = t.id), '') AS track_artists,
     COALESCE((SELECT string_agg(aa2.name, '||') FROM album_artists aa1 JOIN artists aa2 ON aa1.artist_id = aa2.id WHERE aa1.album_id = a.id), '') AS album_artists,
     COALESCE((SELECT string_agg(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id), '') AS genres,
@@ -650,6 +805,8 @@ pub(crate) fn rename_track_from_sq_row(row: &sqlx::sqlite::SqliteRow) -> RenameT
         track_id: row.get("track_id"),
         file_path: row.get("file_path"),
         urls: parse_urls(row.get("source_urls")),
+        source_owner_id: row.get("source_owner_id"),
+        source_access_rule: row.get("source_access_rule"),
         title: row.get("title"),
         artist: row.get("artist_name"),
         album_artist: row.get("album_artist"),
@@ -676,6 +833,8 @@ pub(crate) fn rename_track_from_pg_row(row: &sqlx::postgres::PgRow) -> RenameTra
         track_id: row.get("track_id"),
         file_path: row.get("file_path"),
         urls: parse_urls(row.get("source_urls")),
+        source_owner_id: row.get("source_owner_id"),
+        source_access_rule: row.get("source_access_rule"),
         title: row.get("title"),
         artist: row.get("artist_name"),
         album_artist: row.get("album_artist"),
@@ -700,6 +859,76 @@ pub(crate) fn rename_track_from_pg_row(row: &sqlx::postgres::PgRow) -> RenameTra
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn config(value: serde_json::Value) -> AppConfig {
+        AppConfig {
+            value,
+            path: PathBuf::new(),
+            mtime: 0,
+        }
+    }
+
+    #[test]
+    fn naming_pattern_from_config_missing_key_falls_back() {
+        let cfg = config(serde_json::json!({}));
+        assert_eq!(naming_pattern_from_config(&cfg), DEFAULT_PATTERN);
+    }
+
+    #[test]
+    fn naming_pattern_from_config_empty_falls_back() {
+        let cfg = config(serde_json::json!({ "naming_pattern": "" }));
+        assert_eq!(naming_pattern_from_config(&cfg), DEFAULT_PATTERN);
+    }
+
+    #[test]
+    fn naming_pattern_from_config_whitespace_falls_back() {
+        let cfg = config(serde_json::json!({ "naming_pattern": "  \t\n" }));
+        assert_eq!(naming_pattern_from_config(&cfg), DEFAULT_PATTERN);
+    }
+
+    #[test]
+    fn naming_pattern_from_config_valid_value_is_trimmed() {
+        let cfg = config(serde_json::json!({ "naming_pattern": "  {artist}/{title}  " }));
+        assert_eq!(naming_pattern_from_config(&cfg), "{artist}/{title}");
+    }
+
+    #[tokio::test]
+    async fn config_naming_pattern_without_context_falls_back_to_default() {
+        // An un-upgradable context means the call site isn't wired to the app
+        // yet; the default pattern is the only sane answer.
+        assert_eq!(config_naming_pattern(&Weak::new()).await, DEFAULT_PATTERN);
+    }
+
+    #[test]
+    fn resolve_naming_pattern_prefers_the_override() {
+        assert_eq!(
+            resolve_naming_pattern(Some("{artist}/{title}"), "{album}/{title}"),
+            "{artist}/{title}"
+        );
+    }
+
+    #[test]
+    fn resolve_naming_pattern_uses_the_global_pattern_without_an_override() {
+        assert_eq!(
+            resolve_naming_pattern(None, "{album}/{title}"),
+            "{album}/{title}"
+        );
+    }
+
+    #[test]
+    fn resolve_naming_pattern_ignores_an_empty_override() {
+        assert_eq!(
+            resolve_naming_pattern(Some("   "), "{album}/{title}"),
+            "{album}/{title}"
+        );
+    }
+
+    #[test]
+    fn resolve_naming_pattern_falls_back_to_the_default_pattern() {
+        assert_eq!(resolve_naming_pattern(None, ""), DEFAULT_PATTERN);
+        assert_eq!(resolve_naming_pattern(None, "   "), DEFAULT_PATTERN);
+        assert_eq!(resolve_naming_pattern(Some(""), ""), DEFAULT_PATTERN);
+    }
 
     fn tag(
         title: &str,
@@ -893,6 +1122,8 @@ mod tests {
             track_id: "t1".to_string(),
             file_path: "/music/raw.mp3".to_string(),
             urls: vec!["/music".to_string()],
+            source_owner_id: "owner".to_string(),
+            source_access_rule: "all".to_string(),
             title: "Title".to_string(),
             artist: artist.to_string(),
             album_artist: album_artist.to_string(),

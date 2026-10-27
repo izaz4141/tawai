@@ -20,6 +20,7 @@ pub async fn handle_sync_recs(context: Arc<AppContext>) {
             master_key: &mk,
             user_id: &msg.user_id,
             included_keys: &msg.included_keys,
+            context: Arc::downgrade(&context),
         })
         .await;
 

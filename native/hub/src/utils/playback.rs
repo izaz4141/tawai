@@ -34,6 +34,7 @@ pub async fn handle_play_track(context: Arc<AppContext>) {
             msg.track.as_ref().and_then(|t| t.mbid_recording.as_deref()),
             Some(&cfg),
             &mk,
+            Arc::downgrade(&context),
         )
         .await;
 

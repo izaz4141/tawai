@@ -194,10 +194,6 @@ pub async fn create_playlist(pool: &PgPool, user_id: &str, name: &str) -> Result
 }
 
 pub async fn delete_playlist(pool: &PgPool, playlist_id: &str) -> Result<()> {
-    sqlx::query("DELETE FROM collection_tracks WHERE collection_id = $1")
-        .bind(playlist_id)
-        .execute(pool)
-        .await?;
     sqlx::query("DELETE FROM collections WHERE id = $1")
         .bind(playlist_id)
         .execute(pool)
@@ -343,8 +339,13 @@ pub async fn update_album_cover(pool: &PgPool, album_id: &str, cover: &[u8]) -> 
     Ok(())
 }
 
+/// Insert a track row.
+///
+/// `id` is the track's canonical identity when the source can supply one (the
+/// remote track id for tawai backups); it is generated locally when `None`.
 pub async fn insert_track(
     pool: &PgPool,
+    id: Option<&str>,
     title: &str,
     album_id: &str,
     artist_id: &str,
@@ -363,13 +364,15 @@ pub async fn insert_track(
     track_peak: Option<f64>,
     tags: &TrackTagMeta,
 ) -> Result<String> {
-    let id = uuid::Uuid::new_v4().to_string();
+    let track_id = id
+        .map(str::to_string)
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     sqlx::query(
         r#"INSERT INTO tracks (id, title, album_id, artist_id, disc_num, track_num,
             duration_secs, file_path, file_hash, source_id, file_size, bitrate, sample_rate, mbid_recording, mbid_track, isrc, comment, copyright, encoder, script, cover, lyrics, track_gain, track_peak)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)"#,
     )
-    .bind(&id)
+    .bind(&track_id)
     .bind(title)
     .bind(album_id)
     .bind(artist_id)
@@ -395,7 +398,7 @@ pub async fn insert_track(
     .bind(track_peak)
     .execute(pool)
     .await?;
-    Ok(id)
+    Ok(track_id)
 }
 
 // ---------------------------------------------------------------------------
@@ -580,7 +583,10 @@ pub async fn track_exists_by_fingerprint(
     Ok(track_id)
 }
 
-pub async fn fingerprint_paths_of(
+/// Fingerprints of rows sitting at `paths`, mapped to the **track id** that
+/// owns each fingerprint. The id (not the path) is what callers delete by: a
+/// path can be shared by more than one row.
+pub async fn fingerprint_ids_of(
     pool: &PgPool,
     paths: &std::collections::HashSet<String>,
 ) -> Result<std::collections::HashMap<String, String>> {
@@ -589,7 +595,7 @@ pub async fn fingerprint_paths_of(
     }
     let paths: Vec<String> = paths.iter().cloned().collect();
     let rows: Vec<(String, String)> = sqlx::query_as(
-        "SELECT f.fingerprint, t.file_path FROM fingerprints f \
+        "SELECT f.fingerprint, t.id FROM fingerprints f \
          INNER JOIN tracks t ON t.id = f.track_id \
          WHERE t.file_path = ANY($1)",
     )
@@ -624,6 +630,26 @@ pub async fn all_track_file_paths(pool: &PgPool) -> Result<Vec<String>> {
         .fetch_all(pool)
         .await?;
     Ok(rows)
+}
+
+/// Every track row keyed by its owning source: `(source_id, track_id, file_path)`.
+///
+/// Scan detection is scoped per source, so a single pass over the table is
+/// grouped in memory instead of running one query per source.
+pub async fn all_track_source_keys(pool: &PgPool) -> Result<Vec<(String, String, String)>> {
+    let rows: Vec<(String, String, String)> =
+        sqlx::query_as("SELECT source_id, id, file_path FROM tracks")
+            .fetch_all(pool)
+            .await?;
+    Ok(rows)
+}
+
+pub async fn track_id_by_file_path(pool: &PgPool, file_path: &str) -> Result<Option<String>> {
+    let id: Option<String> = sqlx::query_scalar("SELECT id FROM tracks WHERE file_path = $1")
+        .bind(file_path)
+        .fetch_optional(pool)
+        .await?;
+    Ok(id)
 }
 
 pub async fn delete_tracks_by_source_id(pool: &PgPool, source_id: &str) -> Result<()> {
@@ -713,60 +739,30 @@ pub async fn delete_tracks_by_source_id(pool: &PgPool, source_id: &str) -> Resul
 }
 
 pub async fn delete_track_by_file_path(pool: &PgPool, file_path: &str) -> Result<()> {
-    let id: Option<String> = sqlx::query_scalar("SELECT id FROM tracks WHERE file_path = $1")
+    sqlx::query("DELETE FROM tracks WHERE file_path = $1")
         .bind(file_path)
-        .fetch_optional(pool)
+        .execute(pool)
         .await?;
+    Ok(())
+}
 
-    if let Some(track_id) = id {
-        sqlx::query("DELETE FROM track_genres WHERE track_id = $1")
-            .bind(&track_id)
-            .execute(pool)
-            .await?;
-        sqlx::query("DELETE FROM track_artists WHERE track_id = $1")
-            .bind(&track_id)
-            .execute(pool)
-            .await?;
-        sqlx::query("DELETE FROM fingerprints WHERE track_id = $1")
-            .bind(&track_id)
-            .execute(pool)
-            .await?;
-        sqlx::query("DELETE FROM playback_history WHERE track_id = $1")
-            .bind(&track_id)
-            .execute(pool)
-            .await?;
-        sqlx::query("DELETE FROM collection_tracks WHERE track_id = $1")
-            .bind(&track_id)
-            .execute(pool)
-            .await?;
-        sqlx::query("DELETE FROM tracks WHERE id = $1")
-            .bind(&track_id)
-            .execute(pool)
-            .await?;
-    }
+pub async fn delete_track_by_id(pool: &PgPool, track_id: &str) -> Result<()> {
+    sqlx::query("DELETE FROM tracks WHERE id = $1")
+        .bind(track_id)
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
 pub async fn delete_all_library(pool: &PgPool) -> Result<()> {
-    sqlx::query("DELETE FROM track_genres")
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM track_artists")
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM album_artists")
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM fingerprints")
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM playback_history")
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM tracks").execute(pool).await?;
-    sqlx::query("DELETE FROM albums").execute(pool).await?;
-    sqlx::query("DELETE FROM artists").execute(pool).await?;
-    sqlx::query("DELETE FROM genres").execute(pool).await?;
+    let mut tx = pool.begin().await?;
+
+    sqlx::query("DELETE FROM tracks").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM albums").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM artists").execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM genres").execute(&mut *tx).await?;
+
+    tx.commit().await?;
     Ok(())
 }
 

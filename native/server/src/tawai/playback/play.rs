@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     Json,
     extract::{Extension, State},
@@ -49,6 +51,7 @@ pub async fn handle_play_track(
         req.track.as_ref().and_then(|t| t.mbid_recording.as_deref()),
         Some(&cfg),
         &mk,
+        Arc::downgrade(&state.context),
     )
     .await;
 

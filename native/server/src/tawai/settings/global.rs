@@ -4,6 +4,7 @@ use axum::{
     response::IntoResponse,
 };
 use serde_json::Value;
+use tawai_core::db::account;
 use tawai_core::signals::settings::GlobalSettingsResponse;
 use tawai_core::utils::config::{PRIVATE_CONFIG_KEYS, strip_keys};
 
@@ -17,6 +18,19 @@ const DEVICE_ONLY_KEYS: &[&str] = &[
     "require_login",
     "check_nightly",
     "accounts",
+    "theme_mode",
+    "use_dynamic_color",
+    "custom_color",
+    "retreat_to_tray",
+    "server_host",
+    "server_port",
+];
+
+/// Global settings a non-admin may read from the global settings API.
+const NON_ADMIN_GLOBAL_KEYS: &[&str] = &[
+    "default_download_source",
+    "desired_audio_quality",
+    "download_folder",
 ];
 
 #[utoipa::path(
@@ -25,18 +39,34 @@ const DEVICE_ONLY_KEYS: &[&str] = &[
     tags = ["tawai.settings"],
     security(("ApiKeyAuth" = [])),
     responses(
-        (status = 200, description = "Global server settings", body = GlobalSettingsResponse)
+        (status = 200, description = "Global server settings. Admins receive all non-private, non-device settings; non-admins receive only the allowlisted keys.", body = GlobalSettingsResponse),
+        (status = 401, description = "Not authenticated")
     )
 )]
 pub async fn handle_get_global_settings(
     State(state): State<SharedState>,
-    Extension(_username): Extension<String>,
+    Extension(user_id): Extension<String>,
 ) -> impl IntoResponse {
+    let db = state.context.db().await;
+    let is_admin = match account::get_user_role(db.pool(), &user_id).await {
+        Ok(role) => role.as_deref() == Some("admin"),
+        Err(e) => {
+            tawai_core::utils::logger::error(&format!(
+                "get global settings role lookup failed: {e}"
+            ));
+            false
+        }
+    };
+
     let app_cfg = state.context.cfg().await;
     let mut settings = strip_keys(&app_cfg.value, PRIVATE_CONFIG_KEYS);
     if let Value::Object(map) = &mut settings {
-        for key in DEVICE_ONLY_KEYS {
-            map.remove(*key);
+        if is_admin {
+            for key in DEVICE_ONLY_KEYS {
+                map.remove(*key);
+            }
+        } else {
+            map.retain(|key, _| NON_ADMIN_GLOBAL_KEYS.contains(&key.as_str()));
         }
     }
     Json(GlobalSettingsResponse { settings })

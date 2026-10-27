@@ -8,6 +8,7 @@ use axum::{
 };
 use futures::stream::{self, Stream, StreamExt};
 use std::convert::Infallible;
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use tawai_core::signals::library::{ScanProgress, ScanSourceRequest};
 use tawai_core::{
@@ -77,11 +78,23 @@ pub async fn handle_scan_source(
     let client = state.context.client().clone();
     let sources = vec![source];
     let scan_ctx = state.context.clone();
+    // The scan runs in a spawned task: hand it a weak handle to the live
+    // context so the naming pattern is read from the config as it is.
+    let weak_ctx = Arc::downgrade(&state.context);
 
     tokio::spawn(async move {
         let pool = db.pool();
-        tawai_core::audio::scan::run_scan(&pool, client, &sources, force, Some(tx), &mk, None)
-            .await;
+        tawai_core::audio::scan::run_scan(
+            &pool,
+            client,
+            &sources,
+            force,
+            Some(tx),
+            &mk,
+            None,
+            weak_ctx,
+        )
+        .await;
         scan_ctx.scan_running.store(false, Ordering::SeqCst);
     });
 

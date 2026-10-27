@@ -73,10 +73,15 @@ class _ReadonlyField extends _ComparisonRow {
   final String Function() current;
   final String Function() remote;
 
+  /// Whether [remote] renders muted: outcome-based "no destination resolved"
+  /// state (preview equals the current path, or is empty).
+  final bool Function()? remoteMuted;
+
   _ReadonlyField({
     required this.label,
     required this.current,
     required this.remote,
+    this.remoteMuted,
   });
 }
 
@@ -90,7 +95,24 @@ Future<ComparisonSheetResult?> showTrackComparisonSheet({
   required IdentifyAlbumResult album,
   required String recordingArtist,
   AlbumInfo? albumInfo,
-}) {
+}) async {
+  ReadFileTagsResponse? localTags;
+  // Only the download-folder flow needs the editable source list (its picker)
+  // and the standalone file's tags: a download track has no album row, so the
+  // sheet can only show its real values by reading the file itself.
+  if (currentTrack.sourceType == 'download_folder') {
+    await controller.ensureSourcesLoaded();
+    if (!context.mounted) return null;
+    try {
+      final tags = await BridgeService.instance.readFileTags(
+        currentTrack.filePath,
+      );
+      if (tags != null && tags.error == null) localTags = tags;
+    } catch (_) {
+      // Fall back to the scanned TrackInfo when the file can't be read.
+    }
+    if (!context.mounted) return null;
+  }
   return showModalBottomSheet<ComparisonSheetResult>(
     context: context,
     isScrollControlled: true,
@@ -101,6 +123,7 @@ Future<ComparisonSheetResult?> showTrackComparisonSheet({
       album: album,
       recordingArtist: recordingArtist,
       albumInfo: albumInfo,
+      localTags: localTags,
     ),
   );
 }
@@ -112,6 +135,10 @@ class _TrackComparisonSheet extends StatefulWidget {
   final IdentifyAlbumResult album;
   final String recordingArtist;
   final AlbumInfo? albumInfo;
+
+  /// On-disk tags of a download-folder file, read before the sheet opens.
+  /// `null` for library tracks (they use [albumInfo]) or when the read failed.
+  final ReadFileTagsResponse? localTags;
   const _TrackComparisonSheet({
     required this.controller,
     required this.currentTrack,
@@ -119,6 +146,7 @@ class _TrackComparisonSheet extends StatefulWidget {
     required this.album,
     required this.recordingArtist,
     this.albumInfo,
+    this.localTags,
   });
 
   @override
@@ -247,54 +275,122 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     super.initState();
     final t = widget.currentTrack;
     final ai = widget.albumInfo;
+    // For download-folder tracks [albumInfo] is null (there is no album row) and
+    // [TrackInfo] carries only a subset of the file's tags, so prefer the
+    // on-disk tags read before the sheet opened, falling back per field.
+    final lt = widget.localTags;
 
-    _titleCtrl = TextEditingController(text: t.title);
-    _artistCtrl = TextEditingController(text: t.artistsString);
-    _artistsCtrl = TextEditingController(text: _joinNames(t.artists));
-    _albumCtrl = TextEditingController(text: t.albumTitle);
-    _albumArtistCtrl = TextEditingController(text: ai?.artistsString ?? '');
+    String pick(String? fromFile, String fallback) =>
+        (fromFile != null && fromFile.isNotEmpty) ? fromFile : fallback;
+
+    String joinStrings(List<String> values) =>
+        values.where((v) => v.isNotEmpty).join('; ');
+
+    final fileTotalTracks = lt?.totalTracks;
+    final fileTotalDiscs = lt?.totalDiscs;
+
+    _titleCtrl = TextEditingController(text: pick(lt?.title, t.title));
+    _artistCtrl = TextEditingController(
+      text: pick(lt?.artist, t.artistsString),
+    );
+    _artistsCtrl = TextEditingController(
+      text: (lt != null && lt.artists.isNotEmpty)
+          ? joinStrings(lt.artists)
+          : _joinNames(t.artists),
+    );
+    _albumCtrl = TextEditingController(text: pick(lt?.album, t.albumTitle));
+    _albumArtistCtrl = TextEditingController(
+      text: pick(lt?.albumArtist, ai?.artistsString ?? ''),
+    );
     _albumArtistsCtrl = TextEditingController(
-      text: _joinNames(ai?.artists ?? const []),
+      text: (lt != null && lt.albumArtists.isNotEmpty)
+          ? joinStrings(lt.albumArtists)
+          : _joinNames(ai?.artists ?? const []),
     );
-    _genreCtrl = TextEditingController(text: t.genres.join('; '));
-    _trackNumCtrl = TextEditingController(text: t.trackNum?.toString() ?? '');
+    _genreCtrl = TextEditingController(
+      text: (lt != null && lt.genres.isNotEmpty)
+          ? joinStrings(lt.genres)
+          : t.genres.join('; '),
+    );
+    _trackNumCtrl = TextEditingController(
+      text: pick(lt?.trackNumber?.toString(), t.trackNum?.toString() ?? ''),
+    );
     _totalTracksCtrl = TextEditingController(
-      text: (ai != null && ai.totalTracks > 0) ? ai.totalTracks.toString() : '',
+      text: (fileTotalTracks != null && fileTotalTracks > 0)
+          ? fileTotalTracks.toString()
+          : (ai != null && ai.totalTracks > 0)
+          ? ai.totalTracks.toString()
+          : '',
     );
-    _discNumCtrl = TextEditingController(text: t.discNum?.toString() ?? '');
+    _discNumCtrl = TextEditingController(
+      text: pick(lt?.discNumber?.toString(), t.discNum?.toString() ?? ''),
+    );
     _totalDiscsCtrl = TextEditingController(
-      text: (ai != null && ai.totalDiscs > 0) ? ai.totalDiscs.toString() : '',
+      text: (fileTotalDiscs != null && fileTotalDiscs > 0)
+          ? fileTotalDiscs.toString()
+          : (ai != null && ai.totalDiscs > 0)
+          ? ai.totalDiscs.toString()
+          : '',
     );
-    _dateCtrl = TextEditingController(text: t.releaseDate ?? '');
-    _originalDateCtrl = TextEditingController(text: ai?.originalDate ?? '');
-    _mediaCtrl = TextEditingController(text: ai?.media ?? '');
-    _scriptCtrl = TextEditingController(text: t.script ?? '');
-    _isrcCtrl = TextEditingController(text: t.isrc ?? '');
-    _recordLabelCtrl = TextEditingController(text: ai?.recordLabel ?? '');
-    _releaseCountryCtrl = TextEditingController(text: ai?.releaseCountry ?? '');
-    _releaseTypeCtrl = TextEditingController(text: ai?.releaseType ?? '');
-    _mbidRecordingCtrl = TextEditingController(text: t.mbidRecording ?? '');
-    _mbidTrackCtrl = TextEditingController(text: t.mbidTrack ?? '');
+    _dateCtrl = TextEditingController(
+      text: pick(lt?.releaseDate, t.releaseDate ?? ''),
+    );
+    _originalDateCtrl = TextEditingController(
+      text: pick(lt?.originalDate, ai?.originalDate ?? ''),
+    );
+    _mediaCtrl = TextEditingController(text: pick(lt?.media, ai?.media ?? ''));
+    _scriptCtrl = TextEditingController(text: pick(lt?.script, t.script ?? ''));
+    _isrcCtrl = TextEditingController(text: pick(lt?.isrc, t.isrc ?? ''));
+    _recordLabelCtrl = TextEditingController(
+      text: pick(lt?.recordLabel, ai?.recordLabel ?? ''),
+    );
+    _releaseCountryCtrl = TextEditingController(
+      text: pick(lt?.releaseCountry, ai?.releaseCountry ?? ''),
+    );
+    _releaseTypeCtrl = TextEditingController(
+      text: (lt != null && lt.releaseType.isNotEmpty)
+          ? joinStrings(lt.releaseType)
+          : (ai?.releaseType ?? ''),
+    );
+    _mbidRecordingCtrl = TextEditingController(
+      text: pick(lt?.mbidRecording, t.mbidRecording ?? ''),
+    );
+    _mbidTrackCtrl = TextEditingController(
+      text: pick(lt?.mbidTrack, t.mbidTrack ?? ''),
+    );
     _mbidArtistCtrl = TextEditingController(
-      text: t.artistMbid ?? t.artists.firstOrNull?.mbid ?? '',
+      text: pick(
+        lt?.mbidArtist,
+        t.artistMbid ?? t.artists.firstOrNull?.mbid ?? '',
+      ),
     );
-    _mbidReleaseCtrl = TextEditingController(text: t.releaseMbid ?? '');
+    _mbidReleaseCtrl = TextEditingController(
+      text: pick(lt?.mbidRelease, t.releaseMbid ?? ''),
+    );
     _mbidAlbumArtistCtrl = TextEditingController(
-      text: ai?.releaseArtistMbid ?? widget.album.releaseArtistMbid ?? '',
+      text: pick(
+        lt?.mbidReleaseArtist,
+        ai?.releaseArtistMbid ?? widget.album.releaseArtistMbid ?? '',
+      ),
     );
     _mbidReleaseGroupCtrl = TextEditingController(
-      text: ai?.releaseGroupMbid ?? '',
+      text: pick(lt?.mbidReleaseGroup, ai?.releaseGroupMbid ?? ''),
     );
     _artistSortCtrl = TextEditingController(
-      text: t.artists.firstOrNull?.sortName ?? '',
+      text: pick(lt?.artistSort, t.artists.firstOrNull?.sortName ?? ''),
     );
     _albumArtistSortCtrl = TextEditingController(
-      text: ai?.artists.firstOrNull?.sortName ?? '',
+      text: pick(lt?.albumArtistSort, ai?.artists.firstOrNull?.sortName ?? ''),
     );
-    _commentCtrl = TextEditingController(text: t.comment ?? '');
-    _copyrightCtrl = TextEditingController(text: t.copyright ?? '');
-    _lyricsCtrl = TextEditingController(text: t.lyrics ?? '');
-    _origLyrics = t.lyrics ?? '';
+    _commentCtrl = TextEditingController(
+      text: pick(lt?.comment, t.comment ?? ''),
+    );
+    _copyrightCtrl = TextEditingController(
+      text: pick(lt?.copyright, t.copyright ?? ''),
+    );
+    final localLyrics = pick(lt?.lyrics, t.lyrics ?? '');
+    _lyricsCtrl = TextEditingController(text: localLyrics);
+    _origLyrics = localLyrics;
 
     _controllers = [
       _titleCtrl,
@@ -344,10 +440,12 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
       String label,
       String Function() current, [
       String Function()? remote,
+      bool Function()? remoteMuted,
     ]) => _ReadonlyField(
       label: label,
       current: current,
       remote: remote ?? () => '',
+      remoteMuted: remoteMuted,
     );
 
     _rows = [
@@ -413,13 +511,18 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
       edit('Copyright', _copyrightCtrl, () => ''),
 
       _SectionHeader('Technical'),
-      ro('File Path', () => widget.currentTrack.filePath, () => _pathPreview),
+      ro(
+        'File Path',
+        () => widget.currentTrack.filePath,
+        () => _pathPreview,
+        // Muted while the preview is unresolved: it either hasn't come back
+        // yet (empty) or is the current path (no destination to move to).
+        () =>
+            _pathPreview.isEmpty ||
+            _pathPreview == widget.currentTrack.filePath,
+      ),
       ro('Encoder', () => widget.currentTrack.encoder ?? ''),
     ];
-
-    if (_isDownloadFolder && widget.controller.librarySources.isNotEmpty) {
-      _targetSourceId = widget.controller.librarySources.first.id;
-    }
 
     // Recompute the destination preview as the pattern-relevant fields change.
     _previewControllers = [
@@ -442,7 +545,16 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
       duration: const Duration(milliseconds: 1500),
     )..repeat();
 
-    _loadLocalCover();
+    // Download tracks have their cover embedded in the file; library tracks
+    // resolve it from the album row via [_loadLocalCover].
+    if (lt != null) {
+      final cover = lt.cover;
+      if (cover != null && cover.isNotEmpty) {
+        _localCoverBytes = Uint8List.fromList(cover);
+      }
+    } else {
+      _loadLocalCover();
+    }
 
     if (_remoteLyrics.isEmpty) {
       _lyricsLoading = true;
@@ -562,10 +674,12 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
   }
 
   /// Recompute the destination preview from the currently edited values using
-  /// the configured naming pattern. Mirrors the inputs `_apply` sends so the
-  /// preview matches where `Apply` will place the file. The result is relative
-  /// to the library source root (the root itself is resolved by the backend at
-  /// apply time). No preview is shown when the track has no stored path.
+  /// the global naming pattern. Mirrors the inputs `_apply` sends so the preview
+  /// matches where `Apply` will place the file: no pattern is supplied, so the
+  /// backend resolves the same global setting Apply reads, resolves the source
+  /// root, and appends the file extension. When Apply would not move the file
+  /// the current path is shown instead. No preview is shown when the track has
+  /// no path.
   Future<void> _updatePathPreview() async {
     if (widget.currentTrack.filePath.isEmpty) {
       if (mounted && _pathPreview.isNotEmpty) {
@@ -575,8 +689,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
     }
     final seq = ++_previewSeq;
     try {
-      final result = await BridgeService.instance.formatNamingPreview(
-        pattern: SettingsManager.namingPattern.value,
+      final preview = await BridgeService.instance.formatNamingPreview(
         title: _titleCtrl.text,
         artist: _artistCtrl.text,
         albumArtist: _albumArtistCtrl.text.isNotEmpty
@@ -588,9 +701,12 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
         discNumber: int.tryParse(_discNumCtrl.text) ?? 1,
         albumDisambiguation: _albumDisambiguation,
         totalDiscs: int.tryParse(_totalDiscsCtrl.text) ?? 0,
+        trackId: _isDownloadFolder ? null : widget.currentTrack.id,
+        targetSourceId: _isDownloadFolder ? _targetSourceId : null,
+        filePath: widget.currentTrack.filePath,
       );
       if (!mounted || seq != _previewSeq) return;
-      setState(() => _pathPreview = result);
+      setState(() => _pathPreview = preview.result);
     } catch (_) {
       if (!mounted || seq != _previewSeq) return;
       setState(() => _pathPreview = '');
@@ -744,6 +860,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
       ),
       child: DropdownButtonFormField<String>(
         initialValue: _targetSourceId,
+        hint: const Text('Select a library source'),
         decoration: InputDecoration(
           labelText: 'Move into library source',
           border: OutlineInputBorder(
@@ -752,9 +869,14 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
           isDense: true,
         ),
         items: sources
-            .map((s) => DropdownMenuItem(value: s.id, child: Text(s.name)))
+            .map(
+              (s) => DropdownMenuItem<String>(value: s.id, child: Text(s.name)),
+            )
             .toList(),
-        onChanged: (v) => setState(() => _targetSourceId = v),
+        onChanged: (v) => setState(() {
+          _targetSourceId = v;
+          _schedulePathPreview();
+        }),
       ),
     );
   }
@@ -763,6 +885,24 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+
+    // Download-folder tracks need a target library source before Apply can
+    // move the file; without one the button is disabled and tooltip-explained.
+    final needsTarget = _isDownloadFolder && _targetSourceId == null;
+    final applyButton = FilledButton.icon(
+      onPressed: (_applying || needsTarget) ? null : _apply,
+      icon: _applying
+          ? SizedBox(
+              width: AppTheme.spaceLG * AppTheme.spaceScale(context),
+              height: AppTheme.spaceLG * AppTheme.spaceScale(context),
+              child: const CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : const Icon(Icons.save),
+      label: Text(_applying ? 'Applying...' : 'Apply'),
+    );
 
     return Sheet(
       draggable: true,
@@ -833,32 +973,24 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
                 child: Column(
                   children: [
                     for (final row in _rows) _buildRow(row, textTheme, colors),
-                    if (_isDownloadFolder)
-                      _buildTargetSourcePicker(colors, textTheme),
                   ],
                 ),
               ),
             ),
+            // Pinned above Apply: the picker gates the Apply button, so it
+            // must stay visible without scrolling.
+            if (_isDownloadFolder) _buildTargetSourcePicker(colors, textTheme),
             const Divider(height: AppTheme.spaceSM),
             SafeArea(
               child: SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _applying ? null : _apply,
-                  icon: _applying
-                      ? SizedBox(
-                          width:
-                              AppTheme.spaceLG * AppTheme.spaceScale(context),
-                          height:
-                              AppTheme.spaceLG * AppTheme.spaceScale(context),
-                          child: const CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.save),
-                  label: Text(_applying ? 'Applying...' : 'Apply'),
-                ),
+                child: needsTarget
+                    ? Tooltip(
+                        message:
+                            'Select a library source to move this file into',
+                        child: applyButton,
+                      )
+                    : applyButton,
               ),
             ),
           ],
@@ -891,6 +1023,7 @@ class _TrackComparisonSheetState extends State<_TrackComparisonSheet>
           remote: row.remote(),
           textTheme: textTheme,
           colors: colors,
+          remoteMuted: row.remoteMuted?.call() ?? false,
         );
       case _LyricsField():
         return _lyricsRow(textTheme, colors);

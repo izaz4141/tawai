@@ -526,17 +526,24 @@ class BridgeService {
         : _localRestartServer();
   }
 
+  /// Sets a per-user setting.
+  ///
+  /// In remote mode the user is derived from the request credentials, so
+  /// [userId] is ignored: a remote client can only ever write its own row.
   Future<bool> setUserSetting(String userId, String key, String value) async {
     if (_isRemote) {
-      return APIService.instance.saveSettings({key: value});
+      return APIService.instance.setUserSetting(key, value);
     }
     return RinfService.instance.setUserSetting(userId, key, value);
   }
 
+  /// Reads a per-user setting.
+  ///
+  /// In remote mode the user is derived from the request credentials, so
+  /// [userId] is ignored and a missing setting comes back as an empty string.
   Future<String> getUserSetting(String userId, String key) async {
     if (_isRemote) {
-      final settings = await APIService.instance.getSettings();
-      return settings?[key]?.toString() ?? '';
+      return await APIService.instance.getUserSetting(key) ?? '';
     }
     return RinfService.instance.getUserSetting(userId, key);
   }
@@ -980,8 +987,14 @@ class BridgeService {
   // Naming format preview
   // ---------------------------------------------------------------------------
 
-  Future<String> formatNamingPreview({
-    required String pattern,
+  /// Preview a naming pattern.
+  ///
+  /// [pattern] is an explicit override. When it is `null` the backend resolves
+  /// the global naming pattern from its live config.
+  ///
+  /// Returns the rendered name and the pattern that was actually used.
+  Future<({String result, String pattern})> formatNamingPreview({
+    String? pattern,
     required String title,
     required String artist,
     required String albumArtist,
@@ -991,6 +1004,9 @@ class BridgeService {
     required int discNumber,
     String? albumDisambiguation,
     int totalDiscs = 0,
+    String? trackId,
+    String? targetSourceId,
+    String? filePath,
   }) async {
     if (_isRemote) {
       return APIService.instance.formatNamingPreview(
@@ -1004,6 +1020,9 @@ class BridgeService {
         discNumber: discNumber,
         albumDisambiguation: albumDisambiguation,
         totalDiscs: totalDiscs,
+        trackId: trackId,
+        targetSourceId: targetSourceId,
+        filePath: filePath,
       );
     }
     return RinfService.instance.formatNamingPreview(
@@ -1017,6 +1036,10 @@ class BridgeService {
       discNumber: discNumber,
       albumDisambiguation: albumDisambiguation,
       totalDiscs: totalDiscs,
+      trackId: trackId,
+      targetSourceId: targetSourceId,
+      filePath: filePath,
+      userId: SettingsManager.currentUserId.value ?? '',
     );
   }
 
@@ -1024,9 +1047,13 @@ class BridgeService {
   // Rename
   // ---------------------------------------------------------------------------
 
+  /// Preview a batch rename.
+  ///
+  /// [pattern] is an explicit override. When it is `null` the backend resolves
+  /// the global naming pattern from the live config.
   Future<BatchRenamePreviewResponse?> batchRenamePreview({
     required List<String> filePaths,
-    required String pattern,
+    String? pattern,
     String? sourceId,
   }) async {
     if (_isRemote) {
@@ -1040,31 +1067,38 @@ class BridgeService {
       filePaths: filePaths,
       pattern: pattern,
       sourceId: sourceId,
+      userId: SettingsManager.currentUserId.value ?? '',
     );
   }
 
+  /// Apply a batch rename.
+  ///
+  /// The apply always renames with the global naming pattern from the
+  /// backend's live config — the request carries no pattern.
   Future<BatchRenameApplyResponse?> batchRenameApply({
     required List<String> filePaths,
     required List<String> trackIds,
-    required String pattern,
   }) async {
     if (_isRemote) {
       return APIService.instance.batchRenameApply(
         filePaths: filePaths,
         trackIds: trackIds,
-        pattern: pattern,
       );
     }
     return RinfService.instance.batchRenameApply(
       filePaths: filePaths,
       trackIds: trackIds,
-      pattern: pattern,
+      userId: SettingsManager.currentUserId.value ?? '',
     );
   }
 
+  /// Check which files don't follow the naming convention.
+  ///
+  /// [pattern] is an explicit override. When it is `null` the backend resolves
+  /// the global naming pattern from the live config.
   Future<CheckNamingConventionResponse?> checkNamingConvention({
     String? sourceId,
-    required String pattern,
+    String? pattern,
   }) async {
     if (_isRemote) {
       return APIService.instance.checkNamingConvention(
@@ -1075,16 +1109,15 @@ class BridgeService {
     return RinfService.instance.checkNamingConvention(
       sourceId: sourceId,
       pattern: pattern,
+      userId: SettingsManager.currentUserId.value ?? '',
     );
   }
 
-  Future<GetLibraryStatsResponse?> getLibraryStats({
-    String? namingPattern,
-  }) async {
+  Future<GetLibraryStatsResponse?> getLibraryStats() async {
     if (_isRemote) {
-      return APIService.instance.getLibraryStats(namingPattern: namingPattern);
+      return APIService.instance.getLibraryStats();
     }
-    return RinfService.instance.getLibraryStats(namingPattern: namingPattern);
+    return RinfService.instance.getLibraryStats();
   }
 
   Future<FindMissingMetadataResponse?> findMissingMetadata({

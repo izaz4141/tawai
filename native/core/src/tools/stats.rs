@@ -9,20 +9,21 @@ use crate::tools::rename::{
     rename_track_from_sq_row,
 };
 
-pub async fn get_library_stats(
-    pool: &DatabasePool,
-    naming_pattern: Option<&str>,
-) -> Result<LibraryStats> {
+/// Library statistics, including the naming-conformity figure.
+///
+/// `naming_pattern` is required: the conformity figure is always computed
+/// against a pattern, so it can only be absent when the library is empty.
+/// Callers resolve the effective pattern (see
+/// [`crate::tools::rename::resolve_naming_pattern_from_context`]) before
+/// calling.
+pub async fn get_library_stats(pool: &DatabasePool, naming_pattern: &str) -> Result<LibraryStats> {
     match pool {
         DatabasePool::Sqlite(p) => get_library_stats_sq(p, naming_pattern).await,
         DatabasePool::Postgres(p) => get_library_stats_pg(p, naming_pattern).await,
     }
 }
 
-async fn get_library_stats_sq(
-    pool: &SqlitePool,
-    naming_pattern: Option<&str>,
-) -> Result<LibraryStats> {
+async fn get_library_stats_sq(pool: &SqlitePool, naming_pattern: &str) -> Result<LibraryStats> {
     let total_tracks: i64 = sqlx::query(
         r#"SELECT COUNT(*) FROM tracks t
            JOIN library_sources ls ON t.source_id = ls.id
@@ -193,51 +194,53 @@ async fn get_library_stats_sq(
         (None, 0)
     };
 
-    let naming_conformity_pct = match naming_pattern.filter(|p| !p.is_empty()) {
-        Some(pattern) if total_tracks > 0 => {
-            let rows = sqlx::query(
-                r#"SELECT t.id AS track_id, t.file_path, t.title,
-                          COALESCE(ar.name, '') AS artist_name,
-                          COALESCE(aa.name, '') AS album_artist,
-                          COALESCE(a.title, '') AS album_title,
-                          t.track_num, t.disc_num, a.date, a.disambiguation, a.total_discs,
-                          ls.urls AS source_urls,
-                          COALESCE((SELECT GROUP_CONCAT(ta2.name, '||') FROM track_artists ta1 JOIN artists ta2 ON ta1.artist_id = ta2.id WHERE ta1.track_id = t.id), '') AS track_artists,
-                          COALESCE((SELECT GROUP_CONCAT(aa2.name, '||') FROM album_artists aa1 JOIN artists aa2 ON aa1.artist_id = aa2.id WHERE aa1.album_id = a.id), '') AS album_artists,
-                          COALESCE((SELECT GROUP_CONCAT(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id), '') AS genres,
-                          t.mbid_recording, ar.mbid AS mbid_artist, a.release_mbid AS mbid_release,
-                          t.lyrics, t.track_gain, t.track_peak
-                   FROM tracks t
-                   JOIN albums a ON t.album_id = a.id
-                   JOIN artists ar ON t.artist_id = ar.id
-                   LEFT JOIN artists aa ON a.artist_id = aa.id
-                   JOIN library_sources ls ON t.source_id = ls.id
-                   WHERE ls.source_type = 'local'"#,
-            )
-            .fetch_all(pool)
-            .await?;
+    let naming_conformity_pct = if !naming_pattern.is_empty() && total_tracks > 0 {
+        let pattern = naming_pattern;
+        let rows = sqlx::query(
+            r#"SELECT t.id AS track_id, t.file_path, t.title,
+                      COALESCE(ar.name, '') AS artist_name,
+                      COALESCE(aa.name, '') AS album_artist,
+                      COALESCE(a.title, '') AS album_title,
+                      t.track_num, t.disc_num, a.date, a.disambiguation, a.total_discs,
+                      ls.urls AS source_urls,
+                      COALESCE(ls.owner_id, '') AS source_owner_id,
+                      COALESCE(ls.access_rule, '') AS source_access_rule,
+                      COALESCE((SELECT GROUP_CONCAT(ta2.name, '||') FROM track_artists ta1 JOIN artists ta2 ON ta1.artist_id = ta2.id WHERE ta1.track_id = t.id), '') AS track_artists,
+                      COALESCE((SELECT GROUP_CONCAT(aa2.name, '||') FROM album_artists aa1 JOIN artists aa2 ON aa1.artist_id = aa2.id WHERE aa1.album_id = a.id), '') AS album_artists,
+                      COALESCE((SELECT GROUP_CONCAT(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id), '') AS genres,
+                      t.mbid_recording, ar.mbid AS mbid_artist, a.release_mbid AS mbid_release,
+                      t.lyrics, t.track_gain, t.track_peak
+               FROM tracks t
+               JOIN albums a ON t.album_id = a.id
+               JOIN artists ar ON t.artist_id = ar.id
+               LEFT JOIN artists aa ON a.artist_id = aa.id
+               JOIN library_sources ls ON t.source_id = ls.id
+               WHERE ls.source_type = 'local'"#,
+        )
+        .fetch_all(pool)
+        .await?;
 
-            let mut resolver = SourceUrlResolver::new();
-            let mut conforming = 0.0;
-            for row in rows.iter() {
-                let data = rename_track_from_sq_row(row);
-                if let Ok(root) = resolver
-                    .resolve(&data.urls, None, Some(&data.file_path))
-                    .await
+        let mut resolver = SourceUrlResolver::new();
+        let mut conforming = 0.0;
+        for row in rows.iter() {
+            let data = rename_track_from_sq_row(row);
+            if let Ok(root) = resolver
+                .resolve(&data.urls, None, Some(&data.file_path))
+                .await
+            {
+                let ext = ext_of(&data.file_path);
+                if expected_path_from_root(&root, pattern, &build_audio_tag(&data), &ext)
+                    .to_string_lossy()
+                    == data.file_path
                 {
-                    let ext = ext_of(&data.file_path);
-                    if expected_path_from_root(&root, pattern, &build_audio_tag(&data), &ext)
-                        .to_string_lossy()
-                        == data.file_path
-                    {
-                        conforming += 1.0;
-                    }
+                    conforming += 1.0;
                 }
             }
-
-            Some((conforming / total_tracks as f64) * 100.0)
         }
-        _ => None,
+
+        Some((conforming / total_tracks as f64) * 100.0)
+    } else {
+        None
     };
 
     let total_file_size: i64 = sqlx::query(
@@ -415,10 +418,7 @@ async fn get_library_stats_sq(
     })
 }
 
-async fn get_library_stats_pg(
-    pool: &sqlx::PgPool,
-    naming_pattern: Option<&str>,
-) -> Result<LibraryStats> {
+async fn get_library_stats_pg(pool: &sqlx::PgPool, naming_pattern: &str) -> Result<LibraryStats> {
     let total_tracks: i64 = sqlx::query(
         r#"SELECT COUNT(*)::bigint FROM tracks t
         JOIN library_sources ls ON t.source_id = ls.id
@@ -589,51 +589,53 @@ async fn get_library_stats_pg(
         (None, 0)
     };
 
-    let naming_conformity_pct = match naming_pattern.filter(|p| !p.is_empty()) {
-        Some(pattern) if total_tracks > 0 => {
-            let rows = sqlx::query(
-                r#"SELECT t.id AS track_id, t.file_path, t.title,
-                          COALESCE(ar.name, '') AS artist_name,
-                          COALESCE(aa.name, '') AS album_artist,
-                          COALESCE(a.title, '') AS album_title,
-                          t.track_num, t.disc_num, a.date, a.disambiguation, a.total_discs,
-                          ls.urls::text AS source_urls,
-                          COALESCE((SELECT string_agg(ta2.name, '||') FROM track_artists ta1 JOIN artists ta2 ON ta1.artist_id = ta2.id WHERE ta1.track_id = t.id), '') AS track_artists,
-                          COALESCE((SELECT string_agg(aa2.name, '||') FROM album_artists aa1 JOIN artists aa2 ON aa1.artist_id = aa2.id WHERE aa1.album_id = a.id), '') AS album_artists,
-                          COALESCE((SELECT string_agg(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id), '') AS genres,
-                          t.mbid_recording, ar.mbid AS mbid_artist, a.release_mbid AS mbid_release,
-                          t.lyrics, t.track_gain, t.track_peak
-                   FROM tracks t
-                   JOIN albums a ON t.album_id = a.id
-                   JOIN artists ar ON t.artist_id = ar.id
-                   LEFT JOIN artists aa ON a.artist_id = aa.id
-                   JOIN library_sources ls ON t.source_id = ls.id
-                   WHERE ls.source_type = 'local'"#,
-            )
-            .fetch_all(pool)
-            .await?;
+    let naming_conformity_pct = if !naming_pattern.is_empty() && total_tracks > 0 {
+        let pattern = naming_pattern;
+        let rows = sqlx::query(
+            r#"SELECT t.id AS track_id, t.file_path, t.title,
+                      COALESCE(ar.name, '') AS artist_name,
+                      COALESCE(aa.name, '') AS album_artist,
+                      COALESCE(a.title, '') AS album_title,
+                      t.track_num, t.disc_num, a.date, a.disambiguation, a.total_discs,
+                      ls.urls::text AS source_urls,
+                      COALESCE(ls.owner_id, '') AS source_owner_id,
+                      COALESCE(ls.access_rule, '') AS source_access_rule,
+                      COALESCE((SELECT string_agg(ta2.name, '||') FROM track_artists ta1 JOIN artists ta2 ON ta1.artist_id = ta2.id WHERE ta1.track_id = t.id), '') AS track_artists,
+                      COALESCE((SELECT string_agg(aa2.name, '||') FROM album_artists aa1 JOIN artists aa2 ON aa1.artist_id = aa2.id WHERE aa1.album_id = a.id), '') AS album_artists,
+                      COALESCE((SELECT string_agg(g.name, '||') FROM track_genres tg JOIN genres g ON tg.genre_id = g.id WHERE tg.track_id = t.id), '') AS genres,
+                      t.mbid_recording, ar.mbid AS mbid_artist, a.release_mbid AS mbid_release,
+                      t.lyrics, t.track_gain, t.track_peak
+               FROM tracks t
+               JOIN albums a ON t.album_id = a.id
+               JOIN artists ar ON t.artist_id = ar.id
+               LEFT JOIN artists aa ON a.artist_id = aa.id
+               JOIN library_sources ls ON t.source_id = ls.id
+               WHERE ls.source_type = 'local'"#,
+        )
+        .fetch_all(pool)
+        .await?;
 
-            let mut resolver = SourceUrlResolver::new();
-            let mut conforming = 0.0;
-            for row in rows.iter() {
-                let data = rename_track_from_pg_row(row);
-                if let Ok(root) = resolver
-                    .resolve(&data.urls, None, Some(&data.file_path))
-                    .await
+        let mut resolver = SourceUrlResolver::new();
+        let mut conforming = 0.0;
+        for row in rows.iter() {
+            let data = rename_track_from_pg_row(row);
+            if let Ok(root) = resolver
+                .resolve(&data.urls, None, Some(&data.file_path))
+                .await
+            {
+                let ext = ext_of(&data.file_path);
+                if expected_path_from_root(&root, pattern, &build_audio_tag(&data), &ext)
+                    .to_string_lossy()
+                    == data.file_path
                 {
-                    let ext = ext_of(&data.file_path);
-                    if expected_path_from_root(&root, pattern, &build_audio_tag(&data), &ext)
-                        .to_string_lossy()
-                        == data.file_path
-                    {
-                        conforming += 1.0;
-                    }
+                    conforming += 1.0;
                 }
             }
-
-            Some((conforming / total_tracks as f64) * 100.0)
         }
-        _ => None,
+
+        Some((conforming / total_tracks as f64) * 100.0)
+    } else {
+        None
     };
 
     let total_file_size: i64 = sqlx::query(

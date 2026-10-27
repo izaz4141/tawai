@@ -5,13 +5,54 @@ use std::{
     time::UNIX_EPOCH,
 };
 
-use crate::utils::encryption::decrypt;
+use crate::utils::encryption::{decrypt, encrypt, valid_encryption_format};
 
 /// Default config JSON, embedded at compile time so it works regardless of
 const DEFAULT_CONFIG_JSON: &str = include_str!("../../../../assets/docs/default.json");
 
 /// Config keys holding downstream service secrets. Never exposed to clients
 pub const PRIVATE_CONFIG_KEYS: &[&str] = &["slskd_api_key", "nadekodon_api_key"];
+
+/// Per-user setting keys whose value is stored encrypted at rest. The value is
+/// encrypted before it is written and decrypted when it is read back, so the
+/// plaintext never leaves the process.
+pub const SECRET_USER_SETTING_KEYS: &[&str] = &["listenbrainz_token"];
+
+/// Returns true when the per-user setting `key` holds a secret value.
+pub fn is_secret_user_setting(key: &str) -> bool {
+    SECRET_USER_SETTING_KEYS.contains(&key)
+}
+
+/// Prepares a per-user setting value for storage.
+///
+/// Secret values are encrypted with the master key; every other value is
+/// stored as-is. An already encrypted value is left untouched, so writing the
+/// same value twice does not encrypt it twice. When the master key cannot be
+/// used the plaintext is stored, so the setting stays readable.
+pub fn encode_user_setting(key: &str, value: &str, master_key: &str) -> String {
+    if !is_secret_user_setting(key) || value.is_empty() {
+        return value.to_string();
+    }
+    if valid_encryption_format(value) {
+        return value.to_string();
+    }
+    encrypt(value, master_key).unwrap_or_else(|_| value.to_string())
+}
+
+/// Restores a per-user setting value read from storage.
+///
+/// Secret values are decrypted with the master key. Values stored before
+/// encryption was introduced are still plaintext and pass through unchanged,
+/// as do values that cannot be decrypted.
+pub fn decode_user_setting(key: &str, value: &str, master_key: &str) -> String {
+    if !is_secret_user_setting(key) {
+        return value.to_string();
+    }
+    if !valid_encryption_format(value) {
+        return value.to_string();
+    }
+    decrypt(value, master_key).unwrap_or_else(|_| value.to_string())
+}
 
 /// Returns true if `host` refers to the local machine.
 pub fn is_local_host(host: &str) -> bool {
