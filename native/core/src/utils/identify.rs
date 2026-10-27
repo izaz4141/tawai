@@ -193,26 +193,29 @@ pub async fn apply_identification(
     // link is the track row's federated id, so it survives path and tag
     // changes. The mirror itself is best-effort — any failure below just drops
     // it.
-    let remote_backing: Option<(crate::libsources::tawai::RemoteConn, TrackInfo)> = if source
-        .source_type
-        == "tawai"
-        && params.target_source_id.is_none()
-    {
-        match crate::libsources::tawai::resolve_remote_track(pool, client, &source.urls, &file_path)
+    let remote_backing: Option<(crate::libsources::tawai::RemoteConn, TrackInfo)> =
+        if source.source_type == "tawai" && params.target_source_id.is_none() {
+            match crate::libsources::tawai::resolve_remote_track(
+                None,
+                client,
+                &source.urls,
+                Some(&params.track_id),
+                None,
+            )
             .await
-        {
-            Ok(pair) => Some(pair),
-            Err(e) => {
-                crate::utils::logger::debug(&format!(
-                    "tawai apply mirror skipped for '{}': {e}",
-                    source.name
-                ));
-                None
+            {
+                Ok(pair) => Some(pair),
+                Err(e) => {
+                    crate::utils::logger::debug(&format!(
+                        "tawai apply mirror skipped for '{}': {e}",
+                        source.name
+                    ));
+                    None
+                }
             }
-        }
-    } else {
-        None
-    };
+        } else {
+            None
+        };
 
     let move_plan = resolve_move_plan(&source, Path::new(&file_path), None, global_pattern)
         .await

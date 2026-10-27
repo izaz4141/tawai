@@ -829,29 +829,31 @@ async fn download_chunk(
     Ok(ChunkOutcome::Advanced(expected_total))
 }
 
-/// Map a local backup path back to the remote connection + track that backs it.
+/// Resolve the remote connection + track backing either a federated track id
+/// or a local backup file path.
 ///
 /// The link is the track row's federated id, not its path: an existing backup
-/// keeps its identity when the naming pattern changes. There is no path-based
-/// fallback — a caller without a row has no remote track to resolve.
+/// keeps its identity when the naming pattern changes. When resolving by
+/// `local_path`, the local DB row must exist (path -> federated id).
 pub(crate) async fn resolve_remote_track(
-    pool: &DatabasePool,
+    pool: Option<&DatabasePool>,
     client: &reqwest::Client,
     urls: &[String],
-    local_path: &str,
+    track_id: Option<&str>,
+    local_path: Option<&str>,
 ) -> Result<(RemoteConn, TrackInfo)> {
-    let track_id = library::track_id_by_file_path(pool, local_path)
-        .await?
-        .context("no track row for local backup path")?;
-    resolve_remote_track_by_id(client, urls, &track_id).await
-}
+    let track_id = match (track_id, local_path) {
+        (Some(id), None) => id.to_string(),
+        (None, Some(path)) => {
+            let pool = pool.context("pool required when resolving by local_path")?;
+            library::track_id_by_file_path(pool, path)
+                .await?
+                .context("no track row for local backup path")?
+        }
+        (Some(_), Some(_)) => anyhow::bail!("specify either track_id or local_path, not both"),
+        (None, None) => anyhow::bail!("either track_id or local_path required"),
+    };
 
-/// Find the remote track whose id matches `track_id`.
-pub(crate) async fn resolve_remote_track_by_id(
-    client: &reqwest::Client,
-    urls: &[String],
-    track_id: &str,
-) -> Result<(RemoteConn, TrackInfo)> {
     let conn = pick_remote(urls, client)
         .await
         .context("remote tawai unreachable")?;
@@ -1035,7 +1037,7 @@ impl TawaiParser {
     ) -> Result<ParsedTrack> {
         let dest = Path::new(file_path);
         let resolved = match track_id {
-            Some(id) => resolve_remote_track_by_id(&self.client, urls, id).await,
+            Some(id) => resolve_remote_track(None, &self.client, urls, Some(id), None).await,
             None if dest.is_file() => return local::scan_file(dest),
             None => anyhow::bail!("tawai scan_file: no track id and no backup at {file_path}"),
         };
@@ -1114,7 +1116,8 @@ impl TawaiParser {
             return Ok((file_path.to_string(), vec![]));
         }
         // Fallback: remote stream
-        let (conn, rt) = resolve_remote_track(pool, client, urls, file_path).await?;
+        let (conn, rt) =
+            resolve_remote_track(Some(pool), client, urls, None, Some(file_path)).await?;
         let stream_url = format!("{}/api/tawai/playback/stream/{}", conn.http_base, rt.id);
         Ok((stream_url, vec![("X-API-Key".into(), conn.api_key)]))
     }
@@ -1130,7 +1133,8 @@ impl TawaiParser {
         mirror_remote: bool,
     ) -> Result<()> {
         if mirror_remote {
-            match resolve_remote_track(pool, &self.client, urls, file_path).await {
+            match resolve_remote_track(Some(pool), &self.client, urls, None, Some(file_path)).await
+            {
                 Ok((conn, rt)) => {
                     let delete_url =
                         format!("{}/api/tawai/library/tracks/{}", conn.http_base, rt.id);
@@ -1188,7 +1192,8 @@ pub async fn mirror_tag_write(
         None => return Ok(()),
     };
 
-    let (conn, rt) = resolve_remote_track(pool, client, &source.urls, local_path).await?;
+    let (conn, rt) =
+        resolve_remote_track(Some(pool), client, &source.urls, None, Some(local_path)).await?;
     let body = serde_json::json!({
         "path": rt.file_path,
         "title": tag.title,
