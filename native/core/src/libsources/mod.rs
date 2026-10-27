@@ -36,17 +36,56 @@ impl Deref for ParsedTrack {
     }
 }
 
-/// Per-source scan delta: which paths to insert, which DB paths are stale,
-/// and which inserts replace an existing row.
+/// One path a source wants scanned, paired with the source-owned identity when
+/// the source can supply one. Tawai fills `id` with the remote track id; the
+/// other parsers leave it empty and rely on path identity.
+#[derive(Debug, Clone)]
+pub struct EnumeratedTrack {
+    pub id: Option<String>,
+    pub path: String,
+}
+
+impl EnumeratedTrack {
+    pub fn path_only(path: impl Into<String>) -> Self {
+        Self {
+            id: None,
+            path: path.into(),
+        }
+    }
+
+    pub fn with_id(id: impl Into<String>, path: impl Into<String>) -> Self {
+        Self {
+            id: Some(id.into()),
+            path: path.into(),
+        }
+    }
+}
+
+fn path_only_tracks(paths: Vec<String>) -> Vec<EnumeratedTrack> {
+    paths.into_iter().map(EnumeratedTrack::path_only).collect()
+}
+
+/// Per-source scan delta: which paths to insert, which DB entries are stale, and
+/// which existing rows must be dropped before their replacement is inserted.
 #[derive(Debug, Clone, Default)]
 pub struct ScanDiff {
     /// Enumerate (tag-parse) and insert: new tracks plus any to re-provision.
     pub to_scan: Vec<String>,
-    /// DB entries whose backing material no longer exists for this source.
+    /// DB entries whose backing material no longer exists for this source,
+    /// keyed by file path. Only parsers without federated ids use this: a path
+    /// is not unique across sources, so an id-keyed parser must fill
+    /// `to_delete_ids` instead.
     pub to_delete: Vec<String>,
-    /// Subset of `to_scan` that already has a DB row; the stale row must be
-    /// dropped before the replacement is inserted so the path stays unique.
-    pub replace: HashSet<String>,
+    /// Stale rows to drop by track id. A track id is unique, so this is the
+    /// only unambiguous key when a path may be shared or reused.
+    pub to_delete_ids: HashSet<String>,
+    /// Track ids whose stale row must be dropped before the re-provisioned
+    /// track is inserted under the same id.
+    pub replace_ids: HashSet<String>,
+    /// Remote ids already owned by a different local source as `(id, path)`.
+    /// They are reported instead of downloaded so one id never maps to two
+    /// local files.
+    pub conflicts: Vec<(String, String)>,
 }
 
 /// Deserialize an HTTP response body, embedding the HTTP status, byte count,
@@ -171,19 +210,21 @@ pub enum SourceParser {
 }
 
 impl SourceParser {
-    pub async fn enumerate_paths(
+    pub async fn enumerate_tracks(
         &self,
         pool: &DatabasePool,
         url: &str,
         urls: &[String],
         master_key: &str,
-    ) -> Result<Vec<String>> {
+    ) -> Result<Vec<EnumeratedTrack>> {
         match self {
-            SourceParser::Local => local::enumerate_paths(url),
-            SourceParser::Jellyfin(p) => p.enumerate_paths(url).await,
-            SourceParser::Tawai(p) => p.enumerate_paths(url, urls).await,
+            SourceParser::Local => local::enumerate_paths(url).map(path_only_tracks),
+            SourceParser::Jellyfin(p) => p.enumerate_paths(url).await.map(path_only_tracks),
+            SourceParser::Tawai(p) => p.enumerate_tracks(url, urls).await,
             SourceParser::Recommendation(rec) => {
-                recommendation::enumerate_paths(pool, rec, master_key).await
+                recommendation::enumerate_paths(pool, rec, master_key)
+                    .await
+                    .map(path_only_tracks)
             }
         }
     }
@@ -202,18 +243,24 @@ impl SourceParser {
         }
     }
 
-    /// Compute this source's scan delta: which enumerated paths to insert and
-    /// which DB paths are stale. Each parser owns its interpretation (e.g.
-    /// tawai re-provisions derived backups that vanished from disk).
+    /// Compute this source's scan delta. `own_rows` are this source's
+    /// `(track id, file path)` rows; `foreign_ids` are ids owned by other
+    /// sources and must never be claimed. Detection is id-first where the
+    /// parser supplies ids (tawai) and scoped to `own_rows` otherwise.
     pub async fn detect_difference(
         &self,
-        enumerated: &HashSet<String>,
-        db_paths: &HashSet<String>,
+        entries: &[EnumeratedTrack],
+        own_rows: &[(String, String)],
+        foreign_ids: &HashSet<String>,
     ) -> Result<ScanDiff> {
         match self {
-            SourceParser::Local => local::detect_difference(enumerated, db_paths),
-            SourceParser::Jellyfin(_) => local::detect_difference(enumerated, db_paths),
-            SourceParser::Tawai(p) => p.detect_difference(enumerated, db_paths).await,
+            SourceParser::Local | SourceParser::Jellyfin(_) => {
+                let enumerated: HashSet<String> = entries.iter().map(|e| e.path.clone()).collect();
+                let db_paths: HashSet<String> =
+                    own_rows.iter().map(|(_, path)| path.clone()).collect();
+                local::detect_difference(&enumerated, &db_paths)
+            }
+            SourceParser::Tawai(p) => p.detect_difference(entries, own_rows, foreign_ids).await,
             SourceParser::Recommendation(_) => {
                 // Synced, not scanned: nothing to diff.
                 Ok(ScanDiff::default())
@@ -226,12 +273,13 @@ impl SourceParser {
         url: &str,
         urls: &[String],
         file_path: &str,
+        track_id: Option<&str>,
         log_tx: &Option<LogSender>,
     ) -> Result<ParsedTrack> {
         match self {
             SourceParser::Local => local::scan_file(Path::new(file_path)),
             SourceParser::Jellyfin(p) => p.scan_file(url, file_path, log_tx).await,
-            SourceParser::Tawai(p) => p.scan_file(url, urls, file_path, log_tx).await,
+            SourceParser::Tawai(p) => p.scan_file(url, urls, file_path, track_id, log_tx).await,
             SourceParser::Recommendation(_) => {
                 anyhow::bail!("recommendation sources are synced, not scanned")
             }
@@ -251,7 +299,7 @@ impl SourceParser {
             SourceParser::Local => Ok((file_path.to_string(), vec![])),
             SourceParser::Jellyfin(p) => p.resolve_stream_url(file_path, url).await,
             SourceParser::Tawai(p) => {
-                p.resolve_stream_url(file_path, url, urls, client, cfg)
+                p.resolve_stream_url(pool, file_path, url, urls, client, cfg)
                     .await
             }
             SourceParser::Recommendation(_) => {
@@ -275,7 +323,7 @@ impl SourceParser {
         match self {
             SourceParser::Local => local::delete_file(file_path),
             SourceParser::Jellyfin(p) => p.delete(file_path, url, mirror_remote).await,
-            SourceParser::Tawai(p) => p.delete(file_path, url, urls, mirror_remote).await,
+            SourceParser::Tawai(p) => p.delete(pool, file_path, url, urls, mirror_remote).await,
             SourceParser::Recommendation(_) => recommendation::delete(pool, file_path).await,
         }
     }

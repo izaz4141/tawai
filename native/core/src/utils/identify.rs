@@ -147,9 +147,6 @@ fn tawai_local_root(source: &LibrarySourceInfo) -> Option<String> {
 /// local (non-local sources cannot have their tags rewritten or files moved).
 /// The destination is built from `global_pattern`, resolved by the caller with
 /// [`crate::tools::rename::naming_pattern_from_config`].
-///
-/// `context` is the live app context handle; the tawai mirror resolves the
-/// backing remote track through it when no explicit pattern applies.
 pub async fn apply_identification(
     pool: &DatabasePool,
     user_id: &str,
@@ -158,7 +155,7 @@ pub async fn apply_identification(
     master_key: &str,
     global_pattern: &str,
     client: &reqwest::Client,
-    context: Weak<AppContext>,
+    _context: Weak<AppContext>,
 ) -> Result<ApplyIdentificationOutcome> {
     let (source, file_path, track, download_folder) =
         if let Some(source_id) = params.target_source_id.as_deref() {
@@ -192,33 +189,30 @@ pub async fn apply_identification(
     }
 
     // Tawai tracks live in a local backup of a remote tawai library. Resolve
-    // the remote track backing this file *before* any local retag/rename:
-    // matching recomputes `dest_for(root, pattern, remote metadata)` and the
-    // pre-apply path/tags are the only state that still lines up. The mirror
-    // itself is best-effort — any failure below just drops it.
-    let remote_backing: Option<(crate::libsources::tawai::RemoteConn, TrackInfo)> =
-        if source.source_type == "tawai" && params.target_source_id.is_none() {
-            match crate::libsources::tawai::resolve_remote_track(
-                client,
-                &source.urls,
-                &file_path,
-                Some(global_pattern),
-                &context,
-            )
+    // the remote track backing this file *before* any local retag/rename: the
+    // link is the track row's federated id, so it survives path and tag
+    // changes. The mirror itself is best-effort — any failure below just drops
+    // it.
+    let remote_backing: Option<(crate::libsources::tawai::RemoteConn, TrackInfo)> = if source
+        .source_type
+        == "tawai"
+        && params.target_source_id.is_none()
+    {
+        match crate::libsources::tawai::resolve_remote_track(pool, client, &source.urls, &file_path)
             .await
-            {
-                Ok(pair) => Some(pair),
-                Err(e) => {
-                    crate::utils::logger::debug(&format!(
-                        "tawai apply mirror skipped for '{}': {e}",
-                        source.name
-                    ));
-                    None
-                }
+        {
+            Ok(pair) => Some(pair),
+            Err(e) => {
+                crate::utils::logger::debug(&format!(
+                    "tawai apply mirror skipped for '{}': {e}",
+                    source.name
+                ));
+                None
             }
-        } else {
-            None
-        };
+        }
+    } else {
+        None
+    };
 
     let move_plan = resolve_move_plan(&source, Path::new(&file_path), None, global_pattern)
         .await

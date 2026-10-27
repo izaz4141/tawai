@@ -117,7 +117,7 @@ pub fn detect_difference(
     Ok(ScanDiff {
         to_scan: enumerated.difference(db_paths).cloned().collect(),
         to_delete: db_paths.difference(enumerated).cloned().collect(),
-        replace: HashSet::new(),
+        ..Default::default()
     })
 }
 

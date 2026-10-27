@@ -632,6 +632,7 @@ async fn dedup_or_insert_track(
 
     let track_id = match library::insert_track(
         pool,
+        None,
         track_title,
         &album_id,
         &artist_id,

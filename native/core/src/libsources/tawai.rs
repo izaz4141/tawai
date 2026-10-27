@@ -11,8 +11,8 @@ use crate::app_context::AppContext;
 use crate::audio::scan::{LogSender, stream_log};
 use crate::audio::tags::{AudioTag, derive_sort_name, parse_artists};
 use crate::db::database::DatabasePool;
-use crate::db::library_source;
-use crate::libsources::{ParsedTrack, ScanDiff, local};
+use crate::db::{library, library_source};
+use crate::libsources::{EnumeratedTrack, ParsedTrack, ScanDiff, local};
 use crate::signals::discovery::{JellyfinLibraryInfo, ServerTestResult};
 use crate::signals::library::{
     LibrarySourceInfo, ListLibrarySourcesResponse, ListTracksResponse, TrackInfo,
@@ -831,33 +831,83 @@ async fn download_chunk(
 
 /// Map a local backup path back to the remote connection + track that backs it.
 ///
-/// `naming_pattern` is the explicit pattern for local backup paths: a
-/// non-empty value wins as-is. Otherwise the pattern is read live from the app
-/// config through `context`.
+/// The link is the track row's federated id, not its path: an existing backup
+/// keeps its identity when the naming pattern changes. There is no path-based
+/// fallback — a caller without a row has no remote track to resolve.
 pub(crate) async fn resolve_remote_track(
+    pool: &DatabasePool,
     client: &reqwest::Client,
     urls: &[String],
     local_path: &str,
-    naming_pattern: Option<&str>,
-    context: &Weak<AppContext>,
 ) -> Result<(RemoteConn, TrackInfo)> {
-    let root = local_root(urls).unwrap_or("/tmp");
+    let track_id = library::track_id_by_file_path(pool, local_path)
+        .await?
+        .context("no track row for local backup path")?;
+    resolve_remote_track_by_id(client, urls, &track_id).await
+}
+
+/// Find the remote track whose id matches `track_id`.
+pub(crate) async fn resolve_remote_track_by_id(
+    client: &reqwest::Client,
+    urls: &[String],
+    track_id: &str,
+) -> Result<(RemoteConn, TrackInfo)> {
     let conn = pick_remote(urls, client)
         .await
         .context("remote tawai unreachable")?;
     let tracks = cached_remote_tracks(client, &conn)
         .await
         .context("tawai remote track list failed")?;
-    let pattern = match naming_pattern.filter(|p| !p.trim().is_empty()) {
-        Some(p) => p.to_string(),
-        None => config_naming_pattern(context).await,
-    };
-    let dest = Path::new(local_path);
     let rt = tracks
         .into_iter()
-        .find(|rt| dest_for(root, &pattern, rt).as_path() == dest)
-        .context("no matching remote track for local path")?;
+        .find(|rt| rt.id == track_id)
+        .context("remote track not found for tracked id")?;
     Ok((conn, rt))
+}
+
+/// Pure id-based scan diff for tawai. `own_rows` are this source's
+/// `(track id, file path)` rows; `foreign_ids` are ids owned by other local
+/// sources. Split out so the matching rules stay unit-testable.
+fn detect_id_difference(
+    entries: &[EnumeratedTrack],
+    own_rows: &[(String, String)],
+    foreign_ids: &HashSet<String>,
+) -> ScanDiff {
+    let mut own_by_id: HashMap<&str, &str> = own_rows
+        .iter()
+        .map(|(id, path)| (id.as_str(), path.as_str()))
+        .collect();
+    let mut diff = ScanDiff::default();
+
+    for entry in entries {
+        let Some(id) = entry.id.as_deref() else {
+            continue;
+        };
+        match own_by_id.remove(id) {
+            // Matched by id: keep the row and its current on-disk path, even if
+            // the naming pattern would compute a different destination today.
+            Some(stored_path) => {
+                if !Path::new(stored_path).is_file() {
+                    diff.to_scan.push(entry.path.clone());
+                    diff.replace_ids.insert(id.to_string());
+                }
+            }
+            None if foreign_ids.contains(id) => {
+                diff.conflicts.push((id.to_string(), entry.path.clone()));
+            }
+            None => diff.to_scan.push(entry.path.clone()),
+        }
+    }
+
+    // Anything left is a row this source owns whose remote track is gone.
+    // Drop it by id, not by path: a path is not unique (two tracks can compute
+    // the same destination, and another source may own the same file), so the
+    // id is the only unambiguous key. It is deleted before the inserts, so a
+    // fresh row that reuses a stale path is never caught by this cleanup.
+    for (id, _) in own_by_id {
+        diff.to_delete_ids.insert(id.to_string());
+    }
+    diff
 }
 
 // ── Parser struct──────────────────────────────────────────────────────
@@ -874,9 +924,14 @@ impl TawaiParser {
         Self { client, context }
     }
 
-    /// Enumerate deterministic local dest paths from the remote's track list,
-    /// falling back to the local backup walk when unreachable.
-    pub async fn enumerate_paths(&self, _url: &str, urls: &[String]) -> Result<Vec<String>> {
+    /// Enumerate the source's tracks: the deterministic local destination path
+    /// plus the remote track id, falling back to a local backup walk (no ids)
+    /// when the remote is unreachable.
+    pub async fn enumerate_tracks(
+        &self,
+        _url: &str,
+        urls: &[String],
+    ) -> Result<Vec<EnumeratedTrack>> {
         if let Some(conn) = pick_remote(urls, &self.client).await {
             let root = local_root(urls).unwrap_or("/tmp");
             // Resolved fresh on every call: the pattern is live at every scan
@@ -887,36 +942,75 @@ impl TawaiParser {
                 .context("tawai remote track list failed for remote source")?;
             return Ok(tracks
                 .iter()
-                .map(|rt| dest_for(root, &pattern, rt).to_string_lossy().to_string())
+                .map(|rt| {
+                    EnumeratedTrack::with_id(
+                        rt.id.clone(),
+                        dest_for(root, &pattern, rt).to_string_lossy().to_string(),
+                    )
+                })
                 .collect());
         }
-        // Offline fallback: enumerate local backup dir
+        // Offline fallback: enumerate the local backup dir.
         if let Some(root) = local_root(urls) {
-            return local::enumerate_paths(root);
+            return Ok(local::enumerate_paths(root)?
+                .into_iter()
+                .map(EnumeratedTrack::path_only)
+                .collect());
         }
         Ok(vec![])
     }
 
-    /// Scan delta for tawai backups. Extends the base diff with a restore
-    /// rule: an enumerated backup that's in the DB but missing on disk is
-    /// re-provisioned — `scan_file` re-downloads it and the stale row is
-    /// replaced.
+    /// Scan delta for tawai backups.
+    ///
+    /// Online, the remote track id is the identity: a row whose id is still in
+    /// the remote list is kept wherever it already sits on disk (no file moves
+    /// on naming-pattern drift), a row whose backup vanished is re-provisioned
+    /// under the same id, and ids owned by another local source are reported as
+    /// conflicts. Stale rows are reported by id in both modes, so removing one
+    /// can never touch another source's row that happens to share the path.
+    ///
+    /// Offline (no entry has an id), the enumeration walked the backup
+    /// directory, so its paths are real on-disk paths rather than
+    /// pattern-derived ones: the comparison stays path-based by necessity, but
+    /// the deletions are still keyed by id.
     pub async fn detect_difference(
         &self,
-        enumerated: &HashSet<String>,
-        db_paths: &HashSet<String>,
+        entries: &[EnumeratedTrack],
+        own_rows: &[(String, String)],
+        foreign_ids: &HashSet<String>,
     ) -> Result<ScanDiff> {
-        let mut diff = local::detect_difference(enumerated, db_paths)?;
-        for p in enumerated.intersection(db_paths) {
-            if !Path::new(p).is_file() {
-                diff.to_scan.push(p.clone());
-                diff.replace.insert(p.clone());
+        if entries.iter().any(|entry| entry.id.is_some()) {
+            return Ok(detect_id_difference(entries, own_rows, foreign_ids));
+        }
+
+        let enumerated: HashSet<String> = entries.iter().map(|e| e.path.clone()).collect();
+        let own_by_path: HashMap<&str, &str> = own_rows
+            .iter()
+            .map(|(id, path)| (path.as_str(), id.as_str()))
+            .collect();
+        let mut diff = ScanDiff::default();
+        for path in &enumerated {
+            match own_by_path.get(path.as_str()) {
+                Some(id) => {
+                    if !Path::new(path).is_file() {
+                        diff.to_scan.push(path.clone());
+                        diff.replace_ids.insert((*id).to_string());
+                    }
+                }
+                None => diff.to_scan.push(path.clone()),
+            }
+        }
+        for (path, id) in &own_by_path {
+            if !enumerated.contains(*path) {
+                diff.to_delete_ids.insert((*id).to_string());
             }
         }
         Ok(diff)
     }
 
-    /// Bulk scan paths (unused by current scan pipeline but kept for completeness).
+    /// Bulk scan paths. Path-only helper: it resolves no remote track, so each
+    /// path must already hold a local backup (the scan pipeline supplies ids
+    /// through `scan_file` instead).
     pub async fn scan_paths(
         &self,
         _url: &str,
@@ -925,7 +1019,7 @@ impl TawaiParser {
     ) -> Result<Vec<ParsedTrack>> {
         let mut tracks = Vec::new();
         for p in paths {
-            match self.scan_file(_url, urls, p, &None).await {
+            match self.scan_file(_url, urls, p, None, &None).await {
                 Ok(t) => tracks.push(t),
                 Err(e) => logger::warn(&format!("tawai scan_paths skip {}: {}", p, e)),
             }
@@ -936,15 +1030,28 @@ impl TawaiParser {
     /// Scan one file: import remote metadata when the local SHA-256 matches
     /// the remote `file_hash`, else (re)download and rescan. Falls back to a
     /// local scan when the remote is unreachable or the hash never matches.
+    ///
+    /// `track_id` is the federated id from the scan's enumeration and is the
+    /// only way a remote track is resolved: the expected path is never
+    /// re-derived from the naming pattern, so pattern drift cannot change which
+    /// remote track a file maps to. `None` means an offline enumeration (or a
+    /// path-only caller): there is no remote identity to resolve, so the
+    /// existing backup is scanned locally.
     pub async fn scan_file(
         &self,
         _url: &str,
         urls: &[String],
         file_path: &str,
+        track_id: Option<&str>,
         log_tx: &Option<LogSender>,
     ) -> Result<ParsedTrack> {
         let dest = Path::new(file_path);
-        match resolve_remote_track(&self.client, urls, file_path, None, &self.context).await {
+        let resolved = match track_id {
+            Some(id) => resolve_remote_track_by_id(&self.client, urls, id).await,
+            None if dest.is_file() => return local::scan_file(dest),
+            None => anyhow::bail!("tawai scan_file: no track id and no backup at {file_path}"),
+        };
+        match resolved {
             Ok((conn, rt)) => {
                 let Some(remote_hash) = rt.file_hash.as_deref() else {
                     // No remote hash to verify against: download a missing file
@@ -1007,6 +1114,7 @@ impl TawaiParser {
     /// Resolve stream URL: local file if present, else remote stream.
     pub async fn resolve_stream_url(
         &self,
+        pool: &DatabasePool,
         file_path: &str,
         _url: &str,
         urls: &[String],
@@ -1018,7 +1126,7 @@ impl TawaiParser {
             return Ok((file_path.to_string(), vec![]));
         }
         // Fallback: remote stream
-        let (conn, rt) = resolve_remote_track(client, urls, file_path, None, &self.context).await?;
+        let (conn, rt) = resolve_remote_track(pool, client, urls, file_path).await?;
         let stream_url = format!("{}/api/tawai/playback/stream/{}", conn.http_base, rt.id);
         Ok((stream_url, vec![("X-API-Key".into(), conn.api_key)]))
     }
@@ -1027,13 +1135,14 @@ impl TawaiParser {
     /// is set (best-effort).
     pub async fn delete(
         &self,
+        pool: &DatabasePool,
         file_path: &str,
         _url: &str,
         urls: &[String],
         mirror_remote: bool,
     ) -> Result<()> {
         if mirror_remote {
-            match resolve_remote_track(&self.client, urls, file_path, None, &self.context).await {
+            match resolve_remote_track(pool, &self.client, urls, file_path).await {
                 Ok((conn, rt)) => {
                     let delete_url =
                         format!("{}/api/tawai/library/tracks/{}", conn.http_base, rt.id);
@@ -1070,11 +1179,8 @@ impl TawaiParser {
 }
 
 /// Forward a local tag write to the remote source so the remote copy stays in
-/// sync; no-op for non-tawai files.
-///
-/// `context` is the live app context handle: the backing remote track is
-/// resolved through the global naming pattern read from the config at the
-/// moment of the lookup.
+/// sync; no-op for non-tawai files. The backing remote track is resolved from
+/// the local track row's federated id.
 pub async fn mirror_tag_write(
     pool: &DatabasePool,
     local_path: &str,
@@ -1082,7 +1188,6 @@ pub async fn mirror_tag_write(
     clear_cover: bool,
     client: &reqwest::Client,
     master_key: &str,
-    context: Weak<AppContext>,
 ) -> Result<()> {
     let sources = library_source::list_all_sources(pool, master_key).await?;
     let source = match sources.iter().find(|s| {
@@ -1095,7 +1200,7 @@ pub async fn mirror_tag_write(
         None => return Ok(()),
     };
 
-    let (conn, rt) = resolve_remote_track(client, &source.urls, local_path, None, &context).await?;
+    let (conn, rt) = resolve_remote_track(pool, client, &source.urls, local_path).await?;
     let body = serde_json::json!({
         "path": rt.file_path,
         "title": tag.title,
@@ -1303,5 +1408,163 @@ mod tests {
         let d2 = dest_for(root, pattern, &rt);
         assert_eq!(d1, d2);
         assert!(d1.to_string_lossy().contains("My Song"));
+    }
+
+    // ── Id-based scan diff ────────────────────────────────────────────
+
+    fn fixture_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("tawai-scan-test-{}-{name}", std::process::id()))
+    }
+
+    fn touch(name: &str) -> PathBuf {
+        let path = fixture_path(name);
+        std::fs::write(&path, b"x").expect("write fixture");
+        path
+    }
+
+    fn as_string(path: &Path) -> String {
+        path.to_string_lossy().to_string()
+    }
+
+    #[test]
+    fn id_diff_ignores_naming_pattern_drift() {
+        // The row is matched by id; the desired path under today's pattern is
+        // different, but the existing file is kept where it already sits.
+        let stored = touch("drift-stored.mp3");
+        let desired = fixture_path("drift-desired-name.mp3");
+        let entries = vec![EnumeratedTrack::with_id("t1", as_string(&desired))];
+        let own = vec![("t1".to_string(), as_string(&stored))];
+
+        let diff = detect_id_difference(&entries, &own, &HashSet::new());
+
+        assert!(diff.to_scan.is_empty());
+        assert!(diff.to_delete.is_empty());
+        assert!(diff.replace_ids.is_empty());
+        assert!(diff.conflicts.is_empty());
+        std::fs::remove_file(&stored).ok();
+    }
+
+    #[test]
+    fn id_diff_reprovisions_missing_backup_under_same_id() {
+        let missing = fixture_path("missing-backup.mp3");
+        let desired = fixture_path("reprovisioned-name.mp3");
+        let entries = vec![EnumeratedTrack::with_id("t1", as_string(&desired))];
+        let own = vec![("t1".to_string(), as_string(&missing))];
+
+        let diff = detect_id_difference(&entries, &own, &HashSet::new());
+
+        assert_eq!(diff.to_scan, vec![as_string(&desired)]);
+        assert!(diff.replace_ids.contains("t1"));
+        assert!(diff.to_delete.is_empty());
+    }
+
+    #[test]
+    fn id_diff_deletes_rows_whose_remote_track_vanished() {
+        let stored = touch("vanished.mp3");
+        let kept = touch("kept.mp3");
+        let own = vec![
+            ("gone".to_string(), as_string(&stored)),
+            ("kept".to_string(), as_string(&kept)),
+        ];
+        let entries = vec![EnumeratedTrack::with_id("kept", as_string(&kept))];
+
+        let diff = detect_id_difference(&entries, &own, &HashSet::new());
+
+        assert!(diff.to_delete_ids.contains("gone"));
+        assert_eq!(diff.to_delete_ids.len(), 1);
+        assert!(diff.to_delete.is_empty());
+        assert!(diff.to_scan.is_empty());
+        std::fs::remove_file(&stored).ok();
+        std::fs::remove_file(&kept).ok();
+    }
+
+    #[test]
+    fn id_diff_reports_ids_owned_by_another_source() {
+        let foreign: HashSet<String> = ["t1".to_string()].into_iter().collect();
+        let entries = vec![EnumeratedTrack::with_id("t1", "/music/x.mp3")];
+
+        let diff = detect_id_difference(&entries, &[], &foreign);
+
+        assert_eq!(
+            diff.conflicts,
+            vec![("t1".to_string(), "/music/x.mp3".to_string())]
+        );
+        assert!(diff.to_scan.is_empty());
+        assert!(diff.to_delete.is_empty());
+    }
+
+    #[test]
+    fn id_diff_scans_new_ids() {
+        let entries = vec![
+            EnumeratedTrack::with_id("new-1", "/music/a.mp3"),
+            EnumeratedTrack::with_id("new-2", "/music/b.mp3"),
+        ];
+
+        let diff = detect_id_difference(&entries, &[], &HashSet::new());
+
+        assert_eq!(diff.to_scan, vec!["/music/a.mp3", "/music/b.mp3"]);
+    }
+
+    #[test]
+    fn id_diff_deletes_stale_row_reusing_the_same_path_by_id() {
+        // A stale row (e.g. a pre-federated UUID row) sits at the exact path a
+        // newly enumerated remote id now wants. The new id is scanned; the old
+        // row is dropped by id, never by the shared path, so the fresh row
+        // cannot be caught by the cleanup.
+        let path = touch("path-reuse.mp3");
+        let entries = vec![EnumeratedTrack::with_id("remote-id", as_string(&path))];
+        let own = vec![("legacy-id".to_string(), as_string(&path))];
+
+        let diff = detect_id_difference(&entries, &own, &HashSet::new());
+
+        assert_eq!(diff.to_scan, vec![as_string(&path)]);
+        assert!(diff.to_delete_ids.contains("legacy-id"));
+        assert!(diff.replace_ids.is_empty());
+        assert!(diff.to_delete.is_empty());
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[tokio::test]
+    async fn offline_diff_uses_only_the_sources_own_rows() {
+        // No ids in the entries (offline enumeration): fall back to a path
+        // diff over exactly the rows the scan handed us for this source.
+        let kept = touch("offline-kept.mp3");
+        let stale = touch("offline-stale.mp3");
+        let parser = TawaiParser::new(reqwest::Client::new(), Weak::new());
+        let entries = vec![EnumeratedTrack::path_only(as_string(&kept))];
+        let own = vec![
+            ("own".to_string(), as_string(&kept)),
+            ("stale".to_string(), as_string(&stale)),
+        ];
+
+        let diff = parser
+            .detect_difference(&entries, &own, &HashSet::new())
+            .await
+            .expect("diff");
+
+        assert!(diff.to_scan.is_empty());
+        assert!(diff.to_delete_ids.contains("stale"));
+        assert_eq!(diff.to_delete_ids.len(), 1);
+        assert!(diff.to_delete.is_empty());
+        std::fs::remove_file(&kept).ok();
+        std::fs::remove_file(&stale).ok();
+    }
+
+    #[tokio::test]
+    async fn offline_diff_reprovisions_missing_backup_under_its_id() {
+        let missing = fixture_path("offline-missing.mp3");
+        std::fs::remove_file(&missing).ok();
+        let parser = TawaiParser::new(reqwest::Client::new(), Weak::new());
+        let entries = vec![EnumeratedTrack::path_only(as_string(&missing))];
+        let own = vec![("t1".to_string(), as_string(&missing))];
+
+        let diff = parser
+            .detect_difference(&entries, &own, &HashSet::new())
+            .await
+            .expect("diff");
+
+        assert_eq!(diff.to_scan, vec![as_string(&missing)]);
+        assert!(diff.replace_ids.contains("t1"));
+        assert!(diff.to_delete.is_empty());
     }
 }

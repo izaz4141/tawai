@@ -46,9 +46,10 @@ enum InsertOutcome {
 async fn insert_track_to_db(
     pool: &DatabasePool,
     track: &libsources::ParsedTrack,
+    track_id: Option<&str>,
     source_id: &str,
     force: bool,
-    stale_fp_to_path: &mut HashMap<String, String>,
+    stale_fp_to_track: &mut HashMap<String, String>,
     total_new: &mut u32,
     total_duplicates: &mut u32,
     log_tx: &Option<LogSender>,
@@ -58,18 +59,17 @@ async fn insert_track_to_db(
         if let Some(fp) = track.acoust_id_fingerprint.as_deref() {
             match library::track_exists_by_fingerprint(pool, fp).await {
                 Ok(Some(_)) => {
-                    if let Some(stale_path) = stale_fp_to_path.remove(fp) {
+                    if let Some(stale_id) = stale_fp_to_track.remove(fp) {
                         // The existing copy is being removed this scan (its file is gone),
                         // so adopt this file as the kept copy. remove() ensures only ONE
                         // replacement happens — later duplicates hit the branch below.
-                        if let Err(e) = library::delete_track_by_file_path(pool, &stale_path).await
-                        {
+                        if let Err(e) = library::delete_track_by_id(pool, &stale_id).await {
                             stream_log(
                                 log_tx,
                                 "ERROR",
                                 format!(
                                     "Failed to remove stale track '{}' before keep-one insert: {}",
-                                    stale_path, e
+                                    stale_id, e
                                 ),
                             );
                         }
@@ -169,6 +169,7 @@ async fn insert_track_to_db(
 
     let track_id = match library::insert_track(
         pool,
+        track_id,
         &track.title,
         &album_id,
         &track_artist_ids[0],
@@ -288,7 +289,7 @@ pub async fn run_scan(
     // Phase 1: Enumerate all file paths from all sources (cheap — no tag parsing)
     // -----------------------------------------------------------------------
     let mut filesystem_paths: HashSet<String> = HashSet::new();
-    let mut source_paths: HashMap<String, Vec<String>> = HashMap::new();
+    let mut source_entries: HashMap<String, Vec<libsources::EnumeratedTrack>> = HashMap::new();
 
     for source in &sources {
         send_progress(
@@ -332,8 +333,8 @@ pub async fn run_scan(
             }
         };
 
-        let paths = match parser
-            .enumerate_paths(pool, &url, &source.urls, master_key)
+        let entries = match parser
+            .enumerate_tracks(pool, &url, &source.urls, master_key)
             .await
         {
             Ok(p) => p,
@@ -350,17 +351,17 @@ pub async fn run_scan(
             }
         };
 
-        for p in &paths {
-            filesystem_paths.insert(p.clone());
+        for entry in &entries {
+            filesystem_paths.insert(entry.path.clone());
         }
-        source_paths.insert(source.id.clone(), paths);
+        source_entries.insert(source.id.clone(), entries);
     }
 
     let total_found = filesystem_paths.len() as u32;
     logger::info(&format!("Phase 1 complete: {} files found", total_found));
 
     // -----------------------------------------------------------------------
-    // Phase 2: Get all DB file paths (single query)
+    // Phase 2: Load track rows grouped by owning source (single query)
     // -----------------------------------------------------------------------
     send_progress(
         &progress,
@@ -374,19 +375,32 @@ pub async fn run_scan(
         },
     );
 
-    let db_paths: HashSet<String> = match library::all_track_file_paths(pool).await {
-        Ok(paths) => paths.into_iter().collect(),
+    // Detection is per source, so a source's stale paths can never include
+    // another source's live rows. Ids are collected globally as well so a
+    // source can detect that a remote id already belongs to someone else.
+    let source_keys = match library::all_track_source_keys(pool).await {
+        Ok(keys) => keys,
         Err(e) => {
             stream_log(
                 &log_tx,
                 "ERROR",
-                format!("Failed to list track file paths: {}", e),
+                format!("Failed to list track source keys: {}", e),
             );
-            HashSet::new()
+            Vec::new()
         }
     };
+    let mut own_rows: HashMap<String, Vec<(String, String)>> = HashMap::new();
+    let mut all_db_ids: HashSet<String> = HashSet::new();
+    for (source_id, track_id, file_path) in source_keys {
+        all_db_ids.insert(track_id.clone());
+        own_rows
+            .entry(source_id)
+            .or_default()
+            .push((track_id, file_path));
+    }
+    let db_row_count: usize = own_rows.values().map(Vec::len).sum();
 
-    logger::info(&format!("Phase 2 complete: {} paths in DB", db_paths.len()));
+    logger::info(&format!("Phase 2 complete: {} rows in DB", db_row_count));
 
     // -----------------------------------------------------------------------
     // Phase 3: Compute set difference
@@ -403,27 +417,67 @@ pub async fn run_scan(
         },
     );
     let mut to_scan_set: HashSet<String> = HashSet::new();
-    let mut to_delete_set: HashSet<String> = HashSet::new();
-    let mut replace_set: HashSet<String> = HashSet::new();
+    // Paths of stale rows, kept for the fingerprint pass below.
+    let mut stale_path_set: HashSet<String> = HashSet::new();
+    // Rows to drop, keyed by track id — a path is not unique, so id is the only
+    // key that can't take another track with it.
+    let mut to_delete_id_set: HashSet<String> = HashSet::new();
+    // Stale paths that resolved to no row at all (defensive: nothing else keys
+    // a delete on a path).
+    let mut unresolved_delete_paths: HashSet<String> = HashSet::new();
+    let mut replace_ids_set: HashSet<String> = HashSet::new();
     for source in &sources {
         let Some(parser) =
             libsources::get_parser(&source.source_type, client.clone(), context.clone())
         else {
             continue;
         };
-        let Some(enumerated) = source_paths.get(&source.id) else {
+        let Some(entries) = source_entries.get(&source.id) else {
             continue;
         };
-        let enumerated: HashSet<String> = enumerated.iter().cloned().collect();
-        match parser.detect_difference(&enumerated, &db_paths).await {
+        let own: Vec<(String, String)> = own_rows.get(&source.id).cloned().unwrap_or_default();
+        let own_ids: HashSet<String> = own.iter().map(|(id, _)| id.clone()).collect();
+        let foreign_ids: HashSet<String> = all_db_ids.difference(&own_ids).cloned().collect();
+        // path -> ids still available for a stale delete, so a parser that only
+        // reports paths still gets its rows dropped by id.
+        let mut ids_by_path: HashMap<String, Vec<String>> = HashMap::new();
+        for (id, path) in &own {
+            ids_by_path
+                .entry(path.clone())
+                .or_default()
+                .push(id.clone());
+        }
+        match parser.detect_difference(entries, &own, &foreign_ids).await {
             Ok(diff) => {
+                for (id, path) in diff.conflicts {
+                    stream_log(
+                        &log_tx,
+                        "WARN",
+                        format!(
+                            "Track id '{}' from source '{}' is already owned by another library source — skipping '{}'",
+                            id, source.name, path
+                        ),
+                    );
+                }
                 to_scan_set.extend(diff.to_scan);
-                to_delete_set.extend(
-                    diff.to_delete
-                        .into_iter()
-                        .filter(|p| !p.starts_with("recommendation://") && !p.is_empty()),
-                );
-                replace_set.extend(diff.replace);
+                for path in diff.to_delete {
+                    // Recommendation rows are synced, not on disk; their
+                    // lifecycle is the sync's, not the scan's.
+                    if path.starts_with("recommendation://") || path.is_empty() {
+                        continue;
+                    }
+                    match ids_by_path.get_mut(&path).and_then(Vec::pop) {
+                        Some(id) => {
+                            to_delete_id_set.insert(id);
+                        }
+                        None => {
+                            unresolved_delete_paths.insert(path.clone());
+                        }
+                    }
+                    stale_path_set.insert(path);
+                }
+                to_delete_id_set.extend(diff.to_delete_ids);
+                replace_ids_set.extend(diff.replace_ids);
             }
             Err(e) => stream_log(
                 &log_tx,
@@ -437,32 +491,62 @@ pub async fn run_scan(
     }
 
     logger::info(&format!(
-        "Phase 3 complete: {} to scan, {} to delete",
+        "Phase 3 complete: {} to scan, {} to delete ({} unresolved by path)",
         to_scan_set.len(),
-        to_delete_set.len()
+        to_delete_id_set.len() + unresolved_delete_paths.len(),
+        unresolved_delete_paths.len()
     ));
 
     // -----------------------------------------------------------------------
     // Phase 3b: Fingerprints of DB tracks that will be removed this scan.
     // When a new file matches one of these, it is the replacement copy — keep
     // it instead of deleting it ("keep one when all copies would be uninserted").
+    // Stale rows are normally already gone by phase 4 (phase 3c deletes them
+    // first), so this is the safety net for a delete that did not land.
     // -----------------------------------------------------------------------
-    let mut stale_fp_to_path: HashMap<String, String> =
-        match library::fingerprint_paths_of(pool, &to_delete_set).await {
+    let mut stale_fp_to_track: HashMap<String, String> =
+        match library::fingerprint_ids_of(pool, &stale_path_set).await {
             Ok(map) => map,
             Err(e) => {
                 stream_log(
                     &log_tx,
                     "ERROR",
-                    format!("fingerprint_paths_of failed: {}", e),
+                    format!("fingerprint_ids_of failed: {}", e),
                 );
                 HashMap::new()
             }
         };
-    if !stale_fp_to_path.is_empty() {
+    if !stale_fp_to_track.is_empty() {
         logger::info(&format!(
             "Phase 3b complete: {} stale fingerprints will be replaced",
-            stale_fp_to_path.len()
+            stale_fp_to_track.len()
+        ));
+    }
+
+    let mut total_deleted: u32 = 0;
+
+    // -----------------------------------------------------------------------
+    // Phase 3c: Drop rows whose federated id is gone, before anything is
+    // inserted. These are deleted by id, never by path: a path can be shared
+    // with another row (including one inserted later this scan), so a
+    // path-keyed delete could remove the wrong track. Doing it ahead of phase 4
+    // also means a file that is now enumerated by another source can be
+    // inserted instead of being clobbered by the cleanup.
+    // -----------------------------------------------------------------------
+    for track_id in &to_delete_id_set {
+        match library::delete_track_by_id(pool, track_id).await {
+            Ok(()) => total_deleted += 1,
+            Err(e) => stream_log(
+                &log_tx,
+                "ERROR",
+                format!("Failed to delete track '{}' by id: {}", track_id, e),
+            ),
+        }
+    }
+    if !to_delete_id_set.is_empty() {
+        logger::info(&format!(
+            "Phase 3c complete: {} rows deleted by id",
+            to_delete_id_set.len()
         ));
     }
 
@@ -472,22 +556,20 @@ pub async fn run_scan(
     let mut total_new: u32 = 0;
     let mut total_duplicates: u32 = 0;
     let mut total_duplicates_deleted: u32 = 0;
-    let mut total_deleted: u32 = 0;
     let mut best_covers: HashMap<String, (Vec<u8>, u32)> = HashMap::new();
     let to_scan_count = to_scan_set.len() as u32;
     let mut scanned_count: u32 = 0;
 
     for source in &sources {
-        let Some(source_paths) = source_paths.get(&source.id) else {
+        let Some(entries) = source_entries.get(&source.id) else {
             continue;
         };
-        let new_paths: Vec<String> = source_paths
+        let new_entries: Vec<&libsources::EnumeratedTrack> = entries
             .iter()
-            .filter(|p| to_scan_set.contains(*p))
-            .cloned()
+            .filter(|entry| to_scan_set.contains(&entry.path))
             .collect();
 
-        if new_paths.is_empty() {
+        if new_entries.is_empty() {
             logger::info(&format!(
                 "Source '{}' has no new files — skipping tag parsing entirely",
                 source.name
@@ -502,7 +584,8 @@ pub async fn run_scan(
             };
 
         let mut resolver = libsources::SourceUrlResolver::new();
-        for file_path in &new_paths {
+        for entry in new_entries {
+            let file_path = &entry.path;
             send_progress(
                 &progress,
                 ScanProgress {
@@ -530,7 +613,7 @@ pub async fn run_scan(
             };
 
             let mut track = match parser
-                .scan_file(&url, &source.urls, file_path, &log_tx)
+                .scan_file(&url, &source.urls, file_path, entry.id.as_deref(), &log_tx)
                 .await
             {
                 Ok(t) => t,
@@ -591,27 +674,31 @@ pub async fn run_scan(
 
             scanned_count += 1;
 
-            // Replacement re-provision: drop the stale DB row so the path
-            // stays unique and the old fingerprint can't veto the new copy.
-            if replace_set.contains(file_path) {
-                if let Err(e) = library::delete_track_by_file_path(pool, file_path).await {
-                    stream_log(
-                        &log_tx,
-                        "ERROR",
-                        format!(
-                            "Failed to remove replaced track '{}' before re-insert: {}",
-                            file_path, e
-                        ),
-                    );
+            // Replacement re-provision: drop the stale row by its federated id
+            // first, so the path stays unique and the old fingerprint can't
+            // veto the new copy.
+            if let Some(track_id) = entry.id.as_deref() {
+                if replace_ids_set.contains(track_id) {
+                    if let Err(e) = library::delete_track_by_id(pool, track_id).await {
+                        stream_log(
+                            &log_tx,
+                            "ERROR",
+                            format!(
+                                "Failed to remove replaced track '{}' before re-insert: {}",
+                                track_id, e
+                            ),
+                        );
+                    }
                 }
             }
 
             let outcome = insert_track_to_db(
                 pool,
                 &track,
+                entry.id.as_deref(),
                 &source.id,
                 force,
-                &mut stale_fp_to_path,
+                &mut stale_fp_to_track,
                 &mut total_new,
                 &mut total_duplicates,
                 &log_tx,
@@ -678,20 +765,20 @@ pub async fn run_scan(
     }
 
     // -----------------------------------------------------------------------
-    // Phase 5: Delete stale DB entries
+    // Phase 5: Delete stale DB entries that could not be resolved to an id.
     // -----------------------------------------------------------------------
     send_progress(
         &progress,
         ScanProgress {
             current_file: String::new(),
             files_scanned: 0,
-            total_files: to_delete_set.len() as u32,
+            total_files: unresolved_delete_paths.len() as u32,
             stage: "cleaning".to_string(),
             ..Default::default()
         },
     );
 
-    for file_path in &to_delete_set {
+    for file_path in &unresolved_delete_paths {
         if let Err(e) = library::delete_track_by_file_path(pool, file_path).await {
             stream_log(
                 &log_tx,

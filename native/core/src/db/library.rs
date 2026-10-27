@@ -128,6 +128,7 @@ pub async fn update_album_cover(
 
 pub async fn insert_track(
     pool: &DatabasePool,
+    id: Option<&str>,
     title: &str,
     album_id: &str,
     artist_id: &str,
@@ -150,6 +151,7 @@ pub async fn insert_track(
         DatabasePool::Sqlite(p) => {
             super::library_sq::insert_track(
                 p,
+                id,
                 title,
                 album_id,
                 artist_id,
@@ -173,6 +175,7 @@ pub async fn insert_track(
         DatabasePool::Postgres(p) => {
             super::library_pg::insert_track(
                 p,
+                id,
                 title,
                 album_id,
                 artist_id,
@@ -217,13 +220,15 @@ pub async fn track_exists_by_fingerprint(
     }
 }
 
-pub async fn fingerprint_paths_of(
+/// Map the fingerprints of rows sitting at `paths` to the track id that owns
+/// each one, so stale rows can be dropped by id rather than by path.
+pub async fn fingerprint_ids_of(
     pool: &DatabasePool,
     paths: &std::collections::HashSet<String>,
 ) -> anyhow::Result<std::collections::HashMap<String, String>> {
     match pool {
-        DatabasePool::Sqlite(p) => super::library_sq::fingerprint_paths_of(p, paths).await,
-        DatabasePool::Postgres(p) => super::library_pg::fingerprint_paths_of(p, paths).await,
+        DatabasePool::Sqlite(p) => super::library_sq::fingerprint_ids_of(p, paths).await,
+        DatabasePool::Postgres(p) => super::library_pg::fingerprint_ids_of(p, paths).await,
     }
 }
 
@@ -247,6 +252,32 @@ pub async fn all_track_file_paths(pool: &DatabasePool) -> anyhow::Result<Vec<Str
     match pool {
         DatabasePool::Sqlite(p) => super::library_sq::all_track_file_paths(p).await,
         DatabasePool::Postgres(p) => super::library_pg::all_track_file_paths(p).await,
+    }
+}
+
+pub async fn all_track_source_keys(
+    pool: &DatabasePool,
+) -> anyhow::Result<Vec<(String, String, String)>> {
+    match pool {
+        DatabasePool::Sqlite(p) => super::library_sq::all_track_source_keys(p).await,
+        DatabasePool::Postgres(p) => super::library_pg::all_track_source_keys(p).await,
+    }
+}
+
+pub async fn track_id_by_file_path(
+    pool: &DatabasePool,
+    file_path: &str,
+) -> anyhow::Result<Option<String>> {
+    match pool {
+        DatabasePool::Sqlite(p) => super::library_sq::track_id_by_file_path(p, file_path).await,
+        DatabasePool::Postgres(p) => super::library_pg::track_id_by_file_path(p, file_path).await,
+    }
+}
+
+pub async fn delete_track_by_id(pool: &DatabasePool, track_id: &str) -> anyhow::Result<()> {
+    match pool {
+        DatabasePool::Sqlite(p) => super::library_sq::delete_track_by_id(p, track_id).await,
+        DatabasePool::Postgres(p) => super::library_pg::delete_track_by_id(p, track_id).await,
     }
 }
 

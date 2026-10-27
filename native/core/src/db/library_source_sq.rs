@@ -34,6 +34,7 @@ pub async fn add_source(
     source_type: &str,
     access_rule: &str,
     master_key: &str,
+    explicit_id: Option<&str>,
 ) -> std::result::Result<String, crate::db::library_source::AddSourceError> {
     let urls = encrypt_urls(urls, master_key);
     let existing: Vec<(String, String)> = sqlx::query_as(
@@ -52,7 +53,24 @@ pub async fn add_source(
         }
     }
 
-    let id = Uuid::new_v4().to_string();
+    // A federated id is global: if any local user already added the same remote
+    // source, the second add is a duplicate rather than a second backup.
+    let id = match explicit_id {
+        Some(explicit_id) => {
+            let taken: Option<String> =
+                sqlx::query_scalar("SELECT id FROM library_sources WHERE id = ?")
+                    .bind(explicit_id)
+                    .fetch_optional(pool)
+                    .await?;
+            if let Some(existing_id) = taken {
+                return Err(crate::db::library_source::AddSourceError::Duplicate {
+                    source_id: existing_id,
+                });
+            }
+            explicit_id.to_string()
+        }
+        None => Uuid::new_v4().to_string(),
+    };
     let now = now();
     let urls_json = serde_json::to_string(&urls).unwrap_or_else(|_| "[]".to_string());
     sqlx::query(
