@@ -18,7 +18,10 @@ const MAX_BYTES_UPLOAD: usize = 200 * 1024 * 1024;
 pub fn create_library_identify_router() -> Router<SharedState> {
     Router::new()
         .route("/unidentified", get(track::handle_list_unidentified))
-        .route("/apply", post(track::handle_apply_identification))
+        .route(
+            "/apply",
+            post(track::handle_apply_identification).layer(DefaultBodyLimit::max(MAX_BYTES_UPLOAD)),
+        )
         .route(
             "/download-folder",
             get(track::handle_list_download_folder_tracks),
