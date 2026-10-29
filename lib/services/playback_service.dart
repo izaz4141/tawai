@@ -538,6 +538,13 @@ class PlaybackService {
     SettingsManager.playbackVolume.value = clamped;
   }
 
+  /// Nudge the volume by [delta], e.g. one scroll-wheel notch. Reads the last
+  /// requested value synchronously so fast successive calls accumulate instead
+  /// of racing the async [setVolume].
+  void adjustVolume(double delta) {
+    setVolume(_userVolume + delta);
+  }
+
   /// Effective ReplayGain gain in dB for a track, including preamp, capped so
   /// the track's peak cannot be driven past full scale (clipping).
   /// Returns 0.0 when disabled or the track has no gain value.
