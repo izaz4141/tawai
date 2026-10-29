@@ -47,6 +47,12 @@ class _LyricsViewState extends State<LyricsView> {
 
   TrackInfo? get _currentTrack => PlaybackService.instance.currentTrack;
 
+  Duration? _trackDuration(TrackInfo track) {
+    final secs = track.durationSecs;
+    if (secs == null || secs <= 0) return null;
+    return Duration(milliseconds: (secs * 1000).round());
+  }
+
   void _onPositionChanged() {
     if (_parsedLyrics == null || !_parsedLyrics!.synced) return;
     final pos = PlaybackService.instance.position.value;
@@ -90,9 +96,11 @@ class _LyricsViewState extends State<LyricsView> {
 
     final stored = track.lyrics;
     if (stored != null && stored.trim().isNotEmpty) {
-      final synced = ParsedLyrics.looksSynced(stored);
       setState(() {
-        _parsedLyrics = ParsedLyrics.fromRaw(stored, synced: synced);
+        _parsedLyrics = ParsedLyrics.fromRaw(
+          stored,
+          trackDuration: _trackDuration(track),
+        );
         _isLoading = false;
         _error = null;
       });
@@ -127,6 +135,7 @@ class _LyricsViewState extends State<LyricsView> {
             result.lyrics,
             synced: result.synced,
             instrumental: result.instrumental,
+            trackDuration: _trackDuration(track),
           );
           _isLoading = false;
           _error = null;
