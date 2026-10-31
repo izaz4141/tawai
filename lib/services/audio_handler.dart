@@ -7,6 +7,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/utils/bridge_service.dart';
+import 'package:tawai/utils/image_cache.dart';
 import 'package:tawai/utils/io_service.dart';
 import 'package:tawai/utils/logger.dart';
 
@@ -123,7 +124,11 @@ class TawaiAudioHandler extends BaseAudioHandler with SeekHandler {
     final cached = _artCache[trackId];
     if (cached != null) return cached;
 
-    final bytes = await BridgeService.instance.getTrackCover(trackId);
+    // Externally opened tracks are not in the library, so the bridge cannot
+    // resolve their cover; reuse the bytes PlaybackService seeded locally.
+    final bytes =
+        AppImageCache.instance.peek(trackId: trackId) ??
+        await BridgeService.instance.getTrackCover(trackId);
     if (bytes == null || bytes.isEmpty) return null;
 
     if (kIsWeb) {

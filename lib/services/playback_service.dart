@@ -10,6 +10,7 @@ import 'package:tawai/ui/app.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/image_cache.dart';
+import 'package:tawai/utils/rinf_service.dart';
 import 'package:tawai/utils/settings.dart' show SettingsManager;
 import 'package:tawai/utils/helper.dart';
 import 'package:tawai/utils/logger.dart';
@@ -268,7 +269,10 @@ class PlaybackService {
   Future<TrackInfo?> _buildExternalTrack(String path) async {
     ReadFileTagsResponse? tags;
     try {
-      tags = await BridgeService.instance.readFileTags(path);
+      // External files always live on this device, so their tags must be read
+      // by the local runtime. BridgeService would send the path to the remote
+      // server, which cannot see Android paths and returns an error.
+      tags = await RinfService.instance.readFileTags(path);
     } catch (e) {
       log('readFileTags failed for $path: $e', level: LogLevel.error);
     }
