@@ -66,7 +66,9 @@ class APIService {
       }
     }
 
-    _startPolling();
+    SettingsManager.isLoggedIn.addListener(_onLoginStateChanged);
+
+    _onLoginStateChanged();
 
     SettingsManager.serverHost.addListener(restartPolling);
     SettingsManager.serverPort.addListener(restartPolling);
@@ -121,6 +123,11 @@ class APIService {
     return null;
   }
 
+  /// Polling only makes sense once a session is usable: the server is remote
+  /// and the user is logged in, or the hub is embedded locally (no login).
+  bool get _shouldPoll =>
+      SettingsManager.isLoggedIn.value || !PlatformService().isRemote;
+
   void _startPolling() {
     _timer?.cancel();
 
@@ -131,10 +138,28 @@ class APIService {
     _timer = Timer.periodic(const Duration(seconds: 5), (_) => _checkStatus());
   }
 
+  void _stopPolling() {
+    _timer?.cancel();
+    _timer = null;
+    _debounce?.cancel();
+    _debounce = null;
+
+    isOnline.value = false;
+    serverVersion.value = null;
+  }
+
+  void _onLoginStateChanged() {
+    if (_shouldPoll) {
+      _startPolling();
+    } else {
+      _stopPolling();
+    }
+  }
+
   void restartPolling() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 200), () {
-      _startPolling();
+      _onLoginStateChanged();
     });
   }
 
@@ -3231,8 +3256,9 @@ class APIService {
   }
 
   void dispose() {
-    _timer?.cancel();
+    SettingsManager.isLoggedIn.removeListener(_onLoginStateChanged);
     SettingsManager.serverHost.removeListener(restartPolling);
     SettingsManager.serverPort.removeListener(restartPolling);
+    _stopPolling();
   }
 }
