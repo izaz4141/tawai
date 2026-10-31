@@ -9,8 +9,7 @@ use tokio::sync::Mutex;
 
 use crate::signals::library::ArtistInfo;
 use crate::signals::metadata::{MBSearchInfo, RecordingInfo, ReleaseInfo, ReleaseTrackInfo};
-
-static MB_UA: &str = "Tawai/0.0.1 ( https://github.com/izaz4141/tawai )";
+use crate::utils::MB_UA;
 
 const ACOUSTID_CLIENT_KEY: &str = "1WElrdlcln";
 

@@ -13,6 +13,7 @@ class ListTextField extends StatefulWidget {
   final String? autofillHints;
   final TextInputType? keyboardType;
   final bool enabled;
+  final bool confirmEnabled;
   final List<Widget>? suffixWidgets;
   final TextEditingController? controller;
 
@@ -27,6 +28,7 @@ class ListTextField extends StatefulWidget {
     this.autofillHints,
     this.keyboardType,
     this.enabled = true,
+    this.confirmEnabled = true,
     this.suffixWidgets,
     this.controller,
   });
@@ -114,10 +116,16 @@ class _ListTextFieldState extends State<ListTextField> {
                               ),
                               iconSize:
                                   AppTheme.iconSM * AppTheme.iconScale(context),
-                              onPressed: () {
-                                widget.onConfirm!(_controller.text);
-                                FocusScope.of(context).unfocus();
-                              },
+                              tooltip: widget.confirmEnabled
+                                  ? 'Save'
+                                  : 'Test first — save is disabled until the '
+                                        'test succeeds',
+                              onPressed: widget.confirmEnabled
+                                  ? () {
+                                      widget.onConfirm!(_controller.text);
+                                      FocusScope.of(context).unfocus();
+                                    }
+                                  : null,
                             ),
                           if (widget.defaultValue != null)
                             IconButton(
@@ -149,7 +157,7 @@ class _ListTextFieldState extends State<ListTextField> {
                   : TextInputAction.done,
               onSubmitted: widget.enabled
                   ? (val) {
-                      if (widget.onConfirm != null) {
+                      if (widget.onConfirm != null && widget.confirmEnabled) {
                         widget.onConfirm!(val);
                       }
                     }

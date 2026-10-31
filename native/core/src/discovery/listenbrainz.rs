@@ -1,4 +1,5 @@
 use anyhow::Result;
+use reqwest::header;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
@@ -6,6 +7,7 @@ use crate::metadata::musicbrainz;
 use crate::signals::discovery::ValidateLBTokenResponse;
 use crate::signals::library::TrackInfo;
 use crate::signals::metadata::RecordingInfo;
+use crate::utils::MB_UA;
 
 #[derive(Serialize)]
 struct Listen {
@@ -103,6 +105,18 @@ pub async fn update_now_playing(
     submit_listen(client, token, &payload).await
 }
 
+#[derive(Default, Deserialize)]
+struct LbTokenValidation {
+    #[serde(default)]
+    valid: bool,
+    #[serde(default)]
+    user_name: Option<String>,
+    #[serde(default)]
+    message: Option<String>,
+    #[serde(default)]
+    error: Option<String>,
+}
+
 pub async fn validate_token(
     client: &reqwest::Client,
     token: &str,
@@ -110,16 +124,43 @@ pub async fn validate_token(
     let resp = client
         .get("https://api.listenbrainz.org/1/validate-token")
         .header("Authorization", format!("Token {token}"))
+        .header(header::USER_AGENT, MB_UA)
         .send()
         .await
         .map_err(|e| anyhow::anyhow!("failed to send validate-token request: {e}"))?;
 
-    let body: ValidateLBTokenResponse = resp
-        .json()
-        .await
-        .map_err(|e| anyhow::anyhow!("failed to parse validate-token response: {e}"))?;
+    let status = resp.status();
+    let body = resp.text().await.unwrap_or_default();
+    let parsed: LbTokenValidation = serde_json::from_str(&body).unwrap_or_default();
 
-    Ok(body)
+    if !status.is_success() {
+        let detail = parsed
+            .error
+            .or(parsed.message)
+            .filter(|m| !m.is_empty())
+            .unwrap_or_else(|| status.to_string());
+        return Ok(ValidateLBTokenResponse {
+            id: String::new(),
+            valid: false,
+            user_name: None,
+            message: detail,
+        });
+    }
+
+    let message = parsed.message.filter(|m| !m.is_empty()).unwrap_or_else(|| {
+        if parsed.valid {
+            "Token valid.".to_string()
+        } else {
+            "Token invalid.".to_string()
+        }
+    });
+
+    Ok(ValidateLBTokenResponse {
+        id: String::new(),
+        valid: parsed.valid,
+        user_name: parsed.user_name,
+        message,
+    })
 }
 
 async fn enrich_mbids(client: &reqwest::Client, mbids: Vec<(String, f64)>) -> Vec<RecordingInfo> {

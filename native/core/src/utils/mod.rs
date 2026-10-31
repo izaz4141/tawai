@@ -14,3 +14,6 @@ pub mod tagging;
 pub mod types;
 pub mod url;
 pub mod version;
+
+/// User-Agent sent with outbound requests to public APIs.
+pub const MB_UA: &str = "Tawai/0.0.1 ( https://github.com/izaz4141/tawai )";

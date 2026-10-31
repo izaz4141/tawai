@@ -3133,21 +3133,32 @@ class APIService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/discovery/lb/validate'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
         body: jsonEncode({'id': _newId(), 'token': token}),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return (
-          valid: data['valid'] as bool,
+          valid: data['valid'] as bool? ?? false,
           userName: data['user_name'] as String?,
           message: data['message'] as String? ?? '',
         );
       }
+      String detail = 'HTTP ${response.statusCode}';
+      if (response.body.isNotEmpty) {
+        try {
+          final data = jsonDecode(response.body);
+          if (data is Map<String, dynamic>) {
+            final msg = data['error'] ?? data['message'];
+            if (msg is String && msg.isNotEmpty) detail = msg;
+          }
+        } catch (_) {}
+      }
+      return (valid: false, userName: null, message: detail);
     } catch (e) {
       log('validateLBToken error: $e', level: LogLevel.error);
+      return (valid: false, userName: null, message: e.toString());
     }
-    return (valid: false, userName: null, message: 'Request failed');
   }
 
   // ---------------------------------------------------------------------------

@@ -53,12 +53,37 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
   String? _removingSourceId;
   bool _lbTokenValid = false;
   bool _lbTokenTesting = false;
+  bool _lbSavedTokenValid = false;
+  String? _lbTestedToken;
+  String? _lbTestMessage;
+  String? _lbTestedUserName;
   late final TextEditingController _lbTokenController;
+
+  String get _lbTypedToken => _lbTokenController.text.trim();
+  String get _lbSavedToken => SettingsManager.listenbrainzToken.value.trim();
+
+  /// The last test result applies to what is currently in the field.
+  bool get _lbTestApplies {
+    final tested = _lbTestedToken;
+    if (tested == null) return false;
+    final typed = _lbTypedToken;
+    return typed.isEmpty ? tested == _lbSavedToken : typed == tested;
+  }
+
+  /// Saving is only possible for the exact token that just passed the test.
+  bool get _lbCanSave =>
+      !_lbTokenTesting &&
+      _lbTokenValid &&
+      _lbTestedToken != null &&
+      _lbTypedToken.isNotEmpty &&
+      _lbTypedToken == _lbTestedToken &&
+      _lbTypedToken != _lbSavedToken;
 
   @override
   void initState() {
     super.initState();
     _lbTokenController = TextEditingController();
+    _lbTokenController.addListener(_onLbTokenChanged);
     _loadSources();
     if (SettingsManager.listenbrainzToken.value.isNotEmpty) {
       unawaited(_validateLbToken(showFeedback: false));
@@ -69,10 +94,15 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
 
   @override
   void dispose() {
+    _lbTokenController.removeListener(_onLbTokenChanged);
     _lbTokenController.dispose();
     ScanService.instance.isScanning.removeListener(_onScanStateChanged);
     ScanService.instance.release();
     super.dispose();
+  }
+
+  void _onLbTokenChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onScanStateChanged() {
@@ -183,12 +213,16 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
   }
 
   Future<void> _validateLbToken({bool showFeedback = true}) async {
-    final typed = _lbTokenController.text.trim();
-    final token = typed.isNotEmpty
-        ? typed
-        : SettingsManager.listenbrainzToken.value.trim();
+    final typed = _lbTypedToken;
+    final token = typed.isNotEmpty ? typed : _lbSavedToken;
     if (token.isEmpty) {
-      setState(() => _lbTokenValid = false);
+      setState(() {
+        _lbTokenValid = false;
+        _lbSavedTokenValid = false;
+        _lbTestedToken = null;
+        _lbTestMessage = null;
+        _lbTestedUserName = null;
+      });
       if (showFeedback) {
         AppSnackBar.show(
           context,
@@ -198,12 +232,17 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
       }
       return;
     }
+    final testingSavedToken = token == _lbSavedToken;
     setState(() => _lbTokenTesting = true);
     final result = await BridgeService.instance.validateLBToken(token);
     if (!mounted) return;
     setState(() {
       _lbTokenTesting = false;
       _lbTokenValid = result.valid;
+      _lbTestedToken = token;
+      _lbTestMessage = result.message;
+      _lbTestedUserName = result.userName;
+      if (testingSavedToken) _lbSavedTokenValid = result.valid;
     });
     if (showFeedback) {
       if (result.valid) {
@@ -299,6 +338,19 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
       default:
         return p.stage;
     }
+  }
+
+  String _lbTestStatusLabel() {
+    if (_lbTokenValid) {
+      final user = _lbTestedUserName;
+      return user != null && user.isNotEmpty
+          ? 'Token validated — $user'
+          : 'Token validated';
+    }
+    final message = _lbTestMessage;
+    return message != null && message.isNotEmpty
+        ? 'Token test failed: $message'
+        : 'Token test failed';
   }
 
   Widget _resultChip(Color color, IconData icon, String label, String hint) {
@@ -699,14 +751,17 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
           valueListenable: SettingsManager.listenbrainzToken,
           controller: _lbTokenController,
           isObscured: true,
+          confirmEnabled: _lbCanSave,
           onConfirm: (value) {
+            if (!_lbCanSave) return;
             SettingsManager.saveUserSetting(
               SettingsManager.listenbrainzToken,
               'listenbrainz_token',
-              value,
+              value.trim(),
             );
-            setState(() => _lbTokenValid = false);
-            unawaited(_validateLbToken(showFeedback: false));
+            setState(() {
+              _lbSavedTokenValid = _lbTokenValid;
+            });
           },
           suffixWidgets: [
             IconButton(
@@ -721,11 +776,38 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
                   : const Icon(Icons.bolt),
               iconSize: AppTheme.iconSM * AppTheme.iconScale(context),
               tooltip: 'Test token',
-              color: _lbTokenValid ? colorScheme.primary : null,
+              color: _lbTestApplies && _lbTokenValid
+                  ? colorScheme.primary
+                  : null,
               onPressed: _lbTokenTesting ? null : _validateLbToken,
             ),
           ],
         ),
+        if (_lbTestApplies && _lbTestMessage != null) ...[
+          SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
+          Row(
+            children: [
+              Icon(
+                _lbTokenValid
+                    ? Icons.check_circle_outline
+                    : Icons.error_outline,
+                size: AppTheme.iconSM * AppTheme.iconScale(context),
+                color: _lbTokenValid ? colorScheme.primary : colorScheme.error,
+              ),
+              SizedBox(width: AppTheme.spaceXS * AppTheme.spaceScale(context)),
+              Expanded(
+                child: Text(
+                  _lbTestStatusLabel(),
+                  style: textTheme.bodySmall?.copyWith(
+                    color: _lbTokenValid
+                        ? colorScheme.primary
+                        : colorScheme.error,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
         SizedBox(height: AppTheme.spaceLG * AppTheme.spaceScale(context)),
         Text(
           'Select ListenBrainz recommendation types to include as library '
@@ -735,8 +817,7 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
             color: colorScheme.onSurfaceVariant,
           ),
         ),
-        if (!_lbTokenValid ||
-            SettingsManager.listenbrainzToken.value.trim().isEmpty) ...[
+        if (!_lbSavedTokenValid) ...[
           SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
           Text(
             'Enter a valid ListenBrainz token above to enable recommendations.',
@@ -752,9 +833,7 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
           builder: (context, _) {
             final raw = SettingsManager.includedRecommendations.value;
             final selected = raw.split(',').where((s) => s.isNotEmpty).toSet();
-            final enabled =
-                _lbTokenValid &&
-                SettingsManager.listenbrainzToken.value.trim().isNotEmpty;
+            final enabled = _lbSavedTokenValid;
             return Column(
               children: [
                 for (final src in RecommendationSource.all)
