@@ -55,13 +55,15 @@ class _DownloadTrackSheetState extends State<_DownloadTrackSheet> {
 
     try {
       final query = '${widget.track.title} ${widget.track.artistsString}';
-      final results = await BridgeService.instance.search(_source, query);
-      if (mounted) {
-        setState(() {
-          _results = results;
-          _searching = false;
-        });
-      }
+      final response = await BridgeService.instance.search(_source, query);
+      if (!mounted) return;
+      setState(() {
+        _results = response.success
+            ? response.results.map(SearchResultItem.fromDlSearchItem).toList()
+            : [];
+        _error = response.success ? null : (response.error ?? 'Search failed');
+        _searching = false;
+      });
     } catch (e) {
       if (mounted) {
         setState(() {

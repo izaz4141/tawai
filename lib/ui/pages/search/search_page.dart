@@ -93,18 +93,42 @@ class _SearchPageState extends State<SearchPage> {
       }
     } else {
       setState(() => _searching = true);
-      final results = await _doSearch(query);
-      if (mounted) {
+      try {
+        final response = await _doSearch(query);
+        if (!mounted) return;
         setState(() {
-          _results = results;
+          _results = response.success
+              ? response.results.map(SearchResultItem.fromDlSearchItem).toList()
+              : [];
           _searching = false;
         });
+        if (!response.success) {
+          AppSnackBar.show(
+            context,
+            response.error ?? 'Search failed',
+            type: SnackType.error,
+          );
+        }
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _results = [];
+          _searching = false;
+        });
+        AppSnackBar.show(context, e.toString(), type: SnackType.error);
       }
     }
   }
 
-  Future<List<SearchResultItem>> _doSearch(String query) async {
-    if (query.isEmpty) return [];
+  Future<DownloadSearchResponse> _doSearch(String query) async {
+    if (query.isEmpty) {
+      return const DownloadSearchResponse(
+        id: '',
+        results: [],
+        success: true,
+        error: null,
+      );
+    }
     return BridgeService.instance.search(_downloadSource, query);
   }
 
@@ -113,7 +137,33 @@ class _SearchPageState extends State<SearchPage> {
     if (query.isEmpty) return;
 
     setState(() => _autoDownloading = true);
-    final results = await _doSearch(query);
+
+    final DownloadSearchResponse response;
+    try {
+      response = await _doSearch(query);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _autoDownloading = false);
+        AppSnackBar.show(context, e.toString(), type: SnackType.error);
+      }
+      return;
+    }
+
+    if (!response.success) {
+      if (mounted) {
+        setState(() => _autoDownloading = false);
+        AppSnackBar.show(
+          context,
+          response.error ?? 'Search failed',
+          type: SnackType.error,
+        );
+      }
+      return;
+    }
+
+    final results = response.results
+        .map(SearchResultItem.fromDlSearchItem)
+        .toList();
 
     if (results.isEmpty) {
       if (mounted) {

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde_json::Value;
+use std::time::Instant;
 use tokio::time::{Duration, sleep};
 
 use serde::{Deserialize, Serialize};
@@ -13,22 +14,35 @@ use crate::signals::download::{DlGlance, DlListResponse, DlSearchItem, DlSearchR
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SlskdSearchResultFile {
-    pub bitrate: i32,
+    // slskd serializes `File.BitRate`, and omits the field entirely when it is null.
+    #[serde(rename = "bitRate", alias = "bitrate", default)]
+    pub bitrate: Option<i32>,
+    #[serde(default)]
     pub code: i32,
+    #[serde(default)]
     pub extension: String,
+    #[serde(default)]
     pub filename: String,
-    pub length: i32,
+    #[serde(default)]
+    pub length: Option<i32>,
+    #[serde(default)]
     pub size: u64,
+    #[serde(default)]
     pub is_locked: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SlskdSearchResult {
+    #[serde(default)]
     pub file_count: i32,
+    #[serde(default)]
     pub files: Vec<SlskdSearchResultFile>,
+    #[serde(default)]
     pub has_free_upload_slot: bool,
+    #[serde(default)]
     pub upload_speed: u64,
+    #[serde(default)]
     pub username: String,
 }
 
@@ -37,8 +51,11 @@ pub struct SlskdSearchResult {
 pub struct SlskdSearchResponse {
     #[serde(alias = "id")]
     pub search_id: String,
+    #[serde(default)]
     pub is_complete: bool,
+    #[serde(default)]
     pub responses: Vec<SlskdSearchResult>,
+    #[serde(default)]
     pub state: String,
 }
 
@@ -150,42 +167,59 @@ impl SlskdClient {
             anyhow::bail!("slskd search failed {}: {}", status, text);
         }
         let data: serde_json::Value = resp.json().await?;
-        let result = self.search_complete(&data["id"].to_string()).await?;
+        let id = data
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow::anyhow!("slskd search response is missing an id"))?
+            .to_string();
+        let result = self.search_complete(&id).await?;
         Ok(result)
     }
 
     pub async fn search_complete(&self, id: &str) -> Result<SlskdSearchResponse> {
-        let mut complete = false;
-        let mut result: SlskdSearchResponse = {
-            let mut data = serde_json::Value::Null;
-            while !complete {
-                sleep(Duration::from_secs(5)).await;
-                let url = format!("{}/api/v0/searches/{}", self.base_url, &id);
-                let resp = self
-                    .client
-                    .post(&url)
-                    .query(&[("includeResponses", "true")])
-                    .headers(self.headers())
-                    .send()
-                    .await?;
-                if !resp.status().is_success() {
-                    let status = resp.status();
-                    let text = resp.text().await.unwrap_or_default();
-                    anyhow::bail!("slskd search failed {}: {}", status, text);
-                }
-                data = resp.json().await?;
-                complete = data["isComplete"].as_bool().unwrap_or(false);
+        const POLL_INTERVAL: Duration = Duration::from_secs(2);
+        const MAX_WAIT: Duration = Duration::from_secs(60);
+
+        let deadline = Instant::now() + MAX_WAIT;
+
+        loop {
+            sleep(POLL_INTERVAL).await;
+
+            let url = format!("{}/api/v0/searches/{}", self.base_url, id);
+            let resp = self
+                .client
+                .get(&url)
+                .query(&[("includeResponses", "true")])
+                .headers(self.headers())
+                .send()
+                .await?;
+            if !resp.status().is_success() {
+                let status = resp.status();
+                let text = resp.text().await.unwrap_or_default();
+                anyhow::bail!("slskd search failed {}: {}", status, text);
             }
-            serde_json::from_value(data)?
-        };
-        result.responses.sort_by(
-            |a, b| match (a.has_free_upload_slot, b.has_free_upload_slot) {
-                (true, false) => std::cmp::Ordering::Greater,
-                (false, true) => std::cmp::Ordering::Less,
-                _ => b.upload_speed.cmp(&a.upload_speed),
-            },
-        );
-        Ok(result)
+
+            let data: serde_json::Value = resp.json().await?;
+            if data["isComplete"].as_bool().unwrap_or(false) {
+                let mut result: SlskdSearchResponse = serde_json::from_value(data)?;
+                result.responses.sort_by(|a, b| {
+                    match (a.has_free_upload_slot, b.has_free_upload_slot) {
+                        (true, false) => std::cmp::Ordering::Less,
+                        (false, true) => std::cmp::Ordering::Greater,
+                        _ => b.upload_speed.cmp(&a.upload_speed),
+                    }
+                });
+                return Ok(result);
+            }
+
+            if Instant::now() >= deadline {
+                anyhow::bail!(
+                    "slskd search {} did not complete within {} seconds",
+                    id,
+                    MAX_WAIT.as_secs()
+                );
+            }
+        }
     }
 
     pub async fn enqueue_download(
@@ -430,7 +464,7 @@ impl SlskdClient {
                     thumbnail: None,
                     duration: None,
                     channel: None,
-                    bitrate: Some(f.bitrate),
+                    bitrate: f.bitrate,
                     extension: Some(f.extension.clone()),
                     webpage_url: None,
                 })
@@ -486,4 +520,58 @@ pub fn is_terminal_slskd_state(state: &str) -> bool {
         state,
         "Completed" | "Cancelled" | "Rejected" | "TimedOut" | "Errored"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deserializes_search_payload_with_omitted_nullable_file_fields() {
+        let json = serde_json::json!({
+            "id": "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+            "searchText": "aphex twin",
+            "state": "Completed",
+            "isComplete": true,
+            "fileCount": 2,
+            "responseCount": 1,
+            "responses": [{
+                "fileCount": 2,
+                "hasFreeUploadSlot": true,
+                "uploadSpeed": 1000000,
+                "username": "peer",
+                "files": [
+                    {
+                        "code": 1,
+                        "extension": "mp3",
+                        "filename": "Music\\Aphex Twin\\Windowlicker.mp3",
+                        "size": 1234567,
+                        "isLocked": false
+                    },
+                    {
+                        "bitRate": 320,
+                        "code": 1,
+                        "extension": "flac",
+                        "filename": "Music\\Aphex Twin\\Xtal.flac",
+                        "length": 293,
+                        "size": 50000000,
+                        "isLocked": false
+                    }
+                ]
+            }]
+        });
+
+        let parsed: SlskdSearchResponse = serde_json::from_value(json).unwrap();
+
+        assert_eq!(parsed.search_id, "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0");
+        assert!(parsed.is_complete);
+        assert_eq!(parsed.state, "Completed");
+        assert_eq!(parsed.responses.len(), 1);
+
+        let files = &parsed.responses[0].files;
+        assert_eq!(files[0].bitrate, None);
+        assert_eq!(files[0].length, None);
+        assert_eq!(files[1].bitrate, Some(320));
+        assert_eq!(files[1].length, Some(293));
+    }
 }

@@ -413,10 +413,7 @@ class RinfService {
     return signal.message.downloads;
   }
 
-  Future<({List<DlSearchItem> results, bool success, String? error})> search(
-    String sourceType,
-    String query,
-  ) async {
+  Future<DownloadSearchResponse> search(String sourceType, String query) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = DownloadSearchResponse.rustSignalStream.where(
       (s) => s.message.id == id,
@@ -427,11 +424,7 @@ class RinfService {
       query: query,
     ).sendSignalToRust();
     final signal = await stream.first;
-    return (
-      results: signal.message.results,
-      success: signal.message.success,
-      error: signal.message.error,
-    );
+    return signal.message;
   }
 
   Future<({bool success, String downloadId, String? error})> create(

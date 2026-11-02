@@ -6,6 +6,7 @@ import 'package:tawai/utils/helper.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/ui/pages/search/widgets/search_result_tile.dart';
 import 'package:tawai/ui/widgets/mini_player.dart';
+import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/pages/search/modals/release_picker_dialog.dart';
 import 'package:tawai/ui/pages/search/modals/track_picker_dialog.dart';
 import 'package:tawai/ui/widgets/components/cached_network_image.dart';
@@ -17,7 +18,7 @@ class EnhancedSearchView extends StatefulWidget {
   final List<RecordingInfo> recordings;
   final bool searching;
   final Set<String> loadingUrls;
-  final Future<List<SearchResultItem>> Function(String query) onSearch;
+  final Future<DownloadSearchResponse> Function(String query) onSearch;
   final void Function(SearchResultItem entry) onDownload;
 
   const EnhancedSearchView({
@@ -93,13 +94,29 @@ class _EnhancedSearchViewState extends State<EnhancedSearchView> {
       _results = [];
     });
     final query = '$artist $title';
-    final results = await widget.onSearch(query);
-    if (mounted) {
+    try {
+      final response = await widget.onSearch(query);
+      if (!mounted) return;
+      if (!response.success) {
+        setState(() => _searchingSource = false);
+        AppSnackBar.show(
+          context,
+          response.error ?? 'Search failed',
+          type: SnackType.error,
+        );
+        return;
+      }
       setState(() {
-        _results = results;
+        _results = response.results
+            .map(SearchResultItem.fromDlSearchItem)
+            .toList();
         _searchingSource = false;
         _step = _EnhancedStep.viewingResults;
       });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _searchingSource = false);
+      AppSnackBar.show(context, e.toString(), type: SnackType.error);
     }
   }
 

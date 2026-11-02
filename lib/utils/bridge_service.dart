@@ -8,7 +8,6 @@ import 'package:tawai/utils/platform_service.dart';
 import 'package:tawai/utils/api_service.dart';
 import 'package:tawai/utils/rinf_service.dart';
 import 'package:tawai/utils/settings.dart';
-import 'package:tawai/ui/pages/search/search_types.dart';
 
 class BridgeService {
   static final BridgeService _instance = BridgeService._();
@@ -357,17 +356,10 @@ class BridgeService {
     return RinfService.instance.pollDownloads(userId);
   }
 
-  Future<List<SearchResultItem>> search(String sourceType, String query) async {
-    if (_isRemote) {
-      final response = await APIService.instance.search(sourceType, query);
-      return response.results
-          .map((r) => SearchResultItem.fromDlSearchItem(r))
-          .toList();
-    }
-    final response = await RinfService.instance.search(sourceType, query);
-    return response.results
-        .map((r) => SearchResultItem.fromDlSearchItem(r))
-        .toList();
+  Future<DownloadSearchResponse> search(String sourceType, String query) async {
+    return _isRemote
+        ? APIService.instance.search(sourceType, query)
+        : RinfService.instance.search(sourceType, query);
   }
 
   Future<({bool success, String downloadId, String? error})> create(

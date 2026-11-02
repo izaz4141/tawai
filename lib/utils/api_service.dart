@@ -1036,19 +1036,13 @@ class APIService {
     return [];
   }
 
-  Future<({List<DlSearchItem> results, bool success, String? error})> search(
-    String sourceType,
-    String query,
-  ) async {
+  Future<DownloadSearchResponse> search(String sourceType, String query) async {
+    final id = _newId();
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/download/search'),
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
-        body: jsonEncode({
-          'id': _newId(),
-          'source_type': sourceType,
-          'query': query,
-        }),
+        body: jsonEncode({'id': id, 'source_type': sourceType, 'query': query}),
       );
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -1068,17 +1062,28 @@ class APIService {
             extension: m['extension'] as String?,
           );
         }).toList();
-        return (results: results, success: true, error: null);
+        return DownloadSearchResponse(
+          id: id,
+          results: results,
+          success: true,
+          error: null,
+        );
       }
       final body = jsonDecode(response.body);
-      return (
-        results: <DlSearchItem>[],
+      return DownloadSearchResponse(
+        id: id,
+        results: const <DlSearchItem>[],
         success: false,
         error: body['error'] as String? ?? 'HTTP ${response.statusCode}',
       );
     } catch (e) {
       log('search error: $e', level: LogLevel.error);
-      return (results: <DlSearchItem>[], success: false, error: e.toString());
+      return DownloadSearchResponse(
+        id: id,
+        results: const <DlSearchItem>[],
+        success: false,
+        error: e.toString(),
+      );
     }
   }
 
