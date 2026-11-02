@@ -72,7 +72,10 @@ class _ListDropdownState extends State<ListDropdown> {
   }
 
   void _handleChange(String newValue) {
-    if (widget.disabledValues.contains(newValue)) return;
+    if (widget.disabledValues.contains(newValue) &&
+        newValue != widget.valueListenable.value) {
+      return;
+    }
     if (widget.onChange != null) {
       widget.onChange!(newValue);
     } else if (widget.valueListenable is ValueNotifier<String>) {
@@ -166,10 +169,14 @@ class _ListDropdownState extends State<ListDropdown> {
   }
 
   Widget _buildDropdown(String value, TextTheme textTheme, ColorScheme colors) {
+    final knownValue = widget.items.any((item) => item.value == value)
+        ? value
+        : null;
     bool isDisabled(String? v) =>
-        v != null && widget.disabledValues.contains(v);
+        v != null && v != value && widget.disabledValues.contains(v);
     return DropdownButtonFormField<String>(
-      initialValue: widget.disabledValues.contains(value) ? null : value,
+      key: ValueKey<String?>(knownValue),
+      initialValue: knownValue,
       style: textTheme.bodyMedium,
       decoration: InputDecoration(
         contentPadding: EdgeInsets.symmetric(

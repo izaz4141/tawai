@@ -408,7 +408,13 @@ class APIService {
         headers: _authHeaders(extra: {'Content-Type': 'application/json'}),
         body: jsonEncode(settings),
       );
-      return response.statusCode == 200;
+      if (response.statusCode == 200) return true;
+      log(
+        'Saving settings failed with HTTP ${response.statusCode}: '
+        '${response.body}',
+        level: LogLevel.error,
+      );
+      return false;
     } catch (e) {
       log("Error saving settings: $e", level: LogLevel.error);
       return false;

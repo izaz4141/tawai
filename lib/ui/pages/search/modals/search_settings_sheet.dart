@@ -55,13 +55,6 @@ class _SearchSettingsSheetState extends State<_SearchSettingsSheet> {
   @override
   void initState() {
     super.initState();
-    final current = widget.downloadSource;
-    final sys = SystemService();
-    if (current == 'nadekodon' && sys.nadekodonVersion.value == null) {
-      widget.onDownloadSourceChanged('slskd');
-    } else if (current == 'slskd' && sys.slskdVersion.value == null) {
-      widget.onDownloadSourceChanged('nadekodon');
-    }
     _downloadSourceNotifier = ValueNotifier<String>(widget.downloadSource);
     _autoDownload = widget.autoDownload;
     _enhancedSearch = widget.enhancedSearch;
@@ -98,10 +91,15 @@ class _SearchSettingsSheetState extends State<_SearchSettingsSheet> {
             ]),
             builder: (context, _) {
               final sys = SystemService();
+              final current = _downloadSourceNotifier.value;
+              // Keep the current source in the list even when its version
+              // probe has not reported back, so the sheet never shows an
+              // empty selection.
               final items = <(String, String, IconData?)>[
-                if (sys.slskdVersion.value != null)
+                if (sys.slskdVersion.value != null || current == 'slskd')
                   ('slskd', 'Soulseek', Icons.cloud),
-                if (sys.nadekodonVersion.value != null)
+                if (sys.nadekodonVersion.value != null ||
+                    current == 'nadekodon')
                   ('nadekodon', 'YouTube', Icons.video_library),
               ];
               if (items.isEmpty) {

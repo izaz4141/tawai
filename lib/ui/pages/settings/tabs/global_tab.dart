@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -18,8 +20,19 @@ import 'package:tawai/ui/widgets/dialog/permission_dialog.dart';
 import 'package:tawai/utils/io_service.dart';
 import 'package:tawai/utils/platform_service.dart';
 
-class SettingsGlobalTab extends StatelessWidget {
+class SettingsGlobalTab extends StatefulWidget {
   const SettingsGlobalTab({super.key});
+
+  @override
+  State<SettingsGlobalTab> createState() => _SettingsGlobalTabState();
+}
+
+class _SettingsGlobalTabState extends State<SettingsGlobalTab> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(SystemService().checkServiceAvailability());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -121,14 +134,17 @@ class SettingsGlobalTab extends StatelessWidget {
           ]),
           builder: (context, _) {
             final sys = SystemService();
-            final disabled = <String>{};
-            if (sys.slskdVersion.value == null) disabled.add('slskd');
-            if (sys.nadekodonVersion.value == null) disabled.add('nadekodon');
+            final unconfigured = <String>[
+              if (sys.slskdVersion.value == null) 'Soulseek',
+              if (sys.nadekodonVersion.value == null) 'YouTube',
+            ];
             return ListDropdown(
               title: 'Download Source',
-              subtitle: 'Default source for music downloads',
+              subtitle: unconfigured.isEmpty
+                  ? 'Default source for music downloads'
+                  : 'Default source for music downloads (not configured: '
+                        '${unconfigured.join(', ')})',
               valueListenable: SettingsManager.defaultDownloadSource,
-              disabledValues: disabled,
               items: const [
                 DropdownMenuItem(value: 'slskd', child: Text('Soulseek')),
                 DropdownMenuItem(value: 'nadekodon', child: Text('YouTube')),
