@@ -1048,21 +1048,16 @@ pub fn parse_filename_tags(stem: &str) -> (Option<String>, Option<String>, Optio
     }
 }
 
+/// Returns the list of audio file extensions supported by lofty.
+/// Used to filter search results to audio files only.
+pub fn audio_extensions() -> &'static [&'static str] {
+    &[
+        "mp3", "flac", "ogg", "m4a", "mp4", "wav", "aiff", "aac", "ape", "mpc", "wv", "opus", "spx",
+    ]
+}
+
 pub fn supported_lofty_format(ext: &str) -> bool {
-    matches!(
-        ext.to_lowercase().as_str(),
-        "mp3"
-            | "flac"
-            | "ogg"
-            | "m4a"
-            | "mp4"
-            | "wav"
-            | "aiff"
-            | "aac"
-            | "ape"
-            | "mpc"
-            | "wv"
-            | "opus"
-            | "spx"
-    )
+    audio_extensions()
+        .iter()
+        .any(|&ae| ae.eq_ignore_ascii_case(ext))
 }

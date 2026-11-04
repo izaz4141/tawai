@@ -83,7 +83,7 @@ class _DownloadTrackSheetState extends State<_DownloadTrackSheet> {
 
     final result = await BridgeService.instance.create(
       'slskd',
-      '${entry.username}/${entry.filename}',
+      entry.filename,
       SettingsManager.downloadFolder.value,
       userId,
       extra: '{"username": "${entry.username}"}',

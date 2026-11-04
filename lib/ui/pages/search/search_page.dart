@@ -194,9 +194,9 @@ class _SearchPageState extends State<SearchPage> {
       }
 
       final userId = SettingsManager.currentUserId.value ?? '';
-      await BridgeService.instance.create(
+      final result = await BridgeService.instance.create(
         'slskd',
-        '${best.username}/${best.filename}',
+        best.filename,
         SettingsManager.downloadFolder.value,
         userId,
         extra: '{"username": "${best.username}"}',
@@ -204,11 +204,19 @@ class _SearchPageState extends State<SearchPage> {
 
       if (mounted) {
         setState(() => _autoDownloading = false);
-        AppSnackBar.show(
-          context,
-          'Auto-downloading: ${best.filename.split('/').last}',
-          type: SnackType.success,
-        );
+        if (result.success) {
+          AppSnackBar.show(
+            context,
+            'Auto-downloading: ${best.filename.split('/').last}',
+            type: SnackType.success,
+          );
+        } else {
+          AppSnackBar.show(
+            context,
+            result.error ?? 'Failed to start download',
+            type: SnackType.error,
+          );
+        }
       }
     } else {
       final first = results.firstOrNull;
@@ -230,19 +238,31 @@ class _SearchPageState extends State<SearchPage> {
 
   Future<void> _downloadSlskd(SearchResultItem entry) async {
     final userId = SettingsManager.currentUserId.value ?? '';
-    await BridgeService.instance.create(
-      'slskd',
-      '${entry.username}/${entry.filename}',
-      SettingsManager.downloadFolder.value,
-      userId,
-      extra: '{"username": "${entry.username}"}',
-    );
-    if (mounted) {
-      AppSnackBar.show(
-        context,
-        'Downloading: ${entry.filename}',
-        type: SnackType.success,
+    setState(() => _loadingUrls.add(entry.filename));
+    try {
+      final result = await BridgeService.instance.create(
+        'slskd',
+        entry.filename,
+        SettingsManager.downloadFolder.value,
+        userId,
+        extra: '{"username": "${entry.username}"}',
       );
+      if (!mounted) return;
+      if (result.success) {
+        AppSnackBar.show(
+          context,
+          'Downloading: ${entry.filename.split('/').last}',
+          type: SnackType.success,
+        );
+      } else {
+        AppSnackBar.show(
+          context,
+          result.error ?? 'Failed to start download',
+          type: SnackType.error,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingUrls.remove(entry.filename));
     }
   }
 

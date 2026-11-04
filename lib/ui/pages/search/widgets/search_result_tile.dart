@@ -25,6 +25,7 @@ class SearchResultTile extends StatelessWidget {
   }
 
   Widget _buildSlskdTile(BuildContext context) {
+    final isLoading = loadingUrls.contains(entry.filename);
     return ListTile(
       leading: const Icon(Icons.audio_file),
       title: Text(
@@ -37,10 +38,15 @@ class SearchResultTile extends StatelessWidget {
         ' · ${entry.bitrate} kbps'
         ' · ${entry.extension}',
       ),
-      trailing: IconButton(
-        icon: const Icon(Icons.download),
-        onPressed: onDownload,
-      ),
+      trailing: isLoading
+          ? SizedBox(
+              width: AppTheme.iconXL * AppTheme.iconScale(context),
+              height: AppTheme.iconXL * AppTheme.iconScale(context),
+              child: const Center(
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          : IconButton(icon: const Icon(Icons.download), onPressed: onDownload),
     );
   }
 
