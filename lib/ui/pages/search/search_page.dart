@@ -207,7 +207,7 @@ class _SearchPageState extends State<SearchPage> {
         if (result.success) {
           AppSnackBar.show(
             context,
-            'Auto-downloading: ${best.filename.split('/').last}',
+            'Auto-downloading: ${best.filename.split(RegExp(r'[/\\]')).last}',
             type: SnackType.success,
           );
         } else {
@@ -251,7 +251,7 @@ class _SearchPageState extends State<SearchPage> {
       if (result.success) {
         AppSnackBar.show(
           context,
-          'Downloading: ${entry.filename.split('/').last}',
+          'Downloading: ${entry.filename.split(RegExp(r'[/\\]')).last}',
           type: SnackType.success,
         );
       } else {
