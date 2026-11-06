@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/utils/helper.dart';
 
 class TrackPickerDialog extends StatelessWidget {
   final ReleaseInfo release;
@@ -13,14 +14,6 @@ class TrackPickerDialog extends StatelessWidget {
     required this.tracks,
     required this.onSelected,
   });
-
-  String _formatDuration(double? secs) {
-    if (secs == null) return '';
-    final totalSecs = secs.round();
-    final minutes = totalSecs ~/ 60;
-    final seconds = totalSecs % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +63,7 @@ class TrackPickerDialog extends StatelessWidget {
                 ),
                 if (track.durationSecs != null)
                   Text(
-                    _formatDuration(track.durationSecs),
+                    formatDuration(track.durationSecs),
                     style: Theme.of(
                       context,
                     ).textTheme.bodySmall?.copyWith(color: colors.outline),

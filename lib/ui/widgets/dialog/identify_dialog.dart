@@ -7,6 +7,7 @@ import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/widgets/components/cached_network_image.dart';
 import 'package:tawai/utils/bridge_service.dart';
+import 'package:tawai/utils/helper.dart';
 
 class MusicBrainzFetchResult {
   final String title;
@@ -105,14 +106,6 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
   List<ReleaseTrackInfo> _tracks = [];
   bool _loadingTracks = false;
   ReleaseTrackInfo? _bestTrack;
-
-  String _formatDuration(double? secs) {
-    if (secs == null) return '';
-    final totalSecs = secs.round();
-    final minutes = totalSecs ~/ 60;
-    final seconds = totalSecs % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-  }
 
   @override
   void initState() {
@@ -454,7 +447,7 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
                           const SizedBox(width: AppTheme.spaceSM),
                         if (rec.durationSecs != null)
                           Text(
-                            _formatDuration(rec.durationSecs),
+                            formatDuration(rec.durationSecs),
                             style: textTheme.bodySmall?.copyWith(
                               color: colors.outline,
                             ),
@@ -707,7 +700,7 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
                 Padding(
                   padding: const EdgeInsets.only(right: AppTheme.spaceSM),
                   child: Text(
-                    _formatDuration(track.durationSecs),
+                    formatDuration(track.durationSecs),
                     style: textTheme.bodySmall?.copyWith(color: colors.outline),
                   ),
                 ),

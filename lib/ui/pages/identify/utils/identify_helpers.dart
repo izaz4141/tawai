@@ -5,14 +5,6 @@ import 'package:tawai/ui/pages/identify/models/identify_session.dart';
 String normalize(String s) =>
     s.toLowerCase().replaceAll(RegExp(r'[^\w\s]'), '').trim();
 
-String formatDuration(double? secs) {
-  if (secs == null) return '';
-  final total = secs.round();
-  final m = total ~/ 60;
-  final s = total % 60;
-  return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-}
-
 ReleaseTrackInfo? autoAssignCorrectTrack({
   required String trackTitle,
   required double? trackDuration,

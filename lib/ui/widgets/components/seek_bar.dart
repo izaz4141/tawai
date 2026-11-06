@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/utils/helper.dart';
 
 class SeekBar extends StatefulWidget {
   final bool compact;
@@ -115,8 +116,7 @@ class _SeekBarState extends State<SeekBar> {
   }
 
   String _fmt(Duration d) {
-    final min = d.inMinutes.remainder(60);
-    final sec = d.inSeconds.remainder(60);
-    return '${min.toString().padLeft(2, '0')}:${sec.toString().padLeft(2, '0')}';
+    final secs = d.inSeconds.toDouble();
+    return formatDuration(secs);
   }
 }

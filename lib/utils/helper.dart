@@ -175,9 +175,20 @@ String formatSpeed(double bytesPerSec) {
 String formatDuration(double? secs) {
   if (secs == null) return '--:--';
   final total = secs.round();
-  final m = (total ~/ 60).toString().padLeft(2, '0');
-  final s = (total % 60).toString().padLeft(2, '0');
-  return '$m:$s';
+
+  final h = total ~/ 3600;
+  final m = (total % 3600) ~/ 60;
+  final s = total % 60;
+
+  final hStr = h.toString().padLeft(2, '0');
+  final mStr = m.toString().padLeft(2, '0');
+  final sStr = s.toString().padLeft(2, '0');
+
+  if (h >= 1) {
+    return '$hStr:$mStr:$sStr';
+  } else {
+    return '$mStr:$sStr';
+  }
 }
 
 String formatTimestamp(String iso) {
