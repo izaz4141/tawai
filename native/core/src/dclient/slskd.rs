@@ -474,6 +474,10 @@ impl SlskdClient {
 
     pub async fn search(&self, query: &str) -> Result<DlSearchResponse> {
         let resp = self.search_internal(query).await?;
+        Ok(Self::map_search_response(resp))
+    }
+
+    fn map_search_response(resp: SlskdSearchResponse) -> DlSearchResponse {
         let results: Vec<DlSearchItem> = resp
             .responses
             .into_iter()
@@ -503,7 +507,7 @@ impl SlskdClient {
                     })
             })
             .collect();
-        Ok(DlSearchResponse { results })
+        DlSearchResponse { results }
     }
 
     pub async fn sync(&self, pool: &DatabasePool) -> Result<u32> {
@@ -684,35 +688,7 @@ mod tests {
         });
 
         let resp: SlskdSearchResponse = serde_json::from_value(json).unwrap();
-        let results: Vec<DlSearchItem> = resp
-            .responses
-            .into_iter()
-            .flat_map(|r| {
-                let username = r.username;
-                r.files
-                    .into_iter()
-                    .filter(|f| {
-                        let ext = effective_extension(f);
-                        !ext.is_empty() && is_audio_extension(&ext)
-                    })
-                    .map(move |f| {
-                        let ext = effective_extension(&f);
-                        DlSearchItem {
-                            filename: f.filename.clone(),
-                            size: f.size,
-                            source_type: "slskd".to_string(),
-                            username: Some(username.clone()),
-                            title: None,
-                            thumbnail: None,
-                            duration: None,
-                            channel: None,
-                            bitrate: f.bitrate,
-                            extension: if ext.is_empty() { None } else { Some(ext) },
-                            webpage_url: None,
-                        }
-                    })
-            })
-            .collect();
+        let results = SlskdClient::map_search_response(resp).results;
 
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].extension, Some("mp3".to_string()));
