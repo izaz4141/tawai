@@ -4,6 +4,13 @@ import 'package:tawai/ui/pages/search/search_types.dart';
 import 'package:tawai/utils/helper.dart';
 import 'package:tawai/ui/widgets/components/cached_network_image.dart';
 
+String _loadingKey(SearchResultItem entry) {
+  if (entry.sourceType == 'slskd') {
+    return '${entry.username}:${entry.filename}';
+  }
+  return entry.webpageUrl ?? entry.filename;
+}
+
 class SearchResultTile extends StatelessWidget {
   final SearchResultItem entry;
   final VoidCallback onDownload;
@@ -25,6 +32,7 @@ class SearchResultTile extends StatelessWidget {
   }
 
   Widget _buildSlskdTile(BuildContext context) {
+    final isLoading = loadingUrls.contains(_loadingKey(entry));
     return ListTile(
       leading: const Icon(Icons.audio_file),
       title: Text(
@@ -37,10 +45,15 @@ class SearchResultTile extends StatelessWidget {
         ' · ${entry.bitrate} kbps'
         ' · ${entry.extension}',
       ),
-      trailing: IconButton(
-        icon: const Icon(Icons.download),
-        onPressed: onDownload,
-      ),
+      trailing: isLoading
+          ? SizedBox(
+              width: AppTheme.iconXL * AppTheme.iconScale(context),
+              height: AppTheme.iconXL * AppTheme.iconScale(context),
+              child: const Center(
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          : IconButton(icon: const Icon(Icons.download), onPressed: onDownload),
     );
   }
 
@@ -85,7 +98,7 @@ class SearchResultTile extends StatelessWidget {
               ),
           ],
         ),
-        trailing: loadingUrls.contains(entry.filename)
+        trailing: loadingUrls.contains(_loadingKey(entry))
             ? SizedBox(
                 width: AppTheme.iconXL * AppTheme.iconScale(context),
                 height: AppTheme.iconXL * AppTheme.iconScale(context),

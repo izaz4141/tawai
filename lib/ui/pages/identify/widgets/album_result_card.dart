@@ -12,6 +12,7 @@ import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/components/track_info_sheet.dart';
 import 'package:tawai/ui/widgets/dialog/search_lyrics.dart';
 import 'package:tawai/utils/bridge_service.dart';
+import 'package:tawai/utils/helper.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AlbumResultCard extends StatelessWidget {

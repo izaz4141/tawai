@@ -7,9 +7,33 @@ use tokio::time::{Duration, sleep};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::audio::tags::audio_extensions;
 use crate::db;
 use crate::db::database::DatabasePool;
 use crate::signals::download::{DlGlance, DlListResponse, DlSearchItem, DlSearchResponse};
+
+fn is_audio_extension(ext: &str) -> bool {
+    audio_extensions()
+        .iter()
+        .any(|&ae| ae.eq_ignore_ascii_case(ext))
+}
+
+fn extension_from_filename(filename: &str) -> String {
+    filename
+        .rsplit(|c| c == '/' || c == '\\')
+        .next()
+        .and_then(|name| name.rsplit_once('.').map(|(_, ext)| ext))
+        .unwrap_or("")
+        .to_string()
+}
+
+fn effective_extension(file: &SlskdSearchResultFile) -> String {
+    if !file.extension.is_empty() {
+        file.extension.clone()
+    } else {
+        extension_from_filename(&file.filename)
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -450,27 +474,40 @@ impl SlskdClient {
 
     pub async fn search(&self, query: &str) -> Result<DlSearchResponse> {
         let resp = self.search_internal(query).await?;
+        Ok(Self::map_search_response(resp))
+    }
+
+    fn map_search_response(resp: SlskdSearchResponse) -> DlSearchResponse {
         let results: Vec<DlSearchItem> = resp
             .responses
             .into_iter()
             .flat_map(|r| {
                 let username = r.username;
-                r.files.into_iter().map(move |f| DlSearchItem {
-                    filename: f.filename.clone(),
-                    size: f.size,
-                    source_type: "slskd".to_string(),
-                    username: Some(username.clone()),
-                    title: None,
-                    thumbnail: None,
-                    duration: None,
-                    channel: None,
-                    bitrate: f.bitrate,
-                    extension: Some(f.extension.clone()),
-                    webpage_url: None,
-                })
+                r.files
+                    .into_iter()
+                    .filter(|f| {
+                        let ext = effective_extension(f);
+                        !ext.is_empty() && is_audio_extension(&ext)
+                    })
+                    .map(move |f| {
+                        let ext = effective_extension(&f);
+                        DlSearchItem {
+                            filename: f.filename.clone(),
+                            size: f.size,
+                            source_type: "slskd".to_string(),
+                            username: Some(username.clone()),
+                            title: None,
+                            thumbnail: None,
+                            duration: None,
+                            channel: None,
+                            bitrate: f.bitrate,
+                            extension: if ext.is_empty() { None } else { Some(ext) },
+                            webpage_url: None,
+                        }
+                    })
             })
             .collect();
-        Ok(DlSearchResponse { results })
+        DlSearchResponse { results }
     }
 
     pub async fn sync(&self, pool: &DatabasePool) -> Result<u32> {
@@ -573,5 +610,101 @@ mod tests {
         assert_eq!(files[0].length, None);
         assert_eq!(files[1].bitrate, Some(320));
         assert_eq!(files[1].length, Some(293));
+    }
+
+    #[test]
+    fn filters_non_audio_extensions_in_search() {
+        let json = serde_json::json!({
+            "id": "test-id",
+            "searchText": "test",
+            "state": "Completed",
+            "isComplete": true,
+            "fileCount": 4,
+            "responseCount": 1,
+            "responses": [{
+                "fileCount": 4,
+                "hasFreeUploadSlot": true,
+                "uploadSpeed": 1000000,
+                "username": "peer",
+                "files": [
+                    { "extension": "mp3", "filename": "song.mp3", "size": 1000, "code": 1, "isLocked": false },
+                    { "extension": "flac", "filename": "song.flac", "size": 2000, "code": 1, "isLocked": false },
+                    { "extension": "txt", "filename": "readme.txt", "size": 100, "code": 1, "isLocked": false },
+                    { "extension": "jpg", "filename": "cover.jpg", "size": 5000, "code": 1, "isLocked": false },
+                ]
+            }]
+        });
+
+        let resp: SlskdSearchResponse = serde_json::from_value(json).unwrap();
+        let results: Vec<DlSearchItem> = resp
+            .responses
+            .into_iter()
+            .flat_map(|r| {
+                let username = r.username;
+                r.files
+                    .into_iter()
+                    .filter(|f| is_audio_extension(&f.extension))
+                    .map(move |f| DlSearchItem {
+                        filename: f.filename.clone(),
+                        size: f.size,
+                        source_type: "slskd".to_string(),
+                        username: Some(username.clone()),
+                        title: None,
+                        thumbnail: None,
+                        duration: None,
+                        channel: None,
+                        bitrate: f.bitrate,
+                        extension: Some(f.extension.clone()),
+                        webpage_url: None,
+                    })
+            })
+            .collect();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].extension, Some("mp3".to_string()));
+        assert_eq!(results[1].extension, Some("flac".to_string()));
+    }
+
+    #[test]
+    fn derives_extension_from_filename_when_response_extension_is_blank() {
+        let json = serde_json::json!({
+            "id": "test-id",
+            "searchText": "test",
+            "state": "Completed",
+            "isComplete": true,
+            "fileCount": 3,
+            "responseCount": 1,
+            "responses": [{
+                "fileCount": 3,
+                "hasFreeUploadSlot": true,
+                "uploadSpeed": 1000000,
+                "username": "peer",
+                "files": [
+                    { "extension": "", "filename": "song.mp3", "size": 1000, "code": 1, "isLocked": false },
+                    { "extension": "", "filename": "album/track.flac", "size": 2000, "code": 1, "isLocked": false },
+                    { "extension": "", "filename": "readme.txt", "size": 100, "code": 1, "isLocked": false },
+                ]
+            }]
+        });
+
+        let resp: SlskdSearchResponse = serde_json::from_value(json).unwrap();
+        let results = SlskdClient::map_search_response(resp).results;
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].extension, Some("mp3".to_string()));
+        assert_eq!(results[1].extension, Some("flac".to_string()));
+        assert_eq!(results[0].filename, "song.mp3");
+        assert_eq!(results[1].filename, "album/track.flac");
+    }
+
+    #[test]
+    fn extension_from_filename_handles_edge_cases() {
+        assert_eq!(extension_from_filename("song.mp3"), "mp3");
+        assert_eq!(extension_from_filename("path/to/song.flac"), "flac");
+        assert_eq!(extension_from_filename("path\\to\\song.ogg"), "ogg");
+        assert_eq!(extension_from_filename("no_extension"), "");
+        assert_eq!(extension_from_filename("file."), "");
+        assert_eq!(extension_from_filename(".hidden"), "hidden");
+        assert_eq!(extension_from_filename("archive.tar.gz"), "gz");
     }
 }
