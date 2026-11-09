@@ -27,6 +27,8 @@ class ListenBrainzState {
     }
     if (!force && _validatedToken == token && savedTokenValid.value) return;
     final result = await BridgeService.instance.validateLBToken(token);
+    // Drop stale results: the saved token changed while this request ran.
+    if (SettingsManager.listenbrainzToken.value.trim() != token) return;
     savedTokenValid.value = result.valid;
     _validatedToken = result.valid ? token : null;
   }
