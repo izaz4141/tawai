@@ -90,10 +90,8 @@ impl AppContext {
                 // The rejected file is gone (or unreadable). Forget the cached
                 // rejection so a file that reappears is loaded again.
                 if !current_config.writable && current_mtime != 0 {
-                    let refreshed = readonly_default_config(
-                        current_path.to_string_lossy().into_owned(),
-                        0,
-                    );
+                    let refreshed =
+                        readonly_default_config(current_path.to_string_lossy().into_owned(), 0);
                     *self.config.write().await = Some(refreshed.clone());
                     return refreshed;
                 }
