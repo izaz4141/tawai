@@ -259,7 +259,7 @@ class _NamingFormatDialogState extends State<_NamingFormatDialog> {
               },
               itemBuilder: (_) => [
                 PopupMenuItem(
-                  value: const MapEntry(
+                  value: MapEntry(
                     'Picard-style',
                     SettingsManager.defaultNamingPattern,
                   ),

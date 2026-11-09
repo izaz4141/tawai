@@ -854,7 +854,10 @@ mod tests {
 
     #[test]
     fn preview_pattern_empty_global_falls_back_to_default() {
-        assert_eq!(resolve_preview_pattern(None, ""), DEFAULT_PATTERN);
-        assert_eq!(resolve_preview_pattern(Some("   "), ""), DEFAULT_PATTERN);
+        assert_eq!(resolve_preview_pattern(None, ""), DEFAULT_PATTERN.as_str());
+        assert_eq!(
+            resolve_preview_pattern(Some("   "), ""),
+            DEFAULT_PATTERN.as_str()
+        );
     }
 }

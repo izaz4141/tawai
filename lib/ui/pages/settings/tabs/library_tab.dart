@@ -7,19 +7,19 @@ import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/components/list_dropdown.dart';
 import 'package:tawai/ui/widgets/components/section_header.dart';
 import 'package:tawai/ui/widgets/components/list_switch.dart';
-import 'package:tawai/ui/widgets/components/list_text_field.dart';
 import 'package:tawai/ui/widgets/dialog/naming_format.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/io_service.dart';
+import 'package:tawai/utils/listenbrainz_state.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/models/recommendation_source.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
 
-class SettingsDiscoveryTab extends StatefulWidget {
-  const SettingsDiscoveryTab({super.key});
+class SettingsLibraryTab extends StatefulWidget {
+  const SettingsLibraryTab({super.key});
 
   @override
-  State<SettingsDiscoveryTab> createState() => _SettingsDiscoveryTabState();
+  State<SettingsLibraryTab> createState() => _SettingsLibraryTabState();
 }
 
 String _redactUrl(String url) {
@@ -48,61 +48,30 @@ String _schemeOfRaw(String raw) =>
     ? 'https'
     : 'http';
 
-class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
+class _SettingsLibraryTabState extends State<SettingsLibraryTab> {
   List<LibrarySourceInfo> _sources = [];
   String? _removingSourceId;
-  bool _lbTokenValid = false;
-  bool _lbTokenTesting = false;
-  bool _lbSavedTokenValid = false;
-  String? _lbTestedToken;
-  String? _lbTestMessage;
-  String? _lbTestedUserName;
-  late final TextEditingController _lbTokenController;
-
-  String get _lbTypedToken => _lbTokenController.text.trim();
-  String get _lbSavedToken => SettingsManager.listenbrainzToken.value.trim();
-
-  /// The last test result applies to what is currently in the field.
-  bool get _lbTestApplies {
-    final tested = _lbTestedToken;
-    if (tested == null) return false;
-    final typed = _lbTypedToken;
-    return typed.isEmpty ? tested == _lbSavedToken : typed == tested;
-  }
-
-  /// Saving is only possible for the exact token that just passed the test.
-  bool get _lbCanSave =>
-      !_lbTokenTesting &&
-      _lbTokenValid &&
-      _lbTestedToken != null &&
-      _lbTypedToken.isNotEmpty &&
-      _lbTypedToken == _lbTestedToken &&
-      _lbTypedToken != _lbSavedToken;
 
   @override
   void initState() {
     super.initState();
-    _lbTokenController = TextEditingController();
-    _lbTokenController.addListener(_onLbTokenChanged);
     _loadSources();
-    if (SettingsManager.listenbrainzToken.value.isNotEmpty) {
-      unawaited(_validateLbToken(showFeedback: false));
-    }
+    unawaited(ListenBrainzState.instance.validateSavedToken());
+    SettingsManager.listenbrainzToken.addListener(_onTokenChanged);
     ScanService.instance.acquire();
     ScanService.instance.isScanning.addListener(_onScanStateChanged);
   }
 
   @override
   void dispose() {
-    _lbTokenController.removeListener(_onLbTokenChanged);
-    _lbTokenController.dispose();
+    SettingsManager.listenbrainzToken.removeListener(_onTokenChanged);
     ScanService.instance.isScanning.removeListener(_onScanStateChanged);
     ScanService.instance.release();
     super.dispose();
   }
 
-  void _onLbTokenChanged() {
-    if (mounted) setState(() {});
+  void _onTokenChanged() {
+    unawaited(ListenBrainzState.instance.validateSavedToken());
   }
 
   void _onScanStateChanged() {
@@ -212,58 +181,6 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
     if (mounted) await _loadSources();
   }
 
-  Future<void> _validateLbToken({bool showFeedback = true}) async {
-    final typed = _lbTypedToken;
-    final token = typed.isNotEmpty ? typed : _lbSavedToken;
-    if (token.isEmpty) {
-      setState(() {
-        _lbTokenValid = false;
-        _lbSavedTokenValid = false;
-        _lbTestedToken = null;
-        _lbTestMessage = null;
-        _lbTestedUserName = null;
-      });
-      if (showFeedback) {
-        AppSnackBar.show(
-          context,
-          'Enter a ListenBrainz token first',
-          type: SnackType.error,
-        );
-      }
-      return;
-    }
-    final testingSavedToken = token == _lbSavedToken;
-    setState(() => _lbTokenTesting = true);
-    final result = await BridgeService.instance.validateLBToken(token);
-    if (!mounted) return;
-    setState(() {
-      _lbTokenTesting = false;
-      _lbTokenValid = result.valid;
-      _lbTestedToken = token;
-      _lbTestMessage = result.message;
-      _lbTestedUserName = result.userName;
-      if (testingSavedToken) _lbSavedTokenValid = result.valid;
-    });
-    if (showFeedback) {
-      if (result.valid) {
-        final user = result.userName != null && result.userName!.isNotEmpty
-            ? ' — ${result.userName}'
-            : '';
-        AppSnackBar.show(
-          context,
-          'ListenBrainz token is valid$user',
-          type: SnackType.success,
-        );
-      } else {
-        AppSnackBar.show(
-          context,
-          'Invalid ListenBrainz token: ${result.message}',
-          type: SnackType.error,
-        );
-      }
-    }
-  }
-
   Future<void> _showForceRescanDialog() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -338,19 +255,6 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
       default:
         return p.stage;
     }
-  }
-
-  String _lbTestStatusLabel() {
-    if (_lbTokenValid) {
-      final user = _lbTestedUserName;
-      return user != null && user.isNotEmpty
-          ? 'Token validated — $user'
-          : 'Token validated';
-    }
-    final message = _lbTestMessage;
-    return message != null && message.isNotEmpty
-        ? 'Token test failed: $message'
-        : 'Token test failed';
   }
 
   Widget _resultChip(Color color, IconData icon, String label, String hint) {
@@ -631,43 +535,18 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
 
         SizedBox(height: AppTheme.spaceXL * AppTheme.spaceScale(context)),
 
-        // Metadata section
-        const SectionHeader(title: 'Metadata', leading: Icon(Icons.tag)),
+        // Organization section
+        const SectionHeader(title: 'Organization', leading: Icon(Icons.tag)),
         SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-        ValueListenableBuilder<String>(
-          valueListenable: SettingsManager.namingPattern,
-          builder: (context, value, _) {
-            final isAdmin = SettingsManager.currentUser.value?.role == 'admin';
-            if (!isAdmin) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ListTile(
-                    title: Text(
-                      'Naming Format',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    subtitle: Text(
-                      'Managed by an admin',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    trailing: TextButton.icon(
-                      onPressed: () => showNamingFormatHelpDialog(context),
-                      icon: Icon(
-                        Icons.help_outline,
-                        size: AppTheme.iconSM * AppTheme.iconScale(context),
-                      ),
-                      label: const Text('Naming Format Help'),
-                    ),
-                  ),
-                ],
-              );
-            }
+        ValueListenableBuilder(
+          valueListenable: SettingsManager.currentUser,
+          builder: (context, user, _) {
+            if (user?.role != 'admin') return const SizedBox.shrink();
             return ListDropdown(
               title: 'Naming Format',
               subtitle: 'Pattern for organizing files.',
               valueListenable: SettingsManager.namingPattern,
-              items: const [
+              items: [
                 DropdownMenuItem(
                   value: SettingsManager.defaultNamingPattern,
                   child: Text('Picard-style'),
@@ -739,76 +618,12 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
 
         SizedBox(height: AppTheme.spaceXL * AppTheme.spaceScale(context)),
 
-        // ListenBrainz section
+        // Recommendations section
         const SectionHeader(
-          title: 'ListenBrainz',
+          title: 'Recommendations',
           leading: Icon(Icons.explore),
         ),
         SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-        ListTextField(
-          title: 'ListenBrainz Token',
-          subtitle: 'Required for scrobbling and music discovery',
-          valueListenable: SettingsManager.listenbrainzToken,
-          controller: _lbTokenController,
-          isObscured: true,
-          confirmEnabled: _lbCanSave,
-          onConfirm: (value) {
-            if (!_lbCanSave) return;
-            SettingsManager.saveUserSetting(
-              SettingsManager.listenbrainzToken,
-              'listenbrainz_token',
-              value.trim(),
-            );
-            setState(() {
-              _lbSavedTokenValid = _lbTokenValid;
-            });
-          },
-          suffixWidgets: [
-            IconButton(
-              icon: _lbTokenTesting
-                  ? SizedBox(
-                      width:
-                          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
-                      height:
-                          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
-                      child: const CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.bolt),
-              iconSize: AppTheme.iconSM * AppTheme.iconScale(context),
-              tooltip: 'Test token',
-              color: _lbTestApplies && _lbTokenValid
-                  ? colorScheme.primary
-                  : null,
-              onPressed: _lbTokenTesting ? null : _validateLbToken,
-            ),
-          ],
-        ),
-        if (_lbTestApplies && _lbTestMessage != null) ...[
-          SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-          Row(
-            children: [
-              Icon(
-                _lbTokenValid
-                    ? Icons.check_circle_outline
-                    : Icons.error_outline,
-                size: AppTheme.iconSM * AppTheme.iconScale(context),
-                color: _lbTokenValid ? colorScheme.primary : colorScheme.error,
-              ),
-              SizedBox(width: AppTheme.spaceXS * AppTheme.spaceScale(context)),
-              Expanded(
-                child: Text(
-                  _lbTestStatusLabel(),
-                  style: textTheme.bodySmall?.copyWith(
-                    color: _lbTokenValid
-                        ? colorScheme.primary
-                        : colorScheme.error,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-        SizedBox(height: AppTheme.spaceLG * AppTheme.spaceScale(context)),
         Text(
           'Select ListenBrainz recommendation types to include as library '
           'sources. Their tracks will appear in the library and can be '
@@ -817,23 +632,32 @@ class _SettingsDiscoveryTabState extends State<SettingsDiscoveryTab> {
             color: colorScheme.onSurfaceVariant,
           ),
         ),
-        if (!_lbSavedTokenValid) ...[
-          SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-          Text(
-            'Enter a valid ListenBrainz token above to enable recommendations.',
-            style: textTheme.bodySmall?.copyWith(color: colorScheme.error),
-          ),
-        ],
+        ValueListenableBuilder<bool>(
+          valueListenable: ListenBrainzState.instance.savedTokenValid,
+          builder: (context, valid, _) {
+            if (valid) return const SizedBox.shrink();
+            return Padding(
+              padding: EdgeInsets.only(
+                top: AppTheme.spaceSM * AppTheme.spaceScale(context),
+              ),
+              child: Text(
+                'Add a valid ListenBrainz token in Connections to enable '
+                'recommendations.',
+                style: textTheme.bodySmall?.copyWith(color: colorScheme.error),
+              ),
+            );
+          },
+        ),
         SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
         ListenableBuilder(
           listenable: Listenable.merge([
             SettingsManager.includedRecommendations,
-            SettingsManager.listenbrainzToken,
+            ListenBrainzState.instance.savedTokenValid,
           ]),
           builder: (context, _) {
             final raw = SettingsManager.includedRecommendations.value;
             final selected = raw.split(',').where((s) => s.isNotEmpty).toSet();
-            final enabled = _lbSavedTokenValid;
+            final enabled = ListenBrainzState.instance.savedTokenValid.value;
             return Column(
               children: [
                 for (final src in RecommendationSource.all)

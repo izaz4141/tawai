@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 use std::fmt;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use std::time::UNIX_EPOCH;
 
 use anyhow::Result;
 use tokio::sync::{Notify, RwLock, watch};
@@ -14,8 +14,9 @@ use crate::db::{account, database::DatabaseManager, library_source, user_setting
 use crate::discovery::sync::{SyncRecsParams, sync_recs};
 use crate::signals::library::ScanProgress;
 use crate::utils::config::{
-    AppConfig, PRIVATE_CONFIG_KEYS, is_local_host, load_config, load_default_config,
-    normalize_secret, strip_keys,
+    AppConfig, DEFAULT_SETTINGS, config_file_mtime, get_path, get_path_mut, is_local_host,
+    is_version_mismatch, load_config, load_default_config, merge_into, normalize_secret,
+    path_is_secret, readonly_default_config, remove_path, set_path, strip_paths,
 };
 use crate::utils::{cache, encryption::encrypt, encryption::valid_encryption_format, logger};
 
@@ -81,19 +82,21 @@ impl AppContext {
         let current_path = current_config.path.clone();
         let current_mtime = current_config.mtime;
 
-        let need_reload = match tokio::fs::metadata(&current_path).await {
-            Ok(meta) => {
-                if let Ok(modified) = meta.modified() {
-                    if let Ok(duration) = modified.duration_since(UNIX_EPOCH) {
-                        duration.as_secs() > current_mtime
-                    } else {
-                        false
-                    }
-                } else {
-                    false
+        let observed_mtime = config_file_mtime(&current_path).await;
+
+        let need_reload = match observed_mtime {
+            Some(mtime) => mtime != current_mtime,
+            None => {
+                // The rejected file is gone (or unreadable). Forget the cached
+                // rejection so a file that reappears is loaded again.
+                if !current_config.writable && current_mtime != 0 {
+                    let refreshed =
+                        readonly_default_config(current_path.to_string_lossy().into_owned(), 0);
+                    *self.config.write().await = Some(refreshed.clone());
+                    return refreshed;
                 }
+                false
             }
-            Err(_) => false,
         };
 
         if !need_reload {
@@ -119,7 +122,19 @@ impl AppContext {
             }
             Err(e) => {
                 logger::error(&format!("Failed to reload config: {}", e));
-                current_config // fallback to old config
+                if is_version_mismatch(&e) {
+                    // Never keep retrying a file that is still on another
+                    // schema version; remember its mtime and fall back to
+                    // defaults until the file changes or disappears.
+                    let rejected = readonly_default_config(
+                        current_path.to_string_lossy().into_owned(),
+                        observed_mtime.unwrap_or(0),
+                    );
+                    *write = Some(rejected.clone());
+                    rejected
+                } else {
+                    current_config // fallback to old config
+                }
             }
         }
     }
@@ -128,23 +143,38 @@ impl AppContext {
     /// file is missing. Returns `true` when a default config was created
     /// (first run).
     pub async fn init_config(&self, path: String) -> Result<bool> {
-        let (app_config, is_first_run) =
-            match load_config(path.clone(), self.master_key.read().await.clone()).await {
-                Ok(aconfig) => (aconfig, false),
-                Err(e) => {
-                    logger::warn(&format!("Cant load provided config: {}", e.to_string()));
-                    let aconfig = match load_default_config(path.clone()).await {
-                        Ok(c) => c,
-                        Err(e) => {
-                            logger::error(&format!(
-                                "Cant load default config: {e}\n ConfigPath: {path}"
-                            ));
-                            anyhow::bail!("Cant load default config: {e}\n ConfigPath: {path}")
-                        }
-                    };
-                    (aconfig, true)
-                }
-            };
+        let (app_config, is_first_run) = match load_config(
+            path.clone(),
+            self.master_key.read().await.clone(),
+        )
+        .await
+        {
+            Ok(aconfig) => (aconfig, false),
+            Err(e) if is_version_mismatch(&e) => {
+                // The document belongs to another schema version. Start on
+                // in-memory defaults, but never write them over the file.
+                // Remember the rejected file's mtime so reloads are skipped
+                // until the file changes or disappears.
+                logger::error(&format!(
+                    "Refusing to load config: {e}. Running on defaults; the file will not be written."
+                ));
+                let mtime = config_file_mtime(Path::new(&path)).await.unwrap_or(0);
+                (readonly_default_config(path.clone(), mtime), false)
+            }
+            Err(e) => {
+                logger::warn(&format!("Cant load provided config: {}", e.to_string()));
+                let aconfig = match load_default_config(path.clone()).await {
+                    Ok(c) => c,
+                    Err(e) => {
+                        logger::error(&format!(
+                            "Cant load default config: {e}\n ConfigPath: {path}"
+                        ));
+                        anyhow::bail!("Cant load default config: {e}\n ConfigPath: {path}")
+                    }
+                };
+                (aconfig, true)
+            }
+        };
         *self.config.write().await = Some(app_config);
         if let Some(db) = self.db.read().await.as_ref().cloned() {
             let pool = db.pool().clone();
@@ -180,14 +210,15 @@ impl AppContext {
         let users = account::get_all_users_with_keys(db.pool(), &master_key).await?;
         let mut cfg = self.cfg().await.value.clone();
 
-        let server_host = cfg["server_host"]
-            .as_str()
+        let server_host = get_path(&cfg, "server.host")
+            .and_then(|v| v.as_str())
             .unwrap_or("127.0.0.1")
             .to_string();
-        let server_port = cfg["server_port"].as_u64().unwrap_or(8181);
+        let server_port = get_path(&cfg, "server.port")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(8181);
 
-        let mut accounts: Vec<serde_json::Value> = cfg
-            .get("accounts")
+        let mut accounts: Vec<serde_json::Value> = get_path(&cfg, "accounts.saved")
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default();
@@ -231,87 +262,74 @@ impl AppContext {
             }
         }
 
-        cfg["accounts"] = serde_json::Value::Array(accounts);
+        set_path(
+            &mut cfg,
+            "accounts.saved",
+            serde_json::Value::Array(accounts),
+        );
         self.save_config(&cfg).await
     }
 
-    /// Returns the current config with private keys stripped, suitable for
-    /// sending to the client. Device-local keys are intentionally kept.
+    /// Returns the current config with secrets stripped, suitable for sending
+    /// to the client.
     pub async fn client_config(&self) -> serde_json::Value {
-        strip_keys(&self.cfg().await.value, PRIVATE_CONFIG_KEYS)
+        strip_paths(&self.cfg().await.value, path_is_secret)
     }
 
-    /// Merges `partial` into the current config and persists it. Null values
-    /// and empty-string private keys are skipped so partial saves can't wipe
-    /// stored secrets. Present private keys are encrypted with the master key.
+    /// Merges `partial` into the current config and persists it.
+    ///
+    /// Objects merge recursively, arrays replace wholesale, and `null` resets a
+    /// path to its schema default. An empty string for a secret path is
+    /// dropped, so a partial save can't wipe a stored credential.
     pub async fn update_config(&self, partial: &serde_json::Value) -> Result<()> {
         let current = self.cfg().await.value.clone();
-        let mut cfg = current.clone();
-        if let Some(obj) = partial.as_object() {
-            for (key, value) in obj {
-                if value.is_null() {
-                    continue;
-                }
-                if PRIVATE_CONFIG_KEYS.contains(&key.as_str())
-                    && value.as_str().map(|s| s.trim().is_empty()).unwrap_or(false)
-                {
-                    continue;
-                }
-                if key == "accounts" {
-                    if let Some(incoming) = value.as_array() {
-                        let mut merged: Vec<serde_json::Value> = Vec::new();
-                        for acc in incoming {
-                            let acc_id = acc
-                                .get("id")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("")
-                                .to_string();
-                            let pos = if !acc_id.is_empty() {
-                                merged.iter().position(|e| {
-                                    e.get("id")
-                                        .and_then(|v| v.as_str())
-                                        .map(|s| s == acc_id)
-                                        .unwrap_or(false)
-                                })
-                            } else {
-                                merged.iter().position(|e| {
-                                    e.get("host") == acc.get("host")
-                                        && e.get("port") == acc.get("port")
-                                })
-                            };
-                            match pos {
-                                Some(i) => merged[i] = acc.clone(),
-                                None => merged.push(acc.clone()),
-                            }
-                        }
-                        cfg["accounts"] = serde_json::Value::Array(merged);
-                    }
-                    continue;
-                }
-                cfg[key] = value.clone();
+
+        let mut incoming = partial.clone();
+        for (path, spec) in &crate::utils::config::SCHEMA.entries {
+            if !spec.secret {
+                continue;
             }
-            // When the server port changes on a local host, keep every local
-            // account's port in sync so saved accounts still match the server.
-            if let Some(new_port) = obj.get("server_port").and_then(|v| v.as_u64()) {
-                let host = obj
-                    .get("server_host")
-                    .and_then(|v| v.as_str())
-                    .map(str::to_string)
-                    .unwrap_or_else(|| current["server_host"].as_str().unwrap_or("").to_string());
-                let old_port = current["server_port"].as_u64().unwrap_or(0);
-                if crate::utils::config::is_local_host(&host) && new_port != old_port {
-                    if let Some(accounts) = cfg.get_mut("accounts").and_then(|v| v.as_array_mut()) {
-                        for acc in accounts.iter_mut() {
-                            if let Some(acc_host) = acc["host"].as_str() {
-                                if crate::utils::config::is_local_host(acc_host) {
-                                    acc["port"] = serde_json::Value::from(new_port);
-                                }
+            let empty = get_path(&incoming, path)
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim().is_empty())
+                .unwrap_or(false);
+            if empty {
+                remove_path(&mut incoming, path);
+            }
+        }
+
+        let mut cfg = merge_into(&current, &incoming, &DEFAULT_SETTINGS);
+
+        // When the server port changes on a local host, keep every local
+        // account's port in sync so saved accounts still match the server.
+        if let Some(new_port) = get_path(&incoming, "server.port").and_then(|v| v.as_u64()) {
+            let host = get_path(&incoming, "server.host")
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+                .or_else(|| {
+                    get_path(&current, "server.host")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string)
+                })
+                .unwrap_or_default();
+            let old_port = get_path(&current, "server.port")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            if is_local_host(&host) && new_port != old_port {
+                if let Some(accounts) =
+                    get_path_mut(&mut cfg, "accounts.saved").and_then(|v| v.as_array_mut())
+                {
+                    for acc in accounts.iter_mut() {
+                        if let Some(acc_host) = acc.get("host").and_then(|v| v.as_str()) {
+                            if is_local_host(acc_host) {
+                                acc["port"] = serde_json::Value::from(new_port);
                             }
                         }
                     }
                 }
             }
         }
+
         self.save_config(&cfg).await
     }
 
@@ -323,23 +341,39 @@ impl AppContext {
             .clone()
             .ok_or_else(|| anyhow::anyhow!("Config not initialized"))?;
 
+        if !app_config.writable {
+            logger::warn(
+                "Config is read-only because it belongs to another schema version; skipping save",
+            );
+            return Ok(());
+        }
+
         let mut new_settings = settings.clone();
         let master_key = self.master_key.read().await.clone();
-        let api_keys = vec!["slskd_api_key", "nadekodon_api_key"];
-        for key in api_keys {
-            let dapi = normalize_secret(&settings[key].to_string().as_str()).to_string();
-            if valid_encryption_format(&dapi) {
-                new_settings[key] = serde_json::Value::String(dapi);
+        for path in [
+            "integrations.slskd.api_key",
+            "integrations.nadekodon.api_key",
+        ] {
+            let stored = get_path(settings, path)
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let plain = normalize_secret(&stored).to_string();
+            if valid_encryption_format(&plain) {
+                set_path(&mut new_settings, path, serde_json::Value::String(plain));
                 continue;
             }
-            if let Ok(eapi) = encrypt(dapi.as_str(), master_key.as_str()) {
-                new_settings[key] = serde_json::Value::String(eapi);
+            if let Ok(encrypted) = encrypt(plain.as_str(), master_key.as_str()) {
+                set_path(
+                    &mut new_settings,
+                    path,
+                    serde_json::Value::String(encrypted),
+                );
             }
         }
 
-        if let Some(accounts) = new_settings
-            .get_mut("accounts")
-            .and_then(|v| v.as_array_mut())
+        if let Some(accounts) =
+            get_path_mut(&mut new_settings, "accounts.saved").and_then(|v| v.as_array_mut())
         {
             for acc in accounts.iter_mut() {
                 if let Some(api_key) = acc.get("api_key").and_then(|v| v.as_str()) {
