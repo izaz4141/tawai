@@ -132,12 +132,14 @@
       "type": "enum",
       "values": ["off", "one", "all"],
       "default": "off",
-      "scope": "device"
+      "scope": "device",
+      "web_local": true
     },
     "playback.shuffle": {
       "type": "bool",
       "default": false,
-      "scope": "device"
+      "scope": "device",
+      "web_local": true
     },
     "playback.volume": {
       "type": "number",
