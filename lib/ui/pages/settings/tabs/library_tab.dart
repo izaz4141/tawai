@@ -538,11 +538,10 @@ class _SettingsLibraryTabState extends State<SettingsLibraryTab> {
         // Organization section
         const SectionHeader(title: 'Organization', leading: Icon(Icons.tag)),
         SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-        ValueListenableBuilder<String>(
-          valueListenable: SettingsManager.namingPattern,
-          builder: (context, value, _) {
-            final isAdmin = SettingsManager.currentUser.value?.role == 'admin';
-            if (!isAdmin) return const SizedBox.shrink();
+        ValueListenableBuilder(
+          valueListenable: SettingsManager.currentUser,
+          builder: (context, user, _) {
+            if (user?.role != 'admin') return const SizedBox.shrink();
             return ListDropdown(
               title: 'Naming Format',
               subtitle: 'Pattern for organizing files.',

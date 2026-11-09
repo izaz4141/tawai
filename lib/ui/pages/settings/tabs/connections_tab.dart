@@ -151,239 +151,261 @@ class _SettingsConnectionsTabState extends State<SettingsConnectionsTab> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final isAdmin = SettingsManager.currentUser.value?.role == 'admin';
 
-    return ListView(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppTheme.spaceLG * AppTheme.spaceScale(context),
-        vertical: AppTheme.spaceLG,
-      ),
-      children: [
-        const SectionHeader(
-          title: 'Account',
-          leading: Icon(Icons.person_outline),
-        ),
-        SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-        _ApiKeyTile(obscured: _obscured),
-        if (isAdmin) ...[
-          SizedBox(height: AppTheme.spaceXL * AppTheme.spaceScale(context)),
-          SectionHeader(
-            title: 'Server',
-            leading: const Icon(Icons.dns),
-            trailing: ValueListenableBuilder<bool>(
-              valueListenable: APIService.isOnline,
-              builder: (context, online, _) {
-                return IconButton(
-                  tooltip: 'Restart server',
-                  onPressed: () => SettingsManager.restartServer(),
-                  icon: Icon(
-                    Icons.restart_alt,
-                    color: online ? colors.primary : colors.error,
-                  ),
-                );
-              },
-            ),
+    return ValueListenableBuilder<User?>(
+      valueListenable: SettingsManager.currentUser,
+      builder: (context, user, _) {
+        final isAdmin = user?.role == 'admin';
+
+        return ListView(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppTheme.spaceLG * AppTheme.spaceScale(context),
+            vertical: AppTheme.spaceLG,
           ),
-          SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-          // On web the origin decides where the server lives and login is
-          // always required, so these controls cannot mean anything there.
-          if (!kIsWeb) ...[
-            ListTextField(
-              title: 'Server Host',
-              subtitle: 'Hostname or IP address of the server',
-              valueListenable: SettingsManager.serverHost,
-              defaultValue:
-                  SettingsManager.defaultFor('server.host') as String?,
-            ),
-            SpinBox<int>(
-              title: 'Server Port',
-              subtitle: 'Port the server listens on',
-              valueListenable: SettingsManager.serverPort,
-              min: 1,
-              max: 65535,
-              defaultValue: SettingsManager.defaultFor('server.port') as int?,
-            ),
-            SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
-            ListSwitch(
-              title: 'Require Login',
-              subtitle: 'Enforce authentication for remote access',
-              valueListenable: SettingsManager.requireLogin,
-              defaultValue:
-                  SettingsManager.defaultFor('server.require_login') as bool?,
+          children: [
+            const SectionHeader(
+              title: 'Account',
+              leading: Icon(Icons.person_outline),
             ),
             SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-          ],
-          OutlinedButton.icon(
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (ctx) => const DbAccountManagerDialog(),
-              );
-            },
-            icon: Icon(
-              Icons.manage_accounts,
-              size: AppTheme.iconMD * AppTheme.iconScale(context),
-            ),
-            label: const Text('Manage Accounts'),
-          ),
-          SizedBox(height: AppTheme.spaceXL * AppTheme.spaceScale(context)),
-          const SectionHeader(
-            title: 'Download Services',
-            leading: Icon(Icons.download),
-          ),
-          SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-          ListButton(
-            title: 'slskd',
-            subtitle: 'Configure slskd connection',
-            onPressed: () => showConnectServiceDialog(
-              context: context,
-              inputs: [
-                (
-                  'slskd URL',
-                  'Your slskd server URL',
-                  false,
-                  SettingsManager.slskdUrl.value,
+            _ApiKeyTile(obscured: _obscured),
+            if (isAdmin) ...[
+              SizedBox(height: AppTheme.spaceXL * AppTheme.spaceScale(context)),
+              SectionHeader(
+                title: 'Server',
+                leading: const Icon(Icons.dns),
+                trailing: ValueListenableBuilder<bool>(
+                  valueListenable: APIService.isOnline,
+                  builder: (context, online, _) {
+                    return IconButton(
+                      tooltip: 'Restart server',
+                      onPressed: () => SettingsManager.restartServer(),
+                      icon: Icon(
+                        Icons.restart_alt,
+                        color: online ? colors.primary : colors.error,
+                      ),
+                    );
+                  },
                 ),
-                (
-                  'slskd Token',
-                  'Stored encrypted server-side; blank keeps the existing token',
-                  true,
-                  '',
-                ),
-              ],
-              test: (values) async {
-                final res = await BridgeService.instance.testConnection(
-                  'slskd',
-                  url: values[0],
-                  token: values[1],
-                );
-                return res.success
-                    ? 'Connected! v${res.version ?? '?'}'
-                    : res.error ?? 'Connection failed';
-              },
-              onConfirm: (values) async {
-                SettingsManager.slskdUrl.value = values[0];
-                await SettingsManager.saveSlskdApiKey(values[1]);
-                SystemService().checkServiceAvailability();
-              },
-            ),
-            type: ListButtonType.text,
-            label: 'Configure',
-          ),
-          SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
-          ListButton(
-            title: 'Nadekodon (YouTube)',
-            subtitle: 'Configure nadekodon connection',
-            onPressed: () => showConnectServiceDialog(
-              context: context,
-              inputs: [
-                (
-                  'Nadekodon URL',
-                  'Your nadekodon server URL',
-                  false,
-                  SettingsManager.nadekodonUrl.value,
-                ),
-                (
-                  'Nadekodon Token',
-                  'Stored encrypted server-side; blank keeps the existing token',
-                  true,
-                  '',
-                ),
-              ],
-              test: (values) async {
-                final res = await BridgeService.instance.testConnection(
-                  'nadekodon',
-                  url: values[0],
-                  token: values[1],
-                );
-                return res.success
-                    ? 'Connected! v${res.version ?? '?'}'
-                    : res.error ?? 'Connection failed';
-              },
-              onConfirm: (values) async {
-                SettingsManager.nadekodonUrl.value = values[0];
-                await SettingsManager.saveNadekodonApiKey(values[1]);
-                SystemService().checkServiceAvailability();
-              },
-            ),
-            type: ListButtonType.text,
-            label: 'Configure',
-          ),
-        ],
-        SizedBox(height: AppTheme.spaceXL * AppTheme.spaceScale(context)),
-        const SectionHeader(
-          title: 'ListenBrainz',
-          leading: Icon(Icons.explore),
-        ),
-        SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-        ListTextField(
-          title: 'ListenBrainz Token',
-          subtitle: 'Required for scrobbling and music discovery',
-          valueListenable: SettingsManager.listenbrainzToken,
-          controller: _lbTokenController,
-          isObscured: true,
-          confirmEnabled: _lbCanSave,
-          onConfirm: (value) {
-            if (!_lbCanSave) return;
-            final token = value.trim();
-            SettingsManager.saveUserSetting(
-              SettingsManager.listenbrainzToken,
-              'listenbrainz_token',
-              token,
-            );
-            ListenBrainzState.instance.markValidated(token, _lbTokenValid);
-            setState(() {});
-          },
-          suffixWidgets: [
-            IconButton(
-              icon: _lbTokenTesting
-                  ? SizedBox(
-                      width:
-                          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
-                      height:
-                          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
-                      child: const CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.bolt),
-              iconSize: AppTheme.iconSM * AppTheme.iconScale(context),
-              tooltip: 'Test token',
-              color: _lbTestApplies && _lbTokenValid ? colors.primary : null,
-              onPressed: _lbTokenTesting ? null : _validateLbToken,
-            ),
-          ],
-        ),
-        if (_lbTestApplies && _lbTestMessage != null) ...[
-          SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-          Row(
-            children: [
-              Icon(
-                _lbTokenValid
-                    ? Icons.check_circle_outline
-                    : Icons.error_outline,
-                size: AppTheme.iconSM * AppTheme.iconScale(context),
-                color: _lbTokenValid ? colors.primary : colors.error,
               ),
-              SizedBox(width: AppTheme.spaceXS * AppTheme.spaceScale(context)),
-              Expanded(
-                child: Text(
-                  _lbTestStatusLabel(),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: _lbTokenValid ? colors.primary : colors.error,
-                  ),
+              SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
+              // On web the origin decides where the server lives and login is
+              // always required, so these controls cannot mean anything there.
+              if (!kIsWeb) ...[
+                ListTextField(
+                  title: 'Server Host',
+                  subtitle: 'Hostname or IP address of the server',
+                  valueListenable: SettingsManager.serverHost,
+                  defaultValue:
+                      SettingsManager.defaultFor('server.host') as String?,
                 ),
+                SpinBox<int>(
+                  title: 'Server Port',
+                  subtitle: 'Port the server listens on',
+                  valueListenable: SettingsManager.serverPort,
+                  min: 1,
+                  max: 65535,
+                  defaultValue:
+                      SettingsManager.defaultFor('server.port') as int?,
+                ),
+                SizedBox(
+                  height: AppTheme.spaceMD * AppTheme.spaceScale(context),
+                ),
+                ListSwitch(
+                  title: 'Require Login',
+                  subtitle: 'Enforce authentication for remote access',
+                  valueListenable: SettingsManager.requireLogin,
+                  defaultValue:
+                      SettingsManager.defaultFor('server.require_login')
+                          as bool?,
+                ),
+                SizedBox(
+                  height: AppTheme.spaceSM * AppTheme.spaceScale(context),
+                ),
+              ],
+              OutlinedButton.icon(
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => const DbAccountManagerDialog(),
+                  );
+                },
+                icon: Icon(
+                  Icons.manage_accounts,
+                  size: AppTheme.iconMD * AppTheme.iconScale(context),
+                ),
+                label: const Text('Manage Accounts'),
+              ),
+              SizedBox(height: AppTheme.spaceXL * AppTheme.spaceScale(context)),
+              const SectionHeader(
+                title: 'Download Services',
+                leading: Icon(Icons.download),
+              ),
+              SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
+              ListButton(
+                title: 'slskd',
+                subtitle: 'Configure slskd connection',
+                onPressed: () => showConnectServiceDialog(
+                  context: context,
+                  inputs: [
+                    (
+                      'slskd URL',
+                      'Your slskd server URL',
+                      false,
+                      SettingsManager.slskdUrl.value,
+                    ),
+                    (
+                      'slskd Token',
+                      'Stored encrypted server-side; blank keeps the existing token',
+                      true,
+                      '',
+                    ),
+                  ],
+                  test: (values) async {
+                    final res = await BridgeService.instance.testConnection(
+                      'slskd',
+                      url: values[0],
+                      token: values[1],
+                    );
+                    return res.success
+                        ? 'Connected! v${res.version ?? '?'}'
+                        : res.error ?? 'Connection failed';
+                  },
+                  onConfirm: (values) async {
+                    SettingsManager.slskdUrl.value = values[0];
+                    await SettingsManager.saveSlskdApiKey(values[1]);
+                    SystemService().checkServiceAvailability();
+                  },
+                ),
+                type: ListButtonType.text,
+                label: 'Configure',
+              ),
+              SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
+              ListButton(
+                title: 'Nadekodon (YouTube)',
+                subtitle: 'Configure nadekodon connection',
+                onPressed: () => showConnectServiceDialog(
+                  context: context,
+                  inputs: [
+                    (
+                      'Nadekodon URL',
+                      'Your nadekodon server URL',
+                      false,
+                      SettingsManager.nadekodonUrl.value,
+                    ),
+                    (
+                      'Nadekodon Token',
+                      'Stored encrypted server-side; blank keeps the existing token',
+                      true,
+                      '',
+                    ),
+                  ],
+                  test: (values) async {
+                    final res = await BridgeService.instance.testConnection(
+                      'nadekodon',
+                      url: values[0],
+                      token: values[1],
+                    );
+                    return res.success
+                        ? 'Connected! v${res.version ?? '?'}'
+                        : res.error ?? 'Connection failed';
+                  },
+                  onConfirm: (values) async {
+                    SettingsManager.nadekodonUrl.value = values[0];
+                    await SettingsManager.saveNadekodonApiKey(values[1]);
+                    SystemService().checkServiceAvailability();
+                  },
+                ),
+                type: ListButtonType.text,
+                label: 'Configure',
               ),
             ],
-          ),
-        ],
-        SizedBox(height: AppTheme.spaceLG * AppTheme.spaceScale(context)),
-        Text(
-          'Link your ListenBrainz account to enable scrobbling '
-          'and discover new music based on your listening habits.',
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
-        ),
-      ],
+            SizedBox(height: AppTheme.spaceXL * AppTheme.spaceScale(context)),
+            const SectionHeader(
+              title: 'ListenBrainz',
+              leading: Icon(Icons.explore),
+            ),
+            SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
+            ListTextField(
+              title: 'ListenBrainz Token',
+              subtitle: 'Required for scrobbling and music discovery',
+              valueListenable: SettingsManager.listenbrainzToken,
+              controller: _lbTokenController,
+              isObscured: true,
+              confirmEnabled: _lbCanSave,
+              onConfirm: (value) {
+                if (!_lbCanSave) return;
+                final token = value.trim();
+                SettingsManager.saveUserSetting(
+                  SettingsManager.listenbrainzToken,
+                  'listenbrainz_token',
+                  token,
+                );
+                ListenBrainzState.instance.markValidated(token, _lbTokenValid);
+                setState(() {});
+              },
+              suffixWidgets: [
+                IconButton(
+                  icon: _lbTokenTesting
+                      ? SizedBox(
+                          width:
+                              AppTheme.spaceSM *
+                              2 *
+                              AppTheme.spaceScale(context),
+                          height:
+                              AppTheme.spaceSM *
+                              2 *
+                              AppTheme.spaceScale(context),
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.bolt),
+                  iconSize: AppTheme.iconSM * AppTheme.iconScale(context),
+                  tooltip: 'Test token',
+                  color: _lbTestApplies && _lbTokenValid
+                      ? colors.primary
+                      : null,
+                  onPressed: _lbTokenTesting ? null : _validateLbToken,
+                ),
+              ],
+            ),
+            if (_lbTestApplies && _lbTestMessage != null) ...[
+              SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
+              Row(
+                children: [
+                  Icon(
+                    _lbTokenValid
+                        ? Icons.check_circle_outline
+                        : Icons.error_outline,
+                    size: AppTheme.iconSM * AppTheme.iconScale(context),
+                    color: _lbTokenValid ? colors.primary : colors.error,
+                  ),
+                  SizedBox(
+                    width: AppTheme.spaceXS * AppTheme.spaceScale(context),
+                  ),
+                  Expanded(
+                    child: Text(
+                      _lbTestStatusLabel(),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: _lbTokenValid ? colors.primary : colors.error,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            SizedBox(height: AppTheme.spaceLG * AppTheme.spaceScale(context)),
+            Text(
+              'Link your ListenBrainz account to enable scrobbling '
+              'and discover new music based on your listening habits.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+            ),
+          ],
+        );
+      },
     );
   }
 }

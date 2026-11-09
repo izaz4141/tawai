@@ -18,90 +18,110 @@ class SettingsDownloadsTab extends StatefulWidget {
 class _SettingsDownloadsTabState extends State<SettingsDownloadsTab> {
   @override
   Widget build(BuildContext context) {
-    final isAdmin = SettingsManager.currentUser.value?.role == 'admin';
-    if (!isAdmin) {
-      return _AdminOnly();
-    }
+    return ValueListenableBuilder(
+      valueListenable: SettingsManager.currentUser,
+      builder: (context, user, _) {
+        final isAdmin = user?.role == 'admin';
+        if (!isAdmin) {
+          return _AdminOnly();
+        }
 
-    return ListView(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppTheme.spaceLG * AppTheme.spaceScale(context),
-        vertical: AppTheme.spaceLG,
-      ),
-      children: [
-        const SectionHeader(
-          title: 'Destination',
-          leading: Icon(Icons.folder_outlined),
-        ),
-        SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-        ValueListenableBuilder<String>(
-          valueListenable: SettingsManager.downloadFolder,
-          builder: (context, path, _) {
-            Future<void> pick() async {
-              final p = await IOServiceFactory.create().getDirectoryPath(
-                context,
-                initialPath: path.isNotEmpty ? path : null,
-              );
-              if (p != null && context.mounted) {
-                SettingsManager.downloadFolder.value = p;
-              }
-            }
-
-            return ListButton(
-              title: 'Download Folder',
-              subtitle: path.isEmpty ? 'Not set' : path,
-              enabled: true,
-              onPressed: pick,
-              type: ListButtonType.text,
-              label: 'Browse',
-            );
-          },
-        ),
-        SizedBox(height: AppTheme.spaceXL * AppTheme.spaceScale(context)),
-        const SectionHeader(title: 'Defaults', leading: Icon(Icons.download)),
-        SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-        ListenableBuilder(
-          listenable: Listenable.merge([
-            SystemService().slskdVersion,
-            SystemService().nadekodonVersion,
-          ]),
-          builder: (context, _) {
-            final sys = SystemService();
-            final unconfigured = <String>[
-              if (sys.slskdVersion.value == null) 'Soulseek',
-              if (sys.nadekodonVersion.value == null) 'YouTube',
-            ];
-            return ListDropdown(
-              title: 'Download Source',
-              subtitle: unconfigured.isEmpty
-                  ? 'Default source for music downloads'
-                  : 'Default source for music downloads (not configured: '
-                        '${unconfigured.join(', ')})',
-              valueListenable: SettingsManager.defaultDownloadSource,
-              items: const [
-                DropdownMenuItem(value: 'slskd', child: Text('Soulseek')),
-                DropdownMenuItem(value: 'nadekodon', child: Text('YouTube')),
-              ],
-            );
-          },
-        ),
-        SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
-        ListDropdown(
-          title: 'Desired Audio Quality',
-          subtitle: 'Quality filter for auto-download',
-          valueListenable: SettingsManager.desiredAudioQuality,
-          items: const [
-            DropdownMenuItem(value: 'best', child: Text('Best Available')),
-            DropdownMenuItem(value: 'lossless', child: Text('Lossless Only')),
-            DropdownMenuItem(value: 'high', child: Text('High (≥ 320 kbps)')),
-            DropdownMenuItem(
-              value: 'medium',
-              child: Text('Medium (≥ 192 kbps)'),
+        return ListView(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppTheme.spaceLG * AppTheme.spaceScale(context),
+            vertical: AppTheme.spaceLG,
+          ),
+          children: [
+            const SectionHeader(
+              title: 'Destination',
+              leading: Icon(Icons.folder_outlined),
             ),
-            DropdownMenuItem(value: 'low', child: Text('Low (any quality)')),
+            SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
+            ValueListenableBuilder<String>(
+              valueListenable: SettingsManager.downloadFolder,
+              builder: (context, path, _) {
+                Future<void> pick() async {
+                  final p = await IOServiceFactory.create().getDirectoryPath(
+                    context,
+                    initialPath: path.isNotEmpty ? path : null,
+                  );
+                  if (p != null && context.mounted) {
+                    SettingsManager.downloadFolder.value = p;
+                  }
+                }
+
+                return ListButton(
+                  title: 'Download Folder',
+                  subtitle: path.isEmpty ? 'Not set' : path,
+                  enabled: true,
+                  onPressed: pick,
+                  type: ListButtonType.text,
+                  label: 'Browse',
+                );
+              },
+            ),
+            SizedBox(height: AppTheme.spaceXL * AppTheme.spaceScale(context)),
+            const SectionHeader(
+              title: 'Defaults',
+              leading: Icon(Icons.download),
+            ),
+            SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
+            ListenableBuilder(
+              listenable: Listenable.merge([
+                SystemService().slskdVersion,
+                SystemService().nadekodonVersion,
+              ]),
+              builder: (context, _) {
+                final sys = SystemService();
+                final unconfigured = <String>[
+                  if (sys.slskdVersion.value == null) 'Soulseek',
+                  if (sys.nadekodonVersion.value == null) 'YouTube',
+                ];
+                return ListDropdown(
+                  title: 'Download Source',
+                  subtitle: unconfigured.isEmpty
+                      ? 'Default source for music downloads'
+                      : 'Default source for music downloads (not configured: '
+                            '${unconfigured.join(', ')})',
+                  valueListenable: SettingsManager.defaultDownloadSource,
+                  items: const [
+                    DropdownMenuItem(value: 'slskd', child: Text('Soulseek')),
+                    DropdownMenuItem(
+                      value: 'nadekodon',
+                      child: Text('YouTube'),
+                    ),
+                  ],
+                );
+              },
+            ),
+            SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
+            ListDropdown(
+              title: 'Desired Audio Quality',
+              subtitle: 'Quality filter for auto-download',
+              valueListenable: SettingsManager.desiredAudioQuality,
+              items: const [
+                DropdownMenuItem(value: 'best', child: Text('Best Available')),
+                DropdownMenuItem(
+                  value: 'lossless',
+                  child: Text('Lossless Only'),
+                ),
+                DropdownMenuItem(
+                  value: 'high',
+                  child: Text('High (≥ 320 kbps)'),
+                ),
+                DropdownMenuItem(
+                  value: 'medium',
+                  child: Text('Medium (≥ 192 kbps)'),
+                ),
+                DropdownMenuItem(
+                  value: 'low',
+                  child: Text('Low (any quality)'),
+                ),
+              ],
+            ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 }

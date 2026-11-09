@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_shell.dart';
-import 'package:tawai/utils/settings.dart';
 import 'package:tawai/ui/pages/settings/tabs/appearance_tab.dart';
 import 'package:tawai/ui/pages/settings/tabs/playback_tab.dart';
 import 'package:tawai/ui/pages/settings/tabs/library_tab.dart';
@@ -67,21 +66,7 @@ class _SettingsPageState extends State<SettingsPage>
     return AppShell(
       title: 'Settings',
       bottom: tabBar,
-      body: ValueListenableBuilder(
-        valueListenable: SettingsManager.currentUser,
-        // The tabs are fixed; only their contents depend on the role, so the
-        // controller is never rebuilt when the signed-in user changes.
-        builder: (context, _, _) => Column(
-          children: [
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: _tabViews,
-              ),
-            ),
-          ],
-        ),
-      ),
+      body: TabBarView(controller: _tabController, children: _tabViews),
     );
   }
 }
