@@ -943,8 +943,14 @@ mod tests {
     #[test]
     fn resolve_naming_pattern_falls_back_to_the_default_pattern() {
         assert_eq!(resolve_naming_pattern(None, ""), DEFAULT_PATTERN.as_str());
-        assert_eq!(resolve_naming_pattern(None, "   "), DEFAULT_PATTERN);
-        assert_eq!(resolve_naming_pattern(Some(""), ""), DEFAULT_PATTERN);
+        assert_eq!(
+            resolve_naming_pattern(None, "   "),
+            DEFAULT_PATTERN.as_str()
+        );
+        assert_eq!(
+            resolve_naming_pattern(Some(""), ""),
+            DEFAULT_PATTERN.as_str()
+        );
     }
 
     fn tag(
@@ -999,7 +1005,7 @@ mod tests {
             &["Some Artist"],
         );
         assert_eq!(
-            format_naming_pattern(DEFAULT_PATTERN, &t),
+            format_naming_pattern(DEFAULT_PATTERN.as_str(), &t),
             "Album Artist/Album/02-07 Some Artist - Title"
         );
     }
@@ -1017,7 +1023,7 @@ mod tests {
             &["Some Artist"],
         );
         assert_eq!(
-            format_naming_pattern(DEFAULT_PATTERN, &t),
+            format_naming_pattern(DEFAULT_PATTERN.as_str(), &t),
             "Some Artist/02-Title"
         );
     }
@@ -1035,7 +1041,7 @@ mod tests {
             &["Some Artist"],
         );
         assert_eq!(
-            format_naming_pattern(DEFAULT_PATTERN, &t),
+            format_naming_pattern(DEFAULT_PATTERN.as_str(), &t),
             "Album Artist/Album/07 Some Artist - Title"
         );
     }
@@ -1053,7 +1059,7 @@ mod tests {
             &["Album Artist"],
         );
         assert_eq!(
-            format_naming_pattern(DEFAULT_PATTERN, &t),
+            format_naming_pattern(DEFAULT_PATTERN.as_str(), &t),
             "Album Artist/Album/07 Title"
         );
     }
@@ -1126,7 +1132,7 @@ mod tests {
             2,
             &["Some Artist"],
         );
-        let path = expected_path_from_root("/music", DEFAULT_PATTERN, &t, "flac");
+        let path = expected_path_from_root("/music", DEFAULT_PATTERN.as_str(), &t, "flac");
         assert_eq!(
             path.to_string_lossy(),
             "/music/Album Artist/Album/02-07 Some Artist - Title.flac"
