@@ -296,12 +296,12 @@ impl NadekodonClient {
     }
 
     pub fn from_config(cfg: &AppConfig, client: &reqwest::Client) -> Result<Self> {
-        let url = cfg.value["nadekodon_url"]
-            .as_str()
+        let url = crate::utils::config::get_path(&cfg.value, "integrations.nadekodon.url")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("nadekodon_url not configured"))?
             .to_string();
-        let key = cfg.value["nadekodon_api_key"]
-            .as_str()
+        let key = crate::utils::config::get_path(&cfg.value, "integrations.nadekodon.api_key")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("nadekodon_api_key not configured"))?
             .to_string();
         Ok(NadekodonClient::new(url, key, client.clone()))

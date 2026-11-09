@@ -104,6 +104,9 @@ class PlaybackService {
     _userVolume = SettingsManager.playbackVolume.value;
     volume.value = _userVolume;
     _player.setVolume(_userVolume);
+    // Loop and shuffle are device settings that survive a queue reset.
+    loopMode.value = _loopFromSetting(SettingsManager.playbackLoopMode.value);
+    shuffleModeEnabled.value = SettingsManager.playbackShuffle.value;
     _replayGainEnabledSub = () {
       unawaited(_applyEffectiveVolume());
     };
@@ -139,8 +142,18 @@ class PlaybackService {
       playerState.value = PlayerState(false, ProcessingState.loading);
       final idx = startIndex.clamp(0, tracks.length - 1).toInt();
       _orderedItems = [for (final t in tracks) QueueItem(track: t)];
-      queue.value = QueueState(items: _orderedItems, currentIndex: idx);
-      final ok = await _loadTrackAt(idx);
+      var items = _orderedItems;
+      var playIdx = idx;
+      if (shuffleModeEnabled.value) {
+        // Keep the requested track first and shuffle everything after it.
+        final first = items[idx];
+        final rest = [...items]..removeAt(idx);
+        rest.shuffle();
+        items = [first, ...rest];
+        playIdx = 0;
+      }
+      queue.value = QueueState(items: items, currentIndex: playIdx);
+      final ok = await _loadTrackAt(playIdx);
       if (!ok) {
         playerState.value = PlayerState(false, ProcessingState.idle);
         return false;
@@ -253,7 +266,14 @@ class PlaybackService {
       await _reset();
       playerState.value = PlayerState(false, ProcessingState.loading);
       _orderedItems = items;
-      queue.value = QueueState(items: items, currentIndex: 0);
+      if (shuffleModeEnabled.value) {
+        final first = items.first;
+        final rest = [...items]..removeAt(0);
+        rest.shuffle();
+        queue.value = QueueState(items: [first, ...rest], currentIndex: 0);
+      } else {
+        queue.value = QueueState(items: items, currentIndex: 0);
+      }
       _loadedTrackId = first.track.id;
       _sourceGeneration++;
       await _player.setAudioSource(_buildSource(first.track, first.source!));
@@ -489,13 +509,14 @@ class PlaybackService {
       );
     }
     shuffleModeEnabled.value = enable;
+    SettingsManager.playbackShuffle.value = enable;
     unawaited(_prefetchWindow());
   }
 
   void cycleLoopMode() {
     const modes = [LoopMode.off, LoopMode.all, LoopMode.one];
     final next = (modes.indexOf(loopMode.value) + 1) % modes.length;
-    loopMode.value = modes[next];
+    setLoopMode(modes[next]);
   }
 
   Future<void> clearQueue() async {
@@ -528,6 +549,7 @@ class PlaybackService {
 
   Future<void> setLoopMode(LoopMode mode) async {
     loopMode.value = mode;
+    SettingsManager.playbackLoopMode.value = _loopToSetting(mode);
   }
 
   Future<void> seek(Duration pos) async {
@@ -839,8 +861,22 @@ class PlaybackService {
     _inflight.clear();
     playerState.value = PlayerState(false, ProcessingState.idle);
     queue.value = const QueueState();
-    shuffleModeEnabled.value = false;
-    loopMode.value = LoopMode.off;
+  }
+
+  static String _loopToSetting(LoopMode mode) {
+    return switch (mode) {
+      LoopMode.one => 'one',
+      LoopMode.all => 'all',
+      LoopMode.off => 'off',
+    };
+  }
+
+  static LoopMode _loopFromSetting(String raw) {
+    return switch (raw) {
+      'one' => LoopMode.one,
+      'all' => LoopMode.all,
+      _ => LoopMode.off,
+    };
   }
 
   Future<void> _finish() async {

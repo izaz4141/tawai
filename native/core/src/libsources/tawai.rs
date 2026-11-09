@@ -1354,7 +1354,7 @@ mod tests {
     fn dest_for_deterministic() {
         use crate::signals::library::ArtistInfo;
         let root = "/music";
-        let pattern = DEFAULT_PATTERN;
+        let pattern = DEFAULT_PATTERN.as_str();
         let rt = TrackInfo {
             id: "1".into(),
             title: "My Song".into(),

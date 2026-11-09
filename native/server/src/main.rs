@@ -7,6 +7,7 @@ use tokio::sync::RwLock;
 
 use tawai_core::app_context::AppContext;
 use tawai_core::signals::library::ScanProgress;
+use tawai_core::utils::config::{get_path, set_path};
 use tawai_core::utils::logger;
 
 use tawai_server::server;
@@ -49,35 +50,42 @@ async fn main() {
         .parse()
         .unwrap_or(8181);
 
-    // Set server_port in config
+    // Set the server port in config
     let mut config_value = context.cfg().await.value.clone();
-    config_value["server_port"] = serde_json::json!(port);
+    set_path(&mut config_value, "server.port", serde_json::json!(port));
 
-    // Default download_folder to {tawai_home}/downloads when unset
-    let existing = config_value
-        .get("download_folder")
+    // Default the download folder to {tawai_home}/downloads when unset
+    let existing = get_path(&config_value, "downloads.folder")
         .and_then(|v| v.as_str())
         .map(|s| !s.trim().is_empty())
         .unwrap_or(false);
     let downloads_dir = format!("{}/downloads", server::tawai_home());
     if !existing {
-        config_value["download_folder"] = serde_json::json!(downloads_dir);
+        set_path(
+            &mut config_value,
+            "downloads.folder",
+            serde_json::json!(downloads_dir),
+        );
     }
 
     // Inject optional downstream service connection details from the environment.
     // Environment variables override whatever is already stored in the config file.
     // save_config encrypts the slskd/nadekodon API keys with the master key.
     let env_overrides = [
-        ("TAWAI_SLSKD_URL", "slskd_url"),
-        ("TAWAI_SLSKD_API_KEY", "slskd_api_key"),
-        ("TAWAI_NADEKODON_URL", "nadekodon_url"),
-        ("TAWAI_NADEKODON_API_KEY", "nadekodon_api_key"),
+        ("TAWAI_SLSKD_URL", "integrations.slskd.url"),
+        ("TAWAI_SLSKD_API_KEY", "integrations.slskd.api_key"),
+        ("TAWAI_NADEKODON_URL", "integrations.nadekodon.url"),
+        ("TAWAI_NADEKODON_API_KEY", "integrations.nadekodon.api_key"),
     ];
-    for (env_var, config_key) in env_overrides {
+    for (env_var, config_path) in env_overrides {
         if let Ok(value) = std::env::var(env_var)
             && !value.trim().is_empty()
         {
-            config_value[config_key] = serde_json::json!(value.trim());
+            set_path(
+                &mut config_value,
+                config_path,
+                serde_json::json!(value.trim()),
+            );
         }
     }
 

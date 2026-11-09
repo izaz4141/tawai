@@ -8,7 +8,7 @@ use serde_json::Value;
 
 use crate::db::database::DatabasePool;
 use crate::signals::download::{DlListResponse, DlSearchResponse, DownloadTestConnectionRequest};
-use crate::utils::config::AppConfig;
+use crate::utils::config::{AppConfig, get_path};
 
 pub enum DownloadClient {
     Nadekodon(nadekodon::NadekodonClient),
@@ -22,13 +22,13 @@ impl DownloadClient {
                 nadekodon::NadekodonClient::from_config(cfg, client)?,
             )),
             "slskd" => {
-                let url = cfg.value["slskd_url"]
-                    .as_str()
-                    .ok_or_else(|| anyhow::anyhow!("slskd_url not configured"))?
+                let url = get_path(&cfg.value, "integrations.slskd.url")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("integrations.slskd.url not configured"))?
                     .to_string();
-                let key = cfg.value["slskd_api_key"]
-                    .as_str()
-                    .ok_or_else(|| anyhow::anyhow!("slskd_api_key not configured"))?
+                let key = get_path(&cfg.value, "integrations.slskd.api_key")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| anyhow::anyhow!("integrations.slskd.api_key not configured"))?
                     .to_string();
                 Ok(DownloadClient::Slskd(slskd::SlskdClient::new(
                     url,
@@ -115,13 +115,21 @@ impl DownloadClient {
                     .url
                     .clone()
                     .filter(|s| !s.is_empty())
-                    .or_else(|| cfg.value["slskd_url"].as_str().map(String::from))
+                    .or_else(|| {
+                        get_path(&cfg.value, "integrations.slskd.url")
+                            .and_then(|v| v.as_str())
+                            .map(String::from)
+                    })
                     .ok_or_else(|| anyhow::anyhow!("slskd_url not configured"))?;
                 let token = request
                     .token
                     .clone()
                     .filter(|s| !s.is_empty())
-                    .or_else(|| cfg.value["slskd_api_key"].as_str().map(String::from))
+                    .or_else(|| {
+                        get_path(&cfg.value, "integrations.slskd.api_key")
+                            .and_then(|v| v.as_str())
+                            .map(String::from)
+                    })
                     .unwrap_or_default();
                 slskd::SlskdClient::new(url, token, http.clone())
                     .test_connection()
@@ -132,13 +140,21 @@ impl DownloadClient {
                     .url
                     .clone()
                     .filter(|s| !s.is_empty())
-                    .or_else(|| cfg.value["nadekodon_url"].as_str().map(String::from))
+                    .or_else(|| {
+                        get_path(&cfg.value, "integrations.nadekodon.url")
+                            .and_then(|v| v.as_str())
+                            .map(String::from)
+                    })
                     .ok_or_else(|| anyhow::anyhow!("nadekodon_url not configured"))?;
                 let token = request
                     .token
                     .clone()
                     .filter(|s| !s.is_empty())
-                    .or_else(|| cfg.value["nadekodon_api_key"].as_str().map(String::from))
+                    .or_else(|| {
+                        get_path(&cfg.value, "integrations.nadekodon.api_key")
+                            .and_then(|v| v.as_str())
+                            .map(String::from)
+                    })
                     .unwrap_or_default();
                 nadekodon::NadekodonClient::new(url, token, http.clone())
                     .test_connection()

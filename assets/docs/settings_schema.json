@@ -1,0 +1,177 @@
+{
+  "version": 1,
+  "settings": {
+    "accounts.current_user": {
+      "type": "string",
+      "default": "",
+      "scope": "device"
+    },
+    "accounts.saved": {
+      "type": "array",
+      "item": "account",
+      "default": [],
+      "scope": "device"
+    },
+    "accounts.saved[].api_key": {
+      "type": "string",
+      "default": "",
+      "scope": "device"
+    },
+    "accounts.saved[].display_name": {
+      "type": "string",
+      "default": "",
+      "scope": "device"
+    },
+    "accounts.saved[].host": {
+      "type": "string",
+      "default": "127.0.0.1",
+      "scope": "device"
+    },
+    "accounts.saved[].id": {
+      "type": "string",
+      "default": "",
+      "scope": "device"
+    },
+    "accounts.saved[].label": {
+      "type": "string",
+      "default": "",
+      "scope": "device"
+    },
+    "accounts.saved[].port": {
+      "type": "int",
+      "default": 8181,
+      "scope": "device"
+    },
+    "accounts.saved[].role": {
+      "type": "string",
+      "default": "user",
+      "scope": "device"
+    },
+    "accounts.saved[].username": {
+      "type": "string",
+      "default": "",
+      "scope": "device"
+    },
+    "downloads.folder": {
+      "type": "string",
+      "default": "",
+      "scope": "global",
+      "admin": true
+    },
+    "downloads.quality": {
+      "type": "enum",
+      "values": ["best", "lossless", "high", "medium", "low"],
+      "default": "best",
+      "scope": "global",
+      "admin": true
+    },
+    "downloads.source": {
+      "type": "enum",
+      "values": ["slskd", "nadekodon"],
+      "default": "slskd",
+      "scope": "global",
+      "admin": true
+    },
+    "integrations.nadekodon.api_key": {
+      "type": "string",
+      "default": "",
+      "scope": "global",
+      "admin": true,
+      "secret": true
+    },
+    "integrations.nadekodon.url": {
+      "type": "string",
+      "default": "",
+      "scope": "global",
+      "admin": true
+    },
+    "integrations.slskd.api_key": {
+      "type": "string",
+      "default": "",
+      "scope": "global",
+      "admin": true,
+      "secret": true
+    },
+    "integrations.slskd.url": {
+      "type": "string",
+      "default": "",
+      "scope": "global",
+      "admin": true
+    },
+    "interface.theme.custom_color": {
+      "type": "color",
+      "default": "#FF4081",
+      "scope": "device",
+      "web_local": true
+    },
+    "interface.theme.dynamic_color": {
+      "type": "bool",
+      "default": true,
+      "scope": "device",
+      "web_local": true
+    },
+    "interface.theme.mode": {
+      "type": "enum",
+      "values": ["system", "light", "dark"],
+      "default": "system",
+      "scope": "device",
+      "web_local": true
+    },
+    "interface.window.retreat_to_tray": {
+      "type": "bool",
+      "default": true,
+      "scope": "device"
+    },
+    "library.organization.naming_pattern": {
+      "type": "string",
+      "default": "{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}",
+      "scope": "global",
+      "admin": true
+    },
+    "playback.loop_mode": {
+      "type": "enum",
+      "values": ["off", "one", "all"],
+      "default": "off",
+      "scope": "device"
+    },
+    "playback.shuffle": {
+      "type": "bool",
+      "default": false,
+      "scope": "device"
+    },
+    "playback.volume": {
+      "type": "number",
+      "min": 0,
+      "max": 1,
+      "default": 1.0,
+      "scope": "device",
+      "web_local": true
+    },
+    "server.host": {
+      "type": "string",
+      "default": "127.0.0.1",
+      "scope": "device",
+      "admin": true
+    },
+    "server.port": {
+      "type": "int",
+      "min": 1,
+      "max": 65535,
+      "default": 8181,
+      "scope": "device",
+      "admin": true
+    },
+    "server.require_login": {
+      "type": "bool",
+      "default": false,
+      "scope": "device",
+      "admin": true
+    },
+    "system.check_nightly": {
+      "type": "bool",
+      "default": false,
+      "scope": "device",
+      "web_local": true
+    }
+  }
+}

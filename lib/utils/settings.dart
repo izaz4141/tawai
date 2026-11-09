@@ -15,8 +15,33 @@ import 'package:tawai/utils/helper.dart';
 import 'package:tawai/models/account.dart';
 import 'package:tawai/models/user.dart';
 
+/// One notifier bound to a dotted path in the settings document.
+///
+/// [decode] turns the value stored in the document into the notifier's type,
+/// and [encode] turns it back. The defaults are identity for plain values.
+class _SettingBinding {
+  final String path;
+  final ValueNotifier<dynamic> notifier;
+  final dynamic Function(dynamic raw) decode;
+  final dynamic Function(dynamic value) encode;
+
+  const _SettingBinding(
+    this.path,
+    this.notifier, {
+    this.decode = _identity,
+    this.encode = _identity,
+  });
+
+  static dynamic _identity(dynamic value) => value;
+}
+
 class SettingsManager {
   static const String masterKeyFile = 'master.key';
+
+  /// The settings manifest. It is the single source of truth for the shape,
+  /// defaults, scope and capabilities of the global settings document.
+  static const String schemaAsset = 'assets/docs/settings_schema.json';
+
   static IOService? _ioServiceInstance;
 
   /// Platform IO service. Created on first use: the web client attaches
@@ -27,43 +52,37 @@ class SettingsManager {
 
   static late String configPath;
   static bool isFirstRun = false;
+
+  /// The nested default document, folded from the manifest on startup.
   static Map<String, dynamic> defaults = {};
 
-  /// Settings that belong to this device only. They are never sent to the
-  /// global settings endpoint; in remote mode they are stored in this
-  /// device's own config instead. Mirrors the server's device-only list.
-  static const Set<String> deviceLocalKeys = {
-    'playback_volume',
-    'current_user',
-    'require_login',
-    'check_nightly',
-    'accounts',
-    'server_host',
-    'server_port',
-    'theme_mode',
-    'use_dynamic_color',
-    'custom_color',
-    'retreat_to_tray',
-  };
+  /// The schema version this build ships with.
+  static int schemaVersion = 1;
 
-  /// Device-only settings the web client keeps in the browser's local
-  /// storage. The account list is left out because it carries API keys, the
-  /// user id comes from the session cookie, and login / host / port / tray
-  /// are fixed on web.
-  static const Set<String> webLocalKeys = {
-    'playback_volume',
-    'check_nightly',
-    'theme_mode',
-    'use_dynamic_color',
-    'custom_color',
-  };
+  /// Set when the document on disk (or on the server) belongs to another
+  /// schema version. The app runs on in-memory defaults and writes nothing.
+  static bool _readOnly = false;
+  static bool get isReadOnly => _readOnly;
+
+  /// Flat manifest entries, keyed by dotted path.
+  static Map<String, dynamic> _specs = {};
+
+  /// Every declared path that is device-local, web-local or admin-only.
+  static final List<String> _devicePaths = [];
+  static final List<String> _webLocalPaths = [];
+  static final List<String> _adminPaths = [];
+  static final List<String> _secretPaths = [];
 
   /// Global settings this device loaded from the backend, with the values it
   /// saw. Only globals that changed on this device are pushed back, so a
   /// device never overwrites the server's config with its own stale copy.
   static final Map<String, dynamic> _backendGlobals = {};
 
-  // Your ValueNotifiers
+  /// True once this device has loaded the server's settings at least once.
+  /// Until then a full save must not push local defaults over the server.
+  static bool _backendLoaded = false;
+
+  // ValueNotifiers, each bound to a dotted path by [_bindings].
   // A browser has no system tray.
   static final retreatToTray = ValueNotifier<bool>(!kIsWeb);
   static final downloadFolder = ValueNotifier<String>('');
@@ -78,7 +97,7 @@ class SettingsManager {
   static const Duration saveDebounceWindow = Duration(milliseconds: 400);
 
   /// Changed settings that have been recorded but not written yet. The last
-  /// value of a key wins, so a burst of changes on one key is a single write.
+  /// value of a path wins, so a burst of changes on one path is one write.
   static final Map<String, dynamic> _pendingSaves = {};
 
   /// The trailing timer that flushes [_pendingSaves].
@@ -114,20 +133,25 @@ class SettingsManager {
   static final nadekodonUrl = ValueNotifier<String>('');
   static final nadekodonApiKey = ValueNotifier<String>('');
 
-  // default download source
+  // Default download source
   static final defaultDownloadSource = ValueNotifier<String>('slskd');
 
-  // ListenBrainz Settings
+  // ListenBrainz Settings (per-user)
   static final listenbrainzToken = ValueNotifier<String>('');
 
   // Recommendation sources shown in library (comma-separated keys)
   static final includedRecommendations = ValueNotifier<String>('');
 
-  // Naming Pattern
-  static const String defaultNamingPattern =
-      '{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}';
+  // Playback preferences that survive a queue reset.
+  static final playbackLoopMode = ValueNotifier<String>('off');
+  static final playbackShuffle = ValueNotifier<bool>(false);
 
-  static final namingPattern = ValueNotifier<String>(defaultNamingPattern);
+  // Naming Pattern
+  static final namingPattern = ValueNotifier<String>('');
+
+  /// The default naming pattern, read from the manifest.
+  static String get defaultNamingPattern =>
+      (dotted('library.organization.naming_pattern') as String?) ?? '';
 
   // Per-user metadata preferences
   static final lyricsPrefersync = ValueNotifier<bool>(true);
@@ -142,20 +166,212 @@ class SettingsManager {
   // Playback preferences
   static final playbackVolume = ValueNotifier<double>(1.0);
 
-  static Future<void> _loadDefaults() async {
+  /// Every autosaved setting, in the order the settings UI presents them.
+  static final List<_SettingBinding> _bindings = [
+    _SettingBinding('interface.window.retreat_to_tray', retreatToTray),
+    _SettingBinding(
+      'interface.theme.mode',
+      themeMode,
+      decode: _decodeThemeMode,
+      encode: _encodeThemeMode,
+    ),
+    _SettingBinding('interface.theme.dynamic_color', useDynamicColor),
+    _SettingBinding(
+      'interface.theme.custom_color',
+      customColor,
+      decode: _decodeColor,
+      encode: _encodeColor,
+    ),
+    _SettingBinding('playback.volume', playbackVolume, decode: _decodeDouble),
+    _SettingBinding('playback.loop_mode', playbackLoopMode),
+    _SettingBinding('playback.shuffle', playbackShuffle),
+    _SettingBinding('downloads.folder', downloadFolder),
+    _SettingBinding('downloads.source', defaultDownloadSource),
+    _SettingBinding('downloads.quality', desiredAudioQuality),
+    _SettingBinding('library.organization.naming_pattern', namingPattern),
+    _SettingBinding('integrations.slskd.url', slskdUrl),
+    _SettingBinding('integrations.nadekodon.url', nadekodonUrl),
+    _SettingBinding('accounts.current_user', currentUserId),
+    _SettingBinding(
+      'accounts.saved',
+      accounts,
+      decode: _decodeAccounts,
+      encode: _encodeAccounts,
+    ),
+    _SettingBinding('server.host', serverHost),
+    _SettingBinding('server.port', serverPort, decode: _decodeInt),
+    _SettingBinding('server.require_login', requireLogin),
+    _SettingBinding('system.check_nightly', checkNightly),
+  ];
+
+  // ---------------------------------------------------------------------------
+  // Manifest
+  // ---------------------------------------------------------------------------
+
+  /// Reads the manifest and folds its defaults into a nested document.
+  static Future<void> _loadSchema() async {
     try {
-      final String response = await rootBundle.loadString(
-        'assets/docs/default.json',
-      );
-      defaults = json.decode(response);
+      final raw =
+          json.decode(await rootBundle.loadString(schemaAsset))
+              as Map<String, dynamic>;
+      schemaVersion = (raw['version'] as num?)?.toInt() ?? 1;
+      _specs = Map<String, dynamic>.from(raw['settings'] as Map);
+
+      _devicePaths.clear();
+      _webLocalPaths.clear();
+      _adminPaths.clear();
+      _secretPaths.clear();
+
+      defaults = {'schema_version': schemaVersion};
+      for (final entry in _specs.entries) {
+        final path = entry.key;
+        final spec = entry.value;
+        if (path.contains('[]')) continue;
+        if (spec is Map && spec['scope'] == 'device') _devicePaths.add(path);
+        if (spec is Map && spec['web_local'] == true) _webLocalPaths.add(path);
+        if (spec is Map && spec['admin'] == true) _adminPaths.add(path);
+        if (spec is Map && spec['secret'] == true) _secretPaths.add(path);
+        setDotted(defaults, path, spec is Map ? spec['default'] : null);
+      }
     } catch (e) {
-      log('Error loading default settings asset: $e', level: LogLevel.error);
+      log('Error loading settings schema asset: $e', level: LogLevel.error);
     }
   }
 
+  /// Returns the manifest default for a dotted path.
+  static dynamic defaultFor(String path) => dotted(path);
+
+  /// Reads a dotted path out of [defaults].
+  static dynamic dotted(String path) {
+    dynamic current = defaults;
+    for (final part in path.split('.')) {
+      if (current is! Map || !current.containsKey(part)) return null;
+      current = current[part];
+    }
+    return current;
+  }
+
+  /// Writes a value at a dotted path, creating intermediate maps.
+  static void setDotted(Map<String, dynamic> root, String path, dynamic value) {
+    final parts = path.split('.');
+    var current = root;
+    for (var i = 0; i < parts.length - 1; i++) {
+      final next = current[parts[i]];
+      if (next is Map<String, dynamic>) {
+        current = next;
+      } else {
+        final created = <String, dynamic>{};
+        current[parts[i]] = created;
+        current = created;
+      }
+    }
+    current[parts.last] = value;
+  }
+
+  /// Folds a flat map of dotted paths into a nested document.
+  static Map<String, dynamic> nest(Map<String, dynamic> flat) {
+    final root = <String, dynamic>{};
+    flat.forEach((path, value) => setDotted(root, path, value));
+    return root;
+  }
+
+  /// Looks a dotted path up in [json], distinguishing "missing" from "null".
+  static ({bool present, dynamic value}) _lookup(
+    Map<String, dynamic> json,
+    String path,
+  ) {
+    dynamic current = json;
+    for (final part in path.split('.')) {
+      if (current is! Map || !current.containsKey(part)) {
+        return (present: false, value: null);
+      }
+      current = current[part];
+    }
+    return (present: true, value: current);
+  }
+
+  /// True when [path] is [prefix] itself or sits underneath it.
+  static bool _isUnder(String path, String prefix) =>
+      path == prefix || path.startsWith('$prefix.');
+
+  static bool _matchesAny(String path, List<String> prefixes) =>
+      prefixes.any((prefix) => _isUnder(path, prefix));
+
+  static bool isDevicePath(String path) => _matchesAny(path, _devicePaths);
+  static bool isWebLocalPath(String path) => _matchesAny(path, _webLocalPaths);
+  static bool isAdminPath(String path) => _matchesAny(path, _adminPaths);
+  static bool isSecretPath(String path) => _matchesAny(path, _secretPaths);
+
+  // ---------------------------------------------------------------------------
+  // Value conversion
+  // ---------------------------------------------------------------------------
+
+  static ThemeMode _decodeThemeMode(dynamic raw) {
+    switch (raw) {
+      case 'light':
+        return ThemeMode.light;
+      case 'dark':
+        return ThemeMode.dark;
+      default:
+        return ThemeMode.system;
+    }
+  }
+
+  static String _encodeThemeMode(dynamic value) {
+    return switch (value) {
+      ThemeMode.light => 'light',
+      ThemeMode.dark => 'dark',
+      _ => 'system',
+    };
+  }
+
+  static double _decodeDouble(dynamic raw) => raw is num ? raw.toDouble() : 1.0;
+
+  static int _decodeInt(dynamic raw) {
+    if (raw is num) return raw.toInt();
+    final fallback = dotted('server.port');
+    return fallback is num ? fallback.toInt() : 8181;
+  }
+
+  static int _decodeColor(dynamic raw) {
+    if (raw is int) return 0xFF000000 | (raw & 0xFFFFFF);
+    if (raw is String && RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(raw)) {
+      return 0xFF000000 | int.parse(raw.substring(1), radix: 16);
+    }
+    return 0xFFFF4081;
+  }
+
+  static String _encodeColor(dynamic value) {
+    final argb = value is int ? value : 0xFFFF4081;
+    return '#${(argb & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
+  }
+
+  static List<Account> _decodeAccounts(dynamic raw) {
+    if (raw is! List) return [];
+    final result = <Account>[];
+    for (final entry in raw) {
+      if (entry is Map<String, dynamic> && entry['id'] is String) {
+        result.add(Account.fromJson(entry));
+      }
+    }
+    return result;
+  }
+
+  static List<dynamic> _encodeAccounts(dynamic value) {
+    final list = value is List ? value : const [];
+    return [
+      for (final account in list)
+        if (account is Account) account.toJson(),
+    ];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Loading and applying the document
+  // ---------------------------------------------------------------------------
+
   static Future<void> init() async {
     _ioServiceInstance = IOServiceFactory.create();
-    await _loadDefaults();
+    await _loadSchema();
 
     if (kIsWeb) {
       // The web client keeps its device-only settings in the browser's
@@ -192,10 +408,6 @@ class SettingsManager {
     final result = await RinfService.instance.initConfig(configPath);
     final data = result.settings;
     if (data != null) {
-      serverHost.value =
-          data['server_host'] ?? (defaults['server_host'] ?? '127.0.0.1');
-      serverPort.value =
-          data['server_port'] ?? (defaults['server_port'] ?? 8181);
       await _applyFromJson(data);
     }
 
@@ -211,115 +423,75 @@ class SettingsManager {
   /// Loads this device's own settings from the platform's local store.
   static Future<void> _loadLocalSettings() async {
     final data = await _ioService.readLocalSettings();
-    // Only the keys that may live in the browser store are read back; a
+    // Only the paths that may live in the browser store are read back; a
     // foreign or corrupted entry must not inject settings into this client.
     final local = Map<String, dynamic>.fromEntries(
-      data.entries.where((e) => webLocalKeys.contains(e.key)),
+      data.entries.where((e) => isWebLocalPath(e.key)),
     );
     if (local.isEmpty) return;
-    await _applyFromJson(local);
-  }
-
-  static ThemeMode _themeModeFrom(Object? value, Object? fallback) {
-    if (value is int && value >= 0 && value < ThemeMode.values.length) {
-      return ThemeMode.values[value];
-    }
-    if (fallback is int &&
-        fallback >= 0 &&
-        fallback < ThemeMode.values.length) {
-      return ThemeMode.values[fallback];
-    }
-    return ThemeMode.system;
+    await _applyFromJson(nest(local));
   }
 
   static Future<void> _applyFromJson(
     Map<String, dynamic> json, {
     bool fromBackend = false,
   }) async {
-    if (!fromBackend) {
-      // Device-local settings only ever come from this device's own config.
-      // A backend payload must never overwrite them.
-      // A browser has no system tray, so the flag is always false there.
-      retreatToTray.value = kIsWeb
-          ? false
-          : (json['retreat_to_tray'] ?? defaults['retreat_to_tray'] ?? true);
-      themeMode.value = _themeModeFrom(
-        json['theme_mode'],
-        defaults['theme_mode'],
-      );
-      useDynamicColor.value =
-          json['use_dynamic_color'] ?? defaults['use_dynamic_color'] ?? true;
-      customColor.value =
-          json['custom_color'] ?? defaults['custom_color'] ?? 0xFFFF4081;
-      checkNightly.value =
-          json['check_nightly'] ?? defaults['check_nightly'] ?? false;
-      if (json.containsKey('require_login')) {
-        requireLogin.value = json['require_login'] ?? false;
-      }
-      if (json.containsKey('current_user')) {
-        currentUserId.value = json['current_user'] as String?;
-      }
-      if (json['playback_volume'] is num) {
-        playbackVolume.value = (json['playback_volume'] as num).toDouble();
-      } else if (defaults['playback_volume'] is num) {
-        playbackVolume.value = (defaults['playback_volume'] as num).toDouble();
-      }
-
-      if (json['accounts'] is List) {
-        final accountList = <Account>[];
-        for (final accJson in json['accounts']) {
-          if (accJson is Map<String, dynamic> && accJson['id'] is String) {
-            accountList.add(Account.fromJson(accJson));
-          }
+    if (fromBackend) {
+      final version = json['schema_version'];
+      if (version is num && version.toInt() != schemaVersion) {
+        if (!_readOnly) {
+          log(
+            'Refusing settings document with schema version $version; '
+            'this build expects $schemaVersion. Settings are read-only.',
+            level: LogLevel.error,
+          );
         }
-        accounts.value = accountList;
+        _readOnly = true;
+        _applyDefaultsToNotifiers();
+        return;
       }
     }
 
-    // Global settings are only applied when the payload actually contains
-    // them, so a partial response (e.g. the non-admin allowlist) never
-    // resets unrelated settings.
-    if (json.containsKey('download_folder')) {
-      downloadFolder.value = json['download_folder'] ?? '';
-    }
-    if (json.containsKey('slskd_url')) {
-      slskdUrl.value = json['slskd_url'] ?? '';
-    }
-    if (json.containsKey('nadekodon_url')) {
-      nadekodonUrl.value = json['nadekodon_url'] ?? '';
-    }
-    if (json.containsKey('desired_audio_quality')) {
-      desiredAudioQuality.value = json['desired_audio_quality'] ?? 'best';
-    }
-    if (json.containsKey('default_download_source')) {
-      defaultDownloadSource.value = json['default_download_source'] ?? 'slskd';
-    }
-    if (json.containsKey('naming_pattern')) {
-      namingPattern.value =
-          json['naming_pattern'] ??
-          defaults['naming_pattern'] ??
-          defaultNamingPattern;
+    for (final binding in _bindings) {
+      if (fromBackend && isDevicePath(binding.path)) continue;
+      final found = _lookup(json, binding.path);
+      if (!found.present) continue;
+      var raw = found.value;
+      // A browser has no system tray.
+      if (binding.path == 'interface.window.retreat_to_tray' && kIsWeb) {
+        raw = false;
+      }
+      try {
+        binding.notifier.value = binding.decode(raw);
+      } catch (e) {
+        log(
+          'Ignoring unusable value for ${binding.path}: $e',
+          level: LogLevel.warning,
+        );
+      }
     }
   }
 
-  static Future<Map<String, dynamic>> _toJson() async => {
-    'retreat_to_tray': retreatToTray.value,
-    'download_folder': downloadFolder.value,
-    'server_host': serverHost.value,
-    'server_port': serverPort.value,
-    'theme_mode': themeMode.value.index,
-    'use_dynamic_color': useDynamicColor.value,
-    'custom_color': customColor.value,
-    'check_nightly': checkNightly.value,
-    'require_login': requireLogin.value,
-    'current_user': currentUserId.value,
-    'slskd_url': slskdUrl.value,
-    'nadekodon_url': nadekodonUrl.value,
-    'desired_audio_quality': desiredAudioQuality.value,
-    'default_download_source': defaultDownloadSource.value,
-    'playback_volume': playbackVolume.value,
-    'naming_pattern': namingPattern.value,
-    'accounts': accounts.value.map((e) => e.toJson()).toList(),
+  static void _applyDefaultsToNotifiers() {
+    for (final binding in _bindings) {
+      var raw = dotted(binding.path);
+      if (binding.path == 'interface.window.retreat_to_tray' && kIsWeb) {
+        raw = false;
+      }
+      binding.notifier.value = binding.decode(raw);
+    }
+  }
+
+  static Map<String, dynamic> _toJsonFlat() => {
+    for (final binding in _bindings)
+      binding.path: binding.encode(binding.notifier.value),
+  };
+
+  /// The current value of every global path this device knows about.
+  static Map<String, dynamic> _globalSnapshot() => {
+    for (final binding in _bindings)
+      if (!isDevicePath(binding.path))
+        binding.path: binding.encode(binding.notifier.value),
   };
 
   static Future<void> reloadConfig() async {
@@ -337,42 +509,51 @@ class SettingsManager {
   }
 
   static Future<void> saveAll() async {
+    if (_readOnly) return;
     // The full config written below supersedes anything still pending.
     await flushPendingSaves();
-    final jsonMap = await _toJson();
+    final flat = _toJsonFlat();
 
     // The device's own config is also the server's config when the app runs
     // the server locally, so everything goes to a single file there.
     if (!kIsWeb && !PlatformService().isRemote) {
-      await RinfService.instance.saveLocalConfig(jsonMap);
+      await RinfService.instance.saveLocalConfig(nest(flat));
       return;
     }
 
-    final localPart = <String, dynamic>{};
-    final globalPart = <String, dynamic>{};
-    for (final entry in jsonMap.entries) {
-      if (deviceLocalKeys.contains(entry.key)) {
-        localPart[entry.key] = entry.value;
-        continue;
-      }
-      if (!_backendGlobals.containsKey(entry.key)) continue;
-      // Only push what changed on this device; the server already has the rest.
-      if (_backendGlobals[entry.key] != entry.value) {
-        globalPart[entry.key] = entry.value;
+    await _saveLocalFlat(
+      Map.fromEntries(flat.entries.where((e) => isDevicePath(e.key))),
+    );
+
+    final globals = Map<String, dynamic>.fromEntries(
+      flat.entries.where((e) => !isDevicePath(e.key)),
+    );
+    if (!_backendLoaded) return;
+    final changed = <String, dynamic>{};
+    for (final entry in globals.entries) {
+      if (jsonEncode(_backendGlobals[entry.key]) != jsonEncode(entry.value)) {
+        changed[entry.key] = entry.value;
       }
     }
-
-    await _saveLocal(localPart);
-    await _saveToBackend(globalPart);
+    if (changed.isEmpty) return;
+    // Global settings are admin-only.
+    if (currentUser.value?.role != 'admin') {
+      log(
+        'Skipped global settings write: the current user is not an admin',
+        level: LogLevel.warning,
+      );
+      return;
+    }
+    await _saveToBackendFlat(changed);
   }
 
-  /// Records a changed setting.
+  /// Records a changed setting by dotted path.
   ///
   /// The write is debounced: the change is persisted when no further change
   /// arrives for [saveDebounceWindow]. The notifier itself is already
   /// updated by the caller, so the UI is never delayed by this.
-  static void saveChanged(String key, dynamic value) {
-    _pendingSaves[key] = value;
+  static void saveChanged(String path, dynamic value) {
+    _pendingSaves[path] = value;
     _saveTimer?.cancel();
     _saveTimer = Timer(saveDebounceWindow, () {
       _saveTimer = null;
@@ -405,26 +586,28 @@ class SettingsManager {
 
   /// Writes one batch of pending changes.
   static Future<void> _writePending(Map<String, dynamic> pending) async {
+    if (_readOnly) return;
+
     // The device's own config is also the server's config when the app runs
     // the server locally, so everything goes to a single file there.
     if (!kIsWeb && !PlatformService().isRemote) {
-      await RinfService.instance.saveLocalConfig(pending);
+      await RinfService.instance.saveLocalConfig(nest(pending));
       return;
     }
 
-    final localPart = <String, dynamic>{};
-    final globalPart = <String, dynamic>{};
+    final localFlat = <String, dynamic>{};
+    final globalFlat = <String, dynamic>{};
     for (final entry in pending.entries) {
-      if (deviceLocalKeys.contains(entry.key)) {
-        localPart[entry.key] = entry.value;
-        continue;
+      if (isDevicePath(entry.key)) {
+        localFlat[entry.key] = entry.value;
+      } else {
+        globalFlat[entry.key] = entry.value;
       }
-      globalPart[entry.key] = entry.value;
     }
 
-    await _saveLocal(localPart);
+    await _saveLocalFlat(localFlat);
 
-    if (globalPart.isEmpty) return;
+    if (globalFlat.isEmpty) return;
     // Global settings are admin-only.
     if (currentUser.value?.role != 'admin') {
       log(
@@ -433,48 +616,26 @@ class SettingsManager {
       );
       return;
     }
-    await _saveToBackend(globalPart);
+    await _saveToBackendFlat(globalFlat);
   }
 
   /// Persists the current user id on this device. Never sent to the server.
   static Future<void> saveCurrentUser(String? userId) async {
-    await _saveLocal({'current_user': userId ?? ''});
+    await _saveLocalFlat({'accounts.current_user': userId ?? ''});
   }
 
   static Future<void> attachAutoSave() async {
     await detachAutoSave();
 
-    void add(ValueNotifier n, String key, [dynamic Function()? getValue]) {
+    for (final binding in _bindings) {
       void listener() {
         if (_applyingBackend) return;
-        saveChanged(key, getValue != null ? getValue() : n.value);
+        saveChanged(binding.path, binding.encode(binding.notifier.value));
       }
 
-      n.addListener(listener);
-      _autoSaveListeners[n] = listener;
+      binding.notifier.addListener(listener);
+      _autoSaveListeners[binding.notifier] = listener;
     }
-
-    add(retreatToTray, 'retreat_to_tray');
-    add(downloadFolder, 'download_folder');
-    add(serverHost, 'server_host');
-    add(serverPort, 'server_port');
-    add(themeMode, 'theme_mode', () => themeMode.value.index);
-    add(useDynamicColor, 'use_dynamic_color');
-    add(customColor, 'custom_color');
-    add(checkNightly, 'check_nightly');
-    add(requireLogin, 'require_login');
-    add(slskdUrl, 'slskd_url');
-    add(nadekodonUrl, 'nadekodon_url');
-    add(desiredAudioQuality, 'desired_audio_quality');
-    add(defaultDownloadSource, 'default_download_source');
-    add(playbackVolume, 'playback_volume');
-    add(namingPattern, 'naming_pattern');
-    add(currentUserId, 'current_user');
-    add(
-      accounts,
-      'accounts',
-      () => accounts.value.map((e) => e.toJson()).toList(),
-    );
   }
 
   /// Stops the autosave listeners and writes everything still pending.
@@ -489,18 +650,16 @@ class SettingsManager {
   }
 
   static Future<void> applyDefaultSettings() async {
-    retreatToTray.value = defaults['retreat_to_tray'] ?? true;
-    // downloadFolder is usually not reset to default from asset as it's environment dependent
-    serverHost.value = defaults['server_host'] ?? '127.0.0.1';
-    serverPort.value = defaults['server_port'] ?? 8181;
-
-    if (defaults['theme_mode'] != null) {
-      themeMode.value = ThemeMode.values[defaults['theme_mode']];
+    // downloadFolder is usually not reset to default from the manifest as it
+    // is environment dependent.
+    for (final binding in _bindings) {
+      if (binding.path == 'downloads.folder') continue;
+      var raw = dotted(binding.path);
+      if (binding.path == 'interface.window.retreat_to_tray' && kIsWeb) {
+        raw = false;
+      }
+      binding.notifier.value = binding.decode(raw);
     }
-    useDynamicColor.value = defaults['use_dynamic_color'] ?? true;
-    customColor.value = defaults['custom_color'] ?? 0xFFFF4081;
-    checkNightly.value = defaults['check_nightly'] ?? false;
-    namingPattern.value = defaults['naming_pattern'] ?? defaultNamingPattern;
   }
 
   static Future<void> loadAllUserSettings() async {
@@ -635,21 +794,23 @@ class SettingsManager {
   static Future<void> saveSlskdApiKey(String plainKey) async {
     slskdApiKey.value = plainKey;
     if (plainKey.isEmpty) return;
+    final payload = nest({'integrations.slskd.api_key': plainKey});
     if (PlatformService().isRemote) {
-      await APIService.instance.saveSettings({'slskd_api_key': plainKey});
+      await APIService.instance.saveSettings(payload);
       return;
     }
-    await RinfService.instance.saveConfig({'slskd_api_key': plainKey});
+    await RinfService.instance.saveConfig(payload);
   }
 
   static Future<void> saveNadekodonApiKey(String plainKey) async {
     nadekodonApiKey.value = plainKey;
     if (plainKey.isEmpty) return;
+    final payload = nest({'integrations.nadekodon.api_key': plainKey});
     if (PlatformService().isRemote) {
-      await APIService.instance.saveSettings({'nadekodon_api_key': plainKey});
+      await APIService.instance.saveSettings(payload);
       return;
     }
-    await RinfService.instance.saveConfig({'nadekodon_api_key': plainKey});
+    await RinfService.instance.saveConfig(payload);
   }
 
   static Future<void> restartServer() async {
@@ -671,33 +832,35 @@ class SettingsManager {
     await flushPendingSaves();
     // Drop the snapshot of whichever server we talked to before.
     _backendGlobals.clear();
+    _backendLoaded = false;
+    _readOnly = false;
     final data = await APIService.instance.getSettings();
     if (data != null) {
-      _backendGlobals.addAll(
-        Map.fromEntries(
-          data.entries.where((entry) => !deviceLocalKeys.contains(entry.key)),
-        ),
-      );
       _applyingBackend = true;
       try {
         await _applyFromJson(data, fromBackend: true);
       } finally {
         _applyingBackend = false;
       }
+      if (!_readOnly) {
+        _backendGlobals.addAll(_globalSnapshot());
+        _backendLoaded = true;
+      }
     } else {
       log('Failed to load settings from backend', level: LogLevel.error);
     }
   }
 
-  /// Sends global settings to the server. Device-local keys are stripped and
+  /// Sends global settings to the server. Device-local paths are stripped and
   /// never leave this device.
-  static Future<void> _saveToBackend(Map<String, dynamic> values) async {
+  static Future<void> _saveToBackendFlat(Map<String, dynamic> values) async {
     final payload = Map<String, dynamic>.from(values)
-      ..removeWhere((key, _) => deviceLocalKeys.contains(key));
+      ..removeWhere((path, _) => isDevicePath(path));
     if (payload.isEmpty) return;
-    final success = await APIService.instance.saveSettings(payload);
+    payload['schema_version'] = schemaVersion;
+    final success = await APIService.instance.saveSettings(nest(payload));
     if (success) {
-      _backendGlobals.addAll(payload);
+      _backendGlobals.addAll(values);
     } else {
       log('Failed to save settings to backend', level: LogLevel.error);
     }
@@ -708,14 +871,14 @@ class SettingsManager {
   /// Native keeps them in the device's own config file (through Rinf); the
   /// web client keeps the ones that may live in the browser in its local
   /// storage.
-  static Future<void> _saveLocal(Map<String, dynamic> values) async {
+  static Future<void> _saveLocalFlat(Map<String, dynamic> values) async {
     if (values.isEmpty) return;
     if (kIsWeb) {
       // Only the settings that may live in the browser are stored: the
       // account list carries API keys, the user id comes from the session
       // cookie, and login / host / port / tray are fixed on web.
       final storable = Map<String, dynamic>.fromEntries(
-        values.entries.where((e) => webLocalKeys.contains(e.key)),
+        values.entries.where((e) => isWebLocalPath(e.key)),
       );
       if (storable.isEmpty) return;
       final saved = await _ioService.writeLocalSettings(storable);
@@ -727,7 +890,7 @@ class SettingsManager {
       }
       return;
     }
-    await RinfService.instance.saveLocalConfig(values);
+    await RinfService.instance.saveLocalConfig(nest(values));
   }
 
   static void addAccount(Account account) {

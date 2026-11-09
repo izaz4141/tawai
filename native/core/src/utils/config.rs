@@ -1,21 +1,142 @@
 use anyhow::Result;
+use serde_json::{Map, Value};
 use std::{
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, LazyLock},
     time::UNIX_EPOCH,
 };
 
 use crate::utils::encryption::{decrypt, encrypt, valid_encryption_format};
 
-/// Default config JSON, embedded at compile time so it works regardless of
-const DEFAULT_CONFIG_JSON: &str = include_str!("../../../../assets/docs/default.json");
+/// The settings schema, embedded at compile time. This file is the single
+/// source of truth for the shape, defaults, scope and capabilities of the
+/// global settings document; `config.json` is always a concrete instance of it.
+const SETTINGS_SCHEMA_JSON: &str = include_str!("../../../../assets/docs/settings_schema.json");
 
-/// Config keys holding downstream service secrets. Never exposed to clients
-pub const PRIVATE_CONFIG_KEYS: &[&str] = &["slskd_api_key", "nadekodon_api_key"];
+/// Version reported for a config document that carries no `schema_version`.
+pub fn current_schema_version() -> u64 {
+    SCHEMA.version
+}
+
+#[derive(Debug, Clone)]
+pub struct SettingSpec {
+    pub kind: String,
+    pub values: Vec<String>,
+    pub default: Value,
+    pub scope: String,
+    pub admin: bool,
+    pub secret: bool,
+    pub web_local: bool,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+}
+
+impl SettingSpec {
+    pub fn is_device(&self) -> bool {
+        self.scope == "device"
+    }
+
+    pub fn is_global(&self) -> bool {
+        self.scope == "global"
+    }
+}
+
+#[derive(Debug)]
+pub struct Schema {
+    pub version: u64,
+    pub entries: Vec<(String, SettingSpec)>,
+}
+
+impl Schema {
+    pub fn spec(&self, path: &str) -> Option<&SettingSpec> {
+        self.entries.iter().find(|(p, _)| p == path).map(|(_, s)| s)
+    }
+
+    fn any(&self, path: &str, predicate: impl Fn(&SettingSpec) -> bool) -> bool {
+        self.entries
+            .iter()
+            .any(|(p, s)| matches_prefix(path, p) && predicate(s))
+    }
+}
+
+/// Returns true when `path` is `prefix` itself or sits underneath it.
+fn matches_prefix(path: &str, prefix: &str) -> bool {
+    if path == prefix {
+        return true;
+    }
+    path.len() > prefix.len() && path.starts_with(prefix) && path.as_bytes()[prefix.len()] == b'.'
+}
+
+fn is_item_path(path: &str) -> bool {
+    path.contains("[]")
+}
+
+#[derive(serde::Deserialize)]
+struct RawSchema {
+    version: u64,
+    settings: Map<String, Value>,
+}
+
+#[derive(serde::Deserialize)]
+struct RawSpec {
+    #[serde(rename = "type")]
+    kind: String,
+    #[serde(default)]
+    values: Vec<String>,
+    #[serde(default)]
+    default: Value,
+    #[serde(default)]
+    scope: String,
+    #[serde(default)]
+    admin: bool,
+    #[serde(default)]
+    secret: bool,
+    #[serde(default)]
+    web_local: bool,
+    #[serde(default)]
+    min: Option<f64>,
+    #[serde(default)]
+    max: Option<f64>,
+}
+
+pub static SCHEMA: LazyLock<Schema> = LazyLock::new(|| {
+    let raw: RawSchema = serde_json::from_str(SETTINGS_SCHEMA_JSON)
+        .expect("assets/docs/settings_schema.json is not valid JSON");
+    let mut entries: Vec<(String, SettingSpec)> = raw
+        .settings
+        .into_iter()
+        .map(|(path, value)| {
+            let spec: RawSpec = serde_json::from_value(value)
+                .unwrap_or_else(|e| panic!("invalid settings schema entry `{path}`: {e}"));
+            (
+                path,
+                SettingSpec {
+                    kind: spec.kind,
+                    values: spec.values,
+                    default: spec.default,
+                    scope: spec.scope,
+                    admin: spec.admin,
+                    secret: spec.secret,
+                    web_local: spec.web_local,
+                    min: spec.min,
+                    max: spec.max,
+                },
+            )
+        })
+        .collect();
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    Schema {
+        version: raw.version,
+        entries,
+    }
+});
 
 /// Per-user setting keys whose value is stored encrypted at rest. The value is
 /// encrypted before it is written and decrypted when it is read back, so the
 /// plaintext never leaves the process.
+///
+/// These keys are unrelated to the settings schema above: per-user settings are
+/// flat key/value rows in the database, not part of the config document.
 pub const SECRET_USER_SETTING_KEYS: &[&str] = &["listenbrainz_token"];
 
 /// Returns true when the per-user setting `key` holds a secret value.
@@ -54,36 +175,362 @@ pub fn decode_user_setting(key: &str, value: &str, master_key: &str) -> String {
     decrypt(value, master_key).unwrap_or_else(|_| value.to_string())
 }
 
+/// The nested default document, folded from the flat manifest.
+pub static DEFAULT_SETTINGS: LazyLock<Value> = LazyLock::new(|| {
+    let mut root = Value::Object(Map::new());
+    set_path(&mut root, "schema_version", Value::from(SCHEMA.version));
+    for (path, spec) in &SCHEMA.entries {
+        if is_item_path(path) {
+            continue;
+        }
+        set_path(&mut root, path, spec.default.clone());
+    }
+    root
+});
+
+/// A fresh copy of the default document.
+pub fn default_settings() -> Value {
+    DEFAULT_SETTINGS.clone()
+}
+
+pub fn path_is_device(path: &str) -> bool {
+    SCHEMA.any(path, |s| s.is_device())
+}
+
+pub fn path_is_secret(path: &str) -> bool {
+    SCHEMA.any(path, |s| s.secret)
+}
+
+pub fn path_is_admin(path: &str) -> bool {
+    SCHEMA.any(path, |s| s.admin)
+}
+
+pub fn path_is_web_local(path: &str) -> bool {
+    SCHEMA.any(path, |s| s.web_local)
+}
+
+/// Reads a dotted path out of a JSON document.
+pub fn get_path<'a>(root: &'a Value, path: &str) -> Option<&'a Value> {
+    let mut current = root;
+    for part in path.split('.') {
+        current = current.get(part)?;
+    }
+    Some(current)
+}
+
+/// Mutable counterpart to [`get_path`].
+pub fn get_path_mut<'a>(root: &'a mut Value, path: &str) -> Option<&'a mut Value> {
+    let mut current = root;
+    for part in path.split('.') {
+        current = current.get_mut(part)?;
+    }
+    Some(current)
+}
+
+/// Removes a dotted path from a JSON document.
+pub fn remove_path(root: &mut Value, path: &str) {
+    let Some((parent, leaf)) = path.rsplit_once('.') else {
+        if let Value::Object(map) = root {
+            map.remove(path);
+        }
+        return;
+    };
+    if let Some(Value::Object(map)) = get_path_mut(root, parent) {
+        map.remove(leaf);
+    }
+}
+
+/// Writes a dotted path into a JSON document, creating intermediate objects.
+pub fn set_path(root: &mut Value, path: &str, value: Value) {
+    let mut parts = path.split('.').peekable();
+    let mut current = root;
+    while let Some(part) = parts.next() {
+        if parts.peek().is_none() {
+            if !current.is_object() {
+                *current = Value::Object(Map::new());
+            }
+            if let Value::Object(map) = current {
+                map.insert(part.to_string(), value);
+            }
+            return;
+        }
+        if !current.is_object() {
+            *current = Value::Object(Map::new());
+        }
+        let map = current.as_object_mut().expect("object");
+        current = map
+            .entry(part.to_string())
+            .or_insert_with(|| Value::Object(Map::new()));
+    }
+}
+
+/// Returns a deep copy of `value` with every path matching `should_strip` removed.
+pub fn strip_paths(value: &Value, should_strip: impl Fn(&str) -> bool) -> Value {
+    fn walk(value: &Value, prefix: &str, should_strip: &impl Fn(&str) -> bool) -> Value {
+        match value {
+            Value::Object(map) => {
+                let mut out = Map::with_capacity(map.len());
+                for (key, child) in map {
+                    let path = if prefix.is_empty() {
+                        key.clone()
+                    } else {
+                        format!("{prefix}.{key}")
+                    };
+                    if should_strip(&path) {
+                        continue;
+                    }
+                    out.insert(key.clone(), walk(child, &path, should_strip));
+                }
+                Value::Object(out)
+            }
+            Value::Array(items) => Value::Array(
+                items
+                    .iter()
+                    .map(|i| walk(i, prefix, should_strip))
+                    .collect(),
+            ),
+            other => other.clone(),
+        }
+    }
+    walk(value, "", &should_strip)
+}
+
+/// Removes objects that ended up empty, e.g. a parent whose every child was
+/// stripped from a response.
+pub fn prune_empty(value: Value) -> Value {
+    match value {
+        Value::Object(map) => {
+            let mut out = Map::new();
+            for (key, child) in map {
+                let child = prune_empty(child);
+                if child.as_object().map(|m| m.is_empty()).unwrap_or(false) {
+                    continue;
+                }
+                out.insert(key, child);
+            }
+            Value::Object(out)
+        }
+        other => other,
+    }
+}
+
+/// Merges `incoming` into `current`.
+///
+/// Objects merge recursively, arrays replace wholesale, and `null` resets the
+/// path to `default`. Unknown keys in `current` are preserved.
+pub fn merge_into(current: &Value, incoming: &Value, default: &Value) -> Value {
+    match (current, incoming) {
+        (Value::Object(a), Value::Object(b)) => {
+            let mut out = a.clone();
+            for (key, value) in b {
+                let fallback = default.get(key).unwrap_or(&Value::Null);
+                let next = match out.get(key) {
+                    Some(existing) => merge_into(existing, value, fallback),
+                    None => {
+                        if value.is_null() {
+                            fallback.clone()
+                        } else {
+                            value.clone()
+                        }
+                    }
+                };
+                out.insert(key.clone(), next);
+            }
+            Value::Object(out)
+        }
+        (_, Value::Array(b)) => Value::Array(b.clone()),
+        (_, Value::Null) => default.clone(),
+        (_, other) => other.clone(),
+    }
+}
+
+/// Returns true when `value` is usable for `spec`.
+pub fn value_matches_spec(spec: &SettingSpec, value: &Value) -> bool {
+    let in_range = |n: f64| {
+        spec.min.map(|m| n >= m).unwrap_or(true) && spec.max.map(|m| n <= m).unwrap_or(true)
+    };
+    match spec.kind.as_str() {
+        "string" => value.is_string(),
+        "bool" => value.is_boolean(),
+        "int" => match value.as_i64() {
+            Some(n) => in_range(n as f64),
+            None => false,
+        },
+        "number" => match value.as_f64() {
+            Some(n) => in_range(n),
+            None => false,
+        },
+        "enum" => value
+            .as_str()
+            .map(|s| spec.values.iter().any(|v| v == s))
+            .unwrap_or(false),
+        "color" => value
+            .as_str()
+            .map(|s| {
+                s.len() == 7 && s.starts_with('#') && s[1..].chars().all(|c| c.is_ascii_hexdigit())
+            })
+            .unwrap_or(false),
+        "array" => value.is_array(),
+        _ => false,
+    }
+}
+
+/// Fills every declared path with its default and replaces unusable values.
+///
+/// Unknown keys are left untouched, and the document's `schema_version` is
+/// stamped with the version this build knows.
+pub fn apply_schema_defaults(value: &mut Value) {
+    for (path, spec) in &SCHEMA.entries {
+        if is_item_path(path) {
+            continue;
+        }
+        let usable = get_path(value, path)
+            .map(|v| value_matches_spec(spec, v))
+            .unwrap_or(false);
+        if !usable {
+            set_path(value, path, spec.default.clone());
+        }
+    }
+    set_path(value, "schema_version", Value::from(SCHEMA.version));
+}
+
+/// Raised when a config document was written by a different schema version.
+#[derive(Debug)]
+pub struct SchemaVersionMismatch {
+    pub found: u64,
+    pub expected: u64,
+}
+
+impl std::fmt::Display for SchemaVersionMismatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "config schema version {} does not match this build's {}",
+            self.found, self.expected
+        )
+    }
+}
+
+impl std::error::Error for SchemaVersionMismatch {}
+
+/// Returns true if `error` means the document belongs to another schema version.
+pub fn is_version_mismatch(error: &anyhow::Error) -> bool {
+    error.downcast_ref::<SchemaVersionMismatch>().is_some()
+}
+
+pub async fn load_config(path: String, master_key: String) -> Result<Arc<AppConfig>> {
+    let config_path = PathBuf::from(path.clone());
+    if !config_path.exists() || !config_path.is_file() {
+        anyhow::bail!("Config file is not valid: {}", path);
+    }
+
+    let contents = tokio::fs::read_to_string(&config_path).await?;
+    let mut config_val: Value = serde_json::from_str(&contents)?;
+
+    if let Some(found) = config_val.get("schema_version").and_then(|v| v.as_u64()) {
+        if found != SCHEMA.version {
+            return Err(anyhow::Error::new(SchemaVersionMismatch {
+                found,
+                expected: SCHEMA.version,
+            }));
+        }
+    }
+
+    for path in [
+        "integrations.slskd.api_key",
+        "integrations.nadekodon.api_key",
+    ] {
+        let stored = get_path(&config_val, path)
+            .map(|v| v.as_str().unwrap_or("").to_string())
+            .unwrap_or_default();
+        if let Ok(plain) = decrypt(normalize_secret(&stored), master_key.as_str()) {
+            set_path(&mut config_val, path, Value::String(plain));
+        }
+    }
+
+    if let Some(accounts) =
+        get_path_mut(&mut config_val, "accounts.saved").and_then(|v| v.as_array_mut())
+    {
+        for account in accounts.iter_mut() {
+            if let Some(encrypted) = account.get("api_key").and_then(|v| v.as_str()) {
+                if let Ok(plain) = decrypt(encrypted, master_key.as_str()) {
+                    account["api_key"] = Value::String(plain);
+                }
+            }
+        }
+    }
+
+    apply_schema_defaults(&mut config_val);
+
+    let config_metadata = tokio::fs::metadata(&config_path).await?;
+    let config_modified = config_metadata.modified()?;
+    let config_mtime = config_modified.duration_since(UNIX_EPOCH)?.as_secs();
+    Ok(Arc::new(AppConfig {
+        value: config_val,
+        path: config_path,
+        mtime: config_mtime,
+        writable: true,
+    }))
+}
+
+pub async fn load_default_config(path: String) -> Result<Arc<AppConfig>> {
+    let config_path = PathBuf::from(&path);
+    let config = default_settings();
+
+    if let Some(parent) = config_path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    let json_str = serde_json::to_string_pretty(&config)?;
+    tokio::fs::write(&config_path, json_str).await?;
+
+    let config_metadata = tokio::fs::metadata(&config_path).await?;
+    let config_modified = config_metadata.modified()?;
+    let config_mtime = config_modified.duration_since(UNIX_EPOCH)?.as_secs();
+    Ok(Arc::new(AppConfig {
+        value: config,
+        path: config_path,
+        mtime: config_mtime,
+        writable: true,
+    }))
+}
+
+/// An in-memory default document that must never be written back over the file
+/// it was derived from.
+pub fn readonly_default_config(path: String) -> Arc<AppConfig> {
+    Arc::new(AppConfig {
+        value: default_settings(),
+        path: PathBuf::from(path),
+        mtime: 0,
+        writable: false,
+    })
+}
+
+pub fn normalize_secret(s: &str) -> &str {
+    let s = s.trim();
+
+    if s.len() >= 2 {
+        let b = s.as_bytes();
+        if (b[0] == b'"' && b[s.len() - 1] == b'"') || (b[0] == b'\'' && b[s.len() - 1] == b'\'') {
+            return &s[1..s.len() - 1];
+        }
+    }
+
+    s
+}
+
 /// Returns true if `host` refers to the local machine.
 pub fn is_local_host(host: &str) -> bool {
     let h = host.trim();
     h.eq_ignore_ascii_case("127.0.0.1") || h.eq_ignore_ascii_case("localhost")
 }
 
-/// Returns a deep copy of `value` with every key listed in `keys` removed.
-pub fn strip_keys(value: &serde_json::Value, keys: &[&str]) -> serde_json::Value {
-    match value {
-        serde_json::Value::Object(map) => {
-            let mut out = serde_json::Map::with_capacity(map.len());
-            for (k, v) in map {
-                if keys.contains(&k.as_str()) {
-                    continue;
-                }
-                out.insert(k.clone(), strip_keys(v, keys));
-            }
-            serde_json::Value::Object(out)
-        }
-        serde_json::Value::Array(items) => {
-            serde_json::Value::Array(items.iter().map(|i| strip_keys(i, keys)).collect())
-        }
-        other => other.clone(),
-    }
-}
-
 pub struct AppConfig {
-    pub value: serde_json::Value,
+    pub value: Value,
     pub path: PathBuf,
     pub mtime: u64,
+    /// False when the document could not be read and an in-memory default is
+    /// standing in for it. Such a config must never be persisted.
+    pub writable: bool,
 }
 
 pub fn dash_cache_dir(cfg: &AppConfig) -> String {
@@ -99,76 +546,107 @@ pub fn dash_cache_dir(cfg: &AppConfig) -> String {
         .to_string()
 }
 
-pub async fn load_config(path: String, master_key: String) -> Result<Arc<AppConfig>> {
-    let config_path = PathBuf::from(path.clone());
-    if !config_path.exists() || !config_path.is_file() {
-        anyhow::bail!("Config file is not valid: {}", path);
-    }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let contents = tokio::fs::read_to_string(&config_path).await?;
-    let config_raw: serde_json::Value = serde_json::from_str(&contents)?;
-    let mut config_val = config_raw.clone();
-
-    let api_keys = vec!["slskd_api_key", "nadekodon_api_key"];
-    for key in api_keys {
-        let eapi = normalize_secret(&config_raw[key].to_string().as_str()).to_string();
-        if let Ok(dapi) = decrypt(eapi.as_str(), master_key.as_str()) {
-            config_val[key] = serde_json::Value::String(dapi);
-        }
-    }
-
-    if let Some(accounts) = config_val
-        .get_mut("accounts")
-        .and_then(|v| v.as_array_mut())
-    {
-        for acc in accounts.iter_mut() {
-            if let Some(eapi) = acc.get("api_key").and_then(|v| v.as_str()) {
-                if let Ok(dapi) = decrypt(eapi, master_key.as_str()) {
-                    acc["api_key"] = serde_json::Value::String(dapi);
-                }
+    #[test]
+    fn schema_is_self_consistent() {
+        let mut seen = std::collections::HashSet::new();
+        for (path, spec) in &SCHEMA.entries {
+            assert!(seen.insert(path.clone()), "duplicate path `{path}`");
+            assert!(
+                spec.scope == "device" || spec.scope == "global",
+                "`{path}` has an unknown scope `{}`",
+                spec.scope
+            );
+            if is_item_path(path) {
+                continue;
+            }
+            assert!(
+                value_matches_spec(spec, &spec.default),
+                "`{path}` default {:?} does not match its type `{}`",
+                spec.default,
+                spec.kind
+            );
+            if spec.kind == "enum" {
+                assert!(!spec.values.is_empty(), "`{path}` enum has no values");
+                assert!(
+                    spec.default
+                        .as_str()
+                        .map(|d| spec.values.iter().any(|v| v == d))
+                        .unwrap_or(false),
+                    "`{path}` default is not one of its values"
+                );
             }
         }
     }
 
-    let config_metadata = tokio::fs::metadata(&config_path).await?;
-    let config_modified = config_metadata.modified()?;
-    let config_mtime = config_modified.duration_since(UNIX_EPOCH)?.as_secs();
-    Ok(Arc::new(AppConfig {
-        value: config_val,
-        path: config_path,
-        mtime: config_mtime,
-    }))
-}
-
-pub async fn load_default_config(path: String) -> Result<Arc<AppConfig>> {
-    let config_path = PathBuf::from(&path);
-    let config: serde_json::Value = serde_json::from_str(DEFAULT_CONFIG_JSON)?;
-
-    if let Some(parent) = config_path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
-    let json_str = serde_json::to_string_pretty(&config)?;
-    tokio::fs::write(&config_path, json_str).await?;
-
-    let config_metadata = tokio::fs::metadata(&config_path).await?;
-    let config_modified = config_metadata.modified()?;
-    let config_mtime = config_modified.duration_since(UNIX_EPOCH)?.as_secs();
-    Ok(Arc::new(AppConfig {
-        value: config,
-        path: config_path,
-        mtime: config_mtime,
-    }))
-}
-
-pub fn normalize_secret(s: &str) -> &str {
-    let s = s.trim();
-
-    if s.len() >= 2 {
-        let b = s.as_bytes();
-        if (b[0] == b'"' && b[s.len() - 1] == b'"') || (b[0] == b'\'' && b[s.len() - 1] == b'\'') {
-            return &s[1..s.len() - 1];
+    #[test]
+    fn defaults_fold_to_a_nested_document() {
+        let defaults = default_settings();
+        assert_eq!(
+            defaults.get("schema_version").and_then(|v| v.as_u64()),
+            Some(SCHEMA.version)
+        );
+        assert_eq!(
+            get_path(&defaults, "library.organization.naming_pattern").and_then(|v| v.as_str()),
+            SCHEMA
+                .spec("library.organization.naming_pattern")
+                .map(|s| s.default.as_str().unwrap_or(""))
+        );
+        assert!(
+            get_path(&defaults, "accounts.saved")
+                .map(|v| v.is_array())
+                .unwrap_or(false)
+        );
+        for (path, spec) in &SCHEMA.entries {
+            if is_item_path(path) {
+                continue;
+            }
+            assert_eq!(
+                get_path(&defaults, path),
+                Some(&spec.default),
+                "`{path}` missing from the folded defaults"
+            );
         }
     }
 
-    s
+    #[test]
+    fn stripping_is_path_aware() {
+        let mut value = default_settings();
+        set_path(&mut value, "accounts.saved", serde_json::json!([]));
+        let stripped = strip_paths(&value, path_is_device);
+        assert!(get_path(&stripped, "accounts.saved").is_none());
+        assert!(get_path(&stripped, "library.organization.naming_pattern").is_some());
+        assert!(get_path(&stripped, "integrations.slskd.url").is_some());
+
+        let no_secrets = strip_paths(&value, path_is_secret);
+        assert!(get_path(&no_secrets, "integrations.slskd.api_key").is_none());
+        assert!(get_path(&no_secrets, "integrations.slskd.url").is_some());
+    }
+
+    #[test]
+    fn merging_resets_nulls_and_replaces_arrays() {
+        let defaults = default_settings();
+        let current = default_settings();
+        let incoming = serde_json::json!({
+            "downloads": { "quality": "lossless" },
+            "accounts": { "saved": [] },
+            "interface": { "theme": { "mode": null } }
+        });
+        let merged = merge_into(&current, &incoming, &defaults);
+        assert_eq!(
+            get_path(&merged, "downloads.quality").and_then(|v| v.as_str()),
+            Some("lossless")
+        );
+        assert_eq!(
+            get_path(&merged, "downloads.source").and_then(|v| v.as_str()),
+            Some("slskd")
+        );
+        assert_eq!(
+            get_path(&merged, "interface.theme.mode").and_then(|v| v.as_str()),
+            Some("system")
+        );
+    }
 }

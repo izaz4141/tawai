@@ -10,22 +10,29 @@ use crate::audio::tags::{AudioTag, derive_sort_name, parse_artists};
 use crate::db::database::DatabasePool;
 use crate::libsources::SourceUrlResolver;
 use crate::signals::tools::{NamingViolation, RenamePreview};
-use crate::utils::config::AppConfig;
+use crate::utils::config::{AppConfig, DEFAULT_SETTINGS, get_path};
 
 /// The default library naming pattern, used everywhere a naming schema is
 /// required but none is configured. May contain subdirectories (`/`).
-pub(crate) const DEFAULT_PATTERN: &str = "{album_artist??{artist?|/}|/}{album_artist?{album?|/}}{total_discs>1?{disc_padded}|-}{album_artist?{track_padded}| }{multi_artist?{artist}| - }{title}";
+///
+/// Derived from the settings schema so the pattern is written down exactly
+/// once, in `assets/docs/settings_schema.json`.
+pub(crate) static DEFAULT_PATTERN: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+    get_path(&DEFAULT_SETTINGS, "library.organization.naming_pattern")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string()
+});
 
 /// Resolve the global library naming pattern, falling back to
 /// [`DEFAULT_PATTERN`] when the key is missing, not a string, empty, or
 /// whitespace-only.
 pub fn naming_pattern_from_config(cfg: &AppConfig) -> String {
-    cfg.value
-        .get("naming_pattern")
+    get_path(&cfg.value, "library.organization.naming_pattern")
         .and_then(|v| v.as_str())
         .map(str::trim)
         .filter(|p| !p.is_empty())
-        .unwrap_or(DEFAULT_PATTERN)
+        .unwrap_or(DEFAULT_PATTERN.as_str())
         .to_string()
 }
 
@@ -42,7 +49,7 @@ pub async fn config_naming_pattern(context: &Weak<AppContext>) -> String {
             let cfg = ctx.cfg().await;
             naming_pattern_from_config(cfg.as_ref())
         }
-        None => DEFAULT_PATTERN.to_string(),
+        None => DEFAULT_PATTERN.clone(),
     }
 }
 
@@ -59,7 +66,7 @@ pub fn resolve_naming_pattern(override_pattern: Option<&str>, global_pattern: &s
         return pattern.to_string();
     }
     if global_pattern.trim().is_empty() {
-        DEFAULT_PATTERN.to_string()
+        DEFAULT_PATTERN.clone()
     } else {
         global_pattern.to_string()
     }
@@ -865,30 +872,37 @@ mod tests {
             value,
             path: PathBuf::new(),
             mtime: 0,
+            writable: true,
         }
+    }
+
+    fn config_with_pattern(pattern: &str) -> AppConfig {
+        config(serde_json::json!({
+            "library": { "organization": { "naming_pattern": pattern } }
+        }))
     }
 
     #[test]
     fn naming_pattern_from_config_missing_key_falls_back() {
         let cfg = config(serde_json::json!({}));
-        assert_eq!(naming_pattern_from_config(&cfg), DEFAULT_PATTERN);
+        assert_eq!(naming_pattern_from_config(&cfg), DEFAULT_PATTERN.as_str());
     }
 
     #[test]
     fn naming_pattern_from_config_empty_falls_back() {
-        let cfg = config(serde_json::json!({ "naming_pattern": "" }));
-        assert_eq!(naming_pattern_from_config(&cfg), DEFAULT_PATTERN);
+        let cfg = config_with_pattern("");
+        assert_eq!(naming_pattern_from_config(&cfg), DEFAULT_PATTERN.as_str());
     }
 
     #[test]
     fn naming_pattern_from_config_whitespace_falls_back() {
-        let cfg = config(serde_json::json!({ "naming_pattern": "  \t\n" }));
-        assert_eq!(naming_pattern_from_config(&cfg), DEFAULT_PATTERN);
+        let cfg = config_with_pattern("  \t\n");
+        assert_eq!(naming_pattern_from_config(&cfg), DEFAULT_PATTERN.as_str());
     }
 
     #[test]
     fn naming_pattern_from_config_valid_value_is_trimmed() {
-        let cfg = config(serde_json::json!({ "naming_pattern": "  {artist}/{title}  " }));
+        let cfg = config_with_pattern("  {artist}/{title}  ");
         assert_eq!(naming_pattern_from_config(&cfg), "{artist}/{title}");
     }
 
@@ -896,7 +910,10 @@ mod tests {
     async fn config_naming_pattern_without_context_falls_back_to_default() {
         // An un-upgradable context means the call site isn't wired to the app
         // yet; the default pattern is the only sane answer.
-        assert_eq!(config_naming_pattern(&Weak::new()).await, DEFAULT_PATTERN);
+        assert_eq!(
+            config_naming_pattern(&Weak::new()).await,
+            DEFAULT_PATTERN.as_str()
+        );
     }
 
     #[test]
@@ -925,7 +942,7 @@ mod tests {
 
     #[test]
     fn resolve_naming_pattern_falls_back_to_the_default_pattern() {
-        assert_eq!(resolve_naming_pattern(None, ""), DEFAULT_PATTERN);
+        assert_eq!(resolve_naming_pattern(None, ""), DEFAULT_PATTERN.as_str());
         assert_eq!(resolve_naming_pattern(None, "   "), DEFAULT_PATTERN);
         assert_eq!(resolve_naming_pattern(Some(""), ""), DEFAULT_PATTERN);
     }

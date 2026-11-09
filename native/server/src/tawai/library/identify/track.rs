@@ -31,9 +31,7 @@ pub async fn handle_list_download_folder_tracks(
     State(state): State<SharedState>,
 ) -> impl IntoResponse {
     let cfg = state.context.cfg().await;
-    let folder = cfg
-        .value
-        .get("download_folder")
+    let folder = tawai_core::utils::config::get_path(&cfg.value, "downloads.folder")
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
