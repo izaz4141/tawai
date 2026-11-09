@@ -60,7 +60,8 @@ class SettingsManager {
   static int schemaVersion = 1;
 
   /// Set when the document on disk (or on the server) belongs to another
-  /// schema version. The app runs on in-memory defaults and writes nothing.
+  /// schema version. Global settings stay read-only and are never written;
+  /// a remote client may still persist its own device-local settings.
   static bool _readOnly = false;
   static bool get isReadOnly => _readOnly;
 
@@ -302,6 +303,10 @@ class SettingsManager {
   static bool isAdminPath(String path) => _matchesAny(path, _adminPaths);
   static bool isSecretPath(String path) => _matchesAny(path, _secretPaths);
 
+  /// True when this process runs the server itself, so its device config file
+  /// is also the server's config file.
+  static bool get _runsLocalServer => !kIsWeb && !PlatformService().isRemote;
+
   // ---------------------------------------------------------------------------
   // Value conversion
   // ---------------------------------------------------------------------------
@@ -447,7 +452,9 @@ class SettingsManager {
           );
         }
         _readOnly = true;
-        _applyDefaultsToNotifiers();
+        // A remote client still owns its device-local settings, so keep those
+        // bindings; a local server keeps the existing full reset.
+        _applyDefaultsToNotifiers(resetDevicePaths: _runsLocalServer);
         return;
       }
     }
@@ -472,8 +479,9 @@ class SettingsManager {
     }
   }
 
-  static void _applyDefaultsToNotifiers() {
+  static void _applyDefaultsToNotifiers({bool resetDevicePaths = true}) {
     for (final binding in _bindings) {
+      if (!resetDevicePaths && isDevicePath(binding.path)) continue;
       var raw = dotted(binding.path);
       if (binding.path == 'interface.window.retreat_to_tray' && kIsWeb) {
         raw = false;
@@ -509,14 +517,25 @@ class SettingsManager {
   }
 
   static Future<void> saveAll() async {
-    if (_readOnly) return;
+    final localServer = _runsLocalServer;
+    if (_readOnly) {
+      // A schema mismatch keeps global settings read-only, but a remote client
+      // still owns its device-local settings, so persist those and nothing else.
+      if (localServer) return;
+      await flushPendingSaves();
+      final flat = _toJsonFlat();
+      await _saveLocalFlat(
+        Map.fromEntries(flat.entries.where((e) => isDevicePath(e.key))),
+      );
+      return;
+    }
     // The full config written below supersedes anything still pending.
     await flushPendingSaves();
     final flat = _toJsonFlat();
 
     // The device's own config is also the server's config when the app runs
     // the server locally, so everything goes to a single file there.
-    if (!kIsWeb && !PlatformService().isRemote) {
+    if (localServer) {
       await RinfService.instance.saveLocalConfig(nest(flat));
       return;
     }
@@ -586,11 +605,14 @@ class SettingsManager {
 
   /// Writes one batch of pending changes.
   static Future<void> _writePending(Map<String, dynamic> pending) async {
-    if (_readOnly) return;
+    final localServer = _runsLocalServer;
+    // A schema mismatch makes a local server fully read-only. A remote client
+    // may still write its device-local paths below.
+    if (_readOnly && localServer) return;
 
     // The device's own config is also the server's config when the app runs
     // the server locally, so everything goes to a single file there.
-    if (!kIsWeb && !PlatformService().isRemote) {
+    if (localServer) {
       await RinfService.instance.saveLocalConfig(nest(pending));
       return;
     }
@@ -606,6 +628,10 @@ class SettingsManager {
     }
 
     await _saveLocalFlat(localFlat);
+
+    // Global settings must never be written while the schema mismatch keeps
+    // them read-only.
+    if (_readOnly) return;
 
     if (globalFlat.isEmpty) return;
     // Global settings are admin-only.
