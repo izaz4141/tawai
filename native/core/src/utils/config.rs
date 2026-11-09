@@ -394,10 +394,11 @@ pub fn apply_schema_defaults(value: &mut Value) {
     set_path(value, "schema_version", Value::from(SCHEMA.version));
 }
 
-/// Raised when a config document was written by a different schema version.
+/// Raised when a config document was written by a different schema version, or
+/// declares a version that is not an unsigned integer.
 #[derive(Debug)]
 pub struct SchemaVersionMismatch {
-    pub found: u64,
+    pub found: Value,
     pub expected: u64,
 }
 
@@ -418,6 +419,17 @@ pub fn is_version_mismatch(error: &anyhow::Error) -> bool {
     error.downcast_ref::<SchemaVersionMismatch>().is_some()
 }
 
+pub fn validate_schema_version(value: &Value) -> Result<(), SchemaVersionMismatch> {
+    match value.get("schema_version") {
+        None => Ok(()),
+        Some(declared) if declared.as_u64() == Some(SCHEMA.version) => Ok(()),
+        Some(declared) => Err(SchemaVersionMismatch {
+            found: declared.clone(),
+            expected: SCHEMA.version,
+        }),
+    }
+}
+
 pub async fn load_config(path: String, master_key: String) -> Result<Arc<AppConfig>> {
     let config_path = PathBuf::from(path.clone());
     if !config_path.exists() || !config_path.is_file() {
@@ -427,14 +439,7 @@ pub async fn load_config(path: String, master_key: String) -> Result<Arc<AppConf
     let contents = tokio::fs::read_to_string(&config_path).await?;
     let mut config_val: Value = serde_json::from_str(&contents)?;
 
-    if let Some(found) = config_val.get("schema_version").and_then(|v| v.as_u64()) {
-        if found != SCHEMA.version {
-            return Err(anyhow::Error::new(SchemaVersionMismatch {
-                found,
-                expected: SCHEMA.version,
-            }));
-        }
-    }
+    validate_schema_version(&config_val).map_err(anyhow::Error::new)?;
 
     for path in [
         "integrations.slskd.api_key",
@@ -648,5 +653,36 @@ mod tests {
             get_path(&merged, "interface.theme.mode").and_then(|v| v.as_str()),
             Some("system")
         );
+    }
+
+    #[test]
+    fn absent_schema_version_is_allowed() {
+        assert!(validate_schema_version(&serde_json::json!({})).is_ok());
+        assert!(validate_schema_version(&serde_json::json!({"server": {"port": 8181}})).is_ok());
+    }
+
+    #[test]
+    fn present_schema_version_must_be_the_current_unsigned_integer() {
+        assert!(
+            validate_schema_version(&serde_json::json!({"schema_version": SCHEMA.version})).is_ok()
+        );
+
+        let rejected = [
+            serde_json::json!({"schema_version": SCHEMA.version + 1}),
+            serde_json::json!({"schema_version": "1"}),
+            serde_json::json!({"schema_version": 1.5}),
+            serde_json::json!({"schema_version": -1}),
+            serde_json::json!({"schema_version": true}),
+            serde_json::json!({"schema_version": null}),
+        ];
+        for value in rejected {
+            let err = validate_schema_version(&value)
+                .expect_err("non-current schema_version should be rejected");
+            assert_eq!(err.expected, SCHEMA.version);
+            assert!(
+                is_version_mismatch(&anyhow::Error::new(err)),
+                "invalid schema_version must take the read-only path, not the overwrite path"
+            );
+        }
     }
 }

@@ -8,7 +8,7 @@ use serde_json::{Map, Value};
 use tawai_core::db::account;
 use tawai_core::signals::settings::GlobalSettingsResponse;
 use tawai_core::utils::config::{
-    current_schema_version, path_is_device, path_is_secret, prune_empty, strip_paths,
+    path_is_device, path_is_secret, prune_empty, strip_paths, validate_schema_version,
 };
 
 use crate::server::SharedState;
@@ -93,19 +93,12 @@ pub async fn handle_update_global_settings(
             .into_response();
     }
 
-    let expected = current_schema_version();
-    if let Some(found) = new_config.get("schema_version").and_then(|v| v.as_u64()) {
-        if found != expected {
-            return (
-                StatusCode::CONFLICT,
-                Json(serde_json::json!({
-                    "error": format!(
-                        "config schema version {found} does not match this server's {expected}"
-                    )
-                })),
-            )
-                .into_response();
-        }
+    if let Err(e) = validate_schema_version(&new_config) {
+        return (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response();
     }
 
     // Device-local settings belong to each client and never reach this file.
