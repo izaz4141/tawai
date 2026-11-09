@@ -661,7 +661,14 @@ class PlaybackService {
       _attachSource(item.track.id, cache);
     }
 
-    playerState.value = PlayerState(false, ProcessingState.loading);
+    // Keep the current play intent while loading: broadcasting `playing: false`
+    // during an automatic track change makes audio_service drop the Android
+    // foreground service, and Android 12+ then refuses to restart it from the
+    // background (freezing playback until the app is reopened).
+    playerState.value = PlayerState(
+      playerState.value.playing,
+      ProcessingState.loading,
+    );
     if (kIsWeb) {
       // Workaround for ryanheise/just_audio#1596: just_audio_web caches
       // decoded source players under the root playlist's fixed id (''), so a

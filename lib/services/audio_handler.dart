@@ -23,6 +23,19 @@ class TawaiAudioHandler extends BaseAudioHandler with SeekHandler {
     attach();
   }
 
+  /// One-time bootstrap for the platform audio service.
+  static Future<TawaiAudioHandler> init() {
+    return AudioService.init(
+      builder: TawaiAudioHandler.new,
+      config: const AudioServiceConfig(
+        androidNotificationChannelId: 'id.glicole.tawai.channel.audio',
+        androidNotificationChannelName: 'Playback',
+        androidNotificationOngoing: false,
+        androidStopForegroundOnPause: false,
+      ),
+    );
+  }
+
   final PlaybackService _ps = PlaybackService.instance;
   final Map<String, Uri> _artCache = {};
   bool _attached = false;

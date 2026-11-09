@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -129,15 +128,7 @@ Future<void> main(List<String> args) async {
       }
 
       if (kIsWeb || PlatformService.isAndroid) {
-        PlaybackService.instance.audioHandler = await AudioService.init(
-          builder: () => TawaiAudioHandler(),
-          config: const AudioServiceConfig(
-            androidNotificationChannelId: 'id.glicole.tawai.channel.audio',
-            androidNotificationChannelName: 'Playback',
-            androidNotificationOngoing: true,
-            androidStopForegroundOnPause: true,
-          ),
-        );
+        PlaybackService.instance.audioHandler = await TawaiAudioHandler.init();
       }
 
       if (PlatformService.isDesktop) {
