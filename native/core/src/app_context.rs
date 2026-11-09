@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 use std::fmt;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use std::time::UNIX_EPOCH;
 
 use anyhow::Result;
 use tokio::sync::{Notify, RwLock, watch};
@@ -14,9 +14,9 @@ use crate::db::{account, database::DatabaseManager, library_source, user_setting
 use crate::discovery::sync::{SyncRecsParams, sync_recs};
 use crate::signals::library::ScanProgress;
 use crate::utils::config::{
-    AppConfig, DEFAULT_SETTINGS, get_path, get_path_mut, is_local_host, is_version_mismatch,
-    load_config, load_default_config, merge_into, normalize_secret, path_is_secret,
-    readonly_default_config, remove_path, set_path, strip_paths,
+    AppConfig, DEFAULT_SETTINGS, config_file_mtime, get_path, get_path_mut, is_local_host,
+    is_version_mismatch, load_config, load_default_config, merge_into, normalize_secret,
+    path_is_secret, readonly_default_config, remove_path, set_path, strip_paths,
 };
 use crate::utils::{cache, encryption::encrypt, encryption::valid_encryption_format, logger};
 
@@ -82,19 +82,23 @@ impl AppContext {
         let current_path = current_config.path.clone();
         let current_mtime = current_config.mtime;
 
-        let need_reload = match tokio::fs::metadata(&current_path).await {
-            Ok(meta) => {
-                if let Ok(modified) = meta.modified() {
-                    if let Ok(duration) = modified.duration_since(UNIX_EPOCH) {
-                        duration.as_secs() > current_mtime
-                    } else {
-                        false
-                    }
-                } else {
-                    false
+        let observed_mtime = config_file_mtime(&current_path).await;
+
+        let need_reload = match observed_mtime {
+            Some(mtime) => mtime != current_mtime,
+            None => {
+                // The rejected file is gone (or unreadable). Forget the cached
+                // rejection so a file that reappears is loaded again.
+                if !current_config.writable && current_mtime != 0 {
+                    let refreshed = readonly_default_config(
+                        current_path.to_string_lossy().into_owned(),
+                        0,
+                    );
+                    *self.config.write().await = Some(refreshed.clone());
+                    return refreshed;
                 }
+                false
             }
-            Err(_) => false,
         };
 
         if !need_reload {
@@ -120,7 +124,19 @@ impl AppContext {
             }
             Err(e) => {
                 logger::error(&format!("Failed to reload config: {}", e));
-                current_config // fallback to old config
+                if is_version_mismatch(&e) {
+                    // Never keep retrying a file that is still on another
+                    // schema version; remember its mtime and fall back to
+                    // defaults until the file changes or disappears.
+                    let rejected = readonly_default_config(
+                        current_path.to_string_lossy().into_owned(),
+                        observed_mtime.unwrap_or(0),
+                    );
+                    *write = Some(rejected.clone());
+                    rejected
+                } else {
+                    current_config // fallback to old config
+                }
             }
         }
     }
@@ -139,10 +155,13 @@ impl AppContext {
             Err(e) if is_version_mismatch(&e) => {
                 // The document belongs to another schema version. Start on
                 // in-memory defaults, but never write them over the file.
+                // Remember the rejected file's mtime so reloads are skipped
+                // until the file changes or disappears.
                 logger::error(&format!(
                     "Refusing to load config: {e}. Running on defaults; the file will not be written."
                 ));
-                (readonly_default_config(path.clone()), false)
+                let mtime = config_file_mtime(Path::new(&path)).await.unwrap_or(0);
+                (readonly_default_config(path.clone(), mtime), false)
             }
             Err(e) => {
                 logger::warn(&format!("Cant load provided config: {}", e.to_string()));

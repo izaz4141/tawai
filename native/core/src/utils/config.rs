@@ -499,13 +499,21 @@ pub async fn load_default_config(path: String) -> Result<Arc<AppConfig>> {
     }))
 }
 
+/// Returns `path`'s modification time in seconds since the Unix epoch, or
+/// `None` when the file is missing or its mtime cannot be read.
+pub async fn config_file_mtime(path: &Path) -> Option<u64> {
+    let modified = tokio::fs::metadata(path).await.ok()?.modified().ok()?;
+    Some(modified.duration_since(UNIX_EPOCH).ok()?.as_secs())
+}
+
 /// An in-memory default document that must never be written back over the file
-/// it was derived from.
-pub fn readonly_default_config(path: String) -> Arc<AppConfig> {
+/// it was derived from. `mtime` records the rejected file's modification time
+/// so reloads are skipped until that file changes.
+pub fn readonly_default_config(path: String, mtime: u64) -> Arc<AppConfig> {
     Arc::new(AppConfig {
         value: default_settings(),
         path: PathBuf::from(path),
-        mtime: 0,
+        mtime,
         writable: false,
     })
 }
