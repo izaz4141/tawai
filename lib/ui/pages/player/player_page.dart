@@ -15,6 +15,7 @@ import 'package:tawai/ui/pages/player/modal/queue_sheet.dart';
 import 'package:tawai/ui/pages/player/subpages/lyrics/lyrics_page.dart';
 import 'package:tawai/ui/pages/player/widgets/lyrics_view.dart';
 import 'package:tawai/ui/pages/player/widgets/queue_view.dart';
+import 'package:tawai/ui/pages/player/widgets/stream_info_bar.dart';
 
 const double kBottomPanelFraction = 0.4;
 
@@ -179,6 +180,7 @@ class _PlayerPageState extends State<PlayerPage> {
                                 overflow: TextOverflow.ellipsis,
                                 textAlign: TextAlign.center,
                               ),
+                              const StreamInfoBar(),
                             ],
                           ),
                         ),

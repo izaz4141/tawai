@@ -1,11 +1,13 @@
 pub mod history;
 pub mod play;
 pub mod preview;
+pub mod probe;
 pub mod stream;
 
 pub use history::*;
 pub use play::*;
 pub use preview::*;
+pub use probe::*;
 pub use stream::*;
 
 use std::collections::HashMap;
@@ -120,6 +122,7 @@ pub fn create_playback_router(state: SharedState) -> Router<SharedState> {
     let streaming_router = create_streaming_router(state.clone());
     Router::new()
         .route("/play", post(handle_play_track))
+        .route("/probe", post(handle_probe_stream))
         .route("/preview", post(handle_preview_track))
         .route("/history", get(handle_get_history))
         .layer(middleware::from_fn_with_state(state, check_api_key))

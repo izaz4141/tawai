@@ -20,6 +20,21 @@ use crate::server::SharedState;
 
 use super::{TrackAccess, user_can_read_track};
 
+/// Transcode bitrate requested by a native client, or `None` when it should
+/// receive the original file. Shared with the probe endpoint so the metadata
+/// reported to the client cannot disagree with what `/play` actually served.
+pub(crate) fn transcode_bitrate(headers: &HeaderMap, bitrate: Option<&str>) -> Option<u32> {
+    // X-API-Key marks a native client (ExoPlayer / libmpv) that can play DASH.
+    // Web clients authenticate via JWT cookie and must fall back to progressive
+    // streaming (HTML5 audio cannot play DASH).
+    let is_native = headers.contains_key("X-API-Key");
+    let bitrate_kbps = bitrate
+        .filter(|b| !b.is_empty() && *b != "lossless")
+        .and_then(|b| b.parse::<u32>().ok())
+        .filter(|b| (DASH_MIN_BITRATE_KBPS..=DASH_MAX_BITRATE_KBPS).contains(b));
+    if is_native { bitrate_kbps } else { None }
+}
+
 #[utoipa::path(
     post,
     path = "/api/tawai/playback/play",
@@ -77,19 +92,8 @@ pub async fn handle_play_track(
         }
     }
 
-    // X-API-Key marks a native client (ExoPlayer / libmpv) that can play DASH.
-    // Web clients authenticate via JWT cookie and must fall back to progressive
-    // streaming (HTML5 audio cannot play DASH). A native client only gets a DASH
-    // transcode when it asked for a specific bitrate; "lossless"/absent keeps
-    // the original file and is served as a range stream.
-    let is_native = headers.contains_key("X-API-Key");
-    let bitrate_kbps = req
-        .bitrate
-        .as_deref()
-        .filter(|b| !b.is_empty() && *b != "lossless")
-        .and_then(|b| b.parse::<u32>().ok())
-        .filter(|b| (DASH_MIN_BITRATE_KBPS..=DASH_MAX_BITRATE_KBPS).contains(b));
-    let transcode = is_native && bitrate_kbps.is_some();
+    let bitrate_kbps = transcode_bitrate(&headers, req.bitrate.as_deref());
+    let transcode = bitrate_kbps.is_some();
 
     let file_path = if result.file_path.starts_with("http://")
         || result.file_path.starts_with("https://")

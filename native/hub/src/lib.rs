@@ -50,6 +50,7 @@ async fn main() {
 
     // Playback handlers
     spawn(utils::playback::handle_play_track(context.clone()));
+    spawn(utils::playback::handle_probe_stream(context.clone()));
     spawn(utils::playback::handle_preview_track(context.clone()));
     spawn(utils::playback::handle_report_playback(context.clone()));
     spawn(utils::playback::handle_get_history(context.clone()));

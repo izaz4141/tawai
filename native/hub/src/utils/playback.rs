@@ -1,20 +1,195 @@
+use std::path::Path;
 use std::sync::Arc;
 
 use rinf::{DartSignal, RustSignal};
 use tokio::spawn;
 
 use crate::signals::playback::{
-    GetHistoryRequest, GetHistoryResponse, PlayTrackRequest, PlayTrackResponse, PlaybackRecord,
-    PreviewTrackRequest, PreviewTrackResponse, ReportPlaybackRequest, ReportPlaybackResponse,
-    UpdateNowPlayingRequest, UpdateNowPlayingResponse,
+    AudioProbe, GetHistoryRequest, GetHistoryResponse, PlayTrackRequest, PlayTrackResponse,
+    PlaybackRecord, PreviewTrackRequest, PreviewTrackResponse, ProbeStreamRequest,
+    ProbeStreamResponse, ReportPlaybackRequest, ReportPlaybackResponse, UpdateNowPlayingRequest,
+    UpdateNowPlayingResponse,
 };
 use crate::utils::logger;
 
 use tawai_core::app_context::AppContext;
+use tawai_core::audio::probe::{probe_file, probe_url};
 use tawai_core::db::{database::DatabasePool, history, library};
 use tawai_core::dclient::iprev;
 use tawai_core::discovery::listenbrainz;
 use tawai_core::utils::playback::resolve_playable_track;
+
+fn is_url(value: &str) -> bool {
+    value.starts_with("http://") || value.starts_with("https://")
+}
+
+async fn probe_local_file(path: String) -> Result<AudioProbe, String> {
+    tokio::task::spawn_blocking(move || probe_file(Path::new(&path)))
+        .await
+        .map_err(|error| format!("probe task failed: {error}"))?
+        .map(AudioProbe::from)
+        .map_err(|error| error.to_string())
+}
+
+async fn probe_remote(url: &str, headers: &[(String, String)]) -> Result<AudioProbe, String> {
+    probe_url(url, headers)
+        .await
+        .map(AudioProbe::from)
+        .map_err(|error| error.to_string())
+}
+
+async fn probe_track(
+    context: &Arc<AppContext>,
+    id: String,
+    msg: ProbeStreamRequest,
+) -> ProbeStreamResponse {
+    if let Some(track) = &msg.track {
+        if track.source == "external" || track.source_type == "external" {
+            let result = probe_local_file(track.file_path.clone()).await;
+            return match result {
+                Ok(info) => ProbeStreamResponse {
+                    id,
+                    mode: Some("external".to_string()),
+                    info: Some(info),
+                    error: None,
+                },
+                Err(error) => ProbeStreamResponse {
+                    id,
+                    mode: Some("external".to_string()),
+                    info: None,
+                    error: Some(error.to_string()),
+                },
+            };
+        }
+
+        if track.source == "preview" || track.source_type == "preview" {
+            return probe_preview(context, id, track).await;
+        }
+    }
+
+    let db = context.db().await;
+    let cfg = context.cfg().await;
+    let master_key = context.master_key.read().await.clone();
+
+    let result = resolve_playable_track(
+        db.pool(),
+        context.client(),
+        msg.track_id.as_deref(),
+        msg.track.as_ref().map(|track| track.title.as_str()),
+        msg.track
+            .as_ref()
+            .map(|track| track.artists_string.as_str()),
+        msg.track.as_ref().map(|track| track.album_title.as_str()),
+        msg.track
+            .as_ref()
+            .and_then(|track| track.mbid_recording.as_deref()),
+        Some(&cfg),
+        &master_key,
+        Arc::downgrade(context),
+    )
+    .await;
+
+    if let Some(error) = result.error {
+        return ProbeStreamResponse {
+            id,
+            mode: None,
+            info: None,
+            error: Some(error),
+        };
+    }
+    if result.file_path.is_empty() {
+        return ProbeStreamResponse {
+            id,
+            mode: None,
+            info: None,
+            error: Some("No audio source found".to_string()),
+        };
+    }
+
+    let (mode, probe) = if is_url(&result.file_path) {
+        let headers = result.headers.clone().unwrap_or_default();
+        (
+            "direct".to_string(),
+            probe_remote(&result.file_path, &headers).await,
+        )
+    } else {
+        (
+            "local".to_string(),
+            probe_local_file(result.file_path.clone()).await,
+        )
+    };
+
+    match probe {
+        Ok(info) => ProbeStreamResponse {
+            id,
+            mode: Some(mode),
+            info: Some(info),
+            error: None,
+        },
+        Err(error) => {
+            logger::error(&format!("stream probe failed: {error}"));
+            ProbeStreamResponse {
+                id,
+                mode: Some(mode),
+                info: None,
+                error: Some(error.to_string()),
+            }
+        }
+    }
+}
+
+async fn probe_preview(
+    context: &Arc<AppContext>,
+    id: String,
+    track: &crate::signals::library::TrackInfo,
+) -> ProbeStreamResponse {
+    match iprev::fetch_preview(context.client(), &track.artists_string, &track.title).await {
+        Ok(Some(url)) => match probe_remote(&url, &[]).await {
+            Ok(mut info) => {
+                info.transport = Some("preview".to_string());
+                ProbeStreamResponse {
+                    id,
+                    mode: Some("preview".to_string()),
+                    info: Some(info),
+                    error: None,
+                }
+            }
+            Err(error) => ProbeStreamResponse {
+                id,
+                mode: Some("preview".to_string()),
+                info: None,
+                error: Some(error.to_string()),
+            },
+        },
+        Ok(None) => ProbeStreamResponse {
+            id,
+            mode: Some("preview".to_string()),
+            info: None,
+            error: Some("No preview available".to_string()),
+        },
+        Err(error) => ProbeStreamResponse {
+            id,
+            mode: Some("preview".to_string()),
+            info: None,
+            error: Some(error.to_string()),
+        },
+    }
+}
+
+pub async fn handle_probe_stream(context: Arc<AppContext>) {
+    let receiver = ProbeStreamRequest::get_dart_signal_receiver();
+    while let Some(signal_pack) = receiver.recv().await {
+        let msg = signal_pack.message;
+        // Probe concurrently: a slow URL probe for a skipped track must not
+        // delay the probe for the track actually playing.
+        let context = context.clone();
+        spawn(async move {
+            let id = msg.id.clone();
+            let response = probe_track(&context, id, msg).await;
+            response.send_signal_to_dart();
+        });
+    }
+}
 
 pub async fn handle_play_track(context: Arc<AppContext>) {
     let receiver = PlayTrackRequest::get_dart_signal_receiver();
