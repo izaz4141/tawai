@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/components/track_list_tile.dart';
 import 'package:tawai/ui/widgets/mini_player.dart';
 import 'package:tawai/utils/bridge_service.dart';
@@ -217,54 +218,18 @@ class _DuplicateFinderPageState extends State<DuplicateFinderPage> {
                 )
               else if (!_hasScanned)
                 Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.copy_all,
-                          size: AppTheme.iconXXL * AppTheme.iconScale(context),
-                          color: colors.onSurfaceVariant,
-                        ),
-                        SizedBox(
-                          height:
-                              AppTheme.spaceSM *
-                              2 *
-                              AppTheme.spaceScale(context),
-                        ),
-                        Text(
-                          'Configure options above and tap Scan',
-                          style: textTheme.bodyLarge?.copyWith(
-                            color: colors.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: const EmptyState(
+                    icon: Icons.copy_all,
+                    message: 'Configure options above and tap Scan',
                   ),
                 )
               else if (_groups.isEmpty)
                 Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.check_circle,
-                          size: AppTheme.iconXXL * AppTheme.iconScale(context),
-                          color: colors.primary,
-                        ),
-                        SizedBox(
-                          height:
-                              AppTheme.spaceSM *
-                              2 *
-                              AppTheme.spaceScale(context),
-                        ),
-                        Text(
-                          'No duplicates found!',
-                          style: textTheme.titleMedium,
-                        ),
-                      ],
-                    ),
+                  child: EmptyState(
+                    icon: Icons.check_circle,
+                    message: 'No duplicates found!',
+                    iconColor: colors.primary,
+                    messageStyle: textTheme.titleMedium,
                   ),
                 )
               else

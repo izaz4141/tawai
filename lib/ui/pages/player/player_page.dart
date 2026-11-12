@@ -9,6 +9,7 @@ import 'package:tawai/ui/widgets/components/volume_button.dart';
 import 'package:tawai/ui/widgets/components/seek_bar.dart';
 import 'package:tawai/ui/widgets/components/track_action_sheet.dart';
 import 'package:tawai/ui/widgets/components/download_track_sheet.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/pages/player/modal/queue_sheet.dart';
 import 'package:tawai/ui/pages/player/subpages/lyrics/lyrics_page.dart';
@@ -107,7 +108,10 @@ class _PlayerPageState extends State<PlayerPage> {
                     ),
                   );
                 }
-                return const Center(child: Text('No track playing'));
+                return const EmptyState(
+                  icon: Icons.music_note_outlined,
+                  message: 'No track playing',
+                );
               }
 
               return Column(

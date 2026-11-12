@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/components/section_header.dart';
 import 'package:tawai/ui/pages/discovery/widgets/recording_card.dart';
 import 'package:tawai/src/bindings/bindings.dart';
@@ -114,7 +115,6 @@ class RecommendationSection extends StatelessWidget {
 
   Widget _buildContent(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
 
     if (loading) {
       return Center(
@@ -128,14 +128,10 @@ class RecommendationSection extends StatelessWidget {
     }
 
     if (recordings == null || recordings!.isEmpty) {
-      return Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppTheme.spaceLG * AppTheme.spaceScale(context),
-        ),
-        child: Text(
-          'No recommendations available yet.',
-          style: textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
-        ),
+      return const EmptyState(
+        icon: Icons.explore_outlined,
+        message: 'No recommendations available yet.',
+        compact: true,
       );
     }
 

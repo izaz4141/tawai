@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/lyrics_parser.dart';
 import 'package:tawai/utils/settings.dart';
@@ -195,20 +196,7 @@ class _LyricsViewState extends State<LyricsView> {
   }
 
   Widget _buildEmpty(String message) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.lyrics_outlined,
-            size: AppTheme.iconXL * AppTheme.iconScale(context),
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-          SizedBox(height: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context)),
-          Text(message, style: Theme.of(context).textTheme.bodyLarge),
-        ],
-      ),
-    );
+    return EmptyState(icon: Icons.lyrics_outlined, message: message);
   }
 
   Widget _buildError(TextTheme textTheme) {

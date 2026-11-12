@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/utils/io_service.dart';
 
 class UploadedMediaFile {
@@ -137,30 +138,14 @@ class _MediaUploaderState extends State<MediaUploader> {
   }
 
   Widget _buildEmpty() {
-    final colors = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.upload_file,
-            size: AppTheme.iconXXL,
-            color: colors.primary,
-          ),
-          SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
-          Text(
-            widget.hintText ?? 'Select media file(s) to upload.',
-            style: textTheme.bodyMedium,
-            textAlign: TextAlign.center,
-          ),
-          SizedBox(height: AppTheme.spaceLG * AppTheme.spaceScale(context)),
-          FilledButton.icon(
-            onPressed: _pickFiles,
-            icon: const Icon(Icons.file_open),
-            label: Text(widget.pickLabel),
-          ),
-        ],
+    return EmptyState(
+      icon: Icons.upload_file,
+      message: widget.hintText ?? 'Select media file(s) to upload.',
+      iconColor: Theme.of(context).colorScheme.primary,
+      action: FilledButton.icon(
+        onPressed: _pickFiles,
+        icon: const Icon(Icons.file_open),
+        label: Text(widget.pickLabel),
       ),
     );
   }

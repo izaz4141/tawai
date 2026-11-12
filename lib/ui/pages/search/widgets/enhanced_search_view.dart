@@ -10,6 +10,7 @@ import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/pages/search/modals/release_picker_dialog.dart';
 import 'package:tawai/ui/pages/search/modals/track_picker_dialog.dart';
 import 'package:tawai/ui/widgets/components/cached_network_image.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 
 enum _EnhancedStep { choosingMbResult, viewingResults }
 
@@ -220,7 +221,7 @@ class _EnhancedSearchViewState extends State<EnhancedSearchView> {
 
   Widget _buildResultsList(List<SearchResultItem> entries) {
     if (entries.isEmpty) {
-      return const Center(child: Text('No results.'));
+      return const EmptyState(icon: Icons.search_off, message: 'No results.');
     }
     return ListView.builder(
       itemCount: entries.length + 1,
@@ -241,7 +242,6 @@ class _EnhancedSearchViewState extends State<EnhancedSearchView> {
     final sourceLabel = widget.downloadSource == 'slskd'
         ? 'Soulseek'
         : 'YouTube';
-    final textTheme = Theme.of(context).textTheme;
 
     if (_step == _EnhancedStep.viewingResults) {
       return Column(
@@ -286,11 +286,9 @@ class _EnhancedSearchViewState extends State<EnhancedSearchView> {
           child: widget.searching
               ? const Center(child: CircularProgressIndicator())
               : widget.recordings.isEmpty
-              ? Center(
-                  child: Text(
-                    'Search MusicBrainz to discover music.',
-                    style: textTheme.bodyMedium,
-                  ),
+              ? const EmptyState(
+                  icon: Icons.travel_explore,
+                  message: 'Search MusicBrainz to discover music.',
                 )
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(

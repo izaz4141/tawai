@@ -5,6 +5,7 @@ import 'package:tawai/ui/pages/library/subpages/album/album_detail_page.dart';
 import 'package:tawai/ui/pages/library/modal/album_action_sheet.dart';
 import 'package:tawai/ui/widgets/components/alphabet_index_scroller.dart';
 import 'package:tawai/ui/widgets/components/album_card.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/mini_player.dart';
 
 class LibraryAlbumsTab extends StatelessWidget {
@@ -20,14 +21,11 @@ class LibraryAlbumsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (albums.isEmpty) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        children: [
-          SizedBox(
-            height: AppTheme.spaceMD * 10 * AppTheme.spaceScale(context),
-          ),
-          const Center(child: Text('No albums in library')),
-        ],
+      return const ScrollableEmptyState(
+        child: EmptyState(
+          icon: Icons.album_outlined,
+          message: 'No albums in library',
+        ),
       );
     }
 

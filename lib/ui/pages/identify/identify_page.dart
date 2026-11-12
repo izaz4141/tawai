@@ -8,6 +8,7 @@ import 'package:tawai/ui/pages/identify/widgets/release_picker_dialog.dart';
 import 'package:tawai/ui/pages/identify/widgets/right_panel.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/dialog/identify_dialog.dart';
 
 class IdentifyPage extends StatefulWidget {
@@ -117,25 +118,9 @@ class _IdentifyPageState extends State<IdentifyPage> {
       builder: (context, _) {
         final rightPanel = _controller.albumResults.isNotEmpty
             ? RightPanel(controller: _controller)
-            : Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.album,
-                      size: AppTheme.iconXXL * AppTheme.iconScale(context),
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-                    SizedBox(
-                      height:
-                          AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
-                    ),
-                    Text(
-                      'No identified tracks',
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ],
-                ),
+            : const EmptyState(
+                icon: Icons.album,
+                message: 'No identified tracks',
               );
 
         return AppShell(

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/utils/helper.dart';
 
 Future<Map<String, dynamic>?> showNadekodonFormatPicker(
@@ -47,9 +48,10 @@ Future<Map<String, dynamic>?> showNadekodonFormatPicker(
             ),
           const SizedBox(height: AppTheme.spaceXS),
           if (formats.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(AppTheme.spaceMD),
-              child: Text('No audio formats available'),
+            const EmptyState(
+              icon: Icons.audio_file_outlined,
+              message: 'No audio formats available',
+              compact: true,
             ),
           for (final f in formats)
             SimpleDialogOption(

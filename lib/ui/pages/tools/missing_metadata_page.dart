@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/dialog/tag_editor.dart';
 import 'package:tawai/utils/bridge_service.dart';
 
@@ -146,12 +147,12 @@ class _MissingMetadataPageState extends State<MissingMetadataPage> {
             ),
           Expanded(
             child: _results.isEmpty
-                ? Center(
-                    child: Text(
-                      _scanning ? '' : 'No results. Tap scan to check.',
-                      style: textTheme.bodyLarge,
-                    ),
-                  )
+                ? (_scanning
+                      ? const Center(child: CircularProgressIndicator())
+                      : const EmptyState(
+                          icon: Icons.manage_search,
+                          message: 'No results. Tap scan to check.',
+                        ))
                 : ListView.builder(
                     itemCount: _results.length,
                     itemBuilder: (context, index) {

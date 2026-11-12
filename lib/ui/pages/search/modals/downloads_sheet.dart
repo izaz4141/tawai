@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/components/sheet.dart';
 import 'package:tawai/ui/pages/search/widgets/download_tile.dart';
 import 'package:tawai/utils/bridge_service.dart';
@@ -81,7 +82,10 @@ class _DownloadsSheetState extends State<_DownloadsSheet> {
       ),
       bodyBuilder: (scrollCtrl) {
         if (_downloads.isEmpty) {
-          return const Center(child: Text('No downloads yet'));
+          return const EmptyState(
+            icon: Icons.download_outlined,
+            message: 'No downloads yet',
+          );
         }
 
         return ListView(

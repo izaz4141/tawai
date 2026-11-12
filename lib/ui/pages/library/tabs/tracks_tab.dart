@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
-import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/components/track_list_tile.dart';
 import 'package:tawai/ui/widgets/components/alphabet_index_scroller.dart';
 import 'package:tawai/ui/widgets/mini_player.dart';
@@ -18,14 +18,11 @@ class LibraryTracksTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (tracks.isEmpty) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        children: [
-          SizedBox(
-            height: AppTheme.spaceMD * 10 * AppTheme.spaceScale(context),
-          ),
-          const Center(child: Text('No tracks in library')),
-        ],
+      return const ScrollableEmptyState(
+        child: EmptyState(
+          icon: Icons.music_note_outlined,
+          message: 'No tracks in library',
+        ),
       );
     }
     return Theme(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/components/track_action_sheet.dart';
 import 'package:tawai/ui/widgets/mini_player.dart';
 import 'package:tawai/utils/helper.dart';
@@ -19,14 +20,11 @@ class LibraryHistoryTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (history.isEmpty) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        children: [
-          SizedBox(
-            height: AppTheme.spaceMD * 10 * AppTheme.spaceScale(context),
-          ),
-          const Center(child: Text('No playback history yet')),
-        ],
+      return const ScrollableEmptyState(
+        child: EmptyState(
+          icon: Icons.history,
+          message: 'No playback history yet',
+        ),
       );
     }
     return ListView.builder(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/pages/library/filterable_list.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 
 class LibraryFilterDialog extends StatefulWidget {
   final LibraryFilters filters;
@@ -57,9 +58,6 @@ class _LibraryFilterDialogState extends State<LibraryFilterDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
     return AlertDialog(
       title: const Text('Filter'),
       contentPadding: EdgeInsets.fromLTRB(
@@ -97,11 +95,10 @@ class _LibraryFilterDialogState extends State<LibraryFilterDialog> {
             if (widget.options.sources.isEmpty &&
                 widget.options.genres.isEmpty &&
                 widget.options.years.isEmpty)
-              Text(
-                'No filters available for this tab.',
-                style: textTheme.bodyMedium?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
+              const EmptyState(
+                icon: Icons.filter_alt_off_outlined,
+                message: 'No filters available for this tab.',
+                compact: true,
               ),
           ],
         ),

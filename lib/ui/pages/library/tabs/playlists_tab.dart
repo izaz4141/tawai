@@ -3,6 +3,7 @@ import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/pages/library/subpages/playlist/playlist_detail_page.dart';
 import 'package:tawai/ui/widgets/components/alphabet_index_scroller.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/mini_player.dart';
 
 class LibraryPlaylistsTab extends StatelessWidget {
@@ -26,10 +27,10 @@ class LibraryPlaylistsTab extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           _buildHeader(context),
-          SizedBox(
-            height: AppTheme.spaceSM * 10 * AppTheme.spaceScale(context),
+          const EmptyState(
+            icon: Icons.playlist_play,
+            message: 'No playlists yet',
           ),
-          const Center(child: Text('No playlists yet')),
         ],
       );
     }

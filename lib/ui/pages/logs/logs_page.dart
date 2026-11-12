@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/utils/log_service.dart';
 
 class LogsPage extends StatefulWidget {
@@ -161,11 +162,9 @@ class _LogsPageState extends State<LogsPage> {
                       borderRadius: BorderRadius.circular(AppTheme.radiusSM),
                     ),
                     child: filteredLogs.isEmpty
-                        ? Center(
-                            child: Text(
-                              'No logs yet.',
-                              style: textTheme.bodyMedium,
-                            ),
+                        ? const EmptyState(
+                            icon: Icons.receipt_long_outlined,
+                            message: 'No logs yet.',
                           )
                         : SingleChildScrollView(
                             child: IntrinsicWidth(

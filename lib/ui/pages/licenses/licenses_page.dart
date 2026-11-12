@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/utils/logger.dart';
 
 class LicensesPage extends StatefulWidget {
@@ -196,11 +197,9 @@ class _LicensesPageState extends State<LicensesPage> {
 
     final detailWidget = Expanded(
       child: _selectedPackage == null
-          ? Center(
-              child: Text(
-                'Select a package to view license',
-                style: textTheme.bodyMedium,
-              ),
+          ? const EmptyState(
+              icon: Icons.description_outlined,
+              message: 'Select a package to view license',
             )
           : Padding(
               padding: const EdgeInsets.all(AppTheme.spaceMD),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/utils/bridge_service.dart';
 
 class SearchLyricsDialog extends StatefulWidget {
@@ -88,14 +89,10 @@ class _SearchLyricsDialogState extends State<SearchLyricsDialog> {
             ),
             const SizedBox(height: 12),
             if (_results.isEmpty && !_loading)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Text(
-                  'No results found',
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
+              const EmptyState(
+                icon: Icons.lyrics_outlined,
+                message: 'No results found',
+                compact: true,
               )
             else
               Flexible(

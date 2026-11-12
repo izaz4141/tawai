@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 
 class TrackListView extends StatelessWidget {
   final List<TrackInfo> tracks;
@@ -27,23 +28,13 @@ class TrackListView extends StatelessWidget {
     }
 
     if (tracks.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.check_circle_outline,
-              size: AppTheme.iconXL * AppTheme.iconScale(context),
-              color: colors.outline,
-            ),
-            const SizedBox(height: AppTheme.spaceMD),
-            Text('No tracks', style: Theme.of(context).textTheme.bodyLarge),
-            const SizedBox(height: AppTheme.spaceSM),
-            FilledButton.tonal(
-              onPressed: onRefresh,
-              child: const Text('Refresh'),
-            ),
-          ],
+      return EmptyState(
+        icon: Icons.check_circle_outline,
+        message: 'No tracks',
+        iconColor: colors.outline,
+        action: FilledButton.tonal(
+          onPressed: onRefresh,
+          child: const Text('Refresh'),
         ),
       );
     }

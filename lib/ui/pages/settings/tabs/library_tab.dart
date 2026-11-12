@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/services/scan_service.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/components/list_dropdown.dart';
 import 'package:tawai/ui/widgets/components/section_header.dart';
 import 'package:tawai/ui/widgets/components/list_switch.dart';
@@ -303,16 +304,12 @@ class _SettingsLibraryTabState extends State<SettingsLibraryTab> {
           leading: Icon(Icons.library_music),
         ),
         if (_sources.isEmpty)
-          Padding(
-            padding: EdgeInsets.symmetric(
-              vertical: AppTheme.spaceSM * AppTheme.spaceScale(context),
-            ),
-            child: Text(
-              'No library sources configured. Add folders or remote libraries containing your music files.',
-              style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
+          const EmptyState(
+            icon: Icons.library_music_outlined,
+            message:
+                'No library sources configured. Add folders or remote '
+                'libraries containing your music files.',
+            compact: true,
           )
         else
           ...List.generate(_sources.length, (i) {

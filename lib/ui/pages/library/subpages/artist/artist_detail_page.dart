@@ -6,6 +6,7 @@ import 'package:tawai/ui/pages/library/subpages/album/album_detail_page.dart';
 import 'package:tawai/ui/pages/library/modal/album_action_sheet.dart';
 import 'package:tawai/ui/pages/library/subpages/artist/artist_header.dart';
 import 'package:tawai/ui/widgets/components/album_card.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/mini_player.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/services/playback_service.dart';
@@ -99,11 +100,9 @@ class _ArtistDetailPageState extends State<ArtistDetailPage> {
                       physics: const AlwaysScrollableScrollPhysics(),
                       children: [
                         ArtistHeader(artist: widget.artist),
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(AppTheme.spaceXXL),
-                            child: Text('No albums found'),
-                          ),
+                        const EmptyState(
+                          icon: Icons.album_outlined,
+                          message: 'No albums found',
                         ),
                         const MiniPlayerSpacer(),
                       ],

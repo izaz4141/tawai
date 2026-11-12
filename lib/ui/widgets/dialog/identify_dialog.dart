@@ -6,6 +6,7 @@ import 'package:tawai/ui/pages/identify/utils/identify_helpers.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/ui/widgets/components/cached_network_image.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/helper.dart';
 
@@ -344,13 +345,12 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
           child: _searching
               ? const Center(child: CircularProgressIndicator())
               : _recordings.isEmpty
-              ? Center(
-                  child: Text(
-                    _hasAutoSearched
-                        ? 'No results found. Try a different query.'
-                        : 'Search for a recording to get started.',
-                    style: textTheme.bodyMedium,
-                  ),
+              ? EmptyState(
+                  icon: _hasAutoSearched ? Icons.search_off : Icons.search,
+                  message: _hasAutoSearched
+                      ? 'No results found. Try a different query.'
+                      : 'Search for a recording to get started.',
+                  compact: true,
                 )
               : ListView.builder(
                   itemCount: _recordings.length,
@@ -627,8 +627,10 @@ class _IdentifyDialogState extends State<_IdentifyDialog> {
           child: _loadingTracks
               ? const Center(child: CircularProgressIndicator())
               : _tracks.isEmpty
-              ? Center(
-                  child: Text('No tracks found.', style: textTheme.bodyMedium),
+              ? const EmptyState(
+                  icon: Icons.album_outlined,
+                  message: 'No tracks found.',
+                  compact: true,
                 )
               : ListView.builder(
                   itemCount: _tracks.length,

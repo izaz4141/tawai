@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/services/playback_service.dart';
-import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/pages/library/subpages/playlist/playlist_header.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/components/track_list_tile.dart';
 import 'package:tawai/ui/widgets/mini_player.dart';
 import 'package:tawai/utils/bridge_service.dart';
@@ -68,11 +68,9 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                       children: [
                         PlaylistHeader(playlist: widget.playlist),
                         if (_tracks.isEmpty)
-                          Padding(
-                            padding: EdgeInsets.all(
-                              AppTheme.spaceXXL * AppTheme.spaceScale(context),
-                            ),
-                            child: const Text('No tracks in this playlist'),
+                          const EmptyState(
+                            icon: Icons.playlist_remove,
+                            message: 'No tracks in this playlist',
                           ),
                       ],
                     );

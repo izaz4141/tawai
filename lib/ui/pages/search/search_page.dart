@@ -7,6 +7,7 @@ import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/ui/widgets/app_shell.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/mini_player.dart';
 import 'package:tawai/ui/pages/search/search_types.dart';
 import 'package:tawai/ui/pages/search/widgets/search_bar.dart' as search;
@@ -494,7 +495,10 @@ class _SearchPageState extends State<SearchPage> {
 
   Widget _buildResultList(List<SearchResultItem> entries) {
     if (entries.isEmpty) {
-      return const Center(child: Text('No results. Try searching above.'));
+      return const EmptyState(
+        icon: Icons.search_off,
+        message: 'No results. Try searching above.',
+      );
     }
     return ListView.builder(
       itemCount: entries.length + 1,

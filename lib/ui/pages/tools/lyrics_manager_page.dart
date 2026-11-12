@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/dialog/language_picker_dialog.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/logger.dart';
@@ -106,14 +107,10 @@ class _LyricsSearchDialogState extends State<_LyricsSearchDialog> {
             ),
             SizedBox(height: AppTheme.spaceMD * AppTheme.spaceScale(context)),
             if (_results.isEmpty && !_loading)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Text(
-                  'No results found',
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
+              const EmptyState(
+                icon: Icons.search_off,
+                message: 'No results found',
+                compact: true,
               )
             else
               Flexible(
@@ -488,13 +485,10 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
           child: _loadingTracks
               ? const Center(child: CircularProgressIndicator())
               : _filteredTracks.isEmpty
-              ? Center(
-                  child: Text(
-                    'No tracks',
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
+              ? const EmptyState(
+                  icon: Icons.music_note_outlined,
+                  message: 'No tracks',
+                  compact: true,
                 )
               : ListView.builder(
                   itemCount: _filteredTracks.length,
@@ -538,26 +532,9 @@ class _LyricsManagerPageState extends State<LyricsManagerPage> {
 
   Widget _buildEditorPanel(ColorScheme colors, TextTheme textTheme) {
     if (_selectedTrack == null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.edit_note,
-              size: AppTheme.iconXXL * AppTheme.iconScale(context),
-              color: colors.onSurfaceVariant,
-            ),
-            SizedBox(
-              height: AppTheme.spaceSM * 2 * AppTheme.spaceScale(context),
-            ),
-            Text(
-              'Select a track to edit lyrics',
-              style: textTheme.bodyLarge?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
+      return const EmptyState(
+        icon: Icons.edit_note,
+        message: 'Select a track to edit lyrics',
       );
     }
 

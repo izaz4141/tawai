@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:tawai/models/fs.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/utils/api_service.dart';
 
 /// A dialog that browses the **server's** filesystem and lets the user select
@@ -183,26 +184,11 @@ class _FolderPickerDialogState extends State<FolderPickerDialog> {
                   ],
                   SizedBox(height: AppTheme.spaceMD * spaceScale),
                   if (_entries.isEmpty && _error == null)
-                    Padding(
-                      padding: EdgeInsets.symmetric(
-                        vertical: AppTheme.spaceXL * spaceScale,
-                      ),
-                      child: Column(
-                        children: [
-                          Icon(
-                            Icons.folder_open_rounded,
-                            size: AppTheme.iconXL * iconScale,
-                            color: colorScheme.onSurfaceVariant.withAlpha(120),
-                          ),
-                          SizedBox(height: AppTheme.spaceSM * spaceScale),
-                          Text(
-                            'No subfolders',
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
+                    EmptyState(
+                      icon: Icons.folder_open_rounded,
+                      message: 'No subfolders',
+                      iconColor: colorScheme.onSurfaceVariant.withAlpha(120),
+                      compact: true,
                     )
                   else
                     Flexible(

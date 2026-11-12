@@ -7,6 +7,7 @@ import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/components/sheet.dart';
 import 'package:tawai/ui/widgets/components/cover_image.dart';
 import 'package:tawai/ui/pages/search/search_types.dart';
@@ -260,18 +261,10 @@ class _DownloadTrackSheetState extends State<_DownloadTrackSheet> {
     }
 
     if (_results.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppTheme.spaceXXL),
-        child: Column(
-          children: [
-            const Icon(Icons.search_off, size: AppTheme.iconXL),
-            const SizedBox(height: AppTheme.spaceMD),
-            Text(
-              'No results found',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-          ],
-        ),
+      return const EmptyState(
+        icon: Icons.search_off,
+        message: 'No results found',
+        compact: true,
       );
     }
 

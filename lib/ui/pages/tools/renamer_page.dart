@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/dialog/naming_format.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/helper.dart';
@@ -353,25 +354,9 @@ class _RenamerPageState extends State<RenamerPage> {
   }
 
   Widget _buildEmptyState() {
-    final colors = Theme.of(context).colorScheme;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.drive_file_rename_outline,
-            size: AppTheme.iconXXL * AppTheme.iconScale(context),
-            color: colors.onSurfaceVariant,
-          ),
-          SizedBox(height: AppTheme.spaceMD),
-          Text(
-            'Select a source and tap Preview',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
-          ),
-        ],
-      ),
+    return const EmptyState(
+      icon: Icons.drive_file_rename_outline,
+      message: 'Select a source and tap Preview',
     );
   }
 

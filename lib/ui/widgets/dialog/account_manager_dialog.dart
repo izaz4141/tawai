@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:tawai/models/account.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/utils/api_service.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/dialog/add_account_dialog.dart';
 // ignore: unused_import
 import 'package:tawai/ui/theme/app_theme.dart';
@@ -47,9 +48,10 @@ class AccountManagerDialog extends StatelessWidget {
                     ]
                   : [
                       if (accounts.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.all(AppTheme.spaceMD),
-                          child: Text("No saved accounts"),
+                        const EmptyState(
+                          icon: Icons.account_circle_outlined,
+                          message: 'No saved accounts',
+                          compact: true,
                         ),
                       Flexible(
                         child: ListView.builder(

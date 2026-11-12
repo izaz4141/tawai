@@ -7,6 +7,7 @@ import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
 import 'package:tawai/ui/widgets/components/cover_image.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/utils/helper.dart';
 
 const double kQueueTileHeight = AppTheme.spaceSM * 10;
@@ -74,25 +75,9 @@ class _QueueViewState extends State<QueueView> {
   @override
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) {
-      final colors = Theme.of(context).colorScheme;
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.queue_music,
-              size: AppTheme.iconLG * AppTheme.iconScale(context),
-              color: colors.onSurfaceVariant,
-            ),
-            SizedBox(height: AppTheme.spaceSM * AppTheme.spaceScale(context)),
-            Text(
-              'Queue is empty',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(color: colors.onSurfaceVariant),
-            ),
-          ],
-        ),
+      return const EmptyState(
+        icon: Icons.queue_music,
+        message: 'Queue is empty',
       );
     }
 

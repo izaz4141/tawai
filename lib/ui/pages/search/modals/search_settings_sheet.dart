@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tawai/ui/theme/app_theme.dart';
+import 'package:tawai/ui/widgets/components/empty_state.dart';
 import 'package:tawai/ui/widgets/components/list_choice.dart';
 import 'package:tawai/ui/widgets/components/sheet.dart';
 import 'package:tawai/utils/system_service.dart';
@@ -103,13 +104,10 @@ class _SearchSettingsSheetState extends State<_SearchSettingsSheet> {
                   ('nadekodon', 'YouTube', Icons.video_library),
               ];
               if (items.isEmpty) {
-                return ListTile(
-                  title: Text(
-                    'No download sources available',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
+                return const EmptyState(
+                  icon: Icons.cloud_off_outlined,
+                  message: 'No download sources available',
+                  compact: true,
                 );
               }
               return ListChoice<String>(
