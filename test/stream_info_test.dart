@@ -11,8 +11,6 @@ StreamInfo _info({
   int? sampleRateHz,
   int? channels,
   int? bitDepth,
-  double? durationSecs,
-  int? sizeBytes,
   String? transport,
   bool loading = false,
   String? error,
@@ -24,8 +22,6 @@ StreamInfo _info({
     sampleRateHz: sampleRateHz,
     channels: channels,
     bitDepth: bitDepth,
-    durationSecs: durationSecs,
-    sizeBytes: sizeBytes,
     transport: transport,
     loading: loading,
     error: error,
@@ -78,8 +74,6 @@ void main() {
         sampleRateHz: 48000,
         bitDepth: 24,
         channels: 2,
-        durationSecs: 245.0,
-        sizeBytes: 5 * 1024 * 1024,
         transport: 'dash',
       ).detailRows;
 
@@ -90,8 +84,6 @@ void main() {
       expect(values['Sample rate'], '48 kHz (48000 Hz)');
       expect(values['Bit depth'], '24-bit');
       expect(values['Channels'], '2 (stereo)');
-      expect(values['Duration'], '4:05');
-      expect(values['Source size'], '5.0 MB');
       expect(values['Source'], 'DASH segment');
     });
 

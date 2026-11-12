@@ -184,12 +184,6 @@ class StreamInfo {
     if (channels != null) {
       rows.add(StreamInfoRow('Channels', _formatChannels(channels!)));
     }
-    if (durationSecs != null) {
-      rows.add(StreamInfoRow('Duration', _formatDuration(durationSecs!)));
-    }
-    if (sizeBytes != null) {
-      rows.add(StreamInfoRow('Source size', _formatBytes(sizeBytes!)));
-    }
     if (transport != null) {
       rows.add(StreamInfoRow('Source', _formatTransport(transport!)));
     }
@@ -211,30 +205,6 @@ class StreamInfo {
     if (channels == 1) return '1 (mono)';
     if (channels == 2) return '2 (stereo)';
     return '$channels';
-  }
-
-  static String _formatDuration(double seconds) {
-    final total = seconds.round();
-    final hours = total ~/ 3600;
-    final minutes = (total % 3600) ~/ 60;
-    final secs = total % 60;
-    if (hours > 0) {
-      return '$hours:${minutes.toString().padLeft(2, '0')}:'
-          '${secs.toString().padLeft(2, '0')}';
-    }
-    return '$minutes:${secs.toString().padLeft(2, '0')}';
-  }
-
-  static String _formatBytes(int bytes) {
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    var value = bytes.toDouble();
-    var unit = 0;
-    while (value >= 1024 && unit < units.length - 1) {
-      value /= 1024;
-      unit++;
-    }
-    final digits = unit == 0 ? 0 : 1;
-    return '${value.toStringAsFixed(digits)} ${units[unit]}';
   }
 
   static String _formatTransport(String transport) {
