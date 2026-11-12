@@ -170,6 +170,38 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsNothing);
     });
 
+    testWidgets('sheet reflects probe completion while open', (tester) async {
+      final notifier = ValueNotifier<StreamInfo?>(
+        StreamInfo.probing(StreamMode.direct),
+      );
+      addTearDown(notifier.dispose);
+
+      await tester.pumpWidget(_wrap(StreamInfoBar(info: notifier)));
+      await tester.tap(find.text('Direct · Analyzing…'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.text('Stream details'), findsOneWidget);
+      expect(find.text('Status'), findsOneWidget);
+      expect(find.text('Analyzing…'), findsOneWidget);
+
+      notifier.value = _info(
+        mode: StreamMode.direct,
+        codec: 'flac',
+        bitrateKbps: 1411,
+        sampleRateHz: 44100,
+      );
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Codec'), findsOneWidget);
+      expect(find.text('flac'), findsOneWidget);
+      expect(find.text('Bitrate (average)'), findsOneWidget);
+      expect(find.text('1411 kbps'), findsOneWidget);
+      expect(find.text('44.1 kHz (44100 Hz)'), findsOneWidget);
+      expect(find.text('Analyzing…'), findsNothing);
+    });
+
     testWidgets('opens a detail sheet with only detected values', (
       tester,
     ) async {

@@ -20,9 +20,10 @@ class StreamInfoBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final listenable = info ?? PlaybackService.instance.streamInfo;
 
     return ValueListenableBuilder<StreamInfo?>(
-      valueListenable: info ?? PlaybackService.instance.streamInfo,
+      valueListenable: listenable,
       builder: (context, info, _) {
         if (info == null) return const SizedBox.shrink();
 
@@ -31,7 +32,7 @@ class StreamInfoBar extends StatelessWidget {
           child: Center(
             child: InkWell(
               borderRadius: BorderRadius.circular(AppTheme.radiusSM),
-              onTap: () => showStreamInfoSheet(context, info),
+              onTap: () => showStreamInfoSheet(context, listenable),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppTheme.spaceSM,
@@ -82,7 +83,10 @@ class StreamInfoBar extends StatelessWidget {
   }
 }
 
-void showStreamInfoSheet(BuildContext context, StreamInfo info) {
+void showStreamInfoSheet(
+  BuildContext context,
+  ValueListenable<StreamInfo?> info,
+) {
   showModalBottomSheet(
     context: context,
     builder: (_) => _StreamInfoSheet(info: info),
@@ -92,12 +96,11 @@ void showStreamInfoSheet(BuildContext context, StreamInfo info) {
 class _StreamInfoSheet extends StatelessWidget {
   const _StreamInfoSheet({required this.info});
 
-  final StreamInfo info;
+  final ValueListenable<StreamInfo?> info;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final rows = info.detailRows;
 
     return Sheet(
       header: Padding(
@@ -125,29 +128,11 @@ class _StreamInfoSheet extends StatelessWidget {
           ],
         ),
       ),
-      body: ListView(
-        shrinkWrap: true,
-        padding: const EdgeInsets.symmetric(vertical: AppTheme.spaceSM),
-        children: [
-          for (final row in rows)
-            ListTile(
-              dense: true,
-              title: Text(row.label),
-              trailing: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.sizeOf(context).width * 0.6,
-                ),
-                child: Text(
-                  row.value,
-                  textAlign: TextAlign.end,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ),
-          if (!info.loading && !info.hasDetails)
-            Padding(
+      body: ValueListenableBuilder<StreamInfo?>(
+        valueListenable: info,
+        builder: (context, info, _) {
+          if (info == null) {
+            return Padding(
               padding: const EdgeInsets.fromLTRB(
                 AppTheme.spaceXL,
                 AppTheme.spaceSM,
@@ -155,14 +140,54 @@ class _StreamInfoSheet extends StatelessWidget {
                 AppTheme.spaceSM,
               ),
               child: Text(
-                'The stream could not be inspected. Playback mode is known, '
-                'but codec, bitrate, and sample rate are unavailable.',
+                'No stream information available.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-            ),
-        ],
+            );
+          }
+
+          return ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.symmetric(vertical: AppTheme.spaceSM),
+            children: [
+              for (final row in info.detailRows)
+                ListTile(
+                  dense: true,
+                  title: Text(row.label),
+                  trailing: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.sizeOf(context).width * 0.6,
+                    ),
+                    child: Text(
+                      row.value,
+                      textAlign: TextAlign.end,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              if (!info.loading && !info.hasDetails)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppTheme.spaceXL,
+                    AppTheme.spaceSM,
+                    AppTheme.spaceXL,
+                    AppTheme.spaceSM,
+                  ),
+                  child: Text(
+                    'The stream could not be inspected. Playback mode is known, '
+                    'but codec, bitrate, and sample rate are unavailable.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
