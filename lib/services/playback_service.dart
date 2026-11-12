@@ -57,12 +57,6 @@ class PlaybackService {
   final queue = ValueNotifier<QueueState>(QueueState());
   final shuffleModeEnabled = ValueNotifier<bool>(false);
   final loopMode = ValueNotifier<LoopMode>(LoopMode.off);
-
-  /// Detected metadata for the stream that is currently playing.
-  ///
-  /// `null` when nothing is playing. Set to a loading value as soon as the
-  /// source is known, then filled in asynchronously so playback never waits on
-  /// the probe.
   final streamInfo = ValueNotifier<StreamInfo?>(null);
 
   TrackInfo? get currentTrack => queue.value.currentTrack;
@@ -214,6 +208,7 @@ class PlaybackService {
         items: [QueueItem(track: syntheticTrack)],
         currentIndex: 0,
       );
+      _clearStreamInfo();
 
       final result = await BridgeService.instance.previewTrack(syntheticTrack);
       if (result.error != null || result.url == null) {
@@ -690,6 +685,7 @@ class PlaybackService {
     if (index < 0 || index >= items.length) return false;
 
     var item = items[index];
+    _clearStreamInfo();
     if (item.source == null) {
       final cache = await _resolveSource(item.track);
       if (cache == null) return false;
@@ -939,6 +935,7 @@ class PlaybackService {
   }
 
   Future<void> _reset() async {
+    _clearStreamInfo();
     await _player.stop();
     await _player.clearAudioSources();
     _sourceGeneration++;
@@ -947,7 +944,6 @@ class PlaybackService {
     _loadedTrackId = null;
     _orderedItems = const [];
     _inflight.clear();
-    _clearStreamInfo();
     playerState.value = PlayerState(false, ProcessingState.idle);
     queue.value = const QueueState();
   }
@@ -969,10 +965,10 @@ class PlaybackService {
   }
 
   Future<void> _finish() async {
+    _clearStreamInfo();
     await _player.stop();
     playerState.value = PlayerState(false, ProcessingState.idle);
     position.value = Duration.zero;
-    _clearStreamInfo();
   }
 }
 
