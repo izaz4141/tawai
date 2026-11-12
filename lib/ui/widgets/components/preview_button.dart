@@ -25,7 +25,7 @@ class PreviewButton extends StatelessWidget {
       shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),
-        onTap: () => ps.preview(recording),
+        onTap: () => ps.togglePreview(recording),
         child: Padding(
           padding: EdgeInsets.all(4),
           child: ValueListenableBuilder<PlayerState>(
@@ -34,7 +34,9 @@ class PreviewButton extends StatelessWidget {
               final isLoading =
                   state.processingState == ProcessingState.loading ||
                   state.processingState == ProcessingState.buffering;
-              final isCurrentTrack = ps.currentTrack?.id == recording.id;
+              final isCurrentTrack =
+                  ps.currentTrack?.id == recording.id &&
+                  ps.currentTrack?.source == 'preview';
               final isActive = isCurrentTrack && state.playing;
 
               if (isLoading && isCurrentTrack) {

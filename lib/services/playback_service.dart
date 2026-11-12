@@ -162,6 +162,30 @@ class PlaybackService {
     });
   }
 
+  /// Starts a preview, or pauses/resumes it when [rec] is already the active
+  /// preview. Does not restart an in-progress preview from the beginning.
+  Future<void> togglePreview(DiscoveryRecording rec) async {
+    final track = currentTrack;
+    final isActivePreview =
+        _previewRestore != null &&
+        track?.id == rec.id &&
+        track?.source == 'preview';
+
+    if (!isActivePreview) {
+      await preview(rec);
+      return;
+    }
+
+    // Ignore taps while the preview source is still being fetched/loaded.
+    final state = playerState.value;
+    if (state.processingState == ProcessingState.loading ||
+        state.processingState == ProcessingState.buffering) {
+      return;
+    }
+
+    await togglePlayPause();
+  }
+
   Future<void> preview(DiscoveryRecording rec) async {
     await _actionLock.synchronized(() async {
       final q = queue.value;
