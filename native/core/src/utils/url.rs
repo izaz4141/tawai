@@ -201,13 +201,27 @@ pub fn redact_urls(text: &str) -> String {
         };
         redacted.push_str(&rest[..index]);
         let tail = &rest[index..];
-        let end = tail
-            .find(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | ')' | ']' | '>'))
-            .unwrap_or(tail.len());
+        let end = url_end(tail);
         redacted.push_str(&redact_url(&tail[..end]));
         rest = &tail[end..];
     }
     redacted
+}
+
+fn url_end(url: &str) -> usize {
+    let authority_start = url.find("//").map_or(0, |index| index + 2);
+    let ipv6_literal = url[authority_start..].starts_with('[');
+    let mut closed_bracket_seen = !ipv6_literal;
+    for (offset, c) in url[authority_start..].char_indices() {
+        if c == ']' && !closed_bracket_seen {
+            closed_bracket_seen = true;
+            continue;
+        }
+        if c.is_whitespace() || matches!(c, '"' | '\'' | ')' | ']' | '>') {
+            return authority_start + offset;
+        }
+    }
+    url.len()
 }
 
 fn redact_url_fallback(url: &str) -> String {
@@ -267,6 +281,20 @@ mod tests {
     fn redacts_urls_embedded_in_text() {
         let redacted = redact_urls("ffprobe failed for https://host/a?token=secret: 403 Forbidden");
         assert!(redacted.contains("https://host/a?redacted"));
+        assert!(!redacted.contains("secret"));
+    }
+
+    #[test]
+    fn redacts_query_in_ipv6_url() {
+        let redacted = redact_urls("fetching http://[::1]:8080/audio?token=secret now");
+        assert_eq!(redacted, "fetching http://[::1]:8080/audio?redacted now");
+        assert!(!redacted.contains("secret"));
+    }
+
+    #[test]
+    fn closing_bracket_still_ends_non_ipv6_url() {
+        let redacted = redact_urls("[https://host/a?token=secret]");
+        assert_eq!(redacted, "[https://host/a?redacted]");
         assert!(!redacted.contains("secret"));
     }
 }
