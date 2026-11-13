@@ -965,7 +965,6 @@ class PlaybackService {
   }
 
   Future<void> _finish() async {
-    _clearStreamInfo();
     await _player.stop();
     playerState.value = PlayerState(false, ProcessingState.idle);
     position.value = Duration.zero;
