@@ -206,7 +206,7 @@ pub async fn handle_probe_stream(
         let remote_headers = result.headers.clone().unwrap_or_default();
         (
             "direct".to_string(),
-            probe_url(&result.file_path, &remote_headers, state.context.client()).await,
+            probe_url(&result.file_path, &remote_headers).await,
         )
     } else if !result.file_path.is_empty() {
         (
@@ -246,7 +246,7 @@ pub async fn handle_probe_stream(
 
 async fn probe_preview(state: &SharedState, id: String, track: &TrackInfo) -> ProbeStreamResponse {
     match iprev::fetch_preview(state.context.client(), &track.artists_string, &track.title).await {
-        Ok(Some(url)) => match probe_url(&url, &[], state.context.client()).await {
+        Ok(Some(url)) => match probe_url(&url, &[]).await {
             Ok(mut info) => {
                 info.transport = Some("preview".to_string());
                 ProbeStreamResponse {

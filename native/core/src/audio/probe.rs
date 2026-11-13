@@ -1,8 +1,10 @@
 use std::path::Path;
-use std::process::Stdio;
-use std::time::Duration;
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
+use std::sync::Once;
 
-use anyhow::{Context, Result, bail};
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
+use anyhow::Context;
+use anyhow::{Result, bail};
 use lofty::file::AudioFile;
 use serde::{Deserialize, Serialize};
 use symphonia::core::formats::FormatOptions;
@@ -10,12 +12,10 @@ use symphonia::core::formats::probe::Hint;
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::{TimeBase, Timestamp};
-use tokio::process::Command;
 use utoipa::ToSchema;
 
-use crate::utils::url::{redact_url, redact_urls};
-
-use super::probe_proxy::ProbeProxy;
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
+use crate::utils::url::redact_urls;
 
 /// Metadata read from an actual audio file or stream.
 ///
@@ -173,191 +173,177 @@ fn duration_from_ticks(time_base: Option<TimeBase>, ticks: Option<u64>) -> Optio
         .map(|time| time.as_secs_f64())
 }
 
-/// Probe a remote URL with `ffprobe`, forwarding the same headers used for
-/// playback so authenticated sources can be read. Credentials are injected by a
-/// loopback proxy so they never appear in `ffprobe`'s process arguments.
-pub async fn probe_url(
-    url: &str,
-    headers: &[(String, String)],
-    client: &reqwest::Client,
-) -> Result<AudioProbe> {
-    let display = redact_url(url);
-    let mut probe = if url.starts_with("http://") || url.starts_with("https://") {
-        let proxy = ProbeProxy::start(url, headers, client.clone()).await?;
-        probe_with_ffprobe(proxy.url(), &display).await
-    } else {
-        probe_with_ffprobe(url, &display).await
-    }?;
-    probe.transport = Some("http".to_string());
-    Ok(probe)
+/// Probe a remote URL with the FFmpeg libraries, forwarding the same headers
+/// used for playback so authenticated sources can be read. Opening the URL
+/// in-process keeps credentials out of process arguments.
+///
+/// Only builds that link FFmpeg can probe; other targets return an error.
+pub async fn probe_url(url: &str, headers: &[(String, String)]) -> Result<AudioProbe> {
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
+    {
+        let url = url.to_string();
+        let headers = headers.to_vec();
+        let mut probe = tokio::task::spawn_blocking(move || probe_with_libav(&url, &headers))
+            .await
+            .map_err(|error| anyhow::anyhow!("probe task failed: {error}"))??;
+        probe.transport = Some("http".to_string());
+        Ok(probe)
+    }
+
+    #[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]
+    {
+        let _ = (url, headers);
+        bail!("stream probing is not supported on this platform")
+    }
 }
 
 /// Probe a generated DASH init segment + media segment pair.
 ///
-/// The two boxes are concatenated into a temporary fMP4 file so `ffprobe` can
+/// The two boxes are concatenated into a temporary fMP4 file so the probe can
 /// read a complete stream. The reported bitrate comes from the probed audio
-/// stream; the media segment byte count and its duration are only used when
-/// `ffprobe` does not report one.
+/// stream; the media segment byte count and its duration are only used when the
+/// probe does not report one.
 pub async fn probe_dash_artifacts(
     init_path: &Path,
     segment_path: &Path,
     segment_duration_secs: Option<f64>,
 ) -> Result<AudioProbe> {
-    let init = tokio::fs::read(init_path)
-        .await
-        .with_context(|| format!("reading DASH init segment {}", init_path.display()))?;
-    let segment = tokio::fs::read(segment_path)
-        .await
-        .with_context(|| format!("reading DASH media segment {}", segment_path.display()))?;
+    #[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]
+    {
+        let _ = (init_path, segment_path, segment_duration_secs);
+        bail!("stream probing is not supported on this platform")
+    }
 
-    let directory = tempfile::tempdir()?;
-    let probe_path = directory.path().join("dash-probe.mp4");
-    let mut bytes = Vec::with_capacity(init.len() + segment.len());
-    bytes.extend_from_slice(&init);
-    bytes.extend_from_slice(&segment);
-    tokio::fs::write(&probe_path, &bytes).await?;
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
+    {
+        let init = tokio::fs::read(init_path)
+            .await
+            .with_context(|| format!("reading DASH init segment {}", init_path.display()))?;
+        let segment = tokio::fs::read(segment_path)
+            .await
+            .with_context(|| format!("reading DASH media segment {}", segment_path.display()))?;
 
-    let display = probe_path.display().to_string();
-    let mut probe = probe_with_ffprobe(&display, &display).await?;
-    probe.transport = Some("dash".to_string());
-    probe.size_bytes = Some(segment.len() as i64);
+        let directory = tempfile::tempdir()?;
+        let probe_path = directory.path().join("dash-probe.mp4");
+        let mut bytes = Vec::with_capacity(init.len() + segment.len());
+        bytes.extend_from_slice(&init);
+        bytes.extend_from_slice(&segment);
+        tokio::fs::write(&probe_path, &bytes).await?;
 
-    let duration = probe
-        .duration_secs
-        .or(segment_duration_secs)
-        .filter(|duration| *duration > 0.0);
-    probe.duration_secs = duration;
+        let display = probe_path.display().to_string();
+        let mut probe = tokio::task::spawn_blocking(move || probe_with_libav(&display, &[]))
+            .await
+            .map_err(|error| anyhow::anyhow!("probe task failed: {error}"))??;
 
-    if probe.bitrate_kbps.is_none() {
-        if let Some(duration) = duration {
-            probe.bitrate_kbps =
-                Some(((segment.len() as f64 * 8.0 / duration) / 1000.0).round() as i64);
+        probe.transport = Some("dash".to_string());
+        probe.size_bytes = Some(segment.len() as i64);
+
+        let duration = probe
+            .duration_secs
+            .or(segment_duration_secs)
+            .filter(|duration| *duration > 0.0);
+        probe.duration_secs = duration;
+
+        if probe.bitrate_kbps.is_none() {
+            if let Some(duration) = duration {
+                probe.bitrate_kbps =
+                    Some(((segment.len() as f64 * 8.0 / duration) / 1000.0).round() as i64);
+            }
         }
+
+        Ok(probe)
+    }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
+fn probe_with_libav(input: &str, headers: &[(String, String)]) -> Result<AudioProbe> {
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        let _ = ffmpeg_next::init();
+        ffmpeg_next::format::network::init();
+        ffmpeg_next::log::set_level(ffmpeg_next::log::Level::Quiet);
+    });
+
+    let mut options = ffmpeg_next::Dictionary::new();
+    options.set("rw_timeout", "15000000");
+    if !headers.is_empty() {
+        let mut blob = String::new();
+        for (name, value) in headers {
+            blob.push_str(name);
+            blob.push_str(": ");
+            blob.push_str(value);
+            blob.push_str("\r\n");
+        }
+        options.set("headers", &blob);
     }
 
-    Ok(probe)
-}
-
-async fn probe_with_ffprobe(input: &str, display: &str) -> Result<AudioProbe> {
-    let mut command = Command::new("ffprobe");
-    command
-        .arg("-v")
-        .arg("error")
-        .arg("-print_format")
-        .arg("json")
-        .arg("-show_streams")
-        .arg("-show_format")
-        .arg("-rw_timeout")
-        .arg("15000000");
-
-    command
-        .arg(input)
-        .kill_on_drop(true)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    let output = tokio::time::timeout(Duration::from_secs(20), command.output())
-        .await
-        .map_err(|_| anyhow::anyhow!("ffprobe timed out for {display}"))?
-        .with_context(|| format!("failed to run ffprobe (is it installed?) for {display}"))?;
-
-    if !output.status.success() {
-        let detail = String::from_utf8_lossy(&output.stderr).replace(input, display);
-        bail!(
-            "ffprobe failed for {display}: {}",
-            redact_urls(detail.trim())
-        );
-    }
-
-    parse_ffprobe_json(&output.stdout)
-}
-
-#[derive(Deserialize)]
-struct FfprobeOutput {
-    #[serde(default)]
-    streams: Vec<FfprobeStream>,
-    format: Option<FfprobeFormat>,
-}
-
-#[derive(Deserialize)]
-struct FfprobeStream {
-    codec_type: Option<String>,
-    codec_name: Option<String>,
-    codec_long_name: Option<String>,
-    sample_rate: Option<String>,
-    channels: Option<u32>,
-    bits_per_raw_sample: Option<String>,
-    bits_per_sample: Option<u32>,
-    bit_rate: Option<String>,
-    duration: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct FfprobeFormat {
-    format_name: Option<String>,
-    format_long_name: Option<String>,
-    duration: Option<String>,
-    size: Option<String>,
-    bit_rate: Option<String>,
-}
-
-fn parse_ffprobe_json(bytes: &[u8]) -> Result<AudioProbe> {
-    let output: FfprobeOutput =
-        serde_json::from_slice(bytes).context("parsing ffprobe JSON output")?;
-
-    let stream = output
-        .streams
-        .iter()
-        .find(|stream| stream.codec_type.as_deref() == Some("audio"))
-        .or_else(|| output.streams.first());
+    let context = ffmpeg_next::format::input_with_dictionary(input, options).map_err(|error| {
+        anyhow::anyhow!("ffmpeg probe failed: {}", redact_urls(&error.to_string()))
+    })?;
 
     let mut probe = AudioProbe::default();
-    if let Some(format) = &output.format {
-        if let Some(name) = &format.format_name {
-            // Containers such as MP4 report a comma-separated list of names.
-            probe.container = Some(name.split(',').next().unwrap_or(name).to_string());
-        }
-        probe.container_long = format.format_long_name.clone();
-        probe.duration_secs = format.duration.as_deref().and_then(parse_f64);
-        probe.size_bytes = format.size.as_deref().and_then(parse_i64);
-        probe.bitrate_kbps = format.bit_rate.as_deref().and_then(parse_i64).map(to_kbps);
+    let format = context.format();
+    probe.container = Some(format.name().to_string());
+    if !format.description().is_empty() {
+        probe.container_long = Some(format.description().to_string());
     }
 
-    if let Some(stream) = stream {
-        probe.codec = stream.codec_name.clone();
-        probe.codec_long = stream.codec_long_name.clone();
-        probe.sample_rate_hz = stream.sample_rate.as_deref().and_then(parse_u32);
-        probe.channels = stream.channels;
-        probe.bit_depth = stream
-            .bits_per_raw_sample
-            .as_deref()
-            .and_then(parse_u32)
-            .or(stream.bits_per_sample);
-        if probe.duration_secs.is_none() {
-            probe.duration_secs = stream.duration.as_deref().and_then(parse_f64);
+    if context.duration() > 0 {
+        probe.duration_secs =
+            Some(context.duration() as f64 / f64::from(ffmpeg_next::ffi::AV_TIME_BASE));
+    }
+    if context.bit_rate() > 0 {
+        probe.bitrate_kbps = Some(to_kbps(context.bit_rate()));
+    }
+
+    if let Some(stream) = context.streams().best(ffmpeg_next::media::Type::Audio) {
+        let parameters = stream.parameters();
+        if let Some(codec) = ffmpeg_next::codec::decoder::find(parameters.id()) {
+            probe.codec = Some(codec.name().to_string());
+            if !codec.description().is_empty() {
+                probe.codec_long = Some(codec.description().to_string());
+            }
         }
-        if let Some(bitrate) = stream.bit_rate.as_deref().and_then(parse_i64) {
-            probe.bitrate_kbps = Some(to_kbps(bitrate));
+
+        // SAFETY: `parameters` borrows codec parameters owned by `context`,
+        // which is alive for this block.
+        let raw = unsafe { &*parameters.as_ptr() };
+        if raw.sample_rate > 0 {
+            probe.sample_rate_hz = Some(raw.sample_rate as u32);
+        }
+        if raw.ch_layout.nb_channels > 0 {
+            probe.channels = Some(raw.ch_layout.nb_channels as u32);
+        }
+        let bits = if raw.bits_per_raw_sample > 0 {
+            raw.bits_per_raw_sample
+        } else {
+            raw.bits_per_coded_sample
+        };
+        if bits > 0 {
+            probe.bit_depth = Some(bits as u32);
+        }
+        if raw.bit_rate > 0 {
+            probe.bitrate_kbps = Some(to_kbps(raw.bit_rate));
+        }
+
+        if probe.duration_secs.is_none() {
+            let time_base = stream.time_base();
+            let duration = stream.duration();
+            if duration > 0 && time_base.denominator() > 0 {
+                probe.duration_secs = Some(
+                    duration as f64 * f64::from(time_base.numerator())
+                        / f64::from(time_base.denominator()),
+                );
+            }
         }
     }
 
     Ok(probe)
 }
 
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 fn to_kbps(bits_per_second: i64) -> i64 {
     (bits_per_second as f64 / 1000.0).round() as i64
-}
-
-fn parse_f64(value: &str) -> Option<f64> {
-    value.trim().parse().ok()
-}
-
-fn parse_i64(value: &str) -> Option<i64> {
-    value.trim().parse().ok()
-}
-
-fn parse_u32(value: &str) -> Option<u32> {
-    value.trim().parse().ok()
 }
 
 #[cfg(test)]
@@ -403,41 +389,30 @@ mod tests {
         assert!(probe.has_details());
     }
 
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
     #[test]
-    fn parses_ffprobe_json() {
-        let json = br#"{
-            "streams": [{
-                "codec_type": "audio",
-                "codec_name": "flac",
-                "codec_long_name": "Free Lossless Audio Codec",
-                "sample_rate": "96000",
-                "channels": 2,
-                "bits_per_raw_sample": "24",
-                "bit_rate": "2304000",
-                "duration": "12.5"
-            }],
-            "format": {
-                "format_name": "flac",
-                "format_long_name": "raw FLAC",
-                "duration": "12.5",
-                "size": "3600000",
-                "bit_rate": "2304000"
-            }
-        }"#;
+    fn probes_pcm_wav_with_libav() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("tone.wav");
+        write_pcm_wav(&path, 48_000, 2, 16, 2);
 
-        let probe = parse_ffprobe_json(json).unwrap();
+        let probe = probe_with_libav(&path.display().to_string(), &[]).unwrap();
 
-        assert_eq!(probe.container.as_deref(), Some("flac"));
-        assert_eq!(probe.codec.as_deref(), Some("flac"));
-        assert_eq!(
-            probe.codec_long.as_deref(),
-            Some("Free Lossless Audio Codec")
-        );
-        assert_eq!(probe.sample_rate_hz, Some(96_000));
+        assert_eq!(probe.container.as_deref(), Some("wav"));
+        assert_eq!(probe.codec.as_deref(), Some("pcm_s16le"));
+        assert_eq!(probe.sample_rate_hz, Some(48_000));
         assert_eq!(probe.channels, Some(2));
-        assert_eq!(probe.bit_depth, Some(24));
-        assert_eq!(probe.bitrate_kbps, Some(2304));
-        assert_eq!(probe.duration_secs, Some(12.5));
-        assert_eq!(probe.size_bytes, Some(3_600_000));
+        assert_eq!(probe.bit_depth, Some(16));
+        assert_eq!(probe.duration_secs, Some(2.0));
+        assert_eq!(probe.bitrate_kbps, Some(1536));
+        assert!(probe.has_details());
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
+    #[test]
+    fn libav_probe_error_redacts_url() {
+        let error = probe_with_libav("http://127.0.0.1:1/stream?token=secret", &[]).unwrap_err();
+
+        assert!(!error.to_string().contains("secret"));
     }
 }
