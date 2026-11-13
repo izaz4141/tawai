@@ -13,6 +13,10 @@ use symphonia::core::units::{TimeBase, Timestamp};
 use tokio::process::Command;
 use utoipa::ToSchema;
 
+use crate::utils::url::{redact_url, redact_urls};
+
+use super::probe_proxy::ProbeProxy;
+
 /// Metadata read from an actual audio file or stream.
 ///
 /// Every field is optional: a probe that cannot determine a value must leave it
@@ -170,9 +174,20 @@ fn duration_from_ticks(time_base: Option<TimeBase>, ticks: Option<u64>) -> Optio
 }
 
 /// Probe a remote URL with `ffprobe`, forwarding the same headers used for
-/// playback so authenticated sources can be read.
-pub async fn probe_url(url: &str, headers: &[(String, String)]) -> Result<AudioProbe> {
-    let mut probe = probe_with_ffprobe(url, headers).await?;
+/// playback so authenticated sources can be read. Credentials are injected by a
+/// loopback proxy so they never appear in `ffprobe`'s process arguments.
+pub async fn probe_url(
+    url: &str,
+    headers: &[(String, String)],
+    client: &reqwest::Client,
+) -> Result<AudioProbe> {
+    let display = redact_url(url);
+    let mut probe = if url.starts_with("http://") || url.starts_with("https://") {
+        let proxy = ProbeProxy::start(url, headers, client.clone()).await?;
+        probe_with_ffprobe(proxy.url(), &display).await
+    } else {
+        probe_with_ffprobe(url, &display).await
+    }?;
     probe.transport = Some("http".to_string());
     Ok(probe)
 }
@@ -202,7 +217,8 @@ pub async fn probe_dash_artifacts(
     bytes.extend_from_slice(&segment);
     tokio::fs::write(&probe_path, &bytes).await?;
 
-    let mut probe = probe_with_ffprobe(&probe_path.to_string_lossy(), &[]).await?;
+    let display = probe_path.display().to_string();
+    let mut probe = probe_with_ffprobe(&display, &display).await?;
     probe.transport = Some("dash".to_string());
     probe.size_bytes = Some(segment.len() as i64);
 
@@ -216,7 +232,7 @@ pub async fn probe_dash_artifacts(
     Ok(probe)
 }
 
-async fn probe_with_ffprobe(input: &str, headers: &[(String, String)]) -> Result<AudioProbe> {
+async fn probe_with_ffprobe(input: &str, display: &str) -> Result<AudioProbe> {
     let mut command = Command::new("ffprobe");
     command
         .arg("-v")
@@ -228,18 +244,6 @@ async fn probe_with_ffprobe(input: &str, headers: &[(String, String)]) -> Result
         .arg("-rw_timeout")
         .arg("15000000");
 
-    if !headers.is_empty() {
-        let mut header_blob = String::new();
-        for (name, value) in headers {
-            // ffprobe expects CRLF-separated header lines.
-            header_blob.push_str(name);
-            header_blob.push_str(": ");
-            header_blob.push_str(value);
-            header_blob.push_str("\r\n");
-        }
-        command.arg("-headers").arg(header_blob);
-    }
-
     command
         .arg(input)
         .kill_on_drop(true)
@@ -248,12 +252,15 @@ async fn probe_with_ffprobe(input: &str, headers: &[(String, String)]) -> Result
 
     let output = tokio::time::timeout(Duration::from_secs(20), command.output())
         .await
-        .map_err(|_| anyhow::anyhow!("ffprobe timed out"))?
-        .with_context(|| format!("failed to run ffprobe (is it installed?) for {input}"))?;
+        .map_err(|_| anyhow::anyhow!("ffprobe timed out for {display}"))?
+        .with_context(|| format!("failed to run ffprobe (is it installed?) for {display}"))?;
 
     if !output.status.success() {
-        let detail = String::from_utf8_lossy(&output.stderr);
-        bail!("ffprobe failed for {input}: {}", detail.trim());
+        let detail = String::from_utf8_lossy(&output.stderr).replace(input, display);
+        bail!(
+            "ffprobe failed for {display}: {}",
+            redact_urls(detail.trim())
+        );
     }
 
     parse_ffprobe_json(&output.stdout)

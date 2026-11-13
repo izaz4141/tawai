@@ -14,6 +14,10 @@ uuid = { version = "1.18.0", features = ["v4"] }
 time = { version = "0.3.41", features = ["macros", "formatting", "parsing", "local-offset"] }
 futures = "0.3.31"
 anyhow = "1.0.99"
+bytes = "1.12.1"
+http-body-util = "0.1.5"
+hyper = { version = "1.10.1", default-features = false, features = ["http1", "server"] }
+hyper-util = { version = "0.1.20", features = ["tokio"] }
 openssl = { version = "0.10.74", features = ["vendored"] }
 indexmap = { version = "2.2.6", features = ["serde"] }
 serde_json = "1.0"

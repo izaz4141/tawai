@@ -31,8 +31,12 @@ async fn probe_local_file(path: String) -> Result<AudioProbe, String> {
         .map_err(|error| error.to_string())
 }
 
-async fn probe_remote(url: &str, headers: &[(String, String)]) -> Result<AudioProbe, String> {
-    probe_url(url, headers)
+async fn probe_remote(
+    url: &str,
+    headers: &[(String, String)],
+    client: &reqwest::Client,
+) -> Result<AudioProbe, String> {
+    probe_url(url, headers, client)
         .await
         .map(AudioProbe::from)
         .map_err(|error| error.to_string())
@@ -110,7 +114,7 @@ async fn probe_track(
         let headers = result.headers.clone().unwrap_or_default();
         (
             "direct".to_string(),
-            probe_remote(&result.file_path, &headers).await,
+            probe_remote(&result.file_path, &headers, context.client()).await,
         )
     } else {
         (
@@ -144,7 +148,7 @@ async fn probe_preview(
     track: &crate::signals::library::TrackInfo,
 ) -> ProbeStreamResponse {
     match iprev::fetch_preview(context.client(), &track.artists_string, &track.title).await {
-        Ok(Some(url)) => match probe_remote(&url, &[]).await {
+        Ok(Some(url)) => match probe_remote(&url, &[], context.client()).await {
             Ok(mut info) => {
                 info.transport = Some("preview".to_string());
                 ProbeStreamResponse {
