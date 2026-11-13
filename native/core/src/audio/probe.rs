@@ -195,9 +195,9 @@ pub async fn probe_url(
 /// Probe a generated DASH init segment + media segment pair.
 ///
 /// The two boxes are concatenated into a temporary fMP4 file so `ffprobe` can
-/// read a complete stream. The bitrate is recomputed from the real media
-/// segment byte count and its measured duration instead of trusting the
-/// requested transcode bitrate.
+/// read a complete stream. The reported bitrate comes from the probed audio
+/// stream; the media segment byte count and its duration are only used when
+/// `ffprobe` does not report one.
 pub async fn probe_dash_artifacts(
     init_path: &Path,
     segment_path: &Path,
@@ -222,11 +222,17 @@ pub async fn probe_dash_artifacts(
     probe.transport = Some("dash".to_string());
     probe.size_bytes = Some(segment.len() as i64);
 
-    let duration = probe.duration_secs.or(segment_duration_secs);
-    if let Some(duration) = duration.filter(|duration| *duration > 0.0) {
-        probe.bitrate_kbps =
-            Some(((segment.len() as f64 * 8.0 / duration) / 1000.0).round() as i64);
-        probe.duration_secs.get_or_insert(duration);
+    let duration = probe
+        .duration_secs
+        .or(segment_duration_secs)
+        .filter(|duration| *duration > 0.0);
+    probe.duration_secs = duration;
+
+    if probe.bitrate_kbps.is_none() {
+        if let Some(duration) = duration {
+            probe.bitrate_kbps =
+                Some(((segment.len() as f64 * 8.0 / duration) / 1000.0).round() as i64);
+        }
     }
 
     Ok(probe)
