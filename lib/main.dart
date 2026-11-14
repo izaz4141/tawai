@@ -128,7 +128,15 @@ Future<void> main(List<String> args) async {
       }
 
       if (kIsWeb || PlatformService.isAndroid || PlatformService.isLinux) {
-        PlaybackService.instance.audioHandler = await TawaiAudioHandler.init();
+        try {
+          PlaybackService.instance.audioHandler =
+              await TawaiAudioHandler.init();
+        } catch (e, stack) {
+          log(
+            'AudioService initialization failed: $e\n$stack',
+            level: LogLevel.error,
+          );
+        }
       }
 
       if (PlatformService.isDesktop) {
