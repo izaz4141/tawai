@@ -11,19 +11,6 @@ pub mod search;
 pub mod sync;
 pub mod test_connection;
 
-pub use cancel::handle_cancel;
-pub use client_list::handle_client_list;
-pub use create::handle_create;
-pub use delete::handle_delete;
-pub use get_info::handle_get_info;
-pub use list::handle_list_downloads;
-pub use pause::handle_pause;
-pub use poll::handle_downloads_poll;
-pub use resume::handle_resume;
-pub use search::handle_search;
-pub use sync::handle_sync;
-pub use test_connection::handle_test_connection;
-
 use crate::security::check_api_key;
 use crate::server::SharedState;
 use axum::{
@@ -33,17 +20,20 @@ use axum::{
 
 pub fn create_download_router(state: SharedState) -> Router<SharedState> {
     Router::new()
-        .route("/list", get(handle_list_downloads))
-        .route("/client-list", post(handle_client_list))
-        .route("/create", post(handle_create))
-        .route("/pause", post(handle_pause))
-        .route("/poll", post(handle_downloads_poll))
-        .route("/resume", post(handle_resume))
-        .route("/cancel", post(handle_cancel))
-        .route("/delete", post(handle_delete))
-        .route("/sync", post(handle_sync))
-        .route("/search", post(handle_search))
-        .route("/test-connection", post(handle_test_connection))
-        .route("/get-info", post(handle_get_info))
+        .route("/list", get(list::handle_list_downloads))
+        .route("/client-list", post(client_list::handle_client_list))
+        .route("/create", post(create::handle_create))
+        .route("/pause", post(pause::handle_pause))
+        .route("/poll", post(poll::handle_downloads_poll))
+        .route("/resume", post(resume::handle_resume))
+        .route("/cancel", post(cancel::handle_cancel))
+        .route("/delete", post(delete::handle_delete))
+        .route("/sync", post(sync::handle_sync))
+        .route("/search", post(search::handle_search))
+        .route(
+            "/test-connection",
+            post(test_connection::handle_test_connection),
+        )
+        .route("/get-info", post(get_info::handle_get_info))
         .layer(middleware::from_fn_with_state(state, check_api_key))
 }

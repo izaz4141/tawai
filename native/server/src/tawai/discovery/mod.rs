@@ -1,8 +1,6 @@
 pub mod lb;
 pub mod sync_recs;
 
-pub use lb::*;
-
 use crate::server::SharedState;
 use axum::{Router, routing::post};
 

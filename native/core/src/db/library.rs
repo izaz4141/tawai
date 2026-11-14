@@ -2,7 +2,7 @@ use std::sync::Weak;
 
 use crate::app_context::AppContext;
 use crate::db::database::DatabasePool;
-use crate::signals::library::*;
+use crate::signals::library::{AlbumInfo, ArtistInfo, PlaylistInfo, TrackInfo};
 
 /// Track-level tag metadata written alongside the positional insert columns.
 /// `mbid_recording` lives here rather than as a positional argument so the

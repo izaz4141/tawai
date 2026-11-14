@@ -4,7 +4,7 @@ use tawai_core::utils::encryption;
 use tawai_server::{
     docs::create_docs_router,
     server::{AppState, global_rate_limit_config, run_server},
-    tawai::{create_tawai_router, system::handle_status},
+    tawai::{create_tawai_router, system::status::handle_status},
 };
 
 use crate::signals::account::{ApiKeyResponse, GenerateApiKeyRequest};

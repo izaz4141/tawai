@@ -2,15 +2,8 @@ pub mod source;
 pub mod start;
 pub mod status;
 
-pub use source::*;
-pub use start::*;
-pub use status::*;
-
 use crate::server::SharedState;
-use axum::{
-    Router,
-    routing::{get, post},
-};
+use axum::{Router, routing::post};
 
 pub fn create_scan_router() -> Router<SharedState> {
     Router::new()

@@ -1,16 +1,20 @@
-use std::path::Path;
 use std::sync::Arc;
 
 use rinf::{DartSignal, RustSignal};
 
-use crate::signals;
+use crate::signals::tools::{
+    BatchRenameApplyRequest, BatchRenameApplyResponse, BatchRenamePreviewRequest,
+    BatchRenamePreviewResponse, CheckNamingConventionRequest, CheckNamingConventionResponse,
+    FindDuplicatesRequest, FindDuplicatesResponse, FindMissingMetadataRequest,
+    FindMissingMetadataResponse, GetLibraryStatsRequest, GetLibraryStatsResponse,
+    RomajizeLyricsRequest, RomajizeLyricsResponse, WriteTrackLyricsRequest,
+    WriteTrackLyricsResponse,
+};
 use crate::utils::logger;
 use tawai_core::app_context::AppContext;
-use tawai_core::db::library;
 use tawai_core::tools;
 
 pub async fn handle_get_library_stats(context: Arc<AppContext>) {
-    use signals::tools::*;
     let receiver = GetLibraryStatsRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -47,7 +51,6 @@ pub async fn handle_get_library_stats(context: Arc<AppContext>) {
 }
 
 pub async fn handle_find_missing_metadata(context: Arc<AppContext>) {
-    use signals::tools::*;
     let receiver = FindMissingMetadataRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -86,7 +89,6 @@ pub async fn handle_find_missing_metadata(context: Arc<AppContext>) {
 }
 
 pub async fn handle_batch_rename_preview(context: Arc<AppContext>) {
-    use signals::tools::*;
     let receiver = BatchRenamePreviewRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -131,7 +133,6 @@ pub async fn handle_batch_rename_preview(context: Arc<AppContext>) {
 }
 
 pub async fn handle_batch_rename_apply(context: Arc<AppContext>) {
-    use signals::tools::*;
     let receiver = BatchRenameApplyRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -174,7 +175,6 @@ pub async fn handle_batch_rename_apply(context: Arc<AppContext>) {
 }
 
 pub async fn handle_check_naming_convention(context: Arc<AppContext>) {
-    use signals::tools::*;
     let receiver = CheckNamingConventionRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -217,7 +217,6 @@ pub async fn handle_check_naming_convention(context: Arc<AppContext>) {
 }
 
 pub async fn handle_write_track_lyrics(context: Arc<AppContext>) {
-    use signals::tools::*;
     let receiver = WriteTrackLyricsRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -245,7 +244,6 @@ pub async fn handle_write_track_lyrics(context: Arc<AppContext>) {
 }
 
 pub async fn handle_romajize_lyrics() {
-    use signals::tools::*;
     let receiver = RomajizeLyricsRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -280,7 +278,6 @@ pub async fn handle_romajize_lyrics() {
 }
 
 pub async fn handle_find_duplicates(context: Arc<AppContext>) {
-    use signals::tools::*;
     let receiver = FindDuplicatesRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;

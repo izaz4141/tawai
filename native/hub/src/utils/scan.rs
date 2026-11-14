@@ -1,15 +1,21 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use rinf::{DartSignal, RustSignal};
 
-use crate::signals::{self, library::ScanProgressSignal};
+use crate::signals::library::{
+    ScanLibraryRequest, ScanLibraryResponse, ScanProgressSignal, ScanSourceRequest,
+    ScanSourceResponse, ScanStatusRequest, ScanStatusResponse, StartPeriodicScanRequest,
+    StartPeriodicScanResponse,
+};
 use crate::utils::logger;
 use tawai_core::app_context::AppContext;
+use tawai_core::audio::scan::run_scan;
 use tawai_core::db::{account, library_source};
+use tawai_core::signals as csignals;
 
 pub async fn handle_scan_library(context: Arc<AppContext>) {
-    use signals::library::*;
     let receiver = ScanLibraryRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -62,8 +68,7 @@ pub async fn handle_scan_library(context: Arc<AppContext>) {
         }
         .send_signal_to_dart();
 
-        let (tx, mut rx) =
-            tokio::sync::watch::channel(tawai_core::signals::library::ScanProgress::default());
+        let (tx, mut rx) = tokio::sync::watch::channel(csignals::library::ScanProgress::default());
         let ctx = context.clone();
         tokio::spawn(async move {
             while rx.changed().await.is_ok() {
@@ -90,7 +95,7 @@ pub async fn handle_scan_library(context: Arc<AppContext>) {
         // context so the naming pattern is read from the config as it is.
         let weak_ctx = Arc::downgrade(&context);
         tokio::spawn(async move {
-            let core_result = tawai_core::audio::scan::run_scan(
+            let core_result = run_scan(
                 db.pool(),
                 client,
                 &sources,
@@ -103,7 +108,7 @@ pub async fn handle_scan_library(context: Arc<AppContext>) {
             .await;
 
             ctx.scan_running.store(false, Ordering::SeqCst);
-            *ctx.scan_progress.write().await = Some(tawai_core::signals::library::ScanProgress {
+            *ctx.scan_progress.write().await = Some(csignals::library::ScanProgress {
                 complete: true,
                 tracks_found: core_result.tracks_found,
                 new_tracks: core_result.new_tracks,
@@ -117,7 +122,6 @@ pub async fn handle_scan_library(context: Arc<AppContext>) {
 }
 
 pub async fn handle_scan_status(context: Arc<AppContext>) {
-    use signals::library::*;
     let receiver = ScanStatusRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let id = signal_pack.message.id;
@@ -146,7 +150,6 @@ pub async fn handle_scan_status(context: Arc<AppContext>) {
 }
 
 pub async fn handle_scan_source(context: Arc<AppContext>) {
-    use signals::library::*;
     let receiver = ScanSourceRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -190,8 +193,7 @@ pub async fn handle_scan_source(context: Arc<AppContext>) {
             continue;
         }
 
-        let (tx, mut rx) =
-            tokio::sync::watch::channel(tawai_core::signals::library::ScanProgress::default());
+        let (tx, mut rx) = tokio::sync::watch::channel(csignals::library::ScanProgress::default());
         let progress_id = id.clone();
         let ctx = context.clone();
         tokio::spawn(async move {
@@ -235,7 +237,7 @@ pub async fn handle_scan_source(context: Arc<AppContext>) {
         let weak_ctx = Arc::downgrade(&context);
         tokio::spawn(async move {
             let pool = db.pool();
-            let result = tawai_core::audio::scan::run_scan(
+            let result = run_scan(
                 &pool,
                 client,
                 &sources,
@@ -246,7 +248,7 @@ pub async fn handle_scan_source(context: Arc<AppContext>) {
                 weak_ctx,
             )
             .await;
-            *ctx.scan_progress.write().await = Some(tawai_core::signals::library::ScanProgress {
+            *ctx.scan_progress.write().await = Some(csignals::library::ScanProgress {
                 complete: true,
                 tracks_found: result.tracks_found,
                 new_tracks: result.new_tracks,
@@ -268,16 +270,12 @@ pub async fn handle_scan_source(context: Arc<AppContext>) {
 }
 
 pub async fn handle_start_periodic_scan(context: Arc<AppContext>) {
-    use signals::library::StartPeriodicScanRequest;
-    use signals::library::StartPeriodicScanResponse;
-    use std::time::Duration;
-    use tawai_core::signals::library::ScanProgress;
     let receiver = StartPeriodicScanRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let id = signal_pack.message.id;
         context.spawn_periodic_scan(
             Duration::from_secs(3600 * 3),
-            Arc::new(|_p: ScanProgress| {}),
+            Arc::new(|_p: csignals::library::ScanProgress| {}),
         );
         StartPeriodicScanResponse { id }.send_signal_to_dart();
     }

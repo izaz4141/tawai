@@ -3,14 +3,29 @@ use std::sync::Arc;
 
 use rinf::{DartSignal, RustSignal};
 
-use crate::signals;
+use crate::signals::{
+    identify::{
+        ApplyIdentificationRequest, ApplyIdentificationResponse, ListUnidentifiedTracksRequest,
+        ListUnidentifiedTracksResponse,
+    },
+    library::{
+        GetAlbumMbidRequest, GetAlbumMbidResponse, ListDownloadFolderTracksRequest,
+        ListDownloadFolderTracksResponse, ListTracksBySourceRequest, ListTracksBySourceResponse,
+        TrackInfo,
+    },
+    metadata::{
+        ReadFileTagsBytesRequest, ReadFileTagsRequest, ReadFileTagsResponse,
+        WriteFileTagsBytesRequest, WriteFileTagsBytesResponse, WriteFileTagsRequest,
+        WriteFileTagsResponse,
+    },
+};
 use crate::utils::logger;
+
 use tawai_core::app_context::AppContext;
 use tawai_core::audio;
 use tawai_core::db::library;
 
 pub async fn handle_list_download_folder_tracks(context: Arc<AppContext>) {
-    use signals::library::*;
     let receiver = ListDownloadFolderTracksRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -25,7 +40,6 @@ pub async fn handle_list_download_folder_tracks(context: Arc<AppContext>) {
 }
 
 pub async fn handle_list_unidentified_tracks(context: Arc<AppContext>) {
-    use signals::identify::*;
     let receiver = ListUnidentifiedTracksRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -51,7 +65,6 @@ pub async fn handle_list_unidentified_tracks(context: Arc<AppContext>) {
 }
 
 pub async fn handle_apply_identification(context: Arc<AppContext>) {
-    use signals::identify::*;
     let receiver = ApplyIdentificationRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -156,7 +169,6 @@ pub async fn handle_apply_identification(context: Arc<AppContext>) {
 }
 
 pub async fn handle_list_tracks_by_source(context: Arc<AppContext>) {
-    use signals::library::*;
     let receiver = ListTracksBySourceRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -182,7 +194,6 @@ pub async fn handle_list_tracks_by_source(context: Arc<AppContext>) {
 }
 
 pub async fn handle_get_album_mbid(context: Arc<AppContext>) {
-    use signals::library::*;
     let receiver = GetAlbumMbidRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -204,7 +215,6 @@ pub async fn handle_get_album_mbid(context: Arc<AppContext>) {
 }
 
 pub async fn handle_read_file_tags(_context: Arc<AppContext>) {
-    use signals::metadata::*;
     let receiver = ReadFileTagsRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -235,7 +245,6 @@ pub async fn handle_read_file_tags(_context: Arc<AppContext>) {
 }
 
 pub async fn handle_write_file_tags(context: Arc<AppContext>) {
-    use signals::metadata::*;
     let receiver = WriteFileTagsRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -337,7 +346,6 @@ pub async fn handle_write_file_tags(context: Arc<AppContext>) {
 }
 
 pub async fn handle_read_file_tags_bytes(_context: Arc<AppContext>) {
-    use signals::metadata::*;
     let receiver = ReadFileTagsBytesRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -367,7 +375,6 @@ pub async fn handle_read_file_tags_bytes(_context: Arc<AppContext>) {
 }
 
 pub async fn handle_write_file_tags_bytes(_context: Arc<AppContext>) {
-    use signals::metadata::*;
     let receiver = WriteFileTagsBytesRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;

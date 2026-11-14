@@ -11,19 +11,18 @@ pub mod tools;
 pub mod utils;
 pub mod version;
 
-#[allow(ambiguous_glob_reexports)]
-pub use account::*;
-pub use auth::*;
-pub use discovery::*;
-pub use download::*;
-pub use identify::*;
-pub use library::*;
-pub use playback::*;
-pub use settings::*;
-pub use system::*;
-pub use tools::*;
-pub use utils::*;
-pub use version::*;
+use account::create_account_router;
+use auth::create_auth_router;
+use discovery::create_discovery_router;
+use download::create_download_router;
+use identify::create_identify_router;
+use library::create_library_router;
+use playback::create_playback_router;
+use settings::create_settings_router;
+use system::create_system_router;
+use tools::create_tools_router;
+use utils::create_utils_router;
+use version::create_version_router;
 
 use crate::server::SharedState;
 use axum::Router;
@@ -35,12 +34,12 @@ pub fn create_tawai_router(state: SharedState) -> Router<SharedState> {
     let download_router = create_download_router(state.clone());
     let identify_router = create_identify_router();
     let library_router = create_library_router(state.clone());
-    let system_router = create_system_router(state.clone());
-    let utils_router = create_utils_router(state.clone());
-    let version_router = create_version_router(state.clone());
     let playback_router = create_playback_router(state.clone());
     let settings_router = create_settings_router(state.clone());
+    let system_router = create_system_router(state.clone());
     let tools_router = create_tools_router(state.clone());
+    let utils_router = create_utils_router(state.clone());
+    let version_router = create_version_router(state.clone());
 
     Router::new()
         .nest("/account", account_router)

@@ -9,7 +9,7 @@ use tawai_core::{
     db::library,
     metadata::musicbrainz,
     signals::identify::{IdentifySingleTrackResponse, MatchCandidate},
-    signals::metadata::{FingerprintTrackRequest, FingerprintTrackResponse, RecordingInfo},
+    signals::metadata::{FingerprintTrackRequest, FingerprintTrackResponse},
 };
 
 use crate::server::SharedState;

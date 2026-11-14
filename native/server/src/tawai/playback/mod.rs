@@ -4,12 +4,6 @@ pub mod preview;
 pub mod probe;
 pub mod stream;
 
-pub use history::*;
-pub use play::*;
-pub use preview::*;
-pub use probe::*;
-pub use stream::*;
-
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
@@ -109,11 +103,11 @@ fn create_streaming_router(state: SharedState) -> Router<SharedState> {
     // API-key clients (libsource backup/download and remote tawai playback) as
     // well as token-authenticated players, so it accepts either.
     let stream_router = Router::new()
-        .route("/stream/{id}", get(handle_media_stream))
+        .route("/stream/{id}", get(stream::handle_media_stream))
         .layer(middleware::from_fn_with_state(state.clone(), auth_stream));
     // DASH embeds the JWT into the manifest, so it must stay token-only.
     let dash_router = Router::new()
-        .route("/stream/{id}/{file}", get(handle_media_dash))
+        .route("/stream/{id}/{file}", get(stream::handle_media_dash))
         .layer(middleware::from_fn_with_state(state, auth_query));
     stream_router.merge(dash_router)
 }
@@ -121,10 +115,10 @@ fn create_streaming_router(state: SharedState) -> Router<SharedState> {
 pub fn create_playback_router(state: SharedState) -> Router<SharedState> {
     let streaming_router = create_streaming_router(state.clone());
     Router::new()
-        .route("/play", post(handle_play_track))
-        .route("/probe", post(handle_probe_stream))
-        .route("/preview", post(handle_preview_track))
-        .route("/history", get(handle_get_history))
+        .route("/play", post(play::handle_play_track))
+        .route("/probe", post(probe::handle_probe_stream))
+        .route("/preview", post(preview::handle_preview_track))
+        .route("/history", get(history::handle_get_history))
         .layer(middleware::from_fn_with_state(state, check_api_key))
         .merge(streaming_router)
 }

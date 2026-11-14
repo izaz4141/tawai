@@ -1,9 +1,12 @@
 use tawai_core as tcore;
 use tcore::app_context::AppContext;
 use tcore::utils;
-use tcore::utils::logger;
 
 use crate::security::JwtResponse;
+use crate::{
+    docs::create_docs_router,
+    tawai::{create_tawai_router, system::status::handle_status},
+};
 
 use axum::{Router, routing::get};
 use axum_extra::extract::{
@@ -11,7 +14,6 @@ use axum_extra::extract::{
     cookie::{Cookie, SameSite},
 };
 use governor::{clock::QuantaInstant, middleware::NoOpMiddleware};
-use serde_json::Value;
 use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
@@ -113,17 +115,14 @@ pub fn create_router(
     state: SharedState,
     governor_conf: GovernorConfig<SmartIpKeyExtractor, NoOpMiddleware<QuantaInstant>>,
 ) -> Router {
-    let tawai_router = crate::tawai::create_tawai_router(state.clone());
-    let docs_router = crate::docs::create_docs_router(state.clone());
+    let tawai_router = create_tawai_router(state.clone());
+    let docs_router = create_docs_router(state.clone());
 
     Router::new()
         .nest("/api/tawai", tawai_router)
         .merge(docs_router)
         .layer(GovernorLayer::new(governor_conf))
-        .route(
-            "/api/tawai/system/status",
-            get(crate::tawai::system::handle_status),
-        )
+        .route("/api/tawai/system/status", get(handle_status))
         .with_state(state)
 }
 

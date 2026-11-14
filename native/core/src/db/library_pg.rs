@@ -3,7 +3,7 @@ use sqlx::{PgPool, Row};
 
 use super::library::{AlbumWriteMeta, TrackTagMeta};
 use crate::audio::tags::{AudioTag, derive_sort_name};
-use crate::signals::library::*;
+use crate::signals::library::{AlbumInfo, ArtistInfo, PlaylistInfo, TrackInfo};
 use crate::utils::helper::sha256_hex;
 
 pub async fn lookup_track(pool: &PgPool, track_id: &str) -> Result<Option<TrackInfo>> {

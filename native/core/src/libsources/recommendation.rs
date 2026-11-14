@@ -258,7 +258,7 @@ pub async fn download(
         std::fs::create_dir_all(parent)?;
     }
 
-    let mut resp = client.get(&format.url).send().await?;
+    let resp = client.get(&format.url).send().await?;
     if !resp.status().is_success() {
         anyhow::bail!(
             "audio stream fetch failed: {} for {}",
@@ -506,7 +506,7 @@ pub async fn sync(
         let Some(enriched) = fetch_recording_mb_data(client, &rec.id).await else {
             continue;
         };
-        if let Some(track_id) = dedup_or_insert_track(pool, rec, &enriched, source_id).await {
+        if let Some(_) = dedup_or_insert_track(pool, rec, &enriched, source_id).await {
             added += 1;
         }
         sleep(Duration::from_millis(1100)).await;

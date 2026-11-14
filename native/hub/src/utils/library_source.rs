@@ -2,7 +2,14 @@ use std::sync::Arc;
 
 use rinf::{DartSignal, RustSignal};
 
-use crate::signals;
+use crate::signals::{
+    discovery::{ServerTestResult, TestSourceRequest, TestSourceResponse},
+    library::{
+        AddLibrarySourceRequest, AddLibrarySourceResponse, ListEditableSourcesRequest,
+        ListEditableSourcesResponse, ListLibrarySourcesRequest, ListLibrarySourcesResponse,
+        RemoveLibrarySourceRequest, RemoveLibrarySourceResponse,
+    },
+};
 use crate::utils::logger;
 use tawai_core::app_context::AppContext;
 use tawai_core::db::account::get_user_role;
@@ -11,7 +18,6 @@ use tawai_core::libsources::jellyfin::JellyfinParser;
 use tawai_core::libsources::tawai;
 
 pub async fn handle_add_library_source(context: Arc<AppContext>) {
-    use signals::library::*;
     let receiver = AddLibrarySourceRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -52,7 +58,6 @@ pub async fn handle_add_library_source(context: Arc<AppContext>) {
 }
 
 pub async fn handle_remove_library_source(context: Arc<AppContext>) {
-    use signals::library::*;
     let receiver = RemoveLibrarySourceRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -86,7 +91,6 @@ pub async fn handle_remove_library_source(context: Arc<AppContext>) {
 }
 
 pub async fn handle_list_library_sources(context: Arc<AppContext>) {
-    use signals::library::*;
     let receiver = ListLibrarySourcesRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -127,7 +131,6 @@ pub async fn handle_list_library_sources(context: Arc<AppContext>) {
 }
 
 pub async fn handle_list_editable_sources(context: Arc<AppContext>) {
-    use signals::library::*;
     let receiver = ListEditableSourcesRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
@@ -167,7 +170,6 @@ pub async fn handle_list_editable_sources(context: Arc<AppContext>) {
 }
 
 pub async fn handle_test_source(context: Arc<AppContext>) {
-    use signals::discovery::*;
     let receiver = TestSourceRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;

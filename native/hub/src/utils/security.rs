@@ -4,7 +4,6 @@ extern crate tawai_core as core;
 use crate::signals::crypt::{
     GenerateMasterKeyRequest, GenerateMasterKeyResponse, Login, LoginResult,
 };
-use crate::utils::logger;
 use core::db::account;
 use core::utils::encryption;
 use core::utils::security::validate_password;
