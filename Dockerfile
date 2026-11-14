@@ -34,13 +34,15 @@ RUN apk add --no-cache \
     make \
     curl \
     ffmpeg-dev \
-    clang-dev
+    clang-dev \
+    clang-libclang
 
 COPY Cargo.toml Cargo.lock ./
 COPY native ./native
 COPY assets ./assets
 
-# Dynamic bind on alpine/musl
+# Disable static linking for both the host build scripts and all targets
+ENV RUSTFLAGS="-C target-feature=-crt-static"
 ENV CARGO_HOST_RUSTFLAGS="-C target-feature=-crt-static"
 
 RUN cargo build --release -p tawai-server && \
