@@ -161,10 +161,14 @@ jobs:
             ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev \
             libavutil-dev libswscale-dev libswresample-dev
 
-      - name: Install deps (Windows)
+      - name: Install FFmpeg (Windows)
         if: matrix.target == 'windows'
-        shell: powershell
-        run: choco install ffmpeg -y
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        id: setup-ffmpeg
+        with:
+          ffmpeg-version: release
+          linking-type: shared
+          github-token: ${{ github.server_url == 'https://github.com' && github.token || '' }}
 
       - name: Install Java (Android only)
         if: startsWith(matrix.target, 'android')
