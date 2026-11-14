@@ -150,7 +150,7 @@ jobs:
             /usr/lib/x86_64-linux-gnu/cmake
           key: ${{ matrix.target }}-linux-deps-v1
 
-      - name: Install system deps (Linux only)
+      - name: Install system deps (Linux)
         if: matrix.target == 'linux-x64'
         run: |
           mkdir -p ~/.apt-cache
@@ -160,6 +160,11 @@ jobs:
             libfuse2 libayatana-appindicator3-dev patchelf curl jq \
             ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev \
             libavutil-dev libswscale-dev libswresample-dev
+
+      - name: Install deps (Windows)
+        if: matrix.target == 'windows'
+        shell: powershell
+        run: choco install ffmpeg -y
 
       - name: Install Java (Android only)
         if: startsWith(matrix.target, 'android')
