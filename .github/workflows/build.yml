@@ -165,20 +165,19 @@ jobs:
         if: matrix.target == 'windows'
         shell: powershell
         run: |
-          # Download a full FFmpeg build that includes headers and import libraries
+          # Download the full FFmpeg build (includes headers, libs, and DLLs)
           Invoke-WebRequest "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full-shared.7z" -OutFile ffmpeg.7z
 
-          # Extract the archive
-          7z x ffmpeg.7z -o.
+          # Extract the archive to the current directory (no -o switch needed)
+          7z x ffmpeg.7z
 
-          # The extracted folder has a versioned name (e.g., ffmpeg-7.0.2-full_build-shared)
-          # Find it and rename it to a simple 'ffmpeg' for consistency
+          # The extracted folder has a versioned name; rename it to a simple 'ffmpeg'
           Get-ChildItem -Directory -Filter "ffmpeg-*" | Rename-Item -NewName { "ffmpeg" }
 
-          # Set FFMPEG_DIR to the extracted folder, which contains include/ and lib/
+          # Point FFMPEG_DIR to the root of the extracted folder (contains include/ and lib/)
           Add-Content $env:GITHUB_ENV "FFMPEG_DIR=${pwd}\ffmpeg"
 
-          # Also add the bin directory to PATH for runtime DLL discovery
+          # Also add the bin directory to PATH so runtime DLLs can be found
           Add-Content $env:GITHUB_PATH "${pwd}\ffmpeg\bin"
 
       - name: Set custom PUB_CACHE path (Windows)
