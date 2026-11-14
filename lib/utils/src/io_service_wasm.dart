@@ -9,6 +9,13 @@ import 'package:tawai/ui/widgets/dialog/folder_picker_dialog.dart';
 
 class WasmIOService implements IOService {
   @override
+  String? getEnv(String env) {
+    throw UnsupportedError(
+      'Filesystem access is not supported in WASM. Use APIService for settings.',
+    );
+  }
+
+  @override
   Future<String> getConfigDir() async {
     throw UnsupportedError(
       'Filesystem access is not supported in WASM. Use APIService for settings.',

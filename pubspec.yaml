@@ -40,6 +40,7 @@ dependencies:
   media_kit_libs_windows_audio: ^1.0.9
   media_kit_libs_linux: ^1.2.1
   audio_service: ^0.18.18
+  audio_service_mpris: ^1.0.0-beta.4
   dynamic_color: ^1.8.1
   window_manager: ^0.5.1
   tray_manager: ^0.5.2
@@ -55,7 +56,7 @@ dependencies:
   flutter_svg: ^2.3.0
   gpt_markdown: ^1.1.7
   font_awesome_flutter: ^11.0.0
-  file_picker: 12.0.0-beta.5
+  file_picker: ^13.3.3
   flutter_sharing_intent: ^2.0.4
   device_info_plus: ^13.1.0
   collection: ^1.19.1

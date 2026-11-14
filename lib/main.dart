@@ -127,8 +127,16 @@ Future<void> main(List<String> args) async {
         SharedIntentService.instance.init();
       }
 
-      if (kIsWeb || PlatformService.isAndroid) {
-        PlaybackService.instance.audioHandler = await TawaiAudioHandler.init();
+      if (kIsWeb || PlatformService.isAndroid || PlatformService.isLinux) {
+        try {
+          PlaybackService.instance.audioHandler =
+              await TawaiAudioHandler.init();
+        } catch (e, stack) {
+          log(
+            'AudioService initialization failed: $e\n$stack',
+            level: LogLevel.error,
+          );
+        }
       }
 
       if (PlatformService.isDesktop) {

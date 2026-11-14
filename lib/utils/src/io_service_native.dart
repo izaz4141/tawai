@@ -19,6 +19,12 @@ class NativeIOService implements IOService {
       _fileLocks.putIfAbsent(path, () => Lock(reentrant: true));
 
   @override
+  String? getEnv(String env) {
+    String? val = Platform.environment[env];
+    return val?.isNotEmpty == true ? val : null;
+  }
+
+  @override
   Future<String> getConfigDir() async {
     final dir = await getApplicationSupportDirectory();
     return dir.path;
