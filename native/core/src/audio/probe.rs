@@ -1,6 +1,10 @@
 use std::path::Path;
 #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
+use std::sync::Arc;
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 use std::sync::Once;
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
+use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 use std::time::{Duration, Instant};
 
@@ -279,14 +283,17 @@ fn probe_with_libav(input: &str, headers: &[(String, String)]) -> Result<AudioPr
         options.set("headers", &blob);
     }
 
+    let done = Arc::new(AtomicBool::new(false));
+    let interrupt_done = Arc::clone(&done);
     let started = Instant::now();
     let deadline = Duration::from_secs(20);
     let context = ffmpeg_next::format::input_with_interrupt_and_dictionary(
         input,
-        move || started.elapsed() >= deadline,
+        move || interrupt_done.load(Ordering::Relaxed) || started.elapsed() >= deadline,
         options,
     )
     .map_err(|error| anyhow::anyhow!("ffmpeg probe failed: {}", redact_urls(&error.to_string())))?;
+    done.store(true, Ordering::Relaxed);
 
     let mut probe = AudioProbe::default();
     let format = context.format();
