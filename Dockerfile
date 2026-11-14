@@ -40,6 +40,9 @@ COPY Cargo.toml Cargo.lock ./
 COPY native ./native
 COPY assets ./assets
 
+# Dynamic bind on alpine/musl
+ENV CARGO_HOST_RUSTFLAGS="-C target-feature=-crt-static"
+
 RUN cargo build --release -p tawai-server && \
     strip /app/target/release/tawai-server
 
