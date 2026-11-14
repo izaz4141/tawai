@@ -207,7 +207,6 @@ Future<String?> findTawaiDesktopEntry() async {
   final home = ioService.getEnv('HOME');
   if (home == null) return null;
 
-  // Read XDG env vars directly (same source xdg_directories uses).
   final dataHome = ioService.getEnv('XDG_DATA_HOME') ?? '$home/.local/share';
   final dataDirs =
       ioService.getEnv('XDG_DATA_DIRS') ?? '/usr/local/share:/usr/share';
@@ -219,7 +218,6 @@ Future<String?> findTawaiDesktopEntry() async {
       if (dir.isNotEmpty) '$dir/applications',
   ];
 
-  // Pass 1 — exact names, in priority order.
   const exactNames = <String>[
     'tawai.desktop',
     'Tawai.desktop',
@@ -229,8 +227,8 @@ Future<String?> findTawaiDesktopEntry() async {
     'tawai-AM.desktop',
   ];
 
-  for (final fileName in exactNames) {
-    for (final dir in searchDirs) {
+  for (final dir in searchDirs) {
+    for (final fileName in exactNames) {
       if (await ioService.fileExists('$dir/$fileName')) {
         return fileName.substring(0, fileName.length - '.desktop'.length);
       }
