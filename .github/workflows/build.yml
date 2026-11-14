@@ -161,18 +161,29 @@ jobs:
             ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev \
             libavutil-dev libswscale-dev libswresample-dev
 
-      - name: Install FFmpeg (Windows)
+      - name: Install FFmpeg Development Files (Windows)
         if: matrix.target == 'windows'
-        uses: FedericoCarboni/setup-ffmpeg@v3
-        id: setup-ffmpeg
-        with:
-          ffmpeg-version: release
-          linking-type: shared
-          github-token: ${{ github.server_url == 'https://github.com' && github.token || '' }}
+        shell: powershell
+        run: |
+          # Download a full FFmpeg build that includes headers and import libraries
+          Invoke-WebRequest "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full-shared.7z" -OutFile ffmpeg.7z
 
-      - name: Set FFMPEG_DIR (Windows)
+          # Extract the archive
+          7z x ffmpeg.7z -o.
+
+          # The extracted folder has a versioned name (e.g., ffmpeg-7.0.2-full_build-shared)
+          # Find it and rename it to a simple 'ffmpeg' for consistency
+          Get-ChildItem -Directory -Filter "ffmpeg-*" | Rename-Item -NewName { "ffmpeg" }
+
+          # Set FFMPEG_DIR to the extracted folder, which contains include/ and lib/
+          Add-Content $env:GITHUB_ENV "FFMPEG_DIR=${pwd}\ffmpeg"
+
+          # Also add the bin directory to PATH for runtime DLL discovery
+          Add-Content $env:GITHUB_PATH "${pwd}\ffmpeg\bin"
+
+      - name: Set custom PUB_CACHE path (Windows)
         if: matrix.target == 'windows'
-        run: echo "FFMPEG_DIR=${{ steps.setup-ffmpeg.outputs.ffmpeg-path }}" >> $env:GITHUB_ENV
+        run: echo "PUB_CACHE=D:\pub-cache" >> $env:GITHUB_ENV
         shell: powershell
 
       - name: Install Java (Android only)
