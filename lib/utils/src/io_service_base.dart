@@ -25,6 +25,7 @@ abstract class IOService {
   Future<String?> getDirectoryPath(BuildContext context, {String? initialPath});
   Future<void> setPermissions(String path, String mode);
   String? getCookie(String name);
+  String? getEnv(String env);
   Future<PickFileResult?> pickFile({List<String>? allowedExtensions});
 
   /// Device-local settings persisted by the platform itself.

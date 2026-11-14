@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:window_manager/window_manager.dart';
@@ -13,8 +12,7 @@ class PlatformService {
   PlatformService._internal();
 
   Future<void> focusWindow() async {
-    if (kIsWeb ||
-        (!Platform.isLinux && !Platform.isWindows && !Platform.isMacOS)) {
+    if (kIsWeb || (!isLinux && !isWindows && !isMacOS)) {
       return;
     }
 

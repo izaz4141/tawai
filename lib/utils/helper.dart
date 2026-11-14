@@ -1,11 +1,11 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'package:collection/collection.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
 import 'package:tawai/utils/bridge_service.dart';
+import 'package:tawai/utils/platform_service.dart';
 import 'package:tawai/utils/settings.dart';
 import 'package:tawai/utils/io_service.dart';
 
@@ -26,13 +26,13 @@ Future<String> _getDeviceId() async {
   final deviceInfo = DeviceInfoPlugin();
   String deviceId = '';
 
-  if (Platform.isAndroid) {
+  if (PlatformService.isAndroid) {
     final androidInfo = await deviceInfo.androidInfo;
     deviceId = androidInfo.id;
-  } else if (Platform.isLinux) {
+  } else if (PlatformService.isLinux) {
     final linuxInfo = await deviceInfo.linuxInfo;
     deviceId = linuxInfo.id;
-  } else if (Platform.isWindows) {
+  } else if (PlatformService.isWindows) {
     final windowsInfo = await deviceInfo.windowsInfo;
     deviceId = windowsInfo.deviceId;
   }
@@ -121,12 +121,6 @@ bool isUrl(String url) {
   return regex.hasMatch(url);
 }
 
-Future<bool> fileExist(String path) async {
-  if (kIsWeb) return false;
-  final type = await FileSystemEntity.type(path);
-  return type != FileSystemEntityType.notFound;
-}
-
 bool isValidMasterKey(String key) {
   if (key.length != 64) return false;
   for (int i = 0; i < 64; i += 2) {
@@ -204,4 +198,43 @@ String formatTimestamp(String iso) {
   } catch (_) {
     return iso;
   }
+}
+
+/// Searches XDG application directories for a Tawai `.desktop` file.
+/// Returns the basename **without** the `.desktop` extension
+Future<String?> findTawaiDesktopEntry() async {
+  final ioService = IOServiceFactory.create();
+  final home = ioService.getEnv('HOME');
+  if (home == null) return null;
+
+  // Read XDG env vars directly (same source xdg_directories uses).
+  final dataHome = ioService.getEnv('XDG_DATA_HOME') ?? '$home/.local/share';
+  final dataDirs =
+      ioService.getEnv('XDG_DATA_DIRS') ?? '/usr/local/share:/usr/share';
+
+  // Search order matters: user-installed files should win over system ones.
+  final searchDirs = <String>[
+    '$dataHome/applications',
+    for (final dir in dataDirs.split(':'))
+      if (dir.isNotEmpty) '$dir/applications',
+  ];
+
+  // Pass 1 — exact names, in priority order.
+  const exactNames = <String>[
+    'tawai.desktop',
+    'Tawai.desktop',
+    'TAWAI.desktop',
+    'id.glicole.tawai.desktop',
+    'Tawai-AM.desktop', // AppMan
+    'tawai-AM.desktop',
+  ];
+
+  for (final fileName in exactNames) {
+    for (final dir in searchDirs) {
+      if (await ioService.fileExists('$dir/$fileName')) {
+        return fileName.substring(0, fileName.length - '.desktop'.length);
+      }
+    }
+  }
+  return null;
 }

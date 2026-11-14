@@ -127,7 +127,7 @@ Future<void> main(List<String> args) async {
         SharedIntentService.instance.init();
       }
 
-      if (kIsWeb || PlatformService.isAndroid) {
+      if (kIsWeb || PlatformService.isAndroid || PlatformService.isLinux) {
         PlaybackService.instance.audioHandler = await TawaiAudioHandler.init();
       }
 

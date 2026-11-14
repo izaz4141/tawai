@@ -1,15 +1,19 @@
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_service_mpris/audio_service_mpris.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/utils/bridge_service.dart';
+import 'package:tawai/utils/platform_service.dart';
+import 'package:tawai/utils/app_lifecycle.dart';
 import 'package:tawai/utils/image_cache.dart';
 import 'package:tawai/utils/io_service.dart';
 import 'package:tawai/utils/logger.dart';
+import 'package:tawai/utils/helper.dart';
 
 /// Bridges [PlaybackService] to `audio_service` so that playback can be
 /// controlled from the Android media notification / lock screen and, on web,
@@ -24,7 +28,24 @@ class TawaiAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   /// One-time bootstrap for the platform audio service.
-  static Future<TawaiAudioHandler> init() {
+  static Future<TawaiAudioHandler> init() async {
+    if (PlatformService.isLinux) {
+      String? desktopEntry = await findTawaiDesktopEntry();
+      AudioServiceMpris.init(
+        dBusName: 'Tawai',
+        identity: 'Tawai',
+        desktopEntry: desktopEntry ?? 'Tawai',
+        minimumRate: 0.5,
+        maximumRate: 2.0,
+        canGoNext: true,
+        canGoPrevious: true,
+        canPlay: true,
+        canPause: true,
+        canControl: true,
+        onRaiseRequest: () async => PlatformService().focusWindow(),
+        onQuitRequest: () => closeApp(),
+      );
+    }
     return AudioService.init(
       builder: TawaiAudioHandler.new,
       config: const AudioServiceConfig(
