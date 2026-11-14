@@ -155,17 +155,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-channel"
-version = "1.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81953c529336010edd6d8e358f886d9581267795c61b19475b71314bffa46d35"
-dependencies = [
- "concurrent-queue",
- "event-listener 2.5.3",
- "futures-core",
-]
-
-[[package]]
 name = "async-compression"
 version = "0.4.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -175,15 +164,6 @@ dependencies = [
  "compression-core",
  "pin-project-lite",
  "tokio",
-]
-
-[[package]]
-name = "async-oneshot"
-version = "0.5.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae47de2a02d543205f3f5457a90b6ecbc9494db70557bd29590ec8f1ddff5463"
-dependencies = [
- "futures-micro",
 ]
 
 [[package]]
@@ -1224,12 +1204,6 @@ dependencies = [
 
 [[package]]
 name = "event-listener"
-version = "2.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
-
-[[package]]
-name = "event-listener"
 version = "5.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e13b66accf52311f30a0db42147dadea9850cb48cd070028831ae5f5d4b856ab"
@@ -1500,15 +1474,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "futures-micro"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b460264b3593d68b16a7bc35f7bc226ddfebdf9a1c8db1ed95d5cc6b7168c826"
-dependencies = [
- "pin-project-lite",
 ]
 
 [[package]]
@@ -1844,10 +1809,7 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 name = "hub"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "axum",
- "hex",
- "messages",
  "openssl",
  "reqwest 0.12.28",
  "rinf",
@@ -2548,20 +2510,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1219ed1b7f229ee7104d281dd01d6802fe28bb6e95d292942c4daacdeb798c0"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "messages"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e02e0c66a1c30e448db540072c1b3811859ebeac2671f96bba20ed7932210205"
-dependencies = [
- "async-channel",
- "async-oneshot",
- "async-trait",
- "futures",
- "once_cell",
- "tokio",
 ]
 
 [[package]]
@@ -4362,7 +4310,7 @@ dependencies = [
  "crc",
  "crossbeam-queue",
  "either",
- "event-listener 5.4.1",
+ "event-listener",
  "futures-core",
  "futures-intrusive",
  "futures-io",
@@ -4868,7 +4816,6 @@ dependencies = [
  "futures",
  "hex",
  "image",
- "indexmap",
  "lindera",
  "lofty",
  "openssl",
@@ -4883,7 +4830,6 @@ dependencies = [
  "tempfile",
  "time",
  "tokio",
- "tokio-util",
  "uroman",
  "utoipa",
  "uuid",
@@ -4899,33 +4845,24 @@ dependencies = [
  "anyhow",
  "axum",
  "axum-extra",
- "base64",
  "futures",
- "futures-util",
  "governor",
  "headers",
- "http-body-util",
  "jsonwebtoken",
  "mime",
- "multer",
- "percent-encoding",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
  "subtle",
  "tawai-core",
- "tempfile",
  "time",
  "tokio",
  "tokio-stream",
- "tokio-util",
  "tower-http 0.7.0",
  "tower_governor",
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
- "walkdir",
- "zip 7.2.0",
 ]
 
 [[package]]
@@ -5300,12 +5237,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
-name = "typed-path"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e"
-
-[[package]]
 name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5481,7 +5412,7 @@ dependencies = [
  "serde_json",
  "url",
  "utoipa",
- "zip 3.0.0",
+ "zip",
 ]
 
 [[package]]
@@ -6275,20 +6206,6 @@ dependencies = [
  "flate2",
  "indexmap",
  "memchr",
- "zopfli",
-]
-
-[[package]]
-name = "zip"
-version = "7.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c42e33efc22a0650c311c2ef19115ce232583abbe80850bc8b66509ebef02de0"
-dependencies = [
- "crc32fast",
- "flate2",
- "indexmap",
- "memchr",
- "typed-path",
  "zopfli",
 ]
 
