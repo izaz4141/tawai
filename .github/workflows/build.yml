@@ -157,7 +157,9 @@ jobs:
           sudo apt update
           sudo apt install -y -o Dir::Cache::Archives="$HOME/.apt-cache" \
             clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
-            libfuse2 libayatana-appindicator3-dev patchelf curl jq
+            libfuse2 libayatana-appindicator3-dev patchelf curl jq \
+            ffmpeg libavcodec-dev libavformat-dev libavfilter-dev libavdevice-dev \
+            libavutil-dev libswscale-dev libswresample-dev
 
       - name: Install Java (Android only)
         if: startsWith(matrix.target, 'android')
