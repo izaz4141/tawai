@@ -39,5 +39,8 @@ wana_kana = "5.0.0"
 lindera = { version = "4.0.1", features = ["embed-ipadic"] }
 whatlang = "0.18.0"
 
+[target.'cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))'.dependencies]
+ffmpeg-next = { version = "9.1.0", default-features = false, features = ["format", "codec"] }
+
 [package.metadata.cargo-machete]
 ignored = ["openssl"]

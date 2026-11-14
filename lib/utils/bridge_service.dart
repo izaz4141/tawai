@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/models/editable_tag_data.dart';
+import 'package:tawai/models/stream_info.dart';
 import 'package:tawai/services/playback_service.dart';
 import 'package:tawai/utils/platform_service.dart';
 import 'package:tawai/utils/api_service.dart';
@@ -297,6 +298,30 @@ class BridgeService {
       return APIService.instance.previewTrack(track);
     }
     return RinfService.instance.previewTrack(track);
+  }
+
+  Future<StreamProbeResult> probeStream(
+    String? trackId, {
+    TrackInfo? track,
+    String? bitrate,
+  }) async {
+    // External files always live on the device that is playing them, even when
+    // the library itself is served by a remote Tawai instance. Probe locally so
+    // their real metadata is available.
+    final isExternal =
+        track?.source == 'external' || track?.sourceType == 'external';
+    if (_isRemote && !isExternal) {
+      return APIService.instance.probeStream(
+        trackId,
+        track: track,
+        bitrate: bitrate,
+      );
+    }
+    return RinfService.instance.probeStream(
+      trackId,
+      track: track,
+      bitrate: bitrate,
+    );
   }
 
   Future<TrackInfo?> getTrackInfo(String trackId) async {

@@ -6,6 +6,7 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:synchronized/synchronized.dart';
 
 import 'package:tawai/src/bindings/bindings.dart';
+import 'package:tawai/models/stream_info.dart';
 import 'package:tawai/ui/app.dart';
 import 'package:tawai/ui/widgets/app_snackbar.dart';
 import 'package:tawai/utils/bridge_service.dart';
@@ -56,6 +57,7 @@ class PlaybackService {
   final queue = ValueNotifier<QueueState>(QueueState());
   final shuffleModeEnabled = ValueNotifier<bool>(false);
   final loopMode = ValueNotifier<LoopMode>(LoopMode.off);
+  final streamInfo = ValueNotifier<StreamInfo?>(null);
 
   TrackInfo? get currentTrack => queue.value.currentTrack;
 
@@ -72,6 +74,7 @@ class PlaybackService {
   List<QueueItem> _orderedItems = const [];
   _PreviewRestore? _previewRestore;
   int _sourceGeneration = 0;
+  int _probeGeneration = 0;
 
   late StreamSubscription<PlayerState> _playerStateSub;
   late StreamSubscription<Duration> _positionSub;
@@ -132,6 +135,7 @@ class PlaybackService {
     queue.dispose();
     shuffleModeEnabled.dispose();
     loopMode.dispose();
+    streamInfo.dispose();
     _player.dispose();
   }
 
@@ -204,6 +208,7 @@ class PlaybackService {
         items: [QueueItem(track: syntheticTrack)],
         currentIndex: 0,
       );
+      _clearStreamInfo();
 
       final result = await BridgeService.instance.previewTrack(syntheticTrack);
       if (result.error != null || result.url == null) {
@@ -214,7 +219,7 @@ class PlaybackService {
 
       final item = QueueItem(
         track: syntheticTrack,
-        source: SourceCache(result.url!, null),
+        source: SourceCache(result.url!, null, bitrate: null),
       );
       queue.value = QueueState(items: [item], currentIndex: 0);
       _loadedTrackId = rec.id;
@@ -223,6 +228,7 @@ class PlaybackService {
       await _applyEffectiveVolume();
       _beginTrack(syntheticTrack);
       _startPlayback();
+      _scheduleProbe(item.track, item.source!);
     });
   }
 
@@ -303,6 +309,7 @@ class PlaybackService {
       await _player.setAudioSource(_buildSource(first.track, first.source!));
       await _applyEffectiveVolume();
       _startPlayback();
+      _scheduleProbe(first.track, first.source!);
       return true;
     });
   }
@@ -678,6 +685,7 @@ class PlaybackService {
     if (index < 0 || index >= items.length) return false;
 
     var item = items[index];
+    _clearStreamInfo();
     if (item.source == null) {
       final cache = await _resolveSource(item.track);
       if (cache == null) return false;
@@ -709,6 +717,7 @@ class PlaybackService {
     if (autoPlay) {
       _startPlayback();
     }
+    _scheduleProbe(item.track, item.source!);
     unawaited(_prefetchWindow());
     return true;
   }
@@ -723,17 +732,18 @@ class PlaybackService {
 
   Future<SourceCache?> _fetchSource(TrackInfo track) async {
     try {
+      final bitrate = SettingsManager.preferredBitrate.value;
       final result = await BridgeService.instance.playTrack(
         track.id,
         track: track,
-        bitrate: SettingsManager.preferredBitrate.value,
+        bitrate: bitrate,
       );
       _inflight.remove(track.id);
       if (result.error != null) {
         _notifyPlaybackError(result.error!);
         return null;
       }
-      return SourceCache(result.filePath, result.headers);
+      return SourceCache(result.filePath, result.headers, bitrate: bitrate);
     } catch (e) {
       _inflight.remove(track.id);
       _notifyPlaybackError(e.toString());
@@ -794,6 +804,49 @@ class PlaybackService {
   void _beginTrack(TrackInfo track) {
     _trackStartTime = DateTime.now();
     _updateNowPlaying(track);
+  }
+
+  /// Infer the playback mode from the resolved source before probing. The
+  /// probe response may refine it; this only drives the initial loading state.
+  StreamMode _modeForSource(TrackInfo track, SourceCache cache) {
+    if (track.source == 'preview' || track.sourceType == 'preview') {
+      return StreamMode.preview;
+    }
+    if (track.source == 'external' || track.sourceType == 'external') {
+      return StreamMode.external;
+    }
+    if (isUrl(cache.filePath)) {
+      return Uri.parse(cache.filePath).path.endsWith('.mpd')
+          ? StreamMode.transcode
+          : StreamMode.direct;
+    }
+    return StreamMode.local;
+  }
+
+  /// Probe the resolved source without blocking playback. A stale probe is
+  /// dropped when the track changes before it finishes.
+  void _scheduleProbe(TrackInfo track, SourceCache cache) {
+    final generation = ++_probeGeneration;
+    final fallbackMode = _modeForSource(track, cache);
+    streamInfo.value = StreamInfo.probing(fallbackMode);
+
+    unawaited(() async {
+      StreamProbeResult result;
+      try {
+        result = await BridgeService.instance
+            .probeStream(track.id, track: track, bitrate: cache.bitrate)
+            .timeout(const Duration(seconds: 30));
+      } catch (_) {
+        result = const StreamProbeResult(error: 'Probe timed out');
+      }
+      if (generation != _probeGeneration) return;
+      streamInfo.value = result.toStreamInfo(fallbackMode: fallbackMode);
+    }());
+  }
+
+  void _clearStreamInfo() {
+    _probeGeneration++;
+    streamInfo.value = null;
   }
 
   void _updateNowPlaying(TrackInfo track) {
@@ -882,6 +935,7 @@ class PlaybackService {
   }
 
   Future<void> _reset() async {
+    _clearStreamInfo();
     await _player.stop();
     await _player.clearAudioSources();
     _sourceGeneration++;
@@ -935,5 +989,9 @@ class SourceCache {
   final String filePath;
   final List<List<String>>? headers;
 
-  const SourceCache(this.filePath, this.headers);
+  /// The exact transcode bitrate requested when this source was resolved.
+  /// `null` or `'lossless'` means the original file was served.
+  final String? bitrate;
+
+  const SourceCache(this.filePath, this.headers, {this.bitrate});
 }

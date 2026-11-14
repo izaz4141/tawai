@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::audio::probe::AudioProbe;
+
 use super::library::TrackInfo;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -34,6 +36,29 @@ pub struct PlayTrackResponse {
     pub file_path: String,
     pub error: Option<String>,
     pub headers: Option<Vec<(String, String)>>,
+}
+
+/// Ask the backend to probe the actual stream/file used for a track.
+///
+/// `bitrate` is the exact value used when the source was resolved, so a
+/// transcode probe inspects the same representation the player received.
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct ProbeStreamRequest {
+    #[serde(default)]
+    pub id: String,
+    pub track_id: Option<String>,
+    pub track: Option<TrackInfo>,
+    #[serde(default)]
+    pub bitrate: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ProbeStreamResponse {
+    pub id: String,
+    /// `direct`, `transcode`, `local`, `preview`, or `external`.
+    pub mode: Option<String>,
+    pub info: Option<AudioProbe>,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]

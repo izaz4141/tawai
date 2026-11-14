@@ -14,6 +14,7 @@ import 'package:tawai/utils/settings.dart';
 import 'package:tawai/utils/logger.dart';
 import 'package:tawai/utils/system_service.dart';
 import 'package:tawai/models/fs.dart';
+import 'package:tawai/models/stream_info.dart';
 import 'package:tawai/models/editable_tag_data.dart';
 import 'package:tawai/models/user.dart';
 
@@ -598,7 +599,7 @@ class APIService {
 
   Future<PreviewTrackResponse> previewTrack(TrackInfo track) async {
     try {
-      final body = <String, dynamic>{'id': _newId(), 'track': track.toJson()};
+      final body = {'id': _newId(), 'track': track.toJson()};
       final response = await http.post(
         Uri.parse('$baseUrl/api/tawai/playback/preview'),
         headers: {..._authHeaders(), 'Content-Type': 'application/json'},
@@ -625,6 +626,56 @@ class APIService {
     } catch (e) {
       log('previewTrack error: $e', level: LogLevel.error);
       return PreviewTrackResponse(id: '');
+    }
+  }
+
+  /// Probe the actual stream/file that will play for [trackId]/[track].
+  ///
+  /// [bitrate] must be the exact value used when the source was resolved so a
+  /// transcode probe inspects the same representation the player received.
+  /// Never throws: a failed probe returns a result without details.
+  Future<StreamProbeResult> probeStream(
+    String? trackId, {
+    TrackInfo? track,
+    String? bitrate,
+  }) async {
+    try {
+      final body = {
+        'id': _newId(),
+        'track_id': trackId,
+        if (track != null) 'track': track.toJson(),
+        if (bitrate != null && bitrate.isNotEmpty) 'bitrate': bitrate,
+      };
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/tawai/playback/probe'),
+        headers: {..._authHeaders(), 'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      final error = json['error'] as String?;
+      final mode = StreamProbeResult.parseMode(json['mode'] as String?);
+      final info = json['info'] as Map<String, dynamic>?;
+      if (response.statusCode != 200 || info == null) {
+        return StreamProbeResult(mode: mode, error: error);
+      }
+      return StreamProbeResult(
+        mode: mode,
+        transport: info['transport'] as String?,
+        container: info['container'] as String?,
+        containerLong: info['container_long'] as String?,
+        codec: info['codec'] as String?,
+        codecLong: info['codec_long'] as String?,
+        bitrateKbps: (info['bitrate_kbps'] as num?)?.toInt(),
+        sampleRateHz: (info['sample_rate_hz'] as num?)?.toInt(),
+        bitDepth: (info['bit_depth'] as num?)?.toInt(),
+        channels: (info['channels'] as num?)?.toInt(),
+        durationSecs: (info['duration_secs'] as num?)?.toDouble(),
+        sizeBytes: (info['size_bytes'] as num?)?.toInt(),
+        error: error,
+      );
+    } catch (e) {
+      log('probeStream error: $e', level: LogLevel.error);
+      return const StreamProbeResult(error: 'Failed to inspect stream');
     }
   }
 

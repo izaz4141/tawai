@@ -165,6 +165,75 @@ async fn try_head_request(
     Ok(response)
 }
 
+/// Strip credentials from a URL for logging: userinfo, query, and fragment are
+/// removed. Non-URL values (such as local paths) are returned unchanged.
+pub fn redact_url(url: &str) -> String {
+    match Url::parse(url) {
+        Ok(mut parsed) => {
+            if !parsed.username().is_empty() {
+                let _ = parsed.set_username("");
+            }
+            if parsed.password().is_some() {
+                let _ = parsed.set_password(None);
+            }
+            if parsed.query().is_some() {
+                parsed.set_query(Some("redacted"));
+            }
+            parsed.set_fragment(None);
+            parsed.to_string()
+        }
+        Err(_) => redact_url_fallback(url),
+    }
+}
+
+/// Redact every URL embedded in `text`.
+pub fn redact_urls(text: &str) -> String {
+    let mut redacted = String::with_capacity(text.len());
+    let mut rest = text;
+    loop {
+        let next = ["http://", "https://"]
+            .iter()
+            .filter_map(|scheme| rest.find(scheme))
+            .min();
+        let Some(index) = next else {
+            redacted.push_str(rest);
+            break;
+        };
+        redacted.push_str(&rest[..index]);
+        let tail = &rest[index..];
+        let end = url_end(tail);
+        redacted.push_str(&redact_url(&tail[..end]));
+        rest = &tail[end..];
+    }
+    redacted
+}
+
+fn url_end(url: &str) -> usize {
+    let authority_start = url.find("//").map_or(0, |index| index + 2);
+    let ipv6_literal = url[authority_start..].starts_with('[');
+    let mut closed_bracket_seen = !ipv6_literal;
+    for (offset, c) in url[authority_start..].char_indices() {
+        if c == ']' && !closed_bracket_seen {
+            closed_bracket_seen = true;
+            continue;
+        }
+        if c.is_whitespace() || matches!(c, '"' | '\'' | ')' | ']' | '>') {
+            return authority_start + offset;
+        }
+    }
+    url.len()
+}
+
+fn redact_url_fallback(url: &str) -> String {
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return url.to_string();
+    }
+    match url.find(['?', '#']) {
+        Some(index) => format!("{}?redacted", &url[..index]),
+        None => url.to_string(),
+    }
+}
+
 async fn try_get_range_request(
     client: &Client,
     url: &str,
@@ -180,4 +249,52 @@ async fn try_get_range_request(
             request_builder.header(header::USER_AGENT, header::HeaderValue::from_str(ua)?);
     }
     request_builder.send().await.map_err(|e| e.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redacts_signed_url_query() {
+        let redacted = redact_url("https://host/media.m4a?expire=1&sig=secret");
+        assert_eq!(redacted, "https://host/media.m4a?redacted");
+        assert!(!redacted.contains("secret"));
+    }
+
+    #[test]
+    fn redacts_userinfo() {
+        assert_eq!(redact_url("https://user:pass@host/a"), "https://host/a");
+    }
+
+    #[test]
+    fn redacts_fragment() {
+        assert_eq!(redact_url("https://host/a#token"), "https://host/a");
+    }
+
+    #[test]
+    fn keeps_plain_paths() {
+        assert_eq!(redact_url("/tmp/audio.mp3"), "/tmp/audio.mp3");
+    }
+
+    #[test]
+    fn redacts_urls_embedded_in_text() {
+        let redacted = redact_urls("ffprobe failed for https://host/a?token=secret: 403 Forbidden");
+        assert!(redacted.contains("https://host/a?redacted"));
+        assert!(!redacted.contains("secret"));
+    }
+
+    #[test]
+    fn redacts_query_in_ipv6_url() {
+        let redacted = redact_urls("fetching http://[::1]:8080/audio?token=secret now");
+        assert_eq!(redacted, "fetching http://[::1]:8080/audio?redacted now");
+        assert!(!redacted.contains("secret"));
+    }
+
+    #[test]
+    fn closing_bracket_still_ends_non_ipv6_url() {
+        let redacted = redact_urls("[https://host/a?token=secret]");
+        assert_eq!(redacted, "[https://host/a?redacted]");
+        assert!(!redacted.contains("secret"));
+    }
 }

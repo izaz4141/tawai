@@ -18,6 +18,57 @@ pub struct PlayTrackResponse {
     pub headers: Option<Vec<(String, String)>>,
 }
 
+/// Metadata read from the actual stream/file that is playing.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, SignalPiece)]
+pub struct AudioProbe {
+    pub transport: Option<String>,
+    pub container: Option<String>,
+    pub container_long: Option<String>,
+    pub codec: Option<String>,
+    pub codec_long: Option<String>,
+    pub bitrate_kbps: Option<i64>,
+    pub sample_rate_hz: Option<u32>,
+    pub bit_depth: Option<u32>,
+    pub channels: Option<u32>,
+    pub duration_secs: Option<f64>,
+    pub size_bytes: Option<i64>,
+}
+
+impl From<tawai_core::audio::probe::AudioProbe> for AudioProbe {
+    fn from(probe: tawai_core::audio::probe::AudioProbe) -> Self {
+        Self {
+            transport: probe.transport,
+            container: probe.container,
+            container_long: probe.container_long,
+            codec: probe.codec,
+            codec_long: probe.codec_long,
+            bitrate_kbps: probe.bitrate_kbps,
+            sample_rate_hz: probe.sample_rate_hz,
+            bit_depth: probe.bit_depth,
+            channels: probe.channels,
+            duration_secs: probe.duration_secs,
+            size_bytes: probe.size_bytes,
+        }
+    }
+}
+
+#[derive(Deserialize, DartSignal)]
+pub struct ProbeStreamRequest {
+    pub id: String,
+    pub track_id: Option<String>,
+    pub track: Option<TrackInfo>,
+    pub bitrate: Option<String>,
+}
+
+#[derive(Serialize, RustSignal)]
+pub struct ProbeStreamResponse {
+    pub id: String,
+    /// `direct`, `transcode`, `local`, `preview`, or `external`.
+    pub mode: Option<String>,
+    pub info: Option<AudioProbe>,
+    pub error: Option<String>,
+}
+
 #[derive(Deserialize, DartSignal)]
 pub struct PreviewTrackRequest {
     pub id: String,

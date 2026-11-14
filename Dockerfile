@@ -32,7 +32,9 @@ RUN apk add --no-cache \
     openssl-dev \
     perl \
     make \
-    curl
+    curl \
+    ffmpeg-dev \
+    clang-dev
 
 COPY Cargo.toml Cargo.lock ./
 COPY native ./native

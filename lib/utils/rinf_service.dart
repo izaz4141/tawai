@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:tawai/models/editable_tag_data.dart';
+import 'package:tawai/models/stream_info.dart';
 import 'package:tawai/src/bindings/bindings.dart';
 import 'package:tawai/utils/logger.dart';
 
@@ -345,6 +346,40 @@ class RinfService {
       );
     }
     return signal.message;
+  }
+
+  Future<StreamProbeResult> probeStream(
+    String? trackId, {
+    TrackInfo? track,
+    String? bitrate,
+  }) async {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final stream = ProbeStreamResponse.rustSignalStream.where(
+      (s) => s.message.id == id,
+    );
+    ProbeStreamRequest(
+      id: id,
+      trackId: trackId,
+      track: track,
+      bitrate: bitrate,
+    ).sendSignalToRust();
+    final message = (await stream.first).message;
+    final info = message.info;
+    return StreamProbeResult(
+      mode: StreamProbeResult.parseMode(message.mode),
+      transport: info?.transport,
+      container: info?.container,
+      containerLong: info?.containerLong,
+      codec: info?.codec,
+      codecLong: info?.codecLong,
+      bitrateKbps: info?.bitrateKbps,
+      sampleRateHz: info?.sampleRateHz,
+      bitDepth: info?.bitDepth,
+      channels: info?.channels,
+      durationSecs: info?.durationSecs,
+      sizeBytes: info?.sizeBytes,
+      error: message.error,
+    );
   }
 
   Future<TrackInfo?> getTrackInfo(String trackId) async {

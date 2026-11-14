@@ -108,7 +108,7 @@ async fn with_track_lock<T>(
 
 /// Ensure `init-<bandwidth>.m4s` for `track` exists in `dir` and is up to
 /// date with the source file, transcoding it (plus segment 1) on demand.
-async fn ensure_dash_init_generated(
+pub(crate) async fn ensure_dash_init_generated(
     state: &SharedState,
     track_id: &str,
     source_path: &str,
@@ -130,7 +130,7 @@ async fn ensure_dash_init_generated(
 
 /// Ensure `seg-<bandwidth>-<number>.m4s` for `track` exists in `dir` and is
 /// up to date with the source file, transcoding just that slice on demand.
-async fn ensure_dash_segment_generated(
+pub(crate) async fn ensure_dash_segment_generated(
     state: &SharedState,
     track_id: &str,
     source_path: &str,
