@@ -170,6 +170,11 @@ jobs:
           linking-type: shared
           github-token: ${{ github.server_url == 'https://github.com' && github.token || '' }}
 
+      - name: Set FFMPEG_DIR (Windows)
+        if: matrix.target == 'windows'
+        run: echo "FFMPEG_DIR=${{ steps.setup-ffmpeg.outputs.ffmpeg-path }}" >> $env:GITHUB_ENV
+        shell: powershell
+
       - name: Install Java (Android only)
         if: startsWith(matrix.target, 'android')
         uses: actions/setup-java@v4
