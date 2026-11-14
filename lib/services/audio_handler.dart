@@ -30,6 +30,7 @@ class TawaiAudioHandler extends BaseAudioHandler with SeekHandler {
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'id.glicole.tawai.channel.audio',
         androidNotificationChannelName: 'Playback',
+        androidNotificationIcon: 'mipmap/launcher_icon',
         androidNotificationOngoing: false,
         androidStopForegroundOnPause: false,
       ),
