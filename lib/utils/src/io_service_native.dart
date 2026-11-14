@@ -20,7 +20,8 @@ class NativeIOService implements IOService {
 
   @override
   String? getEnv(String env) {
-    return Platform.environment[env];
+    String? val = Platform.environment[env];
+    return val?.isNotEmpty == true ? val : null;
   }
 
   @override
