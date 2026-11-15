@@ -140,9 +140,7 @@ native/
 | `TAWAI_NADEKODON_URL` | No | Nadeko~don server URL |
 | `TAWAI_NADEKODON_API_KEY` | No | Nadeko~don API key |
 
-env vars override the values stored in `config.json` on every startup. ListenBrainz tokens are stored per-user in the database and are not read from the environment.
-
-When a trusted proxy sends a forwarding header whose first present value is unusable (for example `unknown`, an obfuscated identifier, or multiple `X-Real-IP` values), the request is rate limited under a per-proxy unknown bucket instead of trusting a value further left in the chain.
+env vars override the values stored in `config.json` on every startup. 
 
 ## Contributing
 
