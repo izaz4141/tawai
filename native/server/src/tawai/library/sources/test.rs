@@ -3,7 +3,7 @@ use tawai_core::libsources::jellyfin::JellyfinParser;
 use tawai_core::libsources::tawai;
 use tawai_core::signals::discovery::{ServerTestResult, TestSourceRequest, TestSourceResponse};
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     post,

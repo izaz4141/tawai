@@ -6,7 +6,7 @@ use axum::{
 use tawai_core::db::library;
 use tawai_core::signals::library::{ListArtistsRequest, ListArtistsResponse};
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 pub async fn handle_list_artists(
     State(state): State<SharedState>,

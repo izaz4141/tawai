@@ -1,4 +1,4 @@
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 use axum::{Json, extract::State, response::IntoResponse};
 use serde::Serialize;
 use utoipa::ToSchema;

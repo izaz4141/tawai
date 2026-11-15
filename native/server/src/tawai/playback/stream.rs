@@ -17,8 +17,8 @@ use tawai_core::signals::library::TrackInfo;
 use tawai_core::utils::config::dash_cache_dir_for_track;
 use tower_http::services::ServeFile;
 
-use crate::security::QueryToken;
-use crate::server::SharedState;
+use crate::utils::security::QueryToken;
+use crate::utils::server::SharedState;
 
 use super::{TrackAccess, user_can_read_track};
 

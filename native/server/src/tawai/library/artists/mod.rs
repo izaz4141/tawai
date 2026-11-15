@@ -1,6 +1,6 @@
 pub mod list;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 use axum::{Router, routing::get};
 
 pub fn create_artists_router() -> Router<SharedState> {

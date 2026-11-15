@@ -6,8 +6,8 @@ pub mod scan;
 pub mod sources;
 pub mod tracks;
 
-use crate::security::check_api_key;
-use crate::server::SharedState;
+use crate::utils::security::check_api_key;
+use crate::utils::server::SharedState;
 use axum::{Router, middleware};
 
 pub fn create_library_router(state: SharedState) -> Router<SharedState> {

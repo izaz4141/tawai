@@ -4,7 +4,7 @@ pub mod list;
 pub mod remove;
 pub mod test;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 use axum::{
     Router,
     routing::{delete, get, post},

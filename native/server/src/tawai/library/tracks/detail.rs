@@ -10,7 +10,7 @@ use tawai_core::db::{library, library_source};
 use tawai_core::signals::library::TrackInfo;
 use tawai_core::utils::playback::resolve_track_source;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     get,

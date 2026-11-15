@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::{Extension, Json, extract::State, response::IntoResponse};
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 use tawai_core::signals::tools::{
     BatchRenameApplyRequest, BatchRenameApplyResponse, BatchRenamePreviewRequest,
     BatchRenamePreviewResponse, CheckNamingConventionRequest, CheckNamingConventionResponse,

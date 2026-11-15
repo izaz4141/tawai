@@ -24,7 +24,7 @@ use tools::create_tools_router;
 use utils::create_utils_router;
 use version::create_version_router;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 use axum::Router;
 
 pub fn create_tawai_router(state: SharedState) -> Router<SharedState> {

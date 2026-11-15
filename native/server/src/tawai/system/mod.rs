@@ -2,8 +2,8 @@ pub mod fs;
 pub mod restart;
 pub mod status;
 
-use crate::security::{check_api_key, require_admin};
-use crate::server::SharedState;
+use crate::utils::security::{check_api_key, require_admin};
+use crate::utils::server::SharedState;
 use axum::{
     Router, middleware,
     routing::{get, post},

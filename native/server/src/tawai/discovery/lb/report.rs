@@ -6,7 +6,7 @@ use axum::{
 use tawai_core::db::{account, database::DatabasePool, history, library};
 use tawai_core::signals::playback::{ReportPlaybackRequest, ReportPlaybackResponse};
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     post,

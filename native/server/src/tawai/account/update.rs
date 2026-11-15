@@ -1,5 +1,5 @@
-use crate::security::create_jwt_response;
-use crate::server::{SharedState, build_jwt_cookie};
+use crate::utils::security::create_jwt_response;
+use crate::utils::server::{SharedState, build_jwt_cookie};
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;

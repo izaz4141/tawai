@@ -4,7 +4,7 @@ use tawai_core::db::account;
 use tawai_core::signals::metadata::{FormatNamingPreviewRequest, FormatNamingPreviewResponse};
 use tawai_core::utils::identify::preview_naming;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 pub async fn handle_format_naming_preview(
     State(state): State<SharedState>,

@@ -6,7 +6,7 @@ use axum::{
 use tawai_core::db::{account, library_source};
 use tawai_core::signals::library::{AddLibrarySourceRequest, AddLibrarySourceResponse};
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 pub async fn handle_add_source(
     State(state): State<SharedState>,

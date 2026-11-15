@@ -7,7 +7,7 @@ use axum::{
 use tawai_core::db;
 use tawai_core::signals::download::{ListDownloadsRequest, ListDownloadsResponse};
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     get,

@@ -3,8 +3,8 @@ pub mod delete;
 pub mod list;
 pub mod update;
 
-use crate::security::check_api_key;
-use crate::server::SharedState;
+use crate::utils::security::check_api_key;
+use crate::utils::server::SharedState;
 use axum::Router;
 use axum::middleware;
 use axum::routing::{get, post};

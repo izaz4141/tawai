@@ -4,7 +4,7 @@ use axum::Router;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 use security::SecurityModifier;
 

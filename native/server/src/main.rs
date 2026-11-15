@@ -6,7 +6,7 @@ use tawai_core::signals::library::ScanProgress;
 use tawai_core::utils::config::{get_path, set_path};
 use tawai_core::utils::{logger, paths};
 
-use tawai_server::server;
+use tawai_server::utils::server;
 
 #[tokio::main]
 async fn main() {

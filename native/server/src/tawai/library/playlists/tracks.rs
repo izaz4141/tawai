@@ -10,7 +10,7 @@ use tawai_core::signals::library::{
     ReorderPlaylistTracksRequest, ReorderPlaylistTracksResponse,
 };
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 pub async fn handle_get_playlist_tracks(
     State(state): State<SharedState>,

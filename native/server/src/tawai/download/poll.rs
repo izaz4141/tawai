@@ -3,7 +3,7 @@ use tawai_core::db;
 use tawai_core::dclient::DownloadClient;
 use tawai_core::signals::download::{DownloadsPollRequest, DownloadsPollResponse};
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     post,

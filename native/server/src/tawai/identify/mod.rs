@@ -1,6 +1,6 @@
 pub mod mb;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 use axum::Router;
 
 pub fn create_identify_router() -> Router<SharedState> {

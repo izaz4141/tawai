@@ -5,7 +5,7 @@ pub mod list;
 pub mod mbid;
 pub mod source;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 use axum::{
     Router,
     extract::DefaultBodyLimit,

@@ -11,7 +11,7 @@ use tawai_core::{
     utils::logger,
 };
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     post,

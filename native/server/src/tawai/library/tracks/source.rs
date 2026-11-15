@@ -6,7 +6,7 @@ use axum::{
 use tawai_core::db::library;
 use tawai_core::signals::library::ListTracksResponse;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     get,

@@ -4,7 +4,7 @@ use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use tawai_core::dclient::DownloadClient;
 use tawai_core::signals::download::{DownloadCreateRequest, DownloadCreateResponse};
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     post,

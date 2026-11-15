@@ -5,7 +5,7 @@ use axum::{
 };
 use tawai_core::db::library;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 pub async fn handle_album_cover(
     State(state): State<SharedState>,

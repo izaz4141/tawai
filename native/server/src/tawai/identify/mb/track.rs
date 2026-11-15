@@ -12,7 +12,7 @@ use tawai_core::{
     signals::metadata::{FingerprintTrackRequest, FingerprintTrackResponse},
 };
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     get,

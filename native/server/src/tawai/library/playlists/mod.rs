@@ -3,7 +3,7 @@ pub mod delete;
 pub mod list;
 pub mod tracks;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 use axum::{
     Router,
     routing::{delete, get, post, put},

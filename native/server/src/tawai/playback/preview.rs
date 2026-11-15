@@ -7,7 +7,7 @@ use axum::{
 use tawai_core::dclient::iprev;
 use tawai_core::signals::playback::PreviewTrackResponse;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 pub async fn handle_preview_track(
     State(state): State<SharedState>,

@@ -2,7 +2,7 @@ pub mod recording;
 pub mod release;
 pub mod track;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 use axum::{Router, routing::get, routing::post};
 
 pub fn create_mb_router() -> Router<SharedState> {

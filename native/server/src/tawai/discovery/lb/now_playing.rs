@@ -7,7 +7,7 @@ use tawai_core::db::{account, history, library};
 use tawai_core::discovery::listenbrainz;
 use tawai_core::signals::playback::{UpdateNowPlayingRequest, UpdateNowPlayingResponse};
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     post,

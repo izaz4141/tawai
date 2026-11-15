@@ -2,7 +2,7 @@ use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use std::sync::atomic::Ordering;
 use tawai_core::signals::library::{ScanStatusRequest, ScanStatusResponse};
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     post,

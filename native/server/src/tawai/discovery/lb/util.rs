@@ -5,7 +5,7 @@ use axum::{
 use tawai_core::db::{account, history};
 use tawai_core::discovery::listenbrainz;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 pub async fn resolve_lb_user(
     state: &SharedState,

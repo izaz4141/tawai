@@ -16,7 +16,7 @@ use tawai_core::{
     signals::library::ListDownloadFolderTracksResponse,
 };
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     get,

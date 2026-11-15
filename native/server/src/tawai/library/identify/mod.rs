@@ -2,7 +2,7 @@ pub mod edit;
 pub mod lyrics;
 pub mod track;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 use axum::{
     Router,
     extract::DefaultBodyLimit,

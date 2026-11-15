@@ -1,6 +1,6 @@
 use axum::{Json, extract::State, response::IntoResponse};
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 use tawai_core::signals::tools::FindDuplicatesResponse;
 
 #[utoipa::path(

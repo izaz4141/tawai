@@ -17,7 +17,7 @@ use tawai_core::{
 };
 use tokio_stream::wrappers::WatchStream;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 fn sse_event(progress: ScanProgress) -> Result<Event, Infallible> {
     Ok(Event::default().json_data(progress).unwrap())

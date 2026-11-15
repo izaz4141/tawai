@@ -5,7 +5,7 @@ use axum_extra::extract::{
 };
 use time::Duration as TimeDuration;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 fn remove_jwt_cookie(jar: CookieJar) -> CookieJar {
     let jwt = Cookie::build(("tawai_jwt", ""))

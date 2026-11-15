@@ -5,8 +5,8 @@ pub mod report;
 pub mod util;
 pub mod validate;
 
-use crate::security::check_api_key;
-use crate::server::SharedState;
+use crate::utils::security::check_api_key;
+use crate::utils::server::SharedState;
 use axum::{
     Router, middleware,
     routing::{get, post},

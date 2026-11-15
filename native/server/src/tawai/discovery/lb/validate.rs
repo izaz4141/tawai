@@ -2,7 +2,7 @@ use axum::{Json, extract::State, response::IntoResponse};
 use tawai_core::discovery::listenbrainz;
 use tawai_core::signals::discovery::{ValidateLBTokenRequest, ValidateLBTokenResponse};
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     post,

@@ -6,7 +6,7 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 use tawai_core::signals::tools::{GetLibraryStatsRequest, GetLibraryStatsResponse};
 use tawai_core::tools::rename::resolve_naming_pattern_from_context;
 

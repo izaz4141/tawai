@@ -9,7 +9,7 @@ use tawai_core::signals::settings::{
     SetUserSettingRequest, SetUserSettingResponse,
 };
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     get,

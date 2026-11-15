@@ -12,7 +12,7 @@ use jsonwebtoken::{
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::server::{SharedState, secure_compare};
+use crate::utils::server::{SharedState, secure_compare};
 
 const JWT_ALGORITHM: Algorithm = Algorithm::HS256;
 const JWT_EXPIRY_HOURS: u64 = 3;

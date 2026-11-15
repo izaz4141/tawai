@@ -1,4 +1,4 @@
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;

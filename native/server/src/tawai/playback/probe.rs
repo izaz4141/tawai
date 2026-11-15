@@ -16,7 +16,7 @@ use tawai_core::signals::playback::{ProbeStreamRequest, ProbeStreamResponse};
 use tawai_core::utils::config::dash_cache_dir_for_track;
 use tawai_core::utils::playback::resolve_playable_track;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 use super::play::transcode_bitrate;
 use super::stream::{ensure_dash_init_generated, ensure_dash_segment_generated};

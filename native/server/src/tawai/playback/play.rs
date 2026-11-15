@@ -15,8 +15,8 @@ use tawai_core::{
     utils::logger,
 };
 
-use crate::security::create_jwt_response;
-use crate::server::SharedState;
+use crate::utils::security::create_jwt_response;
+use crate::utils::server::SharedState;
 
 use super::{TrackAccess, user_can_read_track};
 

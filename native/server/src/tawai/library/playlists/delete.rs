@@ -6,7 +6,7 @@ use axum::{
 };
 use tawai_core::db::library;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 pub async fn handle_delete_playlist(
     State(state): State<SharedState>,

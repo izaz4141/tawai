@@ -11,7 +11,7 @@ use tawai_core::utils::config::{
     path_is_device, path_is_secret, prune_empty, strip_paths, validate_schema_version,
 };
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     get,

@@ -6,8 +6,8 @@ pub mod logout;
 pub mod master_key;
 pub mod verify_password;
 
-use crate::security::check_api_key;
-use crate::server::SharedState;
+use crate::utils::security::check_api_key;
+use crate::utils::server::SharedState;
 use axum::middleware;
 use axum::{
     Router,

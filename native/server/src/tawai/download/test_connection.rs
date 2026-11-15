@@ -4,7 +4,7 @@ use tawai_core::signals::download::{
     DownloadTestConnectionRequest, DownloadTestConnectionResponse,
 };
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     post,

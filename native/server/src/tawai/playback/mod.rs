@@ -11,8 +11,8 @@ use std::time::{Duration, Instant};
 use tawai_core::db::database::DatabasePool;
 use tawai_core::db::{account, library_source};
 
-use crate::security::{auth_query, auth_stream, check_api_key};
-use crate::server::SharedState;
+use crate::utils::security::{auth_query, auth_stream, check_api_key};
+use crate::utils::server::SharedState;
 use axum::{
     Router, middleware,
     routing::{get, post},

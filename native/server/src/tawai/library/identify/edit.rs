@@ -15,7 +15,7 @@ use tawai_core::{
     },
 };
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     post,

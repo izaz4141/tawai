@@ -7,7 +7,7 @@ use axum::{
 };
 use tawai_core::db::library;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     delete,

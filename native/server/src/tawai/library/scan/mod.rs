@@ -2,7 +2,7 @@ pub mod source;
 pub mod start;
 pub mod status;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 use axum::{Router, routing::post};
 
 pub fn create_scan_router() -> Router<SharedState> {

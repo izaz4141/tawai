@@ -6,7 +6,7 @@ use axum::{
 use tawai_core::db::history;
 use tawai_core::signals::playback::{GetHistoryRequest, GetHistoryResponse};
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     get,

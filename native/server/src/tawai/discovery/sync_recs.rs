@@ -4,7 +4,7 @@ use axum::{Json, extract::State};
 use tawai_core::discovery::sync::{SyncRecsParams, sync_recs};
 use tawai_core::signals::discovery::{SyncRecsRequest, SyncRecsResponse};
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 pub async fn handle_sync_recs(
     State(state): State<SharedState>,

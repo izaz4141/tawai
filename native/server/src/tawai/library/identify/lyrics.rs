@@ -9,7 +9,7 @@ use tawai_core::{
     signals::metadata::{FetchLyricsRequest, LyricsResult, SearchLyricsRequest},
 };
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 #[utoipa::path(
     get,

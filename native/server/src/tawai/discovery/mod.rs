@@ -1,7 +1,7 @@
 pub mod lb;
 pub mod sync_recs;
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 use axum::{Router, routing::post};
 
 pub fn create_discovery_router(state: SharedState) -> Router<SharedState> {

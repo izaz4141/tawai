@@ -2,7 +2,7 @@ use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResp
 use tawai_core::db::library;
 use tawai_core::signals::library::{CreatePlaylistRequest, CreatePlaylistResponse};
 
-use crate::server::SharedState;
+use crate::utils::server::SharedState;
 
 pub async fn handle_create_playlist(
     State(state): State<SharedState>,
