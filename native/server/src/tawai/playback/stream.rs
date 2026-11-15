@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::{
     body::Body,
     extract::{Extension, Path, Query, State},
@@ -16,6 +14,7 @@ use tawai_core::audio::ffmpeg::{
 };
 use tawai_core::db::library;
 use tawai_core::signals::library::TrackInfo;
+use tawai_core::utils::config::dash_cache_dir_for_track;
 use tower_http::services::ServeFile;
 
 use crate::security::QueryToken;
@@ -89,23 +88,6 @@ fn is_valid_dash_file(name: &str) -> bool {
     false
 }
 
-/// Serialize concurrent generation of artifacts for the same track. Different
-/// tracks (and the manifest, which needs no generation) proceed in parallel.
-async fn with_track_lock<T>(
-    state: &SharedState,
-    track_id: &str,
-    fut: impl std::future::Future<Output = anyhow::Result<T>>,
-) -> anyhow::Result<T> {
-    let lock = {
-        let mut map = state.dash_generation_locks.lock().unwrap();
-        map.entry(track_id.to_string())
-            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
-            .clone()
-    };
-    let _guard = lock.lock().await;
-    fut.await
-}
-
 /// Ensure `init-<bandwidth>.m4s` for `track` exists in `dir` and is up to
 /// date with the source file, transcoding it (plus segment 1) on demand.
 pub(crate) async fn ensure_dash_init_generated(
@@ -119,13 +101,15 @@ pub(crate) async fn ensure_dash_init_generated(
     if ffmpeg::dash_file_fresh(source_path, &artifact).await? {
         return Ok(());
     }
-    with_track_lock(state, track_id, async {
-        if ffmpeg::dash_file_fresh(source_path, &artifact).await? {
-            return Ok(());
-        }
-        ffmpeg::generate_dash_segment(source_path, dir, bitrate_kbps, 1, 0.0).await
-    })
-    .await
+    state
+        .dash_generation_locks
+        .with_lock(track_id, async {
+            if ffmpeg::dash_file_fresh(source_path, &artifact).await? {
+                return Ok(());
+            }
+            ffmpeg::generate_dash_segment(source_path, dir, bitrate_kbps, 1, 0.0).await
+        })
+        .await
 }
 
 /// Ensure `seg-<bandwidth>-<number>.m4s` for `track` exists in `dir` and is
@@ -143,14 +127,22 @@ pub(crate) async fn ensure_dash_segment_generated(
         return Ok(());
     }
     let start_secs = (segment_number - 1) as f64 * DASH_SEGMENT_DURATION_SECS as f64;
-    with_track_lock(state, track_id, async {
-        if ffmpeg::dash_file_fresh(source_path, &artifact).await? {
-            return Ok(());
-        }
-        ffmpeg::generate_dash_segment(source_path, dir, bitrate_kbps, segment_number, start_secs)
+    state
+        .dash_generation_locks
+        .with_lock(track_id, async {
+            if ffmpeg::dash_file_fresh(source_path, &artifact).await? {
+                return Ok(());
+            }
+            ffmpeg::generate_dash_segment(
+                source_path,
+                dir,
+                bitrate_kbps,
+                segment_number,
+                start_secs,
+            )
             .await
-    })
-    .await
+        })
+        .await
 }
 
 /// Serve a static VOD manifest with the validated `token` embedded into the
@@ -341,7 +333,7 @@ pub async fn handle_media_dash(
     }
 
     let cfg = state.context.cfg().await;
-    let dir = crate::server::dash_cache_dir_for_track(&cfg, &track.id);
+    let dir = dash_cache_dir_for_track(&cfg, &track.id);
 
     let bitrate_kbps = match parse_bandwidth(&file) {
         Some(bw) if (DASH_MIN_BITRATE_KBPS..=DASH_MAX_BITRATE_KBPS).contains(&bw) => bw,

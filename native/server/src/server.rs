@@ -1,7 +1,8 @@
 use tawai_core as tcore;
-use tcore::app_context::AppContext;
+use tcore::app_context::{AppContext, OperationSignals};
 use tcore::utils;
 
+use crate::dash_locks::DashGenerationLocks;
 use crate::ratelimit::RateLimiters;
 use crate::security::JwtResponse;
 use crate::{
@@ -14,71 +15,30 @@ use axum_extra::extract::{
     CookieJar,
     cookie::{Cookie, SameSite},
 };
-use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use subtle::ConstantTimeEq;
 use time::Duration as TimeDuration;
-use tokio::sync::{Notify, RwLock};
-
-static TAWAI_HOME: OnceLock<String> = OnceLock::new();
-pub fn tawai_home() -> &'static String {
-    TAWAI_HOME.get_or_init(|| env::var("TAWAI_HOME").unwrap_or_else(|_| "/home/tawai".to_string()))
-}
-
-pub fn get_logs_dir() -> String {
-    format!("{}/logs", tawai_home())
-}
 
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub context: Arc<AppContext>,
     pub rate_limiters: Arc<RateLimiters>,
-    pub restart_signal: Arc<Notify>,
-    pub shutdown_signal: Arc<Notify>,
-    pub shutdown_requested: Arc<AtomicBool>,
-    pub version: Arc<RwLock<Option<String>>>,
-    pub dash_generation_locks: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
+    pub dash_generation_locks: Arc<DashGenerationLocks>,
 }
 pub type SharedState = Arc<AppState>;
 
 impl AppState {
-    pub fn new(
-        context: Arc<AppContext>,
-        restart_signal: Arc<Notify>,
-        shutdown_signal: Arc<Notify>,
-        shutdown_requested: Arc<AtomicBool>,
-    ) -> Arc<Self> {
+    pub fn new(context: Arc<AppContext>) -> Arc<Self> {
         Arc::new(Self {
             context,
-            restart_signal,
-            shutdown_signal,
-            shutdown_requested,
-            version: Arc::new(RwLock::new(None)),
-            dash_generation_locks: Arc::new(Mutex::new(HashMap::new())),
+            dash_generation_locks: Arc::new(DashGenerationLocks::new()),
             rate_limiters: Arc::new(RateLimiters::new()),
         })
     }
-}
-
-pub fn dash_cache_dir_for_track(cfg: &tcore::utils::config::AppConfig, track_id: &str) -> String {
-    format!("{}/{}", tcore::utils::config::dash_cache_dir(cfg), track_id)
-}
-
-pub fn normalize_secret(s: &str) -> &str {
-    let s = s.trim();
-
-    if s.len() >= 2 {
-        let b = s.as_bytes();
-        if (b[0] == b'"' && b[s.len() - 1] == b'"') || (b[0] == b'\'' && b[s.len() - 1] == b'\'') {
-            return &s[1..s.len() - 1];
-        }
-    }
-
-    s
 }
 
 pub fn secure_compare(a: &str, b: &str) -> bool {
@@ -102,10 +62,6 @@ pub fn build_jwt_cookie(jar: CookieJar, jwt: &JwtResponse) -> CookieJar {
     jar.add(jwt_token).add(csrf_token)
 }
 
-pub fn get_config_path() -> String {
-    format!("{}/config/config.json", tawai_home())
-}
-
 pub fn create_router(state: SharedState) -> Router {
     let tawai_router = create_tawai_router(state.clone());
     let docs_router = create_docs_router(state.clone()).layer(state.rate_limiters.global_layer());
@@ -121,31 +77,62 @@ pub fn create_router(state: SharedState) -> Router {
         .with_state(state)
 }
 
+#[derive(Debug)]
+pub enum ServerExit {
+    Restart,
+    Shutdown,
+    BindFailed(std::io::Error),
+}
+
 pub async fn run_server(
     router: Router,
     port: u16,
-    restart_signal: Arc<Notify>,
-    shutdown_signal: Arc<Notify>,
-) {
+    operation_signals: Arc<OperationSignals>,
+    shutdown_requested: Arc<AtomicBool>,
+) -> ServerExit {
+    if shutdown_requested.load(Ordering::SeqCst) {
+        return ServerExit::Shutdown;
+    }
+
     let host = env::var("TAWAI_SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let addr: SocketAddr = match host.parse() {
         Ok(ip) => SocketAddr::new(ip, port),
         Err(_) => SocketAddr::from(([127, 0, 0, 1], port)),
     };
     utils::logger::debug(&format!("HTTP server listening on {}", addr));
-    match tokio::net::TcpListener::bind(addr).await {
-        Ok(listener) => {
-            tokio::select! {
-                _ = axum::serve(listener, router.into_make_service_with_connect_info::<SocketAddr>())
-                    .with_graceful_shutdown(async move {
-                        restart_signal.notified().await;
-                    }) => {}
-                _ = shutdown_signal.notified() => {
-                    utils::logger::debug("Shutdown signal received, stopping HTTP server...");
-                }
+
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(listener) => listener,
+        Err(e) => {
+            utils::logger::error(&format!("Failed to bind HTTP server: {}", e));
+            return ServerExit::BindFailed(e);
+        }
+    };
+
+    let shutdown_signals = operation_signals.clone();
+    let shutdown_requested2 = shutdown_requested.clone();
+    let serve = axum::serve(
+        listener,
+        router.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(async move {
+        tokio::select! {
+            _ = shutdown_signals.restart_signal.notified() => {}
+            _ = shutdown_signals.shutdown_signal.notified() => {
+                shutdown_requested2.store(true, Ordering::SeqCst);
             }
         }
-        Err(e) => utils::logger::error(&format!("Failed to bind HTTP server: {}", e)),
+    });
+
+    if let Err(e) = serve.await {
+        utils::logger::error(&format!("HTTP server error: {}", e));
+    }
+
+    if shutdown_requested.load(Ordering::SeqCst) {
+        utils::logger::debug("Shutdown signal received, stopping HTTP server...");
+        ServerExit::Shutdown
+    } else {
+        ServerExit::Restart
     }
 }
 
@@ -157,19 +144,26 @@ pub async fn run_server_loop(state: SharedState) {
                 .and_then(|v| v.as_u64())
                 .unwrap_or(8181) as u16
         };
-        let restart_signal = state.restart_signal.clone();
-        let shutdown_signal = state.shutdown_signal.clone();
 
         let router = create_router(state.clone());
-        run_server(router, port, restart_signal, shutdown_signal).await;
 
-        if state.shutdown_requested.load(Ordering::SeqCst) {
-            utils::logger::debug("Shutting down application...");
-            state.context.shutdown().await;
-            break;
+        let operation_signals = state.context.operation_signals.clone();
+        let shutdown_requested = Arc::new(AtomicBool::new(false));
+
+        match run_server(router, port, operation_signals, shutdown_requested).await {
+            ServerExit::Shutdown => {
+                utils::logger::debug("Shutting down application...");
+                state.context.shutdown().await;
+                break;
+            }
+            ServerExit::Restart => {
+                utils::logger::debug("Restarting HTTP server...");
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+            ServerExit::BindFailed(_) => {
+                utils::logger::debug("Retrying HTTP server after bind failure...");
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
         }
-
-        utils::logger::debug("Restarting HTTP server...");
-        tokio::time::sleep(Duration::from_secs(1)).await;
     }
 }

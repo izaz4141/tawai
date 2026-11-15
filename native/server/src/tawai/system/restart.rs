@@ -12,6 +12,6 @@ use axum::response::IntoResponse;
     )
 )]
 pub async fn handle_restart(State(state): State<SharedState>) -> impl IntoResponse {
-    state.restart_signal.notify_one();
+    state.context.operation_signals.request_restart();
     axum::http::StatusCode::OK
 }

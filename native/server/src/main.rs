@@ -1,11 +1,10 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use tawai_core::app_context::AppContext;
 use tawai_core::signals::library::ScanProgress;
 use tawai_core::utils::config::{get_path, set_path};
-use tawai_core::utils::logger;
+use tawai_core::utils::{logger, paths};
 
 use tawai_server::server;
 
@@ -13,28 +12,23 @@ use tawai_server::server;
 async fn main() {
     logger::debug("Initializing Tawai Server...");
 
-    let config_path = server::get_config_path();
+    let config_path = paths::config_path();
 
     let master_key =
         std::env::var("TAWAI_SERVER_MASTER_KEY").expect("TAWAI_SERVER_MASTER_KEY is not set");
 
-    let shutdown_signal = Arc::new(tokio::sync::Notify::new());
     let client = tawai_core::utils::url::build_browser_client().await;
 
-    let context = AppContext::new(shutdown_signal, client);
+    let context = AppContext::new(client);
 
-    // Initialize database
-    let db_done_signal = Arc::new(tokio::sync::Notify::new());
     let db_url = std::env::var("TAWAI_DATABASE_URL")
-        .unwrap_or_else(|_| format!("{}/data/tawai.db", server::tawai_home()));
-    {
-        let ctx = context.clone();
-        let sig = db_done_signal.clone();
-        if let Err(e) = ctx.init_database(&db_url, sig, &master_key).await {
-            logger::error(&format!("Failed to start database manager: {:?}", e));
+        .unwrap_or_else(|_| format!("{}/tawai.db", paths::data_dir()));
+    match context.init_database(&db_url, &master_key).await {
+        Ok(()) => {
+            let loop_ctx = Arc::clone(&context);
+            tokio::spawn(async move { loop_ctx.run_database_loop().await });
         }
-        let loop_ctx = Arc::clone(&context);
-        tokio::spawn(async move { loop_ctx.run_database_loop().await });
+        Err(e) => logger::error(&format!("Failed to start database manager: {:?}", e)),
     }
 
     // Initialize config
@@ -56,7 +50,7 @@ async fn main() {
         .and_then(|v| v.as_str())
         .map(|s| !s.trim().is_empty())
         .unwrap_or(false);
-    let downloads_dir = format!("{}/downloads", server::tawai_home());
+    let downloads_dir = paths::downloads_dir();
     if !existing {
         set_path(
             &mut config_value,
@@ -88,12 +82,7 @@ async fn main() {
 
     let _ = context.save_config(&config_value).await;
 
-    let state = server::AppState::new(
-        context,
-        Arc::new(tokio::sync::Notify::new()),
-        Arc::new(tokio::sync::Notify::new()),
-        Arc::new(AtomicBool::new(false)),
-    );
+    let state = server::AppState::new(context);
 
     state.context.spawn_periodic_scan(
         Duration::from_secs(3600 * 3),
@@ -114,11 +103,17 @@ async fn main() {
 
     let state_clone = state.clone();
     tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.ok();
-        logger::debug("Shutdown signal received...");
-        state_clone.shutdown_signal.notify_waiters();
-        state_clone.shutdown_requested.store(true, Ordering::SeqCst);
+        server::run_server_loop(state).await;
     });
 
-    server::run_server_loop(state).await;
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {
+            logger::debug("Ctrl-C received");
+        }
+        _ = state_clone.context.operation_signals.shutdown_signal.notified() => {
+            logger::debug("Shutdown notification received");
+        }
+    }
+
+    state_clone.context.operation_signals.request_shutdown();
 }

@@ -6,6 +6,7 @@ pub mod fs;
 pub mod helper;
 pub mod identify;
 pub mod logger;
+pub mod paths;
 pub mod playback;
 pub mod romajize;
 pub mod security;
