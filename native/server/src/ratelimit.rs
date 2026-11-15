@@ -53,7 +53,7 @@ impl TrustedProxyIpKeyExtractor {
                 }),
         );
         Self {
-            trusted: trusted.into(),
+            trusted: trusted.into_iter().map(normalize_cidr).collect(),
         }
     }
 }
@@ -190,16 +190,16 @@ fn parse_network(value: &str) -> Option<IpNet> {
 fn peer_ip<T>(req: &Request<T>) -> Option<IpAddr> {
     req.extensions()
         .get::<ConnectInfo<SocketAddr>>()
-        .map(|addr| normalize(addr.ip()))
+        .map(|addr| normalize_ip(addr.ip()))
         .or_else(|| {
             req.extensions()
                 .get::<SocketAddr>()
-                .map(|addr| normalize(addr.ip()))
+                .map(|addr| normalize_ip(addr.ip()))
         })
 }
 
 fn is_trusted(ip: IpAddr, trusted: &[IpNet]) -> bool {
-    let ip = normalize(ip);
+    let ip = normalize_ip(ip);
     trusted.iter().any(|net| net.contains(&ip))
 }
 
@@ -210,7 +210,7 @@ fn select_client_ip(chain: &[IpAddr], trusted: &[IpNet]) -> Option<IpAddr> {
         .copied()
         .find(|ip| !is_trusted(*ip, trusted))
         .or_else(|| chain.first().copied())
-        .map(normalize)
+        .map(normalize_ip)
 }
 
 fn forwarded_for_chain(headers: &HeaderMap) -> Vec<IpAddr> {
@@ -244,7 +244,7 @@ fn forwarded_chain(headers: &HeaderMap) -> Vec<IpAddr> {
             forwarded
                 .iter()
                 .filter_map(|stanza| stanza.forwarded_for_ip())
-                .map(normalize),
+                .map(normalize_ip),
         );
     }
     chain
@@ -262,16 +262,28 @@ fn parse_ip(value: &str) -> Option<IpAddr> {
                 .and_then(|s| s.strip_suffix(']'))
                 .and_then(|s| s.parse::<IpAddr>().ok())
         })
-        .map(normalize)
+        .map(normalize_ip)
 }
 
-fn normalize(ip: IpAddr) -> IpAddr {
+fn normalize_ip(ip: IpAddr) -> IpAddr {
     match ip {
         IpAddr::V6(ip) => ip
             .to_ipv4_mapped()
             .map(IpAddr::V4)
             .unwrap_or(IpAddr::V6(ip)),
         ip => ip,
+    }
+}
+
+fn normalize_cidr(net: IpNet) -> IpNet {
+    match net {
+        IpNet::V6(net) if net.prefix_len() >= 96 => match net.addr().to_ipv4_mapped() {
+            Some(addr) => IpNet::new(IpAddr::V4(addr), net.prefix_len() - 96)
+                .expect("IPv4-mapped prefix length fits IPv4")
+                .trunc(),
+            None => IpNet::V6(net),
+        },
+        net => net,
     }
 }
 
@@ -368,6 +380,56 @@ mod tests {
         assert_eq!(
             extractor.extract(&request).unwrap(),
             "127.0.0.1".parse::<IpAddr>().unwrap()
+        );
+    }
+
+    #[test]
+    fn normalizes_ipv4_mapped_networks() {
+        for (config, expected) in [
+            ("::ffff:10.0.0.0/96", "0.0.0.0/0"),
+            ("::ffff:10.0.0.0/104", "10.0.0.0/8"),
+            ("::ffff:10.0.0.1/128", "10.0.0.1/32"),
+            ("::ffff:0:0/95", "::ffff:0:0/95"),
+            ("2001:db8::/32", "2001:db8::/32"),
+        ] {
+            assert_eq!(
+                normalize_cidr(config.parse::<IpNet>().unwrap()),
+                expected.parse::<IpNet>().unwrap(),
+                "{config}"
+            );
+        }
+    }
+
+    #[test]
+    fn trusted_peer_uses_ipv4_mapped_address_config() {
+        let extractor = extractor("::ffff:10.0.0.1");
+        let request = request("10.0.0.1:1234", &[("x-real-ip", "5.6.7.8")]);
+
+        assert_eq!(
+            extractor.extract(&request).unwrap(),
+            "5.6.7.8".parse::<IpAddr>().unwrap()
+        );
+    }
+
+    #[test]
+    fn trusted_peer_uses_ipv4_mapped_host_config() {
+        let extractor = extractor("::ffff:10.0.0.1/128");
+        let request = request("10.0.0.1:1234", &[("x-real-ip", "5.6.7.8")]);
+
+        assert_eq!(
+            extractor.extract(&request).unwrap(),
+            "5.6.7.8".parse::<IpAddr>().unwrap()
+        );
+    }
+
+    #[test]
+    fn trusted_peer_uses_ipv4_mapped_cidr_config() {
+        let extractor = extractor("::ffff:10.0.0.0/104");
+        let request = request("10.2.3.4:1234", &[("x-real-ip", "5.6.7.8")]);
+
+        assert_eq!(
+            extractor.extract(&request).unwrap(),
+            "5.6.7.8".parse::<IpAddr>().unwrap()
         );
     }
 
