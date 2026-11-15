@@ -1,9 +1,6 @@
-use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tokio::sync::RwLock;
 
 use tawai_core::app_context::AppContext;
 use tawai_core::signals::library::ScanProgress;
@@ -91,14 +88,12 @@ async fn main() {
 
     let _ = context.save_config(&config_value).await;
 
-    let state = Arc::new(server::AppState {
+    let state = server::AppState::new(
         context,
-        restart_signal: Arc::new(tokio::sync::Notify::new()),
-        shutdown_signal: Arc::new(tokio::sync::Notify::new()),
-        shutdown_requested: Arc::new(AtomicBool::new(false)),
-        version: Arc::new(RwLock::new(None)),
-        dash_generation_locks: Arc::new(Mutex::new(HashMap::new())),
-    });
+        Arc::new(tokio::sync::Notify::new()),
+        Arc::new(tokio::sync::Notify::new()),
+        Arc::new(AtomicBool::new(false)),
+    );
 
     state.context.spawn_periodic_scan(
         Duration::from_secs(3600 * 3),

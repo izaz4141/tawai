@@ -7,18 +7,15 @@ pub mod master_key;
 pub mod verify_password;
 
 use crate::security::check_api_key;
-use crate::server::{SharedState, auth_rate_limit_config};
+use crate::server::SharedState;
 use axum::middleware;
 use axum::{
     Router,
     routing::{get, post},
 };
-use tower_governor::GovernorLayer;
 
 pub fn create_auth_router(state: SharedState) -> Router<SharedState> {
-    let public_router = Router::new()
-        .route("/login", post(login::handle_login))
-        .layer(GovernorLayer::new(auth_rate_limit_config()));
+    let public_router = Router::new().route("/login", post(login::handle_login));
 
     let protected_router = Router::new()
         .route("/generate-api", get(api::handle_generate_api))
@@ -33,8 +30,7 @@ pub fn create_auth_router(state: SharedState) -> Router<SharedState> {
             "/verify-password",
             post(verify_password::handle_verify_password),
         )
-        .layer(middleware::from_fn_with_state(state.clone(), check_api_key))
-        .layer(GovernorLayer::new(auth_rate_limit_config()));
+        .layer(middleware::from_fn_with_state(state.clone(), check_api_key));
 
     public_router.merge(protected_router).with_state(state)
 }

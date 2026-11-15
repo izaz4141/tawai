@@ -1,11 +1,7 @@
 use tawai_core::app_context::AppContext;
 use tawai_core::db::account;
 use tawai_core::utils::encryption;
-use tawai_server::{
-    docs::create_docs_router,
-    server::{AppState, global_rate_limit_config, run_server},
-    tawai::{create_tawai_router, system::status::handle_status},
-};
+use tawai_server::server::{AppState, create_router, run_server};
 
 use crate::signals::account::{ApiKeyResponse, GenerateApiKeyRequest};
 use crate::signals::crypt::{
@@ -16,18 +12,10 @@ use crate::signals::server::{
 };
 use crate::signals::settings::{GetGlobalSettingsRequest, GlobalSettingsResponse};
 use crate::utils::logger;
-use axum::{Router, routing::get};
 use rinf::{DartSignal, RustSignal};
-use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
-use std::time::Duration;
-use tokio::{
-    spawn,
-    sync::{Notify, RwLock},
-};
-use tower_governor::GovernorLayer;
+use tokio::{spawn, sync::Notify};
 
 pub async fn handle_generate_api_key(context: Arc<AppContext>) {
     let receiver = GenerateApiKeyRequest::get_dart_signal_receiver();
@@ -223,16 +211,11 @@ pub async fn handle_save_config(context: Arc<AppContext>) {
 
 pub async fn start_server_listener(context: Arc<AppContext>) {
     let mut current_server: Option<(tokio::task::JoinHandle<()>, Arc<tokio::sync::Notify>)> = None;
-    let mut cleanup_handle: Option<tokio::task::JoinHandle<()>> = None;
     let receiver = StartServer::get_dart_signal_receiver();
 
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         logger::debug(&format!("Starting server on port {}", msg.port));
-
-        if let Some(handle) = cleanup_handle.take() {
-            handle.abort();
-        }
 
         if let Some((old_handle, old_notify)) = current_server.take() {
             old_notify.notify_one();
@@ -250,37 +233,14 @@ pub async fn start_server_listener(context: Arc<AppContext>) {
 
         *context.master_key.write().await = msg.master_key.clone();
 
-        let state = Arc::new(AppState {
-            context: context.clone(),
-            restart_signal: restart_signal.clone(),
-            shutdown_signal: shutdown_signal.clone(),
-            shutdown_requested: shutdown_requested.clone(),
-            version: Arc::new(RwLock::new(None)),
-            dash_generation_locks: Arc::new(Mutex::new(HashMap::new())),
-        });
+        let state = AppState::new(
+            context.clone(),
+            restart_signal.clone(),
+            shutdown_signal.clone(),
+            shutdown_requested.clone(),
+        );
 
-        let governor_conf = global_rate_limit_config();
-        let governor_limiter = governor_conf.limiter().clone();
-
-        cleanup_handle = Some(spawn(async move {
-            loop {
-                tokio::time::sleep(Duration::from_secs(60)).await;
-                // logger::debug(&format!(
-                //     "Rate limiting storage size: {}",
-                //     governor_limiter.len()
-                // ));
-                governor_limiter.retain_recent();
-            }
-        }));
-
-        let tawai_router = create_tawai_router(state.clone());
-        let docs_router = create_docs_router(state.clone());
-        let router = Router::new()
-            .nest("/api/tawai", tawai_router)
-            .merge(docs_router)
-            .layer(GovernorLayer::new(governor_conf))
-            .route("/api/tawai/system/status", get(handle_status))
-            .with_state(state);
+        let router = create_router(state.clone());
 
         let rs_clone = restart_signal.clone();
         let ss_clone = shutdown_signal.clone();

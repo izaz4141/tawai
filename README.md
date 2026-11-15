@@ -132,6 +132,8 @@ native/
 | `TAWAI_HOME` | No | Base data folder (`config/`, `data/`, `logs/`); default `/home/tawai` |
 | `TAWAI_SERVER_HOST` | No | API bind address; default `127.0.0.1` (`0.0.0.0` in Docker) |
 | `TAWAI_SERVER_PORT` | No | API port; default `8181` |
+| `TAWAI_TRUSTED_PROXY` | No | Additional comma-separated proxy IPs/CIDRs allowed to set forwarded IP headers; loopback is always trusted |
+| `TAWAI_FORWARDED_HEADER` | No | Pipe-separated forwarding headers trusted from proxies, in priority order. `forwarded` uses RFC 7239, `x-real-ip` is a single IP, any other header is a comma-separated IP chain. Default `x-forwarded-for\|x-real-ip\|forwarded` |
 | `TAWAI_DATABASE_URL` | No | `postgresql://`/`postgres://` → PostgreSQL, else SQLite at `{TAWAI_HOME}/data/tawai.db` |
 | `TAWAI_SLSKD_URL` | No | slskd server URL (e.g. `http://slskd:5030`) |
 | `TAWAI_SLSKD_API_KEY` | No | slskd API key |
@@ -139,6 +141,8 @@ native/
 | `TAWAI_NADEKODON_API_KEY` | No | Nadeko~don API key |
 
 env vars override the values stored in `config.json` on every startup. ListenBrainz tokens are stored per-user in the database and are not read from the environment.
+
+When a trusted proxy sends a forwarding header whose first present value is unusable (for example `unknown`, an obfuscated identifier, or multiple `X-Real-IP` values), the request is rate limited under a per-proxy unknown bucket instead of trusting a value further left in the chain.
 
 ## Contributing
 
