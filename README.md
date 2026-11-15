@@ -132,6 +132,7 @@ native/
 | `TAWAI_HOME` | No | Base data folder (`config/`, `data/`, `logs/`); default `/home/tawai` |
 | `TAWAI_SERVER_HOST` | No | API bind address; default `127.0.0.1` (`0.0.0.0` in Docker) |
 | `TAWAI_SERVER_PORT` | No | API port; default `8181` |
+| `TAWAI_TRUSTED_PROXY` | No | Additional comma-separated proxy IPs/CIDRs allowed to set forwarded IP headers; loopback is always trusted |
 | `TAWAI_DATABASE_URL` | No | `postgresql://`/`postgres://` → PostgreSQL, else SQLite at `{TAWAI_HOME}/data/tawai.db` |
 | `TAWAI_SLSKD_URL` | No | slskd server URL (e.g. `http://slskd:5030`) |
 | `TAWAI_SLSKD_API_KEY` | No | slskd API key |

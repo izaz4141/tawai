@@ -2,6 +2,7 @@ use tawai_core as tcore;
 use tcore::app_context::AppContext;
 use tcore::utils;
 
+use crate::ratelimit::RateLimiters;
 use crate::security::JwtResponse;
 use crate::{
     docs::create_docs_router,
@@ -13,7 +14,6 @@ use axum_extra::extract::{
     CookieJar,
     cookie::{Cookie, SameSite},
 };
-use governor::{clock::QuantaInstant, middleware::NoOpMiddleware};
 use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
@@ -23,11 +23,6 @@ use std::time::Duration;
 use subtle::ConstantTimeEq;
 use time::Duration as TimeDuration;
 use tokio::sync::{Notify, RwLock};
-use tower_governor::{
-    GovernorLayer,
-    governor::{GovernorConfig, GovernorConfigBuilder},
-    key_extractor::SmartIpKeyExtractor,
-};
 
 static TAWAI_HOME: OnceLock<String> = OnceLock::new();
 pub fn tawai_home() -> &'static String {
@@ -41,6 +36,7 @@ pub fn get_logs_dir() -> String {
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub context: Arc<AppContext>,
+    pub rate_limiters: Arc<RateLimiters>,
     pub restart_signal: Arc<Notify>,
     pub shutdown_signal: Arc<Notify>,
     pub shutdown_requested: Arc<AtomicBool>,
@@ -48,6 +44,25 @@ pub struct AppState {
     pub dash_generation_locks: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
 }
 pub type SharedState = Arc<AppState>;
+
+impl AppState {
+    pub fn new(
+        context: Arc<AppContext>,
+        restart_signal: Arc<Notify>,
+        shutdown_signal: Arc<Notify>,
+        shutdown_requested: Arc<AtomicBool>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            context,
+            restart_signal,
+            shutdown_signal,
+            shutdown_requested,
+            version: Arc::new(RwLock::new(None)),
+            dash_generation_locks: Arc::new(Mutex::new(HashMap::new())),
+            rate_limiters: Arc::new(RateLimiters::new()),
+        })
+    }
+}
 
 pub fn dash_cache_dir_for_track(cfg: &tcore::utils::config::AppConfig, track_id: &str) -> String {
     format!("{}/{}", tcore::utils::config::dash_cache_dir(cfg), track_id)
@@ -91,38 +106,18 @@ pub fn get_config_path() -> String {
     format!("{}/config/config.json", tawai_home())
 }
 
-pub fn auth_rate_limit_config() -> GovernorConfig<SmartIpKeyExtractor, NoOpMiddleware<QuantaInstant>>
-{
-    GovernorConfigBuilder::default()
-        .per_second(30)
-        .burst_size(5)
-        .key_extractor(SmartIpKeyExtractor)
-        .finish()
-        .unwrap()
-}
-
-pub fn global_rate_limit_config()
--> GovernorConfig<SmartIpKeyExtractor, NoOpMiddleware<QuantaInstant>> {
-    GovernorConfigBuilder::default()
-        .per_millisecond(200)
-        .burst_size(20)
-        .key_extractor(SmartIpKeyExtractor)
-        .finish()
-        .unwrap()
-}
-
-pub fn create_router(
-    state: SharedState,
-    governor_conf: GovernorConfig<SmartIpKeyExtractor, NoOpMiddleware<QuantaInstant>>,
-) -> Router {
+pub fn create_router(state: SharedState) -> Router {
     let tawai_router = create_tawai_router(state.clone());
-    let docs_router = create_docs_router(state.clone());
+    let docs_router = create_docs_router(state.clone()).layer(state.rate_limiters.global_layer());
+
+    let status_router = Router::new()
+        .route("/api/tawai/system/status", get(handle_status))
+        .layer(state.rate_limiters.public_layer());
 
     Router::new()
         .nest("/api/tawai", tawai_router)
         .merge(docs_router)
-        .layer(GovernorLayer::new(governor_conf))
-        .route("/api/tawai/system/status", get(handle_status))
+        .merge(status_router)
         .with_state(state)
 }
 
@@ -156,20 +151,6 @@ pub async fn run_server(
 
 pub async fn run_server_loop(state: SharedState) {
     loop {
-        let governor_conf = global_rate_limit_config();
-        let governor_limiter = governor_conf.limiter().clone();
-
-        let cleanup_handle = tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(Duration::from_secs(60)).await;
-                // logger::debug(&format!(
-                //     "Rate limiting storage size: {}",
-                //     governor_limiter.len()
-                // ));
-                governor_limiter.retain_recent();
-            }
-        });
-
         let port = {
             let app_cfg = state.context.cfg().await;
             tcore::utils::config::get_path(&app_cfg.value, "server.port")
@@ -179,10 +160,8 @@ pub async fn run_server_loop(state: SharedState) {
         let restart_signal = state.restart_signal.clone();
         let shutdown_signal = state.shutdown_signal.clone();
 
-        let router = create_router(state.clone(), governor_conf);
+        let router = create_router(state.clone());
         run_server(router, port, restart_signal, shutdown_signal).await;
-
-        cleanup_handle.abort();
 
         if state.shutdown_requested.load(Ordering::SeqCst) {
             utils::logger::debug("Shutting down application...");

@@ -28,18 +28,26 @@ use crate::server::SharedState;
 use axum::Router;
 
 pub fn create_tawai_router(state: SharedState) -> Router<SharedState> {
-    let account_router = create_account_router(state.clone());
-    let auth_router = create_auth_router(state.clone());
-    let discovery_router = create_discovery_router(state.clone());
-    let download_router = create_download_router(state.clone());
-    let identify_router = create_identify_router();
-    let library_router = create_library_router(state.clone());
-    let playback_router = create_playback_router(state.clone());
-    let settings_router = create_settings_router(state.clone());
-    let system_router = create_system_router(state.clone());
-    let tools_router = create_tools_router(state.clone());
-    let utils_router = create_utils_router(state.clone());
-    let version_router = create_version_router(state.clone());
+    let account_router =
+        create_account_router(state.clone()).layer(state.rate_limiters.auth_layer());
+    let auth_router = create_auth_router(state.clone()).layer(state.rate_limiters.auth_layer());
+    let discovery_router =
+        create_discovery_router(state.clone()).layer(state.rate_limiters.global_layer());
+    let download_router =
+        create_download_router(state.clone()).layer(state.rate_limiters.global_layer());
+    let identify_router = create_identify_router().layer(state.rate_limiters.global_layer());
+    let library_router =
+        create_library_router(state.clone()).layer(state.rate_limiters.global_layer());
+    let playback_router =
+        create_playback_router(state.clone()).layer(state.rate_limiters.global_layer());
+    let settings_router =
+        create_settings_router(state.clone()).layer(state.rate_limiters.global_layer());
+    let system_router =
+        create_system_router(state.clone()).layer(state.rate_limiters.global_layer());
+    let tools_router = create_tools_router(state.clone()).layer(state.rate_limiters.global_layer());
+    let utils_router = create_utils_router(state.clone()).layer(state.rate_limiters.global_layer());
+    let version_router =
+        create_version_router(state.clone()).layer(state.rate_limiters.global_layer());
 
     Router::new()
         .nest("/account", account_router)
