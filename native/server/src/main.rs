@@ -6,10 +6,29 @@ use tawai_core::signals::library::ScanProgress;
 use tawai_core::utils::config::{get_path, set_path};
 use tawai_core::utils::{logger, paths};
 
-use tawai_server::utils::server;
+use tawai_server::utils::{observability, server};
 
-#[tokio::main]
-async fn main() {
+fn main() {
+    observability::apply_env_aliases();
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to build Tokio runtime");
+
+    runtime.block_on(async {
+        let (guard, tracing_ready) = observability::init();
+        if tracing_ready {
+            logger::enable_tracing();
+        }
+
+        run(guard).await;
+    });
+}
+
+async fn run(guard: init_tracing_opentelemetry::Guard) {
+    let _guard = guard;
+
     logger::debug("Initializing Tawai Server...");
 
     let config_path = paths::config_path();
