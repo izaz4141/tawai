@@ -2,15 +2,12 @@ use tawai_core as tcore;
 use tcore::app_context::{AppContext, OperationSignals};
 use tcore::utils;
 
+use crate::routers::create_router;
 use crate::utils::dash_locks::DashGenerationLocks;
 use crate::utils::ratelimit::RateLimiters;
 use crate::utils::security::JwtResponse;
-use crate::{
-    docs::create_docs_router,
-    tawai::{create_tawai_router, system::status::handle_status},
-};
 
-use axum::{Router, routing::get};
+use axum::Router;
 use axum_extra::extract::{
     CookieJar,
     cookie::{Cookie, SameSite},
@@ -59,21 +56,6 @@ pub fn build_jwt_cookie(jar: CookieJar, jwt: &JwtResponse) -> CookieJar {
         .max_age(TimeDuration::seconds(jwt.expires_in as i64))
         .build();
     jar.add(jwt_token).add(csrf_token)
-}
-
-pub fn create_router(state: SharedState) -> Router {
-    let tawai_router = create_tawai_router(state.clone());
-    let docs_router = create_docs_router(state.clone()).layer(state.rate_limiters.global_layer());
-
-    let status_router = Router::new()
-        .route("/api/tawai/system/status", get(handle_status))
-        .layer(state.rate_limiters.public_layer());
-
-    Router::new()
-        .nest("/api/tawai", tawai_router)
-        .merge(docs_router)
-        .merge(status_router)
-        .with_state(state)
 }
 
 #[derive(Debug)]
