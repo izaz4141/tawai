@@ -17,8 +17,10 @@ fn main() {
         .expect("failed to build Tokio runtime");
 
     runtime.block_on(async {
-        let guard = observability::init();
-        logger::enable_tracing();
+        let (guard, tracing_ready) = observability::init();
+        if tracing_ready {
+            logger::enable_tracing();
+        }
 
         run(guard).await;
     });

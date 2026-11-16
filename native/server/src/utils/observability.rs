@@ -94,11 +94,11 @@ fn build_console(level: LogLevel) -> Result<Guard, String> {
         .map_err(|e| e.to_string())
 }
 
-pub fn init() -> Guard {
+pub fn init() -> (Guard, bool) {
     let (level, invalid) = logger::log_level();
 
-    let guard = match build(level) {
-        Ok(guard) => guard,
+    let (guard, tracing_ready) = match build(level) {
+        Ok(guard) => (guard, true),
         Err(error) => match build_console(LogLevel::Info) {
             Ok(guard) => {
                 tracing::error!(
@@ -106,13 +106,13 @@ pub fn init() -> Guard {
                     level = level.as_directive(),
                     "tracing subscriber init failed; using console-only info"
                 );
-                guard
+                (guard, true)
             }
             Err(fallback_error) => {
                 logger::error(&format!(
                     "tracing subscriber init failed: {error}; console fallback failed: {fallback_error}"
                 ));
-                Guard::global(None)
+                (Guard::global(None), false)
             }
         },
     };
@@ -125,5 +125,5 @@ pub fn init() -> Guard {
         );
     }
 
-    guard
+    (guard, tracing_ready)
 }
