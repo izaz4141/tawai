@@ -1,7 +1,8 @@
 use tawai_core::app_context::AppContext;
 use tawai_core::db::account;
 use tawai_core::utils::encryption;
-use tawai_server::server::{AppState, create_router, run_server};
+use tawai_server::routers::create_router;
+use tawai_server::utils::server::{AppState, run_server};
 
 use crate::signals::account::{ApiKeyResponse, GenerateApiKeyRequest};
 use crate::signals::crypt::{
@@ -14,8 +15,7 @@ use crate::signals::settings::{GetGlobalSettingsRequest, GlobalSettingsResponse}
 use crate::utils::logger;
 use rinf::{DartSignal, RustSignal};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use tokio::{spawn, sync::Notify};
+use tokio::spawn;
 
 pub async fn handle_generate_api_key(context: Arc<AppContext>) {
     let receiver = GenerateApiKeyRequest::get_dart_signal_receiver();
@@ -210,15 +210,15 @@ pub async fn handle_save_config(context: Arc<AppContext>) {
 }
 
 pub async fn start_server_listener(context: Arc<AppContext>) {
-    let mut current_server: Option<(tokio::task::JoinHandle<()>, Arc<tokio::sync::Notify>)> = None;
+    let mut current_server: Option<tokio::task::JoinHandle<()>> = None;
     let receiver = StartServer::get_dart_signal_receiver();
 
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         logger::debug(&format!("Starting server on port {}", msg.port));
 
-        if let Some((old_handle, old_notify)) = current_server.take() {
-            old_notify.notify_one();
+        if let Some(old_handle) = current_server.take() {
+            context.operation_signals.request_restart();
             let _ = old_handle.await;
         }
 
@@ -227,26 +227,16 @@ pub async fn start_server_listener(context: Arc<AppContext>) {
             let _ = context.init_config(msg.config_path.clone()).await;
         }
 
-        let restart_signal = Arc::new(Notify::new());
-        let shutdown_signal = Arc::new(Notify::new());
-        let shutdown_requested = Arc::new(AtomicBool::new(false));
-
         *context.master_key.write().await = msg.master_key.clone();
 
-        let state = AppState::new(
-            context.clone(),
-            restart_signal.clone(),
-            shutdown_signal.clone(),
-            shutdown_requested.clone(),
-        );
+        let state = AppState::new(context.clone());
 
-        let router = create_router(state.clone());
+        let router = create_router(state);
 
-        let rs_clone = restart_signal.clone();
-        let ss_clone = shutdown_signal.clone();
+        let operation_signals = context.operation_signals.clone();
         let new_handle = spawn(async move {
-            run_server(router, msg.port, rs_clone, ss_clone).await;
+            run_server(router, msg.port, operation_signals).await;
         });
-        current_server = Some((new_handle, restart_signal));
+        current_server = Some(new_handle);
     }
 }

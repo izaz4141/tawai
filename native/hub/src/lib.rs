@@ -1,27 +1,19 @@
 mod signals;
 mod utils;
 
-use std::sync::Arc;
-
 use rinf::{dart_shutdown, write_interface};
 use tawai_core::app_context::AppContext;
-use tokio::{spawn, sync::Notify};
+use tokio::spawn;
 
 write_interface!();
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    let shutdown_signal = Arc::new(Notify::new());
     let client = reqwest::Client::new();
-    let context = AppContext::new(shutdown_signal, client);
-
-    let db_done_signal = Arc::new(Notify::new());
+    let context = AppContext::new(client);
 
     // Database manager + server
-    spawn(utils::database::init_database_handler(
-        context.clone(),
-        db_done_signal,
-    ));
+    spawn(utils::database::init_database_handler(context.clone()));
     spawn(utils::server::start_server_listener(context.clone()));
     spawn(utils::server::handle_init_config(context.clone()));
     spawn(utils::server::handle_save_config(context.clone()));
@@ -207,4 +199,5 @@ async fn main() {
     spawn(utils::version::handle_compare_versions(context.clone()));
 
     dart_shutdown().await;
+    context.shutdown().await;
 }

@@ -3,6 +3,7 @@ use std::io::{Seek, Write};
 
 use anyhow::{Context, Result};
 use futures::StreamExt;
+use reqwest::Client;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use tokio::sync::RwLock;
@@ -79,12 +80,12 @@ struct MediaSourceDto {
 }
 
 pub struct JellyfinParser {
-    client: reqwest::Client,
+    client: Client,
     auth_cache: RwLock<HashMap<String, (String, String)>>,
 }
 
 impl JellyfinParser {
-    pub fn new(client: reqwest::Client) -> Self {
+    pub fn new(client: Client) -> Self {
         Self {
             client,
             auth_cache: RwLock::new(HashMap::new()),

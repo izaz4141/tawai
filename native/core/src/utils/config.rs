@@ -559,6 +559,10 @@ pub fn dash_cache_dir(cfg: &AppConfig) -> String {
         .to_string()
 }
 
+pub fn dash_cache_dir_for_track(cfg: &AppConfig, track_id: &str) -> String {
+    format!("{}/{}", dash_cache_dir(cfg), track_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

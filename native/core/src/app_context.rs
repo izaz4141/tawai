@@ -7,7 +7,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use anyhow::Result;
-use tokio::sync::{Notify, RwLock, watch};
+use tokio::sync::{Notify, OnceCell, RwLock, watch};
 
 use crate::audio;
 use crate::db::{account, database::DatabaseManager, library_source, user_settings};
@@ -20,12 +20,56 @@ use crate::utils::config::{
 };
 use crate::utils::{cache, encryption::encrypt, encryption::valid_encryption_format, logger};
 
-#[derive(Clone)]
+#[derive(Debug)]
+pub struct OperationSignals {
+    pub restart_server: Arc<Notify>,
+    shutdown: watch::Sender<bool>,
+    pub database_done: Arc<Notify>,
+}
+
+impl OperationSignals {
+    pub fn new() -> Self {
+        let (shutdown, _) = watch::channel(false);
+        Self {
+            restart_server: Arc::new(Notify::new()),
+            shutdown,
+            database_done: Arc::new(Notify::new()),
+        }
+    }
+
+    pub fn request_restart(&self) {
+        self.restart_server.notify_waiters();
+    }
+
+    pub fn request_shutdown(&self) {
+        self.shutdown.send_replace(true);
+    }
+
+    pub fn shutdown_requested(&self) -> bool {
+        *self.shutdown.borrow()
+    }
+
+    pub async fn wait_for_shutdown(&self) {
+        let mut shutdown = self.shutdown.subscribe();
+        if *shutdown.borrow() {
+            return;
+        }
+        let _ = shutdown.changed().await;
+    }
+}
+
+impl Default for OperationSignals {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct AppContext {
-    db: Arc<RwLock<Option<Arc<DatabaseManager>>>>,
+    db: OnceCell<Arc<DatabaseManager>>,
     client: reqwest::Client,
     config: Arc<RwLock<Option<Arc<AppConfig>>>>,
-    pub shutdown_signal: Arc<Notify>,
+    pub operation_signals: Arc<OperationSignals>,
+    pub version: OnceCell<String>,
     pub master_key: Arc<RwLock<String>>,
     pub scan_running: Arc<AtomicBool>,
     pub scan_progress: Arc<RwLock<Option<ScanProgress>>>,
@@ -34,22 +78,40 @@ pub struct AppContext {
 impl fmt::Debug for AppContext {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AppContext")
-            .field("shutdown_signal", &self.shutdown_signal)
+            .field("operation_signals", &self.operation_signals)
             .finish()
     }
 }
 
 impl AppContext {
-    pub fn new(shutdown_signal: Arc<Notify>, client: reqwest::Client) -> Arc<Self> {
+    pub fn new(client: reqwest::Client) -> Arc<Self> {
         Arc::new(AppContext {
-            db: Arc::new(RwLock::new(None)),
+            db: OnceCell::new(),
             client,
             config: Arc::new(RwLock::new(None)),
-            shutdown_signal,
+            operation_signals: Arc::new(OperationSignals::new()),
+            version: OnceCell::new(),
             master_key: Arc::new(RwLock::new(String::new())),
             scan_running: Arc::new(AtomicBool::new(false)),
             scan_progress: Arc::new(RwLock::new(None)),
         })
+    }
+
+    pub async fn version(&self) -> &str {
+        self.version
+            .get_or_init(|| async {
+                if let Ok(content) = std::fs::read_to_string("./assets/docs/pubspec.yaml") {
+                    let (version, build) = crate::utils::version::parse_pubspec_version(&content);
+                    if let Some(version) = version {
+                        return match build {
+                            Some(build) => format!("{}+{}", version, build),
+                            None => version,
+                        };
+                    }
+                }
+                "Unknown".to_string()
+            })
+            .await
     }
 
     pub fn client(&self) -> &reqwest::Client {
@@ -58,9 +120,7 @@ impl AppContext {
 
     pub async fn db(&self) -> Arc<DatabaseManager> {
         self.db
-            .read()
-            .await
-            .as_ref()
+            .get()
             .unwrap_or_else(|| {
                 let bt = std::backtrace::Backtrace::force_capture();
                 panic!("DatabaseManager not initialized; called from:\n{bt}")
@@ -176,8 +236,8 @@ impl AppContext {
             }
         };
         *self.config.write().await = Some(app_config);
-        if let Some(db) = self.db.read().await.as_ref().cloned() {
-            let pool = db.pool().clone();
+        if let Some(db) = self.db.get() {
+            let pool = db.pool.clone();
             let cfg = self.cfg().await;
             tokio::spawn(async move {
                 if let Err(e) = cache::cleanup_dash_cache(&pool, &cfg).await {
@@ -198,12 +258,9 @@ impl AppContext {
     /// display name, role and api key refreshed from the DB while preserving
     /// their host, port and label. Non-localhost accounts are left untouched.
     pub async fn sync_accounts_from_db(&self) -> Result<()> {
-        let db = match self.db.read().await.as_ref() {
-            Some(db) => db.clone(),
-            None => {
-                logger::warn("Database not initialized; skipping account sync");
-                return Ok(());
-            }
+        let Some(db) = self.db.get() else {
+            logger::warn("Database not initialized; skipping account sync");
+            return Ok(());
         };
 
         let master_key = self.master_key.read().await.clone();
@@ -407,21 +464,23 @@ impl AppContext {
         Ok(())
     }
 
-    pub async fn init_database(
-        self: &Arc<Self>,
-        db_url: &str,
-        db_done_signal: Arc<Notify>,
-        master_key: &str,
-    ) -> Result<()> {
-        let pool = DatabaseManager::init_db(db_url).await?;
-        let weak_ctx = Arc::downgrade(self);
-        let db = DatabaseManager::new(pool, weak_ctx, self.shutdown_signal.clone(), db_done_signal)
-            .await;
+    pub async fn init_database(self: &Arc<Self>, db_url: &str, master_key: &str) -> Result<()> {
+        if self.db.get().is_some() {
+            return Err(anyhow::anyhow!("Database already initialized"));
+        }
 
-        *self.db.write().await = Some(db.clone());
+        self.db
+            .get_or_try_init(|| async {
+                let pool = Arc::new(DatabaseManager::init_db(db_url).await?);
+                let weak_ctx = Arc::downgrade(self);
+                let db = DatabaseManager::new(pool, weak_ctx).await;
+
+                account::ensure_default_user(db.pool(), master_key).await?;
+                Ok::<_, anyhow::Error>(db)
+            })
+            .await?;
+
         *self.master_key.write().await = master_key.to_owned();
-
-        account::ensure_default_user(db.pool(), master_key).await?;
 
         Ok(())
     }
@@ -536,6 +595,17 @@ impl AppContext {
     }
 
     pub async fn shutdown(&self) {
-        self.shutdown_signal.notify_waiters();
+        self.operation_signals.request_shutdown();
+        if self.db.get().is_some() {
+            let flushed = tokio::time::timeout(
+                Duration::from_secs(10),
+                self.operation_signals.database_done.notified(),
+            )
+            .await;
+
+            if flushed.is_err() {
+                logger::error("Timed out waiting for database to flush before shutdown");
+            }
+        }
     }
 }
