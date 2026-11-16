@@ -18,7 +18,6 @@ use axum_extra::extract::{
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use subtle::ConstantTimeEq;
 use time::Duration as TimeDuration;
@@ -88,9 +87,8 @@ pub async fn run_server(
     router: Router,
     port: u16,
     operation_signals: Arc<OperationSignals>,
-    shutdown_requested: Arc<AtomicBool>,
 ) -> ServerExit {
-    if shutdown_requested.load(Ordering::SeqCst) {
+    if operation_signals.shutdown_requested() {
         return ServerExit::Shutdown;
     }
 
@@ -110,17 +108,14 @@ pub async fn run_server(
     };
 
     let shutdown_signals = operation_signals.clone();
-    let shutdown_requested2 = shutdown_requested.clone();
     let serve = axum::serve(
         listener,
         router.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .with_graceful_shutdown(async move {
         tokio::select! {
-            _ = shutdown_signals.restart_signal.notified() => {}
-            _ = shutdown_signals.shutdown_signal.notified() => {
-                shutdown_requested2.store(true, Ordering::SeqCst);
-            }
+            _ = shutdown_signals.restart_server.notified() => {}
+            _ = shutdown_signals.wait_for_shutdown() => {}
         }
     });
 
@@ -128,7 +123,7 @@ pub async fn run_server(
         utils::logger::error(&format!("HTTP server error: {}", e));
     }
 
-    if shutdown_requested.load(Ordering::SeqCst) {
+    if operation_signals.shutdown_requested() {
         utils::logger::debug("Shutdown signal received, stopping HTTP server...");
         ServerExit::Shutdown
     } else {
@@ -148,9 +143,8 @@ pub async fn run_server_loop(state: SharedState) {
         let router = create_router(state.clone());
 
         let operation_signals = state.context.operation_signals.clone();
-        let shutdown_requested = Arc::new(AtomicBool::new(false));
 
-        match run_server(router, port, operation_signals, shutdown_requested).await {
+        match run_server(router, port, operation_signals).await {
             ServerExit::Shutdown => {
                 utils::logger::debug("Shutting down application...");
                 state.context.shutdown().await;

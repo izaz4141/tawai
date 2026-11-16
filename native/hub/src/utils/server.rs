@@ -14,7 +14,6 @@ use crate::signals::settings::{GetGlobalSettingsRequest, GlobalSettingsResponse}
 use crate::utils::logger;
 use rinf::{DartSignal, RustSignal};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use tokio::spawn;
 
 pub async fn handle_generate_api_key(context: Arc<AppContext>) {
@@ -234,9 +233,8 @@ pub async fn start_server_listener(context: Arc<AppContext>) {
         let router = create_router(state);
 
         let operation_signals = context.operation_signals.clone();
-        let shutdown_requested = Arc::new(AtomicBool::new(false));
         let new_handle = spawn(async move {
-            run_server(router, msg.port, operation_signals, shutdown_requested).await;
+            run_server(router, msg.port, operation_signals).await;
         });
         current_server = Some(new_handle);
     }

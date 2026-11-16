@@ -101,19 +101,20 @@ async fn main() {
         }),
     );
 
-    let state_clone = state.clone();
-    tokio::spawn(async move {
+    let context = state.context.clone();
+    let server_task = tokio::spawn(async move {
         server::run_server_loop(state).await;
     });
 
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             logger::debug("Ctrl-C received");
+            context.operation_signals.request_shutdown();
         }
-        _ = state_clone.context.operation_signals.shutdown_signal.notified() => {
+        _ = context.operation_signals.wait_for_shutdown() => {
             logger::debug("Shutdown notification received");
         }
     }
 
-    state_clone.context.operation_signals.request_shutdown();
+    let _ = server_task.await;
 }

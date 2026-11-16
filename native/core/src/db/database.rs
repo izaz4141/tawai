@@ -104,13 +104,8 @@ impl DatabaseManager {
     }
 
     pub async fn run_loop(self: Arc<Self>) {
-        let shutdown_signal = self.context().operation_signals.shutdown_signal.clone();
-
-        tokio::select! {
-            _ = shutdown_signal.notified() => {
-                self.flush_and_signal().await;
-            }
-        }
+        self.context().operation_signals.wait_for_shutdown().await;
+        self.flush_and_signal().await;
     }
 
     async fn flush_and_signal(&self) {

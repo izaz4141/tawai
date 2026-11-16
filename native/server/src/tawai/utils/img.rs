@@ -3,7 +3,10 @@ use axum::{
     extract::{Query, State},
     response::IntoResponse,
 };
-use reqwest::Url;
+use reqwest::{
+    Url,
+    header::{ACCESS_CONTROL_ALLOW_ORIGIN, CACHE_CONTROL, CONTENT_TYPE},
+};
 use serde::Deserialize;
 use utoipa::IntoParams;
 
@@ -101,15 +104,9 @@ pub async fn handle_proxy_image(
 
     (
         [
-            (reqwest::header::CONTENT_TYPE, content_type),
-            (
-                reqwest::header::CACHE_CONTROL,
-                "public, max-age=3600".to_string(),
-            ),
-            (
-                reqwest::header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                "*".to_string(),
-            ),
+            (CONTENT_TYPE, content_type),
+            (CACHE_CONTROL, "public, max-age=3600".to_string()),
+            (ACCESS_CONTROL_ALLOW_ORIGIN, "*".to_string()),
         ],
         bytes,
     )

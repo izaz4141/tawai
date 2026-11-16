@@ -2,7 +2,6 @@ use std::collections::HashSet;
 use std::fmt;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -23,26 +22,39 @@ use crate::utils::{cache, encryption::encrypt, encryption::valid_encryption_form
 
 #[derive(Debug)]
 pub struct OperationSignals {
-    pub restart_signal: Arc<Notify>,
-    pub shutdown_signal: Arc<Notify>,
+    pub restart_server: Arc<Notify>,
+    shutdown: watch::Sender<bool>,
     pub database_done: Arc<Notify>,
 }
 
 impl OperationSignals {
     pub fn new() -> Self {
+        let (shutdown, _) = watch::channel(false);
         Self {
-            restart_signal: Arc::new(Notify::new()),
-            shutdown_signal: Arc::new(Notify::new()),
+            restart_server: Arc::new(Notify::new()),
+            shutdown,
             database_done: Arc::new(Notify::new()),
         }
     }
 
     pub fn request_restart(&self) {
-        self.restart_signal.notify_waiters();
+        self.restart_server.notify_waiters();
     }
 
     pub fn request_shutdown(&self) {
-        self.shutdown_signal.notify_waiters();
+        self.shutdown.send_replace(true);
+    }
+
+    pub fn shutdown_requested(&self) -> bool {
+        *self.shutdown.borrow()
+    }
+
+    pub async fn wait_for_shutdown(&self) {
+        let mut shutdown = self.shutdown.subscribe();
+        if *shutdown.borrow() {
+            return;
+        }
+        let _ = shutdown.changed().await;
     }
 }
 
@@ -53,7 +65,7 @@ impl Default for OperationSignals {
 }
 
 pub struct AppContext {
-    db: OnceLock<Arc<DatabaseManager>>,
+    db: OnceCell<Arc<DatabaseManager>>,
     client: reqwest::Client,
     config: Arc<RwLock<Option<Arc<AppConfig>>>>,
     pub operation_signals: Arc<OperationSignals>,
@@ -74,7 +86,7 @@ impl fmt::Debug for AppContext {
 impl AppContext {
     pub fn new(client: reqwest::Client) -> Arc<Self> {
         Arc::new(AppContext {
-            db: OnceLock::new(),
+            db: OnceCell::new(),
             client,
             config: Arc::new(RwLock::new(None)),
             operation_signals: Arc::new(OperationSignals::new()),
@@ -457,12 +469,17 @@ impl AppContext {
             return Err(anyhow::anyhow!("Database already initialized"));
         }
 
-        let pool = Arc::new(DatabaseManager::init_db(db_url).await?);
-        let weak_ctx = Arc::downgrade(self);
-        let db = DatabaseManager::new(pool, weak_ctx).await;
+        self.db
+            .get_or_try_init(|| async {
+                let pool = Arc::new(DatabaseManager::init_db(db_url).await?);
+                let weak_ctx = Arc::downgrade(self);
+                let db = DatabaseManager::new(pool, weak_ctx).await;
 
-        account::ensure_default_user(db.pool(), master_key).await?;
-        let _ = self.db.set(db);
+                account::ensure_default_user(db.pool(), master_key).await?;
+                Ok::<_, anyhow::Error>(db)
+            })
+            .await?;
+
         *self.master_key.write().await = master_key.to_owned();
 
         Ok(())

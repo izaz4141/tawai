@@ -17,10 +17,10 @@ use crate::utils::server::SharedState;
     )
 )]
 pub async fn handle_test_source(
-    State(_state): State<SharedState>,
+    State(state): State<SharedState>,
     Json(payload): Json<TestSourceRequest>,
 ) -> impl IntoResponse {
-    let client = reqwest::Client::new();
+    let client = state.context.client();
 
     let (libraries, results, error) = match payload.source_type.as_str() {
         "tawai" => {
@@ -28,7 +28,7 @@ pub async fn handle_test_source(
             (libraries, results, None)
         }
         "jellyfin" => {
-            let parser = JellyfinParser::new(client);
+            let parser = JellyfinParser::new(client.clone());
             let mut libraries = Vec::new();
             let mut results = Vec::new();
             let mut last_err: Option<String> = None;
