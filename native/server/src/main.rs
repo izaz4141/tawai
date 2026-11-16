@@ -11,13 +11,19 @@ use tawai_server::utils::{observability, server};
 fn main() {
     observability::apply_env_aliases();
 
-    let guard = observability::init();
-    logger::enable_tracing();
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to build Tokio runtime");
 
-    run(guard);
+    runtime.block_on(async {
+        let guard = observability::init();
+        logger::enable_tracing();
+
+        run(guard).await;
+    });
 }
 
-#[tokio::main]
 async fn run(guard: init_tracing_opentelemetry::Guard) {
     let _guard = guard;
 
