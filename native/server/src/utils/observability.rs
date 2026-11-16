@@ -71,14 +71,24 @@ pub fn apply_env_aliases() {
     }
 }
 
-fn build(level: LogLevel) -> Result<Guard, String> {
-    let config = if cfg!(debug_assertions) {
+fn preset() -> TracingConfig {
+    if cfg!(debug_assertions) {
         TracingConfig::development()
     } else {
         TracingConfig::production()
-    };
+    }
+}
 
-    config
+fn build(level: LogLevel) -> Result<Guard, String> {
+    preset()
+        .with_log_directives(level.as_directive())
+        .init_subscriber()
+        .map_err(|e| e.to_string())
+}
+
+fn build_console(level: LogLevel) -> Result<Guard, String> {
+    preset()
+        .with_otel(false)
         .with_log_directives(level.as_directive())
         .init_subscriber()
         .map_err(|e| e.to_string())
@@ -89,15 +99,22 @@ pub fn init() -> Guard {
 
     let guard = match build(level) {
         Ok(guard) => guard,
-        Err(error) => {
-            let guard = build(LogLevel::Info).expect("tracing subscriber init");
-            tracing::error!(
-                %error,
-                level = level.as_directive(),
-                "tracing subscriber init failed; using info"
-            );
-            guard
-        }
+        Err(error) => match build_console(LogLevel::Info) {
+            Ok(guard) => {
+                tracing::error!(
+                    %error,
+                    level = level.as_directive(),
+                    "tracing subscriber init failed; using console-only info"
+                );
+                guard
+            }
+            Err(fallback_error) => {
+                logger::error(&format!(
+                    "tracing subscriber init failed: {error}; console fallback failed: {fallback_error}"
+                ));
+                Guard::global(None)
+            }
+        },
     };
 
     if let Some(value) = invalid {
