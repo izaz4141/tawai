@@ -73,7 +73,7 @@ fn container_rule() -> Option<&'static Regex> {
             return None;
         }
 
-        let boundary = r"(?:^|[{},;|&(\[:\s=])";
+        let boundary = r"(?:^|[{},;|&?(\[:\s=])";
 
         Regex::new(&format!(
             r#"(?i)({boundary}\s*(?:["'](?:{keys})["']|(?:{keys}))\s*[:=]\s*)([\[{{])|{boundary}\s*"(?:[^"\\]|\\.)*"|{boundary}\s*'(?:[^'\\]|\\.)*'"#
@@ -444,6 +444,22 @@ mod tests {
         assert_eq!(
             scrub(r#"x=[api_key=["sk-live"]]"#).as_ref(),
             r#"x=[api_key="[REDACTED]"]"#,
+        );
+    }
+
+    #[test]
+    fn redacts_containers_after_query_question_mark() {
+        assert_eq!(
+            scrub("GET /api/tawai?api_key=[sk-live]&user=1").as_ref(),
+            r#"GET /api/tawai?api_key="[REDACTED]"&user=1"#,
+        );
+        assert_eq!(
+            scrub(r#"GET /api/tawai?password={"a":"b&c"}&user=1"#).as_ref(),
+            r#"GET /api/tawai?password="[REDACTED]"&user=1"#,
+        );
+        assert_eq!(
+            scrub("GET /api/tawai? token=[abc]&user=1").as_ref(),
+            r#"GET /api/tawai? token="[REDACTED]"&user=1"#,
         );
     }
 
