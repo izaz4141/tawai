@@ -2,8 +2,9 @@ use std::borrow::Cow;
 use std::sync::OnceLock;
 
 use regex::Regex;
+use serde_json::Value;
 
-use crate::utils::redaction::{SENSITIVE_FIELDS, sensitive_field_variants};
+use crate::utils::redaction::{SENSITIVE_FIELDS, is_sensitive_field, sensitive_field_variants};
 
 type Rule = (Regex, &'static str);
 
@@ -17,7 +18,11 @@ pub fn scrub(message: &str) -> Cow<'_, str> {
 }
 
 fn scrub_at_depth(message: &str, depth: usize) -> Cow<'_, str> {
-    let mut redacted = redact_embedded_json(message, depth);
+    let mut redacted = redact_sensitive_json_keys(message);
+
+    if let Some(next) = redact_embedded_json(redacted.as_deref().unwrap_or(message), depth) {
+        redacted = Some(next);
+    }
 
     if let Some(next) = redact_containers(redacted.as_deref().unwrap_or(message)) {
         redacted = Some(next);
@@ -32,6 +37,65 @@ fn scrub_at_depth(message: &str, depth: usize) -> Cow<'_, str> {
     }
 
     redacted.map_or(Cow::Borrowed(message), Cow::Owned)
+}
+
+fn redact_sensitive_json_keys(text: &str) -> Option<String> {
+    if !text.contains("\\u") {
+        return None;
+    }
+
+    let trimmed = text.trim();
+
+    if !(trimmed.starts_with('{') || trimmed.starts_with('[')) {
+        return None;
+    }
+
+    let mut value: Value = serde_json::from_str(trimmed).ok()?;
+
+    if !redact_sensitive_json_value(&mut value) {
+        return None;
+    }
+
+    let encoded = serde_json::to_string(&value).ok()?;
+    let leading = &text[..text.len() - text.trim_start().len()];
+    let trailing = &text[text.trim_end().len()..];
+
+    Some(format!("{leading}{encoded}{trailing}"))
+}
+
+fn redact_sensitive_json_value(value: &mut Value) -> bool {
+    match value {
+        Value::Object(map) => {
+            let mut changed = false;
+
+            for (key, field) in map.iter_mut() {
+                if is_sensitive_field(key) {
+                    let redacted = Value::String("[REDACTED]".to_owned());
+
+                    if *field != redacted {
+                        *field = redacted;
+                        changed = true;
+                    }
+
+                    continue;
+                }
+
+                changed |= redact_sensitive_json_value(field);
+            }
+
+            changed
+        }
+        Value::Array(items) => {
+            let mut changed = false;
+
+            for item in items {
+                changed |= redact_sensitive_json_value(item);
+            }
+
+            changed
+        }
+        _ => false,
+    }
 }
 
 fn redact_embedded_json(message: &str, depth: usize) -> Option<String> {
@@ -306,6 +370,11 @@ fn build_rules() -> Vec<Rule> {
         );
         push_rule(
             &mut rules,
+            &format!(r#"(?i)("(?:{keys})"\s*:\s*)(?:true|false|null)\b"#),
+            r#"${1}"[REDACTED]""#,
+        );
+        push_rule(
+            &mut rules,
             &format!(r#"(?i)([?&]\s*(?:{keys})\s*[:=]\s*)([^&\s"]+)"#),
             r#"${1}[REDACTED]"#,
         );
@@ -380,7 +449,7 @@ mod tests {
 
     #[test]
     fn rule_table_is_complete() {
-        assert_eq!(rules().len(), 11);
+        assert_eq!(rules().len(), 12);
     }
 
     #[test]
@@ -457,6 +526,100 @@ mod tests {
             (
                 r#"{"api_key" : -0.25E-3 }"#,
                 r#"{"api_key" : "[REDACTED]" }"#,
+            ),
+        ] {
+            let scrubbed = scrub(line);
+            let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+            assert_eq!(scrubbed.as_ref(), expected, "line {line}");
+            assert!(value.is_object(), "line {line}");
+        }
+    }
+
+    #[test]
+    fn redacts_unicode_escaped_json_keys() {
+        for (line, key) in [
+            (r#"{"\u0070assword":"hunter2"}"#, "password"),
+            (r#"{"p\u0061ssword":"hunter2"}"#, "password"),
+            (r#"{"\u0050ASSWORD":"hunter2"}"#, "PASSWORD"),
+        ] {
+            let scrubbed = scrub(line);
+            let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+            assert_eq!(value[key].as_str(), Some("[REDACTED]"), "line {line}");
+            assert!(!scrubbed.contains("hunter2"), "line {line}");
+        }
+    }
+
+    #[test]
+    fn redacts_complete_values_for_escaped_json_keys() {
+        let line = r#"{"\u0061pi_key":["sk-live-1","sk-live-2"],"note":"keep"}"#;
+        let scrubbed = scrub(line);
+        let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+        assert_eq!(value["api_key"].as_str(), Some("[REDACTED]"));
+        assert_eq!(value["note"].as_str(), Some("keep"));
+        assert!(!scrubbed.contains("sk-live"));
+    }
+
+    #[test]
+    fn redacts_escaped_json_keys_of_any_value_type() {
+        for line in [
+            r#"{"\u0074oken":true}"#,
+            r#"{"\u0074oken":false}"#,
+            r#"{"\u0074oken":null}"#,
+            r#"{"\u0074oken":42}"#,
+            r#"{"\u0074oken":{"nested":"hunter2"}}"#,
+        ] {
+            let scrubbed = scrub(line);
+            let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+            assert_eq!(value["token"].as_str(), Some("[REDACTED]"), "line {line}");
+            assert!(!scrubbed.contains("hunter2"), "line {line}");
+        }
+    }
+
+    #[test]
+    fn redacts_mixed_escaped_and_plain_json_keys() {
+        let line = r#"{"\u0070assword":"hunter2","access_token":"abc123","note":"keep"}"#;
+        let scrubbed = scrub(line);
+        let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+        assert_eq!(value["password"].as_str(), Some("[REDACTED]"));
+        assert_eq!(value["access_token"].as_str(), Some("[REDACTED]"));
+        assert_eq!(value["note"].as_str(), Some("keep"));
+        assert!(!scrubbed.contains("hunter2"));
+        assert!(!scrubbed.contains("abc123"));
+    }
+
+    #[test]
+    fn redacts_escaped_json_keys_inside_serialized_json_string_values() {
+        let line = r#"{"message":"{\"\\u0070assword\":\"hunter2\"}"}"#;
+        let scrubbed = scrub(line);
+        let outer: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid outer JSON");
+        let inner: Value = serde_json::from_str(outer["message"].as_str().expect("message string"))
+            .expect("valid inner JSON");
+
+        assert_eq!(inner["password"].as_str(), Some("[REDACTED]"));
+        assert!(!scrubbed.contains("hunter2"));
+    }
+
+    #[test]
+    fn leaves_escaped_non_sensitive_json_keys_borrowed() {
+        for line in [r#"{"\u006eote":"keep"}"#, r#"{"\u006eote":"caf\u00e9"}"#] {
+            assert!(matches!(scrub(line), Cow::Borrowed(_)), "line {line}");
+        }
+    }
+
+    #[test]
+    fn redacts_json_boolean_and_null_values_and_keeps_valid_json() {
+        for (line, expected) in [
+            (r#"{"auth":true}"#, r#"{"auth":"[REDACTED]"}"#),
+            (r#"{"auth":false}"#, r#"{"auth":"[REDACTED]"}"#),
+            (r#"{"auth" : null}"#, r#"{"auth" : "[REDACTED]"}"#),
+            (
+                r#"{"token":true,"other":"keep"}"#,
+                r#"{"token":"[REDACTED]","other":"keep"}"#,
             ),
         ] {
             let scrubbed = scrub(line);
