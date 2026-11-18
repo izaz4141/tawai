@@ -9,7 +9,6 @@ path = "src/main.rs"
 
 [dependencies]
 tawai-core = { path = "../core" }
-tracing = "0.1.44"
 init-tracing-opentelemetry = { version = "0.44.0", default-features = false, features = ["tracing_subscriber_ext", "tls-ring"] }
 axum = { version = "0.8.8", features = ["multipart"] }
 axum-extra = { version = "0.12.5", features = ["cookie", "typed-header"] }

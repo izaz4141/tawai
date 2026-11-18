@@ -120,12 +120,11 @@ pub async fn access_log(req: Request<Body>, next: Next) -> Response {
     let response = next.run(req).await;
 
     if !is_excluded(&path) {
-        tracing::info!(
-            target: "tawai::access",
-            method = %method,
-            path = %path,
-            status = response.status().as_u16(),
-            duration_ms = started.elapsed().as_secs_f64() * 1000.0,
+        logger::access(
+            method.as_str(),
+            &path,
+            response.status().as_u16(),
+            started.elapsed().as_secs_f64() * 1000.0,
         );
     }
 
@@ -208,11 +207,10 @@ pub fn init() -> (Guard, bool) {
         Ok(guard) => (guard, true),
         Err(error) => match build_console(LogLevel::Info) {
             Ok(guard) => {
-                tracing::error!(
-                    %error,
-                    level = level.as_directive(),
-                    "tracing subscriber init failed; using console-only info"
-                );
+                logger::error(&format!(
+                    "tracing subscriber init failed; using console-only {}: {error}",
+                    level.as_directive()
+                ));
                 (guard, true)
             }
             Err(fallback_error) => {
@@ -225,11 +223,10 @@ pub fn init() -> (Guard, bool) {
     };
 
     if let Some(value) = invalid {
-        tracing::error!(
-            value = %value,
-            "invalid TAWAI_LOG_LEVEL; using {}",
+        logger::error(&format!(
+            "invalid TAWAI_LOG_LEVEL value {value}; using {}",
             level.as_directive()
-        );
+        ));
     }
 
     (guard, tracing_ready)

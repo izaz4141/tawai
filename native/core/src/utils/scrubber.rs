@@ -1,0 +1,257 @@
+use std::borrow::Cow;
+use std::sync::OnceLock;
+
+use regex::Regex;
+
+use crate::utils::redaction::{SENSITIVE_FIELDS, sensitive_field_variants};
+
+type Rule = (Regex, &'static str);
+
+/// Replaces known credentials in one log message.
+///
+/// Returns a borrowed string when no rule matched.
+pub fn scrub(message: &str) -> Cow<'_, str> {
+    let mut redacted: Option<String> = None;
+
+    for (rule, replacement) in rules() {
+        let input = redacted.as_deref().unwrap_or(message);
+
+        if let Cow::Owned(next) = rule.replace_all(input, *replacement) {
+            redacted = Some(next);
+        }
+    }
+
+    redacted.map_or(Cow::Borrowed(message), Cow::Owned)
+}
+
+fn rules() -> &'static [Rule] {
+    static RULES: OnceLock<Vec<Rule>> = OnceLock::new();
+    RULES.get_or_init(build_rules)
+}
+
+fn build_rules() -> Vec<Rule> {
+    let keys = key_alternation();
+    let mut rules = Vec::new();
+
+    if !keys.is_empty() {
+        push_rule(
+            &mut rules,
+            &format!(r#"(?i)("?(?:{keys})"?\s*[:=]\s*)"(?:[^"\\]|\\.)*""#),
+            r#"${1}"[REDACTED]""#,
+        );
+        push_rule(
+            &mut rules,
+            &format!(
+                r#"(?i)("?(?:{keys})"?\s*[:=]\s*)((?:(?:NDK|tawai-mk1):|bearer\s+|basic\s+)?)[^"'\s,}}&]+"#
+            ),
+            r#"${1}${2}[REDACTED]"#,
+        );
+    }
+
+    push_rule(
+        &mut rules,
+        r"eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]+",
+        "[REDACTED]",
+    );
+    push_rule(
+        &mut rules,
+        r"(?i)bearer\s+[A-Za-z0-9._~+/=-]+",
+        "Bearer [REDACTED]",
+    );
+    push_rule(&mut rules, r"NDK:[0-9a-fA-F]+", "NDK:[REDACTED]");
+    push_rule(
+        &mut rules,
+        r"tawai-mk1:[0-9a-fA-F]+",
+        "tawai-mk1:[REDACTED]",
+    );
+    push_rule(&mut rules, r"\b[0-9a-fA-F]{64}\b", "[REDACTED]");
+    push_rule(&mut rules, r#"(?i)([?&]token=)[^&\s"]+"#, "${1}[REDACTED]");
+
+    rules
+}
+
+fn push_rule(rules: &mut Vec<Rule>, pattern: &str, replacement: &'static str) {
+    if let Ok(regex) = Regex::new(pattern) {
+        rules.push((regex, replacement));
+    }
+}
+
+fn key_alternation() -> String {
+    let mut variants: Vec<String> = SENSITIVE_FIELDS
+        .iter()
+        .flat_map(|field| sensitive_field_variants(field))
+        .map(|variant| regex::escape(&variant))
+        .collect();
+
+    variants.sort_unstable();
+    variants.dedup();
+    variants
+        .sort_unstable_by(|left, right| right.len().cmp(&left.len()).then_with(|| left.cmp(right)));
+
+    variants.join("|")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+
+    #[test]
+    fn plain_json_line_is_borrowed() {
+        let line = r#"{"level":"INFO","message":"server started"}"#;
+        let scrubbed = scrub(line);
+
+        assert!(matches!(scrubbed, Cow::Borrowed(_)));
+        assert_eq!(scrubbed.as_ref(), line);
+    }
+
+    #[test]
+    fn rule_table_is_complete() {
+        assert_eq!(rules().len(), 8);
+    }
+
+    #[test]
+    fn keyed_alternation_covers_every_sensitive_field_variant() {
+        for field in SENSITIVE_FIELDS {
+            for variant in sensitive_field_variants(field) {
+                let line = format!("{variant}=secret");
+                assert_eq!(
+                    scrub(&line).as_ref(),
+                    format!("{variant}=[REDACTED]"),
+                    "field {field} variant {variant}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn keyed_matching_covers_case_and_separator_styles() {
+        for name in [
+            "access_token",
+            "access-token",
+            "accesstoken",
+            "accessToken",
+            "AccessToken",
+            "ACCESS_TOKEN",
+            "x_api_key",
+            "x-api-key",
+            "xapikey",
+            "xApiKey",
+            "XApiKey",
+            "X-API-KEY",
+            "new_password",
+            "newPassword",
+            "NewPassword",
+            "NEW_PASSWORD",
+            "session_id",
+            "sessionId",
+            "SessionId",
+            "master_key",
+            "masterKey",
+            "MasterKey",
+            "tawai_jwt",
+            "tawaiJwt",
+            "TawaiJwt",
+        ] {
+            let line = format!("{name}=secret");
+            assert_eq!(
+                scrub(&line).as_ref(),
+                format!("{name}=[REDACTED]"),
+                "name {name}",
+            );
+        }
+    }
+
+    #[test]
+    fn redacts_json_string_values_and_keeps_valid_json() {
+        let line = r#"{"access_token":"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc"}"#;
+        let scrubbed = scrub(line);
+        let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+        assert_eq!(value["access_token"].as_str(), Some("[REDACTED]"));
+        assert!(!scrubbed.contains("eyJhbGciOiJIUzI1NiJ9"));
+    }
+
+    #[test]
+    fn redacts_camel_and_pascal_json_keys() {
+        for key in ["accessToken", "AccessToken", "ACCESS_TOKEN", "access-token"] {
+            let line = format!(r#"{{"{key}":"secret"}}"#);
+            let scrubbed = scrub(&line);
+            let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+            assert_eq!(value[key].as_str(), Some("[REDACTED]"), "key {key}");
+        }
+    }
+
+    #[test]
+    fn redacts_query_token_values() {
+        assert_eq!(
+            scrub("GET /api/tawai/playback/stream?token=abc.def.ghi").as_ref(),
+            "GET /api/tawai/playback/stream?token=[REDACTED]",
+        );
+        assert_eq!(
+            scrub("GET /api/tawai/library/tracks?a=1&token=abc").as_ref(),
+            "GET /api/tawai/library/tracks?a=1&token=[REDACTED]",
+        );
+    }
+
+    #[test]
+    fn redacts_bearer_and_basic_authorization_values() {
+        assert_eq!(
+            scrub("authorization: Bearer abc123").as_ref(),
+            "authorization: Bearer [REDACTED]",
+        );
+        assert_eq!(
+            scrub("authorization: Basic abc123").as_ref(),
+            "authorization: Basic [REDACTED]",
+        );
+        assert_eq!(scrub("Bearer abc123").as_ref(), "Bearer [REDACTED]");
+    }
+
+    #[test]
+    fn redacts_keyed_ciphertext_prefixes() {
+        assert_eq!(
+            scrub("api_key=NDK:00ff11").as_ref(),
+            "api_key=NDK:[REDACTED]",
+        );
+        assert_eq!(scrub("NDK:00ff11").as_ref(), "NDK:[REDACTED]");
+        assert_eq!(
+            scrub("master_key=tawai-mk1:00ff11").as_ref(),
+            "master_key=tawai-mk1:[REDACTED]",
+        );
+        assert_eq!(scrub("tawai-mk1:00ff11").as_ref(), "tawai-mk1:[REDACTED]",);
+    }
+
+    #[test]
+    fn redacts_64_hex_but_preserves_32_hex() {
+        let hex64 = "0123456789abcdef".repeat(4);
+        let hex32 = "0123456789abcdef".repeat(2);
+
+        assert_eq!(scrub(&hex64).as_ref(), "[REDACTED]");
+
+        let scrubbed = scrub(&hex32);
+        assert!(matches!(scrubbed, Cow::Borrowed(_)));
+        assert_eq!(scrubbed.as_ref(), hex32.as_str());
+    }
+
+    #[test]
+    fn redacts_a_realistic_jwt_seed() {
+        let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJsaXN0ZW5lciIsInNlZWQiOiJ0YXdhaSJ9.c2lnbmF0dXJl";
+
+        assert_eq!(scrub(jwt).as_ref(), "[REDACTED]");
+        assert!(!scrub(jwt).contains("eyJ"));
+    }
+
+    #[test]
+    fn redacts_multiple_secrets_in_one_line() {
+        let hex64 = "0123456789abcdef".repeat(4);
+        let line = format!("token=first password=second key={hex64}");
+        let scrubbed = scrub(&line);
+
+        assert!(!scrubbed.contains("first"));
+        assert!(!scrubbed.contains("second"));
+        assert!(!scrubbed.contains(&hex64));
+        assert!(scrubbed.contains("token=[REDACTED]"));
+        assert!(scrubbed.contains("password=[REDACTED]"));
+    }
+}
