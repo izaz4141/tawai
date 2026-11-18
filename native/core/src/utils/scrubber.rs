@@ -112,7 +112,16 @@ fn redact_containers(message: &str) -> Option<String> {
 
         let (end, replacement) = match container_end(message, opening.start()) {
             Some(end) if ends_at_value_boundary(message, end) => (end, r#""[REDACTED]""#),
-            Some(end) => (scalar_value_end(message, end, in_query), "[REDACTED]"),
+            Some(end) => {
+                let scalar_end = scalar_value_end(message, end, in_query);
+                let replacement = if message.as_bytes().get(scalar_end).copied() == Some(b']') {
+                    r#""[REDACTED]""#
+                } else {
+                    "[REDACTED]"
+                };
+
+                (scalar_end, replacement)
+            }
             None if in_query => (query_value_end(message, opening.start()), "[REDACTED]"),
             None => (record_end(message, opening.start()), "[REDACTED]"),
         };
@@ -218,12 +227,12 @@ fn is_query_prefix(prefix: &str) -> bool {
 fn ends_at_value_boundary(message: &str, end: usize) -> bool {
     match message.as_bytes().get(end).copied() {
         None => true,
-        Some(byte) => is_scalar_terminator(byte) || byte == b']',
+        Some(byte) => is_scalar_terminator(byte),
     }
 }
 
 fn is_scalar_terminator(byte: u8) -> bool {
-    byte.is_ascii_whitespace() || matches!(byte, b',' | b'}' | b'&' | b'"' | b'\'')
+    byte.is_ascii_whitespace() || matches!(byte, b',' | b']' | b'}' | b'&' | b'"' | b'\'')
 }
 
 fn is_query_terminator(byte: u8) -> bool {
@@ -714,6 +723,22 @@ mod tests {
             (r#"password=[hunter2]\"tail"#, "password=[REDACTED]"),
         ] {
             assert_eq!(scrub(line).as_ref(), expected, "line {line}");
+        }
+    }
+
+    #[test]
+    fn scalar_suffix_scan_preserves_enclosing_brackets() {
+        for (line, expected) in [
+            (r"x=[api_key=[hunter2]\ ]]", r#"x=[api_key="[REDACTED]"]]"#),
+            (
+                r#"{"a":{"password":[hunter2]\ ]}}"#,
+                r#"{"a":{"password":"[REDACTED]"]}}"#,
+            ),
+        ] {
+            let scrubbed = scrub(line);
+
+            assert_eq!(scrubbed.as_ref(), expected, "line {line}");
+            assert!(!scrubbed.contains("hunter2"), "line {line}");
         }
     }
 
