@@ -11,7 +11,7 @@ type Rule = (Regex, &'static str);
 ///
 /// Returns a borrowed string when no rule matched.
 pub fn scrub(message: &str) -> Cow<'_, str> {
-    let mut redacted: Option<String> = None;
+    let mut redacted = redact_containers(message);
 
     for (rule, replacement) in rules() {
         let input = redacted.as_deref().unwrap_or(message);
@@ -22,6 +22,100 @@ pub fn scrub(message: &str) -> Cow<'_, str> {
     }
 
     redacted.map_or(Cow::Borrowed(message), Cow::Owned)
+}
+
+fn redact_containers(message: &str) -> Option<String> {
+    let rule = container_rule()?;
+    let mut redacted = String::new();
+    let mut cursor = 0;
+    let mut changed = false;
+
+    for captures in rule.captures_iter(message) {
+        let Some(opening) = captures.get(2) else {
+            continue;
+        };
+
+        if opening.start() < cursor {
+            continue;
+        }
+
+        let Some(end) = container_end(message, opening.start()) else {
+            continue;
+        };
+
+        redacted.push_str(&message[cursor..opening.start()]);
+        redacted.push_str(r#""[REDACTED]""#);
+        cursor = end;
+        changed = true;
+    }
+
+    if !changed {
+        return None;
+    }
+
+    redacted.push_str(&message[cursor..]);
+    Some(redacted)
+}
+
+fn container_rule() -> Option<&'static Regex> {
+    static RULE: OnceLock<Option<Regex>> = OnceLock::new();
+
+    RULE.get_or_init(|| {
+        let keys = key_alternation();
+
+        if keys.is_empty() {
+            return None;
+        }
+
+        Regex::new(&format!(r#"(?i)(["']?(?:{keys})["']?\s*[:=]\s*)([\[{{])"#)).ok()
+    })
+    .as_ref()
+}
+
+fn container_end(message: &str, start: usize) -> Option<usize> {
+    let mut stack = Vec::new();
+    let mut quote = None;
+    let mut escaped = false;
+
+    for (index, byte) in message.as_bytes().iter().copied().enumerate().skip(start) {
+        if let Some(delimiter) = quote {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == delimiter {
+                quote = None;
+            }
+
+            continue;
+        }
+
+        match byte {
+            b'"' | b'\'' => quote = Some(byte),
+            b'[' | b'{' => stack.push(byte),
+            b']' => {
+                if stack.pop() != Some(b'[') {
+                    return None;
+                }
+
+                if stack.is_empty() {
+                    return Some(index + 1);
+                }
+            }
+            b'}' => {
+                if stack.pop() != Some(b'{') {
+                    return None;
+                }
+
+                if stack.is_empty() {
+                    return Some(index + 1);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
 }
 
 fn rules() -> &'static [Rule] {
@@ -186,6 +280,46 @@ mod tests {
 
             assert_eq!(value[key].as_str(), Some("[REDACTED]"), "key {key}");
         }
+    }
+
+    #[test]
+    fn redacts_json_array_values_as_containers() {
+        let line = r#"{"api_key":["sk-live-1","sk-live-2"]}"#;
+        let scrubbed = scrub(line);
+        let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+        assert_eq!(value["api_key"].as_str(), Some("[REDACTED]"));
+        assert!(!scrubbed.contains("sk-live"));
+    }
+
+    #[test]
+    fn redacts_json_object_values_as_containers() {
+        let line = r#"{"password":{"nested":{"token":"hunter2"},"list":["a","b"]}}"#;
+        let scrubbed = scrub(line);
+        let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+        assert_eq!(value["password"].as_str(), Some("[REDACTED]"));
+        assert!(!scrubbed.contains("hunter2"));
+    }
+
+    #[test]
+    fn container_scan_ignores_brackets_inside_strings() {
+        let line = r#"{"master_key":["a]b","c{d","e\"}f"]} trailing"#;
+
+        assert_eq!(
+            scrub(line).as_ref(),
+            r#"{"master_key":"[REDACTED]"} trailing"#,
+        );
+    }
+
+    #[test]
+    fn redacts_multiple_containers_in_one_line() {
+        let line = r#"request {"api_key":["a"]} response {"session_id":{"id":"b"}}"#;
+
+        assert_eq!(
+            scrub(line).as_ref(),
+            r#"request {"api_key":"[REDACTED]"} response {"session_id":"[REDACTED]"}"#,
+        );
     }
 
     #[test]
