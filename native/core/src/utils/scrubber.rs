@@ -195,6 +195,13 @@ fn build_rules() -> Vec<Rule> {
         push_rule(
             &mut rules,
             &format!(
+                r#"(?i)("(?:{keys})"\s*:\s*)(-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)"#
+            ),
+            r#"${1}"[REDACTED]""#,
+        );
+        push_rule(
+            &mut rules,
+            &format!(
                 r#"(?i)("?(?:{keys})"?\s*[:=]\s*)((?:(?:NDK|tawai-mk1):|bearer\s+|basic\s+)?)(?:[^"'\s,}}&\\]|\\.)+"#
             ),
             r#"${1}${2}[REDACTED]"#,
@@ -264,7 +271,7 @@ mod tests {
 
     #[test]
     fn rule_table_is_complete() {
-        assert_eq!(rules().len(), 10);
+        assert_eq!(rules().len(), 11);
     }
 
     #[test]
@@ -327,6 +334,41 @@ mod tests {
 
         assert_eq!(value["access_token"].as_str(), Some("[REDACTED]"));
         assert!(!scrubbed.contains("eyJhbGciOiJIUzI1NiJ9"));
+    }
+
+    #[test]
+    fn redacts_json_numeric_values_and_keeps_valid_json() {
+        for (line, expected) in [
+            (r#"{"session_id":12345}"#, r#"{"session_id":"[REDACTED]"}"#),
+            (r#"{"password":-3.5}"#, r#"{"password":"[REDACTED]"}"#),
+            (
+                r#"{"token":1e9,"other":"keep"}"#,
+                r#"{"token":"[REDACTED]","other":"keep"}"#,
+            ),
+            (
+                r#"{"api_key" : -0.25E-3 }"#,
+                r#"{"api_key" : "[REDACTED]" }"#,
+            ),
+        ] {
+            let scrubbed = scrub(line);
+            let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+            assert_eq!(scrubbed.as_ref(), expected, "line {line}");
+            assert!(value.is_object(), "line {line}");
+        }
+    }
+
+    #[test]
+    fn keeps_plain_text_numeric_assignments_unquoted() {
+        assert_eq!(scrub("session_id=12345").as_ref(), "session_id=[REDACTED]");
+        assert_eq!(
+            scrub("attempts=3&token=abc").as_ref(),
+            "attempts=3&token=[REDACTED]",
+        );
+        assert_eq!(
+            scrub("{\"session_id\":12345,\"attempts\":3}").as_ref(),
+            r#"{"session_id":"[REDACTED]","attempts":3}"#,
+        );
     }
 
     #[test]
