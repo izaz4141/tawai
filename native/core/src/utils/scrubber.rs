@@ -7,11 +7,21 @@ use crate::utils::redaction::{SENSITIVE_FIELDS, sensitive_field_variants};
 
 type Rule = (Regex, &'static str);
 
+const MAX_EMBEDDED_JSON_DEPTH: usize = 8;
+
 /// Replaces known credentials in one log message.
 ///
 /// Returns a borrowed string when no rule matched.
 pub fn scrub(message: &str) -> Cow<'_, str> {
-    let mut redacted = redact_containers(message);
+    scrub_at_depth(message, 0)
+}
+
+fn scrub_at_depth(message: &str, depth: usize) -> Cow<'_, str> {
+    let mut redacted = redact_embedded_json(message, depth);
+
+    if let Some(next) = redact_containers(redacted.as_deref().unwrap_or(message)) {
+        redacted = Some(next);
+    }
 
     for (rule, replacement) in rules() {
         let input = redacted.as_deref().unwrap_or(message);
@@ -22,6 +32,63 @@ pub fn scrub(message: &str) -> Cow<'_, str> {
     }
 
     redacted.map_or(Cow::Borrowed(message), Cow::Owned)
+}
+
+fn redact_embedded_json(message: &str, depth: usize) -> Option<String> {
+    if depth >= MAX_EMBEDDED_JSON_DEPTH {
+        return None;
+    }
+
+    let rule = embedded_json_rule();
+    let mut redacted = String::new();
+    let mut cursor = 0;
+    let mut changed = false;
+
+    for literal in rule.find_iter(message) {
+        if literal.start() < cursor {
+            continue;
+        }
+
+        let Ok(decoded) = serde_json::from_str::<String>(literal.as_str()) else {
+            continue;
+        };
+
+        let trimmed = decoded.trim();
+
+        if !(trimmed.starts_with('{') || trimmed.starts_with('['))
+            || serde_json::from_str::<serde_json::Value>(trimmed).is_err()
+        {
+            continue;
+        }
+
+        let scrubbed = scrub_at_depth(&decoded, depth + 1);
+
+        if scrubbed.as_ref() == decoded.as_str() {
+            continue;
+        }
+
+        let Ok(encoded) = serde_json::to_string(scrubbed.as_ref()) else {
+            continue;
+        };
+
+        redacted.push_str(&message[cursor..literal.start()]);
+        redacted.push_str(&encoded);
+        cursor = literal.end();
+        changed = true;
+    }
+
+    if !changed {
+        return None;
+    }
+
+    redacted.push_str(&message[cursor..]);
+    Some(redacted)
+}
+
+fn embedded_json_rule() -> &'static Regex {
+    static RULE: OnceLock<Regex> = OnceLock::new();
+
+    RULE.get_or_init(|| Regex::new(r#""(?:[^"\\]|\\.)*""#).expect("embedded JSON rule"))
 }
 
 fn redact_containers(message: &str) -> Option<String> {
@@ -429,6 +496,98 @@ mod tests {
 
         assert_eq!(value["password"].as_str(), Some("[REDACTED]"));
         assert!(!scrubbed.contains("hunter2"));
+    }
+
+    #[test]
+    fn redacts_serialized_json_inside_json_string_values() {
+        let line = r#"{"message":"{\"password\":\"hunter2\"}"}"#;
+        let scrubbed = scrub(line);
+
+        assert_eq!(
+            scrubbed.as_ref(),
+            r#"{"message":"{\"password\":\"[REDACTED]\"}"}"#,
+        );
+
+        let outer: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid outer JSON");
+        let inner: Value = serde_json::from_str(outer["message"].as_str().expect("message string"))
+            .expect("valid inner JSON");
+
+        assert_eq!(inner["password"].as_str(), Some("[REDACTED]"));
+        assert!(!scrubbed.contains("hunter2"));
+    }
+
+    #[test]
+    fn redacts_serialized_json_inside_quoted_log_values() {
+        let line = r#"payload="{\"token\":\"abc123\"}""#;
+
+        assert_eq!(
+            scrub(line).as_ref(),
+            r#"payload="{\"token\":\"[REDACTED]\"}""#,
+        );
+    }
+
+    #[test]
+    fn preserves_escaped_siblings_while_redacting_serialized_json() {
+        let line = r#"{"message":"{\"password\":\"hunter2\",\"note\":\"a\\\"b\"}"}"#;
+        let scrubbed = scrub(line);
+
+        assert_eq!(
+            scrubbed.as_ref(),
+            r#"{"message":"{\"password\":\"[REDACTED]\",\"note\":\"a\\\"b\"}"}"#,
+        );
+
+        let outer: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid outer JSON");
+        let inner: Value = serde_json::from_str(outer["message"].as_str().expect("message string"))
+            .expect("valid inner JSON");
+
+        assert_eq!(inner["password"].as_str(), Some("[REDACTED]"));
+        assert_eq!(inner["note"].as_str(), Some("a\"b"));
+    }
+
+    #[test]
+    fn redacts_containers_inside_serialized_json_string_values() {
+        let line = r#"{"message":"{\"api_key\":[\"sk-live-1\",\"sk-live-2\"]}"}"#;
+        let scrubbed = scrub(line);
+
+        assert_eq!(
+            scrubbed.as_ref(),
+            r#"{"message":"{\"api_key\":\"[REDACTED]\"}"}"#,
+        );
+
+        let outer: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid outer JSON");
+        let inner: Value = serde_json::from_str(outer["message"].as_str().expect("message string"))
+            .expect("valid inner JSON");
+
+        assert_eq!(inner["api_key"].as_str(), Some("[REDACTED]"));
+        assert!(!scrubbed.contains("sk-live"));
+    }
+
+    #[test]
+    fn redacts_nested_serialized_json_string_values() {
+        let line = r#"{"message":"{\"payload\":\"{\\\"password\\\":\\\"hunter2\\\"}\"}"}"#;
+        let scrubbed = scrub(line);
+        let outer: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid outer JSON");
+        let middle: Value =
+            serde_json::from_str(outer["message"].as_str().expect("message string"))
+                .expect("valid middle JSON");
+        let inner: Value =
+            serde_json::from_str(middle["payload"].as_str().expect("payload string"))
+                .expect("valid inner JSON");
+
+        assert_eq!(inner["password"].as_str(), Some("[REDACTED]"));
+        assert!(!scrubbed.contains("hunter2"));
+    }
+
+    #[test]
+    fn leaves_quoted_non_json_values_untouched() {
+        for line in [
+            r#"{"message":"server started"}"#,
+            r#"{"message":"[not json]"}"#,
+            r#"{"message":"123"}"#,
+            r#"{"message":"{\"note\":\"keep\"}"}"#,
+        ] {
+            assert!(matches!(scrub(line), Cow::Borrowed(_)), "line {line}");
+        }
     }
 
     #[test]
