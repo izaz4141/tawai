@@ -43,8 +43,14 @@ fn redact_containers(message: &str) -> Option<String> {
             continue;
         };
 
+        let (end, replacement) = if ends_at_value_boundary(message, end) {
+            (end, r#""[REDACTED]""#)
+        } else {
+            (scalar_value_end(message, end), "[REDACTED]")
+        };
+
         redacted.push_str(&message[cursor..opening.start()]);
-        redacted.push_str(r#""[REDACTED]""#);
+        redacted.push_str(replacement);
         cursor = end;
         changed = true;
     }
@@ -116,6 +122,24 @@ fn container_end(message: &str, start: usize) -> Option<usize> {
     }
 
     None
+}
+
+fn ends_at_value_boundary(message: &str, end: usize) -> bool {
+    match message.as_bytes().get(end).copied() {
+        None => true,
+        Some(byte) => is_scalar_terminator(byte) || byte == b']',
+    }
+}
+
+fn is_scalar_terminator(byte: u8) -> bool {
+    byte.is_ascii_whitespace() || matches!(byte, b',' | b'}' | b'&' | b'"' | b'\'')
+}
+
+fn scalar_value_end(message: &str, start: usize) -> usize {
+    message.as_bytes()[start..]
+        .iter()
+        .position(|byte| is_scalar_terminator(*byte))
+        .map_or(message.len(), |offset| start + offset)
 }
 
 fn rules() -> &'static [Rule] {
@@ -332,6 +356,38 @@ mod tests {
         assert_eq!(
             scrub(line).as_ref(),
             r#"request {"api_key":"[REDACTED]"} response {"session_id":"[REDACTED]"}"#,
+        );
+    }
+
+    #[test]
+    fn containers_without_value_boundaries_fall_back_to_scalar_redaction() {
+        for (line, expected) in [
+            ("password=[hunter2]tail", "password=[REDACTED]"),
+            ("api_key={secret}tail", "api_key=[REDACTED]"),
+            (r#"password={"a":"hunter2"}tail"#, "password=[REDACTED]"),
+            (r#"password=["a","hunter2"]tail"#, "password=[REDACTED]"),
+        ] {
+            assert_eq!(scrub(line).as_ref(), expected, "line {line}");
+        }
+    }
+
+    #[test]
+    fn containers_still_redact_at_value_boundaries() {
+        let line = r#"{"api_key":["sk-live-1","sk-live-2"],"other":"keep"}"#;
+        let scrubbed = scrub(line);
+        let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+        assert_eq!(value["api_key"].as_str(), Some("[REDACTED]"));
+        assert_eq!(value["other"].as_str(), Some("keep"));
+        assert!(!scrubbed.contains("sk-live"));
+
+        assert_eq!(
+            scrub("token=[abc]&user=1").as_ref(),
+            r#"token="[REDACTED]"&user=1"#,
+        );
+        assert_eq!(
+            scrub(r#"x=[api_key=["sk-live"]]"#).as_ref(),
+            r#"x=[api_key="[REDACTED]"]"#,
         );
     }
 
