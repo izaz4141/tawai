@@ -173,9 +173,9 @@ fn build_rules() -> Vec<Rule> {
     push_rule(
         &mut rules,
         &format!(
-            r#"(?i)(\b(?:{cookie_keys})\b\s*[:=]\s*)((?:[^\s"\\']|\\[^\r\n])(?:[^"\\\r\n]|\\[^\r\n])*)"#
+            r#"(?im)(?:(^[^"'\r\n]*?\b(?:{cookie_keys})\b\s*[:=]\s*)([^\r\n]*)|(\b(?:{cookie_keys})\b\s*[:=]\s*)((?:[^\s"\\']|\\[^\r\n])(?:[^"\\\r\n]|\\[^\r\n])*))"#
         ),
-        r#"${1}[REDACTED]"#,
+        r#"${1}${3}[REDACTED]"#,
     );
 
     if !keys.is_empty() {
@@ -536,6 +536,14 @@ mod tests {
             "Set-Cookie: [REDACTED]",
         );
         assert_eq!(scrub("cookie=a=1;b=2").as_ref(), "cookie=[REDACTED]");
+        assert_eq!(
+            scrub(r#"Set-Cookie: session="a b; c"; Path=/; HttpOnly; SameSite=Lax"#).as_ref(),
+            "Set-Cookie: [REDACTED]",
+        );
+        assert_eq!(
+            scrub(r#"Cookie: sid="a b"; theme=dark"#).as_ref(),
+            "Cookie: [REDACTED]",
+        );
     }
 
     #[test]
@@ -552,6 +560,10 @@ mod tests {
             scrub(r#"{"message":"Cookie: \"a=1; b=2\"; note=\"x\""}"#).as_ref(),
             r#"{"message":"Cookie: [REDACTED]"}"#,
         );
+        assert_eq!(
+            scrub(r#"{"message":"Set-Cookie: sid=\"a b\"; HttpOnly"}"#).as_ref(),
+            r#"{"message":"Set-Cookie: [REDACTED]"}"#,
+        );
     }
 
     #[test]
@@ -562,7 +574,7 @@ mod tests {
 
         assert_eq!(value["cookie"].as_str(), Some("[REDACTED]"));
         assert_eq!(value["other"].as_str(), Some("keep"));
-        assert_eq!(scrub("cookie: 'a=1; b=2'").as_ref(), "cookie: '[REDACTED]'",);
+        assert_eq!(scrub("cookie: 'a=1; b=2'").as_ref(), "cookie: [REDACTED]",);
     }
 
     #[test]
