@@ -125,7 +125,16 @@ fn rules() -> &'static [Rule] {
 
 fn build_rules() -> Vec<Rule> {
     let keys = key_alternation();
+    let cookie_keys = field_alternation(&["cookie", "set_cookie"]);
     let mut rules = Vec::new();
+
+    push_rule(
+        &mut rules,
+        &format!(
+            r#"(?i)(\b(?:{cookie_keys})\b\s*[:=]\s*)((?:[^\s"\\']|\\[^\r\n])(?:[^"\\\r\n]|\\[^\r\n])*)"#
+        ),
+        r#"${1}[REDACTED]"#,
+    );
 
     if !keys.is_empty() {
         push_rule(
@@ -176,7 +185,11 @@ fn push_rule(rules: &mut Vec<Rule>, pattern: &str, replacement: &'static str) {
 }
 
 fn key_alternation() -> String {
-    let mut variants: Vec<String> = SENSITIVE_FIELDS
+    field_alternation(SENSITIVE_FIELDS)
+}
+
+fn field_alternation(fields: &[&str]) -> String {
+    let mut variants: Vec<String> = fields
         .iter()
         .flat_map(|field| sensitive_field_variants(field))
         .map(|variant| regex::escape(&variant))
@@ -206,7 +219,7 @@ mod tests {
 
     #[test]
     fn rule_table_is_complete() {
-        assert_eq!(rules().len(), 9);
+        assert_eq!(rules().len(), 10);
     }
 
     #[test]
@@ -350,6 +363,46 @@ mod tests {
             scrub(r#"api_key='one' password="two" token=three"#).as_ref(),
             r#"api_key='[REDACTED]' password="[REDACTED]" token=[REDACTED]"#,
         );
+    }
+
+    #[test]
+    fn redacts_entire_cookie_header_value() {
+        assert_eq!(
+            scrub("Cookie: sid=abc123; theme=dark; lang=en").as_ref(),
+            "Cookie: [REDACTED]",
+        );
+        assert_eq!(
+            scrub("Set-Cookie: tawai_jwt=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc; Path=/; HttpOnly; SameSite=Lax").as_ref(),
+            "Set-Cookie: [REDACTED]",
+        );
+        assert_eq!(scrub("cookie=a=1;b=2").as_ref(), "cookie=[REDACTED]");
+    }
+
+    #[test]
+    fn cookie_redaction_stops_at_header_boundary() {
+        assert_eq!(
+            scrub("Cookie: a=1; b=2\r\nUser-Agent: tawai").as_ref(),
+            "Cookie: [REDACTED]\r\nUser-Agent: tawai",
+        );
+        assert_eq!(
+            scrub(r#"{"message":"Cookie: a=1; b=2"}"#).as_ref(),
+            r#"{"message":"Cookie: [REDACTED]"}"#,
+        );
+        assert_eq!(
+            scrub(r#"{"message":"Cookie: \"a=1; b=2\"; note=\"x\""}"#).as_ref(),
+            r#"{"message":"Cookie: [REDACTED]"}"#,
+        );
+    }
+
+    #[test]
+    fn cookie_redaction_preserves_quoted_values() {
+        let line = r#"{"cookie":"a=1; b=2","other":"keep"}"#;
+        let scrubbed = scrub(line);
+        let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+        assert_eq!(value["cookie"].as_str(), Some("[REDACTED]"));
+        assert_eq!(value["other"].as_str(), Some("keep"));
+        assert_eq!(scrub("cookie: 'a=1; b=2'").as_ref(), "cookie: '[REDACTED]'",);
     }
 
     #[test]
