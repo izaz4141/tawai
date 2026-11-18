@@ -73,7 +73,12 @@ fn container_rule() -> Option<&'static Regex> {
             return None;
         }
 
-        Regex::new(&format!(r#"(?i)(["']?(?:{keys})["']?\s*[:=]\s*)([\[{{])"#)).ok()
+        let boundary = r"(?:^|[{},;|&(\[:\s=])";
+
+        Regex::new(&format!(
+            r#"(?i)({boundary}\s*(?:["'](?:{keys})["']|(?:{keys}))\s*[:=]\s*)([\[{{])|{boundary}\s*"(?:[^"\\]|\\.)*"|{boundary}\s*'(?:[^'\\]|\\.)*'"#
+        ))
+        .ok()
     })
     .as_ref()
 }
@@ -174,7 +179,7 @@ fn build_rules() -> Vec<Rule> {
         push_rule(
             &mut rules,
             &format!(
-                r#"(?i)("?(?:{keys})"?\s*[:=]\s*)((?:(?:NDK|tawai-mk1):|bearer\s+|basic\s+)?)[^"'\s,}}&]+"#
+                r#"(?i)("?(?:{keys})"?\s*[:=]\s*)((?:(?:NDK|tawai-mk1):|bearer\s+|basic\s+)?)(?:[^"'\s,}}&\\]|\\.)+"#
             ),
             r#"${1}${2}[REDACTED]"#,
         );
@@ -346,6 +351,57 @@ mod tests {
         assert_eq!(
             scrub(line).as_ref(),
             r#"{"master_key":"[REDACTED]"} trailing"#,
+        );
+    }
+
+    #[test]
+    fn container_scan_ignores_field_like_text_inside_quoted_values() {
+        for line in [
+            r#"{"message":"password=[hunter2]"}"#,
+            r#"{"message": "password=[hunter2]"}"#,
+            r#"{"message":"note api_key={secret}"}"#,
+            r#"{"message": "note api_key={secret}"}"#,
+            r#"{"message":"he said \"password=[hunter2]\""}"#,
+        ] {
+            let scrubbed = scrub(line);
+            let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+            assert!(value["message"].is_string(), "line {line}");
+            assert!(!scrubbed.contains("hunter2"), "line {line}");
+            assert!(!scrubbed.contains("secret"), "line {line}");
+        }
+
+        assert_eq!(
+            scrub("{'message': 'password=[hunter2]'}").as_ref(),
+            "{'message': 'password=[REDACTED]'}",
+        );
+    }
+
+    #[test]
+    fn quoted_container_like_passwords_are_fully_redacted() {
+        for line in [
+            r#"{"password":"[hunter2]"}"#,
+            r#"{"password":"note api_key=[hunter2]"}"#,
+            r#"{"password": "note api_key=[hunter2]"}"#,
+        ] {
+            let scrubbed = scrub(line);
+            let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+            assert_eq!(
+                value["password"].as_str(),
+                Some("[REDACTED]"),
+                "line {line}"
+            );
+            assert!(!scrubbed.contains("hunter2"), "line {line}");
+        }
+
+        assert_eq!(
+            scrub(r#"password="[hunter2]""#).as_ref(),
+            r#"password="[REDACTED]""#,
+        );
+        assert_eq!(
+            scrub("password='[hunter2]'").as_ref(),
+            "password='[REDACTED]'",
         );
     }
 
