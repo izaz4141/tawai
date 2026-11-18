@@ -41,6 +41,11 @@ fn build_rules() -> Vec<Rule> {
         );
         push_rule(
             &mut rules,
+            &format!(r#"(?i)(["']?(?:{keys})["']?\s*[:=]\s*)'(?:[^'\\]|\\.)*'"#),
+            r#"${1}'[REDACTED]'"#,
+        );
+        push_rule(
+            &mut rules,
             &format!(
                 r#"(?i)("?(?:{keys})"?\s*[:=]\s*)((?:(?:NDK|tawai-mk1):|bearer\s+|basic\s+)?)[^"'\s,}}&]+"#
             ),
@@ -107,7 +112,7 @@ mod tests {
 
     #[test]
     fn rule_table_is_complete() {
-        assert_eq!(rules().len(), 8);
+        assert_eq!(rules().len(), 9);
     }
 
     #[test]
@@ -181,6 +186,36 @@ mod tests {
 
             assert_eq!(value[key].as_str(), Some("[REDACTED]"), "key {key}");
         }
+    }
+
+    #[test]
+    fn redacts_single_quoted_values() {
+        assert_eq!(scrub("api_key='s3cr3t'").as_ref(), "api_key='[REDACTED]'",);
+        assert_eq!(
+            scrub("password = 'hunter2'").as_ref(),
+            "password = '[REDACTED]'",
+        );
+        assert_eq!(
+            scrub("{'session_id': 'abc123'}").as_ref(),
+            "{'session_id': '[REDACTED]'}",
+        );
+    }
+
+    #[test]
+    fn redacts_single_quoted_values_with_escapes() {
+        let line = r"password='it\'s a secret'";
+        let scrubbed = scrub(line);
+
+        assert_eq!(scrubbed.as_ref(), r"password='[REDACTED]'");
+        assert!(!scrubbed.contains("a secret"));
+    }
+
+    #[test]
+    fn preserves_double_quoted_and_bare_redaction_for_mixed_lines() {
+        assert_eq!(
+            scrub(r#"api_key='one' password="two" token=three"#).as_ref(),
+            r#"api_key='[REDACTED]' password="[REDACTED]" token=[REDACTED]"#,
+        );
     }
 
     #[test]
