@@ -141,10 +141,23 @@ fn is_scalar_terminator(byte: u8) -> bool {
 }
 
 fn scalar_value_end(message: &str, start: usize) -> usize {
-    message.as_bytes()[start..]
-        .iter()
-        .position(|byte| is_scalar_terminator(*byte))
-        .map_or(message.len(), |offset| start + offset)
+    let bytes = &message.as_bytes()[start..];
+    let mut index = 0;
+
+    while index < bytes.len() {
+        if bytes[index] == b'\\' {
+            index += 2;
+            continue;
+        }
+
+        if is_scalar_terminator(bytes[index]) {
+            return start + index;
+        }
+
+        index += 1;
+    }
+
+    message.len()
 }
 
 fn rules() -> &'static [Rule] {
@@ -425,6 +438,25 @@ mod tests {
         ] {
             assert_eq!(scrub(line).as_ref(), expected, "line {line}");
         }
+    }
+
+    #[test]
+    fn scalar_suffix_scan_consumes_escaped_delimiters() {
+        for (line, expected) in [
+            (r"password=[hunter2]\,tail", "password=[REDACTED]"),
+            (r"password=[hunter2]\ tail", "password=[REDACTED]"),
+            (r#"password=[hunter2]\"tail"#, "password=[REDACTED]"),
+        ] {
+            assert_eq!(scrub(line).as_ref(), expected, "line {line}");
+        }
+    }
+
+    #[test]
+    fn scalar_suffix_scan_stops_at_unescaped_commas() {
+        assert_eq!(
+            scrub("password=[hunter2]tail,other=keep").as_ref(),
+            "password=[REDACTED],other=keep",
+        );
     }
 
     #[test]
