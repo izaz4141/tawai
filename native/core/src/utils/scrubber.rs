@@ -39,14 +39,10 @@ fn redact_containers(message: &str) -> Option<String> {
             continue;
         }
 
-        let Some(end) = container_end(message, opening.start()) else {
-            continue;
-        };
-
-        let (end, replacement) = if ends_at_value_boundary(message, end) {
-            (end, r#""[REDACTED]""#)
-        } else {
-            (scalar_value_end(message, end), "[REDACTED]")
+        let (end, replacement) = match container_end(message, opening.start()) {
+            Some(end) if ends_at_value_boundary(message, end) => (end, r#""[REDACTED]""#),
+            Some(end) => (scalar_value_end(message, end), "[REDACTED]"),
+            None => (record_end(message, opening.start()), "[REDACTED]"),
         };
 
         redacted.push_str(&message[cursor..opening.start()]);
@@ -127,6 +123,13 @@ fn container_end(message: &str, start: usize) -> Option<usize> {
     }
 
     None
+}
+
+fn record_end(message: &str, start: usize) -> usize {
+    message.as_bytes()[start..]
+        .iter()
+        .position(|byte| matches!(byte, b'\r' | b'\n'))
+        .map_or(message.len(), |offset| start + offset)
 }
 
 fn ends_at_value_boundary(message: &str, end: usize) -> bool {
@@ -437,6 +440,35 @@ mod tests {
             (r#"password=["a","hunter2"]tail"#, "password=[REDACTED]"),
         ] {
             assert_eq!(scrub(line).as_ref(), expected, "line {line}");
+        }
+    }
+
+    #[test]
+    fn unterminated_containers_are_redacted_to_the_record_boundary() {
+        for (line, expected) in [
+            ("password=[hunter2", "password=[REDACTED]"),
+            (r#"password=["a","hunter2""#, "password=[REDACTED]"),
+            (r#"password={"a":"hunter2""#, "password=[REDACTED]"),
+            (
+                r#"{"password":{"nested":"hunter2""#,
+                r#"{"password":[REDACTED]"#,
+            ),
+            (
+                "password=[hunter2\r\nother=keep",
+                "password=[REDACTED]\r\nother=keep",
+            ),
+            (
+                "password=[hunter2\nother=keep",
+                "password=[REDACTED]\nother=keep",
+            ),
+            (
+                r#"{"password":{"a":"hunter2"},"other":"keep"}"#,
+                r#"{"password":"[REDACTED]","other":"keep"}"#,
+            ),
+        ] {
+            let scrubbed = scrub(line);
+            assert_eq!(scrubbed.as_ref(), expected, "line {line}");
+            assert!(!scrubbed.contains("hunter2"), "line {line}");
         }
     }
 
