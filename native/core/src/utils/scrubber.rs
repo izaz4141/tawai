@@ -39,9 +39,14 @@ fn redact_containers(message: &str) -> Option<String> {
             continue;
         }
 
+        let in_query = captures
+            .get(1)
+            .is_some_and(|prefix| is_query_prefix(prefix.as_str()));
+
         let (end, replacement) = match container_end(message, opening.start()) {
             Some(end) if ends_at_value_boundary(message, end) => (end, r#""[REDACTED]""#),
-            Some(end) => (scalar_value_end(message, end), "[REDACTED]"),
+            Some(end) => (scalar_value_end(message, end, in_query), "[REDACTED]"),
+            None if in_query => (query_value_end(message, opening.start()), "[REDACTED]"),
             None => (record_end(message, opening.start()), "[REDACTED]"),
         };
 
@@ -132,6 +137,17 @@ fn record_end(message: &str, start: usize) -> usize {
         .map_or(message.len(), |offset| start + offset)
 }
 
+fn query_value_end(message: &str, start: usize) -> usize {
+    message.as_bytes()[start..]
+        .iter()
+        .position(|byte| matches!(byte, b'&' | b'\r' | b'\n'))
+        .map_or(message.len(), |offset| start + offset)
+}
+
+fn is_query_prefix(prefix: &str) -> bool {
+    matches!(prefix.trim_start().as_bytes().first(), Some(b'?' | b'&'))
+}
+
 fn ends_at_value_boundary(message: &str, end: usize) -> bool {
     match message.as_bytes().get(end).copied() {
         None => true,
@@ -143,8 +159,17 @@ fn is_scalar_terminator(byte: u8) -> bool {
     byte.is_ascii_whitespace() || matches!(byte, b',' | b'}' | b'&' | b'"' | b'\'')
 }
 
-fn scalar_value_end(message: &str, start: usize) -> usize {
+fn is_query_terminator(byte: u8) -> bool {
+    byte.is_ascii_whitespace() || matches!(byte, b'&' | b'"' | b'\'')
+}
+
+fn scalar_value_end(message: &str, start: usize, in_query: bool) -> usize {
     let bytes = &message.as_bytes()[start..];
+    let terminator = if in_query {
+        is_query_terminator
+    } else {
+        is_scalar_terminator
+    };
     let mut index = 0;
 
     while index < bytes.len() {
@@ -153,7 +178,7 @@ fn scalar_value_end(message: &str, start: usize) -> usize {
             continue;
         }
 
-        if is_scalar_terminator(bytes[index]) {
+        if terminator(bytes[index]) {
             return start + index;
         }
 
@@ -201,6 +226,11 @@ fn build_rules() -> Vec<Rule> {
         );
         push_rule(
             &mut rules,
+            &format!(r#"(?i)([?&]\s*(?:{keys})\s*[:=]\s*)([^&\s"]+)"#),
+            r#"${1}[REDACTED]"#,
+        );
+        push_rule(
+            &mut rules,
             &format!(
                 r#"(?i)("?(?:{keys})"?\s*[:=]\s*)((?:(?:NDK|tawai-mk1):|bearer\s+|basic\s+)?)(?:[^"'\s,}}&\\]|\\.)+"#
             ),
@@ -225,7 +255,6 @@ fn build_rules() -> Vec<Rule> {
         "tawai-mk1:[REDACTED]",
     );
     push_rule(&mut rules, r"\b[0-9a-fA-F]{64}\b", "[REDACTED]");
-    push_rule(&mut rules, r#"(?i)([?&]token=)[^&\s"]+"#, "${1}[REDACTED]");
 
     rules
 }
@@ -530,6 +559,36 @@ mod tests {
         assert_eq!(
             scrub("password=[hunter2]tail,other=keep").as_ref(),
             "password=[REDACTED],other=keep",
+        );
+    }
+
+    #[test]
+    fn query_values_treat_commas_as_part_of_the_value() {
+        for (line, expected) in [
+            (
+                "GET /api/tawai?api_key=abc,def&bitrate=128",
+                "GET /api/tawai?api_key=[REDACTED]&bitrate=128",
+            ),
+            (
+                "GET /api/tawai?a=1&api_key=abc,def&bitrate=128",
+                "GET /api/tawai?a=1&api_key=[REDACTED]&bitrate=128",
+            ),
+            (
+                "GET /api/tawai?api_key=[abc,def]&bitrate=128",
+                r#"GET /api/tawai?api_key="[REDACTED]"&bitrate=128"#,
+            ),
+            (
+                "GET /api/tawai?api_key=[abc,def&bitrate=128",
+                "GET /api/tawai?api_key=[REDACTED]&bitrate=128",
+            ),
+        ] {
+            let scrubbed = scrub(line);
+            assert_eq!(scrubbed.as_ref(), expected, "line {line}");
+        }
+
+        assert_eq!(
+            scrub("api_key=abc,user=1").as_ref(),
+            "api_key=[REDACTED],user=1",
         );
     }
 
