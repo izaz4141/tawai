@@ -241,6 +241,10 @@ fn scalar_value_end(message: &str, start: usize, in_query: bool) -> usize {
 
     while index < bytes.len() {
         if bytes[index] == b'\\' {
+            if matches!(bytes.get(index + 1), Some(b'\r' | b'\n')) {
+                return start + index + 1;
+            }
+
             index += 2;
             continue;
         }
@@ -710,6 +714,32 @@ mod tests {
             (r#"password=[hunter2]\"tail"#, "password=[REDACTED]"),
         ] {
             assert_eq!(scrub(line).as_ref(), expected, "line {line}");
+        }
+    }
+
+    #[test]
+    fn scalar_suffix_scan_stops_at_escaped_line_breaks() {
+        for (line, expected) in [
+            (
+                "password=[hunter2]tail\\\nother=keep",
+                "password=[REDACTED]\nother=keep",
+            ),
+            (
+                "password=[hunter2]tail\\\r\nother=keep",
+                "password=[REDACTED]\r\nother=keep",
+            ),
+            (
+                "password=[hunter2]tail\\\rother=keep",
+                "password=[REDACTED]\rother=keep",
+            ),
+            (
+                "GET /api/tawai?api_key=[abc]\\\nnext=keep",
+                "GET /api/tawai?api_key=[REDACTED]\nnext=keep",
+            ),
+        ] {
+            let scrubbed = scrub(line);
+
+            assert_eq!(scrubbed.as_ref(), expected, "line {line:?}");
         }
     }
 
