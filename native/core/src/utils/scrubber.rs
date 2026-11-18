@@ -345,7 +345,7 @@ fn build_rules() -> Vec<Rule> {
     push_rule(
         &mut rules,
         &format!(
-            r#"(?im)(?:(^[^"'\r\n]*?\b(?:{cookie_keys})\b\s*[:=]\s*)([^\r\n]*)|(\b(?:{cookie_keys})\b\s*[:=]\s*)((?:[^\s"\\']|\\[^\r\n])(?:[^"\\\r\n]|\\[^\r\n])*))"#
+            r#"(?im)(?:(^[^"'\r\n]*?\b(?:{cookie_keys})\b[ \t]*[:=][ \t]*)([^\r\n]*)|(\b(?:{cookie_keys})\b[ \t]*[:=][ \t]*)((?:[^\s"\\']|\\[^\r\n])(?:[^"\\\r\n]|\\[^\r\n])*))"#
         ),
         r#"${1}${3}[REDACTED]"#,
     );
@@ -1074,6 +1074,30 @@ mod tests {
             scrub(r#"{"message":"Set-Cookie: sid=\"a b\"; HttpOnly"}"#).as_ref(),
             r#"{"message":"Set-Cookie: [REDACTED]"}"#,
         );
+    }
+
+    #[test]
+    fn empty_cookie_header_does_not_consume_the_next_header() {
+        for (line, expected) in [
+            (
+                "Cookie:\r\nUser-Agent: tawai",
+                "Cookie:[REDACTED]\r\nUser-Agent: tawai",
+            ),
+            (
+                "Cookie:\nUser-Agent: tawai",
+                "Cookie:[REDACTED]\nUser-Agent: tawai",
+            ),
+            (
+                "Cookie: \r\nUser-Agent: tawai",
+                "Cookie: [REDACTED]\r\nUser-Agent: tawai",
+            ),
+            (
+                "Set-Cookie:\rUser-Agent: tawai",
+                "Set-Cookie:[REDACTED]\rUser-Agent: tawai",
+            ),
+        ] {
+            assert_eq!(scrub(line).as_ref(), expected, "line {line:?}");
+        }
     }
 
     #[test]
