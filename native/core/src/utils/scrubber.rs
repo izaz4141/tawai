@@ -28,6 +28,10 @@ fn scrub_at_depth(message: &str, depth: usize) -> Cow<'_, str> {
         redacted = Some(next);
     }
 
+    if let Some(next) = redact_cookie_headers(redacted.as_deref().unwrap_or(message)) {
+        redacted = Some(next);
+    }
+
     for (rule, replacement) in rules() {
         let input = redacted.as_deref().unwrap_or(message);
 
@@ -204,6 +208,45 @@ fn redact_containers(message: &str) -> Option<String> {
     Some(redacted)
 }
 
+fn redact_cookie_headers(message: &str) -> Option<String> {
+    let rule = cookie_key_rule();
+    let mut redacted = String::new();
+    let mut cursor = 0;
+    let mut changed = false;
+
+    for key in rule.find_iter(message) {
+        if key.start() < cursor {
+            continue;
+        }
+
+        let line_start = record_start(message, key.start());
+        let value_start = key.end();
+        let end = cookie_value_end(message, line_start, value_start);
+
+        redacted.push_str(&message[cursor..value_start]);
+        redacted.push_str("[REDACTED]");
+        cursor = end;
+        changed = true;
+    }
+
+    if !changed {
+        return None;
+    }
+
+    redacted.push_str(&message[cursor..]);
+    Some(redacted)
+}
+
+fn cookie_key_rule() -> &'static Regex {
+    static RULE: OnceLock<Regex> = OnceLock::new();
+
+    RULE.get_or_init(|| {
+        let keys = field_alternation(&["cookie", "set_cookie"]);
+
+        Regex::new(&format!(r"(?im)\b(?:{keys})\b[ \t]*[:=][ \t]*")).expect("cookie key rule")
+    })
+}
+
 fn container_rule() -> Option<&'static Regex> {
     static RULE: OnceLock<Option<Regex>> = OnceLock::new();
 
@@ -284,6 +327,60 @@ fn query_value_end(message: &str, start: usize) -> usize {
         .map_or(message.len(), |offset| start + offset)
 }
 
+fn record_start(message: &str, position: usize) -> usize {
+    message[..position]
+        .bytes()
+        .rposition(|byte| matches!(byte, b'\r' | b'\n'))
+        .map_or(0, |index| index + 1)
+}
+
+fn cookie_value_end(message: &str, line_start: usize, value_start: usize) -> usize {
+    match open_quote(&message[line_start..value_start]) {
+        Some(delimiter) => quoted_value_end(message, value_start, delimiter),
+        None => record_end(message, value_start),
+    }
+}
+
+fn open_quote(prefix: &str) -> Option<u8> {
+    let track_single = matches!(prefix.trim_start().as_bytes().first(), Some(b'{' | b'['));
+    let mut quote = None;
+    let mut escaped = false;
+
+    for byte in prefix.bytes() {
+        if let Some(delimiter) = quote {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == delimiter {
+                quote = None;
+            }
+        } else if byte == b'"' || (track_single && byte == b'\'') {
+            quote = Some(byte);
+        }
+    }
+
+    quote
+}
+
+fn quoted_value_end(message: &str, start: usize, delimiter: u8) -> usize {
+    let mut escaped = false;
+
+    for (index, byte) in message.as_bytes().iter().copied().enumerate().skip(start) {
+        if escaped {
+            escaped = false;
+        } else if byte == b'\\' {
+            escaped = true;
+        } else if byte == delimiter {
+            return index;
+        } else if matches!(byte, b'\r' | b'\n') {
+            return index;
+        }
+    }
+
+    message.len()
+}
+
 fn is_query_prefix(prefix: &str) -> bool {
     matches!(prefix.trim_start().as_bytes().first(), Some(b'?' | b'&'))
 }
@@ -339,16 +436,7 @@ fn rules() -> &'static [Rule] {
 
 fn build_rules() -> Vec<Rule> {
     let keys = key_alternation();
-    let cookie_keys = field_alternation(&["cookie", "set_cookie"]);
     let mut rules = Vec::new();
-
-    push_rule(
-        &mut rules,
-        &format!(
-            r#"(?im)(?:(^[^"'\r\n]*?\b(?:{cookie_keys})\b[ \t]*[:=][ \t]*)([^\r\n]*)|(\b(?:{cookie_keys})\b[ \t]*[:=][ \t]*)((?:[^\s"\\']|\\[^\r\n])(?:[^"\\\r\n]|\\[^\r\n])*))"#
-        ),
-        r#"${1}${3}[REDACTED]"#,
-    );
 
     if !keys.is_empty() {
         push_rule(
@@ -449,7 +537,7 @@ mod tests {
 
     #[test]
     fn rule_table_is_complete() {
-        assert_eq!(rules().len(), 12);
+        assert_eq!(rules().len(), 11);
     }
 
     #[test]
@@ -1109,6 +1197,54 @@ mod tests {
         assert_eq!(value["cookie"].as_str(), Some("[REDACTED]"));
         assert_eq!(value["other"].as_str(), Some("keep"));
         assert_eq!(scrub("cookie: 'a=1; b=2'").as_ref(), "cookie: [REDACTED]",);
+    }
+
+    #[test]
+    fn redacts_inline_cookie_values_after_quoted_text() {
+        for (line, expected) in [
+            (
+                r#"Referer: "https://example.com" Cookie: sid="a b"; theme=dark"#,
+                r#"Referer: "https://example.com" Cookie: [REDACTED]"#,
+            ),
+            (
+                r#"headers={"Accept":"*/*"} Cookie: sid="a b"; theme=dark"#,
+                r#"headers={"Accept":"*/*"} Cookie: [REDACTED]"#,
+            ),
+            (
+                "user's request Cookie: sid=\"a b\"; theme=dark",
+                "user's request Cookie: [REDACTED]",
+            ),
+        ] {
+            let scrubbed = scrub(line);
+
+            assert_eq!(scrubbed.as_ref(), expected, "line {line}");
+            assert!(!scrubbed.contains("a b"), "line {line}");
+        }
+    }
+
+    #[test]
+    fn preserves_the_enclosing_quote_of_serialized_cookie_text() {
+        let line =
+            r#"{"message":"referer \"https://example.com\"; Cookie: sid=\"a b\"; theme=dark"}"#;
+        let scrubbed = scrub(line);
+        let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+        assert_eq!(
+            scrubbed.as_ref(),
+            r#"{"message":"referer \"https://example.com\"; Cookie: [REDACTED]"}"#,
+        );
+        assert_eq!(
+            value["message"].as_str(),
+            Some(r#"referer "https://example.com"; Cookie: [REDACTED]"#),
+        );
+        assert!(!scrubbed.contains("a b"));
+    }
+
+    #[test]
+    fn redacts_cookie_text_inside_single_quoted_serialized_strings() {
+        let line = r#"{'message': 'Cookie: sid="a b"; theme=dark'}"#;
+
+        assert_eq!(scrub(line).as_ref(), r#"{'message': 'Cookie: [REDACTED]'}"#,);
     }
 
     #[test]
