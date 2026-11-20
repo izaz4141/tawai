@@ -44,13 +44,13 @@ fn scrub_at_depth(message: &str, depth: usize) -> Cow<'_, str> {
 }
 
 fn redact_sensitive_json_keys(text: &str) -> Option<String> {
-    if !text.contains("\\u") {
-        return None;
-    }
-
     let trimmed = text.trim();
 
     if !(trimmed.starts_with('{') || trimmed.starts_with('[')) {
+        return None;
+    }
+
+    if !text.contains("\\u") && !has_uncovered_sensitive_json_key(text) {
         return None;
     }
 
@@ -65,6 +65,39 @@ fn redact_sensitive_json_keys(text: &str) -> Option<String> {
     let trailing = &text[text.trim_end().len()..];
 
     Some(format!("{leading}{encoded}{trailing}"))
+}
+
+fn has_uncovered_sensitive_json_key(text: &str) -> bool {
+    json_key_rule()
+        .captures_iter(text)
+        .filter_map(|captures| captures.get(1))
+        .any(|key| {
+            let key = key.as_str();
+            is_sensitive_field(key) && !is_regex_covered_key(key)
+        })
+}
+
+fn json_key_rule() -> &'static Regex {
+    static RULE: OnceLock<Regex> = OnceLock::new();
+
+    RULE.get_or_init(|| Regex::new(r#""((?:\\.|[^"\\])*)"\s*:"#).expect("JSON key rule"))
+}
+
+fn is_regex_covered_key(key: &str) -> bool {
+    regex_covered_keys()
+        .iter()
+        .any(|variant| variant.eq_ignore_ascii_case(key))
+}
+
+fn regex_covered_keys() -> &'static [String] {
+    static KEYS: OnceLock<Vec<String>> = OnceLock::new();
+
+    KEYS.get_or_init(|| {
+        SENSITIVE_FIELDS
+            .iter()
+            .flat_map(|field| sensitive_field_variants(field))
+            .collect()
+    })
 }
 
 fn redact_sensitive_json_value(value: &mut Value) -> bool {
@@ -687,6 +720,62 @@ mod tests {
         assert_eq!(value["api_key"].as_str(), Some("[REDACTED]"));
         assert_eq!(value["note"].as_str(), Some("keep"));
         assert!(!scrubbed.contains("sk-live"));
+    }
+
+    #[test]
+    fn redacts_json_keys_with_space_separators() {
+        for (line, key) in [
+            (r#"{"api key":"sk-live","note":"keep"}"#, "api key"),
+            (r#"{"API KEY":"sk-live"}"#, "API KEY"),
+            (r#"{"access token":"abc123"}"#, "access token"),
+            (r#"{"p a s s w o r d":"hunter2"}"#, "p a s s w o r d"),
+        ] {
+            let scrubbed = scrub(line);
+            let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+            assert_eq!(value[key].as_str(), Some("[REDACTED]"), "line {line}");
+            assert!(!scrubbed.contains("sk-live"), "line {line}");
+            assert!(!scrubbed.contains("abc123"), "line {line}");
+            assert!(!scrubbed.contains("hunter2"), "line {line}");
+        }
+    }
+
+    #[test]
+    fn redacts_json_keys_with_arbitrary_separators() {
+        for (line, key) in [
+            (
+                r#"{"p_a_s_s_w_o_r_d":"hunter2","note":"keep"}"#,
+                "p_a_s_s_w_o_r_d",
+            ),
+            (r#"{"api_key_":"sk-live"}"#, "api_key_"),
+            (r#"{"_api_key":"sk-live"}"#, "_api_key"),
+        ] {
+            let scrubbed = scrub(line);
+            let value: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid JSON");
+
+            assert_eq!(value[key].as_str(), Some("[REDACTED]"), "line {line}");
+            assert!(!scrubbed.contains("hunter2"), "line {line}");
+            assert!(!scrubbed.contains("sk-live"), "line {line}");
+        }
+    }
+
+    #[test]
+    fn redacts_space_separated_keys_inside_serialized_json_string_values() {
+        let line = r#"{"message":"{\"api key\":\"hunter2\"}"}"#;
+        let scrubbed = scrub(line);
+        let outer: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid outer JSON");
+        let inner: Value = serde_json::from_str(outer["message"].as_str().expect("message string"))
+            .expect("valid inner JSON");
+
+        assert_eq!(inner["api key"].as_str(), Some("[REDACTED]"));
+        assert!(!scrubbed.contains("hunter2"));
+    }
+
+    #[test]
+    fn keeps_borrowed_json_with_already_redacted_space_key() {
+        let line = r#"{"api key":"[REDACTED]"}"#;
+
+        assert!(matches!(scrub(line), Cow::Borrowed(_)));
     }
 
     #[test]
