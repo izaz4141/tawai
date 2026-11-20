@@ -335,10 +335,29 @@ fn record_start(message: &str, position: usize) -> usize {
 }
 
 fn cookie_value_end(message: &str, line_start: usize, value_start: usize) -> usize {
-    match open_quote(&message[line_start..value_start]) {
-        Some(delimiter) => quoted_value_end(message, value_start, delimiter),
-        None => record_end(message, value_start),
+    let Some(delimiter) = open_quote(&message[line_start..value_start]) else {
+        return record_end(message, value_start);
+    };
+
+    let end = quoted_value_end(message, value_start, delimiter);
+
+    if closes_serialized_string(message, end, delimiter) {
+        end
+    } else {
+        record_end(message, value_start)
     }
+}
+
+fn closes_serialized_string(message: &str, end: usize, delimiter: u8) -> bool {
+    if message.as_bytes().get(end).copied() != Some(delimiter) {
+        return true;
+    }
+
+    message.as_bytes()[end + 1..]
+        .iter()
+        .copied()
+        .find(|byte| !matches!(byte, b' ' | b'\t'))
+        .is_none_or(|byte| matches!(byte, b',' | b'}' | b']' | b'\r' | b'\n'))
 }
 
 fn open_quote(prefix: &str) -> Option<u8> {
@@ -1213,6 +1232,25 @@ mod tests {
             (
                 "user's request Cookie: sid=\"a b\"; theme=dark",
                 "user's request Cookie: [REDACTED]",
+            ),
+        ] {
+            let scrubbed = scrub(line);
+
+            assert_eq!(scrubbed.as_ref(), expected, "line {line}");
+            assert!(!scrubbed.contains("a b"), "line {line}");
+        }
+    }
+
+    #[test]
+    fn redacts_inline_cookie_values_when_a_prefix_quote_is_unbalanced() {
+        for (line, expected) in [
+            (
+                r#"Referer: "https://example.com Cookie: sid="a b"; theme=dark"#,
+                r#"Referer: "https://example.com Cookie: [REDACTED]"#,
+            ),
+            (
+                "[INFO] user's Cookie: sid=\"a b\"; it's dark",
+                "[INFO] user's Cookie: [REDACTED]",
             ),
         ] {
             let scrubbed = scrub(line);
