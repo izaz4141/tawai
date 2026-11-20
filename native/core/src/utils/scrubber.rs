@@ -471,9 +471,9 @@ fn build_rules() -> Vec<Rule> {
         push_rule(
             &mut rules,
             &format!(
-                r#"(?i)("(?:{keys})"\s*:\s*)(-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)"#
+                r#"(?i)("(?:{keys})"\s*:\s*)(-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)(?:$|([\s,\]}}]))"#
             ),
-            r#"${1}"[REDACTED]""#,
+            r#"${1}"[REDACTED]"${3}"#,
         );
         push_rule(
             &mut rules,
@@ -640,6 +640,26 @@ mod tests {
 
             assert_eq!(scrubbed.as_ref(), expected, "line {line}");
             assert!(value.is_object(), "line {line}");
+        }
+    }
+
+    #[test]
+    fn redacts_numeric_json_values_only_at_value_boundaries() {
+        for (line, expected) in [
+            (
+                r#"{"session_id":123sample}"#,
+                r#"{"session_id":[REDACTED]}"#,
+            ),
+            (
+                r#"{"token":42abc,"other":"keep"}"#,
+                r#"{"token":[REDACTED],"other":"keep"}"#,
+            ),
+            (
+                r#"{"session_id":12345"#,
+                r#"{"session_id":"[REDACTED]""#,
+            ),
+        ] {
+            assert_eq!(scrub(line).as_ref(), expected, "line {line}");
         }
     }
 
