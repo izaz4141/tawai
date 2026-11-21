@@ -28,19 +28,25 @@ fn scrub_at_depth(message: &str, depth: usize) -> Cow<'_, str> {
         redacted = Some(next);
     }
 
+    apply_rules(&mut redacted, message, quoted_value_rules());
+
     if let Some(next) = redact_cookie_headers(redacted.as_deref().unwrap_or(message)) {
         redacted = Some(next);
     }
 
-    for (rule, replacement) in rules() {
+    apply_rules(&mut redacted, message, rules());
+
+    redacted.map_or(Cow::Borrowed(message), Cow::Owned)
+}
+
+fn apply_rules(redacted: &mut Option<String>, message: &str, rules: &[Rule]) {
+    for (rule, replacement) in rules {
         let input = redacted.as_deref().unwrap_or(message);
 
         if let Cow::Owned(next) = rule.replace_all(input, *replacement) {
-            redacted = Some(next);
+            *redacted = Some(next);
         }
     }
-
-    redacted.map_or(Cow::Borrowed(message), Cow::Owned)
 }
 
 fn redact_sensitive_json_keys(text: &str) -> Option<String> {
@@ -481,12 +487,12 @@ fn scalar_value_end(message: &str, start: usize, in_query: bool) -> usize {
     message.len()
 }
 
-fn rules() -> &'static [Rule] {
+fn quoted_value_rules() -> &'static [Rule] {
     static RULES: OnceLock<Vec<Rule>> = OnceLock::new();
-    RULES.get_or_init(build_rules)
+    RULES.get_or_init(build_quoted_value_rules)
 }
 
-fn build_rules() -> Vec<Rule> {
+fn build_quoted_value_rules() -> Vec<Rule> {
     let keys = key_alternation();
     let mut rules = Vec::new();
 
@@ -501,6 +507,21 @@ fn build_rules() -> Vec<Rule> {
             &format!(r#"(?i)(["']?(?:{keys})["']?\s*[:=]\s*)'(?:[^'\\]|\\.)*'"#),
             r#"${1}'[REDACTED]'"#,
         );
+    }
+
+    rules
+}
+
+fn rules() -> &'static [Rule] {
+    static RULES: OnceLock<Vec<Rule>> = OnceLock::new();
+    RULES.get_or_init(build_rules)
+}
+
+fn build_rules() -> Vec<Rule> {
+    let keys = key_alternation();
+    let mut rules = Vec::new();
+
+    if !keys.is_empty() {
         push_rule(
             &mut rules,
             &format!(
@@ -589,7 +610,7 @@ mod tests {
 
     #[test]
     fn rule_table_is_complete() {
-        assert_eq!(rules().len(), 11);
+        assert_eq!(quoted_value_rules().len() + rules().len(), 11);
     }
 
     #[test]
@@ -687,10 +708,7 @@ mod tests {
                 r#"{"token":42abc,"other":"keep"}"#,
                 r#"{"token":[REDACTED],"other":"keep"}"#,
             ),
-            (
-                r#"{"session_id":12345"#,
-                r#"{"session_id":"[REDACTED]""#,
-            ),
+            (r#"{"session_id":12345"#, r#"{"session_id":"[REDACTED]""#),
         ] {
             assert_eq!(scrub(line).as_ref(), expected, "line {line}");
         }
@@ -1365,6 +1383,46 @@ mod tests {
             let scrubbed = scrub(line);
 
             assert_eq!(scrubbed.as_ref(), expected, "line {line}");
+            assert!(!scrubbed.contains("a b"), "line {line}");
+        }
+    }
+
+    #[test]
+    fn redacts_enclosing_sensitive_values_before_cookie_headers() {
+        for (line, expected) in [
+            (
+                r#"password="S3CR3T; Cookie: sid=abc" tail"#,
+                r#"password="[REDACTED]" tail"#,
+            ),
+            (
+                r#"password="Cookie: sid=abc" tail"#,
+                r#"password="[REDACTED]" tail"#,
+            ),
+            (
+                r#"password='S3CR3T; Cookie: sid=abc' tail"#,
+                r#"password='[REDACTED]' tail"#,
+            ),
+            (
+                r#"password='S3CR3T; Cookie: "a b"' tail"#,
+                r#"password='[REDACTED]' tail"#,
+            ),
+            (
+                r#"password="S3CR3T Cookie: sid='a b'" tail"#,
+                r#"password="[REDACTED]" tail"#,
+            ),
+            (
+                r#"Password = "S3CR3T; Cookie: sid=abc" tail"#,
+                r#"Password = "[REDACTED]" tail"#,
+            ),
+            (
+                r#""password": "S3CR3T; Cookie: sid=abc" tail"#,
+                r#""password": "[REDACTED]" tail"#,
+            ),
+        ] {
+            let scrubbed = scrub(line);
+
+            assert_eq!(scrubbed.as_ref(), expected, "line {line}");
+            assert!(!scrubbed.contains("S3CR3T"), "line {line}");
             assert!(!scrubbed.contains("a b"), "line {line}");
         }
     }
