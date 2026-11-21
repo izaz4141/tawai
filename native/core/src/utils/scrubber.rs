@@ -531,8 +531,8 @@ fn build_rules() -> Vec<Rule> {
         );
         push_rule(
             &mut rules,
-            &format!(r#"(?i)("(?:{keys})"\s*:\s*)(?:true|false|null)\b"#),
-            r#"${1}"[REDACTED]""#,
+            &format!(r#"(?i)("(?:{keys})"\s*:\s*)(?:true|false|null)(?:$|([\s,\]}}]))"#),
+            r#"${1}"[REDACTED]"${2}"#,
         );
         push_rule(
             &mut rules,
@@ -709,6 +709,21 @@ mod tests {
                 r#"{"token":[REDACTED],"other":"keep"}"#,
             ),
             (r#"{"session_id":12345"#, r#"{"session_id":"[REDACTED]""#),
+        ] {
+            assert_eq!(scrub(line).as_ref(), expected, "line {line}");
+        }
+    }
+
+    #[test]
+    fn redacts_boolean_and_null_json_values_only_at_value_boundaries() {
+        for (line, expected) in [
+            (r#"{"auth":true-sample}"#, r#"{"auth":[REDACTED]}"#),
+            (
+                r#"{"token":false-sample,"other":"keep"}"#,
+                r#"{"token":[REDACTED],"other":"keep"}"#,
+            ),
+            (r#"{"auth":null-sample}"#, r#"{"auth":[REDACTED]}"#),
+            (r#"{"auth":true"#, r#"{"auth":"[REDACTED]""#),
         ] {
             assert_eq!(scrub(line).as_ref(), expected, "line {line}");
         }
