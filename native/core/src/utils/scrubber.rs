@@ -160,14 +160,6 @@ fn redact_embedded_json(message: &str, depth: usize) -> Option<String> {
             continue;
         };
 
-        let trimmed = decoded.trim();
-
-        if !(trimmed.starts_with('{') || trimmed.starts_with('['))
-            || serde_json::from_str::<serde_json::Value>(trimmed).is_err()
-        {
-            continue;
-        }
-
         let scrubbed = scrub_at_depth(&decoded, depth + 1);
 
         if scrubbed.as_ref() == decoded.as_str() {
@@ -939,6 +931,42 @@ mod tests {
 
         assert_eq!(inner["password"].as_str(), Some("[REDACTED]"));
         assert!(!scrubbed.contains("hunter2"));
+    }
+
+    #[test]
+    fn redacts_serialized_json_after_a_plain_text_prefix() {
+        let line = r#"{"message":"request body {\"api_key\":\"sample-value\"}"}"#;
+        let scrubbed = scrub(line);
+
+        assert_eq!(
+            scrubbed.as_ref(),
+            r#"{"message":"request body {\"api_key\":\"[REDACTED]\"}"}"#,
+        );
+        assert!(!scrubbed.contains("sample-value"));
+
+        let outer: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid outer JSON");
+        assert_eq!(
+            outer["message"].as_str(),
+            Some(r#"request body {"api_key":"[REDACTED]"}"#),
+        );
+    }
+
+    #[test]
+    fn redacts_containers_after_a_plain_text_prefix() {
+        let line = r#"{"message":"request body {\"api_key\":[\"sample-value\"]}"}"#;
+        let scrubbed = scrub(line);
+
+        assert_eq!(
+            scrubbed.as_ref(),
+            r#"{"message":"request body {\"api_key\":\"[REDACTED]\"}"}"#,
+        );
+        assert!(!scrubbed.contains("sample-value"));
+
+        let outer: Value = serde_json::from_str(scrubbed.as_ref()).expect("valid outer JSON");
+        assert_eq!(
+            outer["message"].as_str(),
+            Some(r#"request body {"api_key":"[REDACTED]"}"#),
+        );
     }
 
     #[test]
