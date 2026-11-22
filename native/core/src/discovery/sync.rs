@@ -10,7 +10,7 @@ use crate::signals::library::LibrarySourceInfo;
 pub struct SyncRecsParams<'a> {
     pub pool: &'a DatabasePool,
     pub client: &'a reqwest::Client,
-    pub master_key: &'a str,
+    pub master_key: &'a [u8; 32],
     pub user_id: &'a str,
     pub included_keys: &'a str,
     /// Live app context handle: sources that derive paths from the global

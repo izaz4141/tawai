@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::utils::server::{SharedState, secure_compare};
+use tawai_core::utils::master_key::KeyBytes;
 
 const JWT_ALGORITHM: Algorithm = Algorithm::HS256;
 const JWT_EXPIRY_HOURS: u64 = 3;
@@ -32,8 +33,11 @@ pub struct JwtResponse {
     pub expires_in: u64,
 }
 
-async fn get_jwt_secret(state: &SharedState) -> Vec<u8> {
-    state.context.master_key.read().await.clone().into_bytes()
+fn get_jwt_secret(state: &SharedState) -> Result<KeyBytes, jsonwebtoken::errors::Error> {
+    state
+        .context
+        .master_key_bytes()
+        .map_err(|_| jsonwebtoken::errors::ErrorKind::InvalidKeyFormat.into())
 }
 
 fn get_current_timestamp() -> u64 {
@@ -66,11 +70,8 @@ async fn create_jwt_token(
     };
 
     let header = Header::new(JWT_ALGORITHM);
-    encode(
-        &header,
-        &claims,
-        &EncodingKey::from_secret(&get_jwt_secret(state).await),
-    )
+    let key = get_jwt_secret(state)?;
+    encode(&header, &claims, &EncodingKey::from_secret(key.as_array()))
 }
 
 pub async fn validate_jwt_token(
@@ -80,9 +81,10 @@ pub async fn validate_jwt_token(
     let mut validation = Validation::new(JWT_ALGORITHM);
     validation.validate_exp = true;
 
+    let key = get_jwt_secret(state)?;
     decode::<JwtClaims>(
         token,
-        &DecodingKey::from_secret(&get_jwt_secret(state).await),
+        &DecodingKey::from_secret(key.as_array()),
         &validation,
     )
 }

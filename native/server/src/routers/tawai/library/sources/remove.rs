@@ -12,7 +12,10 @@ pub async fn handle_remove_source(
     Path(source_id): Path<String>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
+    let mk = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
     let user = match account::get_user_by_id(db.pool(), &user_id, &mk).await {
         Ok(u) => u,
         Err(_) => return axum::http::StatusCode::UNAUTHORIZED.into_response(),

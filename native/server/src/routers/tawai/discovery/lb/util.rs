@@ -12,7 +12,9 @@ pub async fn resolve_lb_user(
     user_id: &str,
 ) -> Result<(String, String), Response> {
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
+    let mk = state
+        .master_key()
+        .map_err(|status| status.into_response())?;
 
     let user = match account::get_user_by_id(db.pool(), user_id, &mk).await {
         Ok(u) => u,

@@ -72,7 +72,7 @@ pub async fn mark_scrobbled(pool: &SqlitePool, history_id: &str) -> Result<()> {
 pub async fn get_listenbrainz_token(
     pool: &SqlitePool,
     user_id: &str,
-    master_key: &str,
+    master_key: &[u8; 32],
 ) -> Option<String> {
     let stored: Option<String> = sqlx::query_scalar::<_, String>(
         "SELECT value FROM user_settings WHERE user_id = ? AND key = 'listenbrainz_token'",

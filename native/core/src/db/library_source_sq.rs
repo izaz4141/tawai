@@ -14,13 +14,13 @@ fn parse_urls(json: &str) -> Vec<String> {
     serde_json::from_str(json).unwrap_or_default()
 }
 
-fn encrypt_urls(urls: &[String], master_key: &str) -> Vec<String> {
+fn encrypt_urls(urls: &[String], master_key: &[u8; 32]) -> Vec<String> {
     urls.iter()
         .map(|u| crate::libsources::tawai::encrypt_url(u, master_key))
         .collect()
 }
 
-fn decrypt_urls(urls: Vec<String>, master_key: &str) -> Vec<String> {
+fn decrypt_urls(urls: Vec<String>, master_key: &[u8; 32]) -> Vec<String> {
     urls.into_iter()
         .map(|u| crate::libsources::tawai::decrypt_url(&u, master_key))
         .collect()
@@ -33,7 +33,7 @@ pub async fn add_source(
     name: &str,
     source_type: &str,
     access_rule: &str,
-    master_key: &str,
+    master_key: &[u8; 32],
     explicit_id: Option<&str>,
 ) -> std::result::Result<String, crate::db::library_source::AddSourceError> {
     let urls = encrypt_urls(urls, master_key);
@@ -137,7 +137,7 @@ pub async fn remove_source(pool: &SqlitePool, source_id: &str) -> Result<bool> {
 
 pub async fn list_all_sources(
     pool: &SqlitePool,
-    master_key: &str,
+    master_key: &[u8; 32],
 ) -> Result<Vec<LibrarySourceInfo>> {
     let rows = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
         "SELECT id, source_type, urls, name, owner_id, access_rule, last_sync_at, created_at, updated_at FROM library_sources ORDER BY created_at",
@@ -178,7 +178,7 @@ pub async fn list_all_sources(
 pub async fn get_source_by_id(
     pool: &SqlitePool,
     source_id: &str,
-    master_key: &str,
+    master_key: &[u8; 32],
 ) -> Result<Option<LibrarySourceInfo>> {
     let row = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
         "SELECT id, source_type, urls, name, owner_id, access_rule, last_sync_at, created_at, updated_at FROM library_sources WHERE id = ?",
@@ -216,7 +216,7 @@ pub async fn get_source_by_id(
 pub async fn get_source_by_track_id(
     pool: &SqlitePool,
     track_id: &str,
-    master_key: &str,
+    master_key: &[u8; 32],
 ) -> Result<Option<(String, String)>> {
     let row = sqlx::query_as::<_, (String, String)>(
         "SELECT ls.source_type, ls.urls FROM tracks t JOIN library_sources ls ON t.source_id = ls.id WHERE t.id = ?",
@@ -236,7 +236,7 @@ pub async fn get_source_by_track_id(
 pub async fn get_source_info_by_track_id(
     pool: &SqlitePool,
     track_id: &str,
-    master_key: &str,
+    master_key: &[u8; 32],
 ) -> Result<Option<LibrarySourceInfo>> {
     let row = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
         "SELECT ls.id, ls.source_type, ls.urls, ls.name, ls.owner_id, ls.access_rule, ls.last_sync_at, ls.created_at, ls.updated_at FROM tracks t JOIN library_sources ls ON t.source_id = ls.id WHERE t.id = ?",
@@ -271,7 +271,7 @@ pub async fn get_source_info_by_track_id(
     ))
 }
 
-pub async fn get_urls_for_scan(pool: &SqlitePool, master_key: &str) -> Result<Vec<String>> {
+pub async fn get_urls_for_scan(pool: &SqlitePool, master_key: &[u8; 32]) -> Result<Vec<String>> {
     let rows = sqlx::query_scalar::<_, String>("SELECT urls FROM library_sources")
         .fetch_all(pool)
         .await?;
@@ -286,7 +286,7 @@ pub async fn get_source_by_url_and_owner(
     source_type: &str,
     url: &str,
     owner_id: &str,
-    master_key: &str,
+    master_key: &[u8; 32],
 ) -> Result<Option<LibrarySourceInfo>> {
     let row = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
         "SELECT id, source_type, urls, name, owner_id, access_rule, last_sync_at, created_at, updated_at FROM library_sources WHERE source_type = ? AND owner_id = ? AND EXISTS (SELECT 1 FROM json_each(library_sources.urls) WHERE json_each.value = ?)",

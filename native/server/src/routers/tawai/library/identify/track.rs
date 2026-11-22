@@ -99,7 +99,10 @@ pub async fn handle_apply_identification(
     Json(body): Json<ApplyIdentificationRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
+    let mk = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
     let cfg = state.context.cfg().await;
     let pattern = tawai_core::tools::rename::naming_pattern_from_config(cfg.as_ref());
 

@@ -150,14 +150,14 @@ pub fn is_secret_user_setting(key: &str) -> bool {
 /// stored as-is. An already encrypted value is left untouched, so writing the
 /// same value twice does not encrypt it twice. When the master key cannot be
 /// used the plaintext is stored, so the setting stays readable.
-pub fn encode_user_setting(key: &str, value: &str, master_key: &str) -> String {
-    if !is_secret_user_setting(key) || value.is_empty() {
+pub fn encode_user_setting(key_name: &str, value: &str, key: &[u8; 32]) -> String {
+    if !is_secret_user_setting(key_name) || value.is_empty() {
         return value.to_string();
     }
     if valid_encryption_format(value) {
         return value.to_string();
     }
-    encrypt(value, master_key).unwrap_or_else(|_| value.to_string())
+    encrypt(value, key).unwrap_or_else(|_| value.to_string())
 }
 
 /// Restores a per-user setting value read from storage.
@@ -165,14 +165,14 @@ pub fn encode_user_setting(key: &str, value: &str, master_key: &str) -> String {
 /// Secret values are decrypted with the master key. Values stored before
 /// encryption was introduced are still plaintext and pass through unchanged,
 /// as do values that cannot be decrypted.
-pub fn decode_user_setting(key: &str, value: &str, master_key: &str) -> String {
-    if !is_secret_user_setting(key) {
+pub fn decode_user_setting(key_name: &str, value: &str, key: &[u8; 32]) -> String {
+    if !is_secret_user_setting(key_name) {
         return value.to_string();
     }
     if !valid_encryption_format(value) {
         return value.to_string();
     }
-    decrypt(value, master_key).unwrap_or_else(|_| value.to_string())
+    decrypt(value, key).unwrap_or_else(|_| value.to_string())
 }
 
 /// The nested default document, folded from the flat manifest.
@@ -430,7 +430,7 @@ pub fn validate_schema_version(value: &Value) -> Result<(), SchemaVersionMismatc
     }
 }
 
-pub async fn load_config(path: String, master_key: String) -> Result<Arc<AppConfig>> {
+pub async fn load_config(path: String, key: Option<&[u8; 32]>) -> Result<Arc<AppConfig>> {
     let config_path = PathBuf::from(path.clone());
     if !config_path.exists() || !config_path.is_file() {
         anyhow::bail!("Config file is not valid: {}", path);
@@ -441,25 +441,27 @@ pub async fn load_config(path: String, master_key: String) -> Result<Arc<AppConf
 
     validate_schema_version(&config_val).map_err(anyhow::Error::new)?;
 
-    for path in [
-        "integrations.slskd.api_key",
-        "integrations.nadekodon.api_key",
-    ] {
-        let stored = get_path(&config_val, path)
-            .map(|v| v.as_str().unwrap_or("").to_string())
-            .unwrap_or_default();
-        if let Ok(plain) = decrypt(normalize_secret(&stored), master_key.as_str()) {
-            set_path(&mut config_val, path, Value::String(plain));
+    if let Some(key) = key {
+        for path in [
+            "integrations.slskd.api_key",
+            "integrations.nadekodon.api_key",
+        ] {
+            let stored = get_path(&config_val, path)
+                .map(|v| v.as_str().unwrap_or("").to_string())
+                .unwrap_or_default();
+            if let Ok(plain) = decrypt(normalize_secret(&stored), key) {
+                set_path(&mut config_val, path, Value::String(plain));
+            }
         }
-    }
 
-    if let Some(accounts) =
-        get_path_mut(&mut config_val, "accounts.saved").and_then(|v| v.as_array_mut())
-    {
-        for account in accounts.iter_mut() {
-            if let Some(encrypted) = account.get("api_key").and_then(|v| v.as_str()) {
-                if let Ok(plain) = decrypt(encrypted, master_key.as_str()) {
-                    account["api_key"] = Value::String(plain);
+        if let Some(accounts) =
+            get_path_mut(&mut config_val, "accounts.saved").and_then(|v| v.as_array_mut())
+        {
+            for account in accounts.iter_mut() {
+                if let Some(encrypted) = account.get("api_key").and_then(|v| v.as_str()) {
+                    if let Ok(plain) = decrypt(encrypted, key) {
+                        account["api_key"] = Value::String(plain);
+                    }
                 }
             }
         }

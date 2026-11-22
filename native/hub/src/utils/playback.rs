@@ -11,6 +11,7 @@ use crate::signals::playback::{
     UpdateNowPlayingResponse,
 };
 use crate::utils::logger;
+use crate::utils::master_key_or_log;
 
 use tawai_core::app_context::AppContext;
 use tawai_core::audio::probe::{probe_file, probe_url};
@@ -69,7 +70,14 @@ async fn probe_track(
 
     let db = context.db().await;
     let cfg = context.cfg().await;
-    let master_key = context.master_key.read().await.clone();
+    let Some(master_key) = master_key_or_log(context) else {
+        return ProbeStreamResponse {
+            id,
+            mode: None,
+            info: None,
+            error: Some("master key unavailable".to_string()),
+        };
+    };
 
     let result = resolve_playable_track(
         db.pool(),
@@ -197,7 +205,9 @@ pub async fn handle_play_track(context: Arc<AppContext>) {
         let msg = signal_pack.message;
         let db = context.db().await;
         let cfg = context.cfg().await;
-        let mk = context.master_key.read().await.clone();
+        let Some(mk) = master_key_or_log(&context) else {
+            continue;
+        };
 
         let result = resolve_playable_track(
             db.pool(),
@@ -278,8 +288,9 @@ pub async fn handle_report_playback(context: Arc<AppContext>) {
 
         match history_id {
             Ok(hid) => {
-                if msg.source != "jellyfin" {
-                    let mk = context.master_key.read().await.clone();
+                if msg.source != "jellyfin"
+                    && let Some(mk) = master_key_or_log(&context)
+                {
                     let token = history::get_listenbrainz_token(db.pool(), &msg.user_id, &mk).await;
                     if let Some(lb_token) = token {
                         if let Ok(Some(track)) =
@@ -334,18 +345,19 @@ pub async fn handle_update_now_playing(context: Arc<AppContext>) {
 
         match library::lookup_track(db.pool(), &msg.track_id).await {
             Ok(Some(track)) => {
-                let mk = context.master_key.read().await.clone();
-                let token = history::get_listenbrainz_token(db.pool(), &msg.user_id, &mk).await;
+                if let Some(mk) = master_key_or_log(&context) {
+                    let token = history::get_listenbrainz_token(db.pool(), &msg.user_id, &mk).await;
 
-                if let Some(lb_token) = token {
-                    let client = context.client().clone();
-                    spawn(async move {
-                        if let Err(e) =
-                            listenbrainz::update_now_playing(&client, &lb_token, &track).await
-                        {
-                            logger::error(&format!("update now playing failed: {}", e));
-                        }
-                    });
+                    if let Some(lb_token) = token {
+                        let client = context.client().clone();
+                        spawn(async move {
+                            if let Err(e) =
+                                listenbrainz::update_now_playing(&client, &lb_token, &track).await
+                            {
+                                logger::error(&format!("update now playing failed: {}", e));
+                            }
+                        });
+                    }
                 }
 
                 UpdateNowPlayingResponse {

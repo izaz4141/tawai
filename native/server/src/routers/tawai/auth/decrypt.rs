@@ -18,7 +18,10 @@ pub async fn handle_decrypt(
     State(state): State<SharedState>,
     Json(req): Json<DecryptRequest>,
 ) -> impl IntoResponse {
-    let master_key = state.context.master_key.read().await.clone();
+    let master_key = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
     let decrypted_key = match encryption::decrypt(&req.encrypted_key, &master_key) {
         Ok(key) => key,
         Err(e) => {

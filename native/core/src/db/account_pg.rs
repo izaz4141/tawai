@@ -6,7 +6,7 @@ use crate::db::account;
 use crate::signals::account::UserListItem;
 use crate::utils::{encryption, helper, security};
 
-pub async fn ensure_default_user(pool: &PgPool, master_key: &str) -> Result<()> {
+pub async fn ensure_default_user(pool: &PgPool, master_key: &[u8; 32]) -> Result<()> {
     let exists: bool = sqlx::query_scalar("SELECT COUNT(*) > 0 FROM users WHERE role = 'admin'")
         .fetch_one(pool)
         .await?;
@@ -106,7 +106,7 @@ pub async fn delete_user(pool: &PgPool, user_id: &str) -> Result<bool> {
 pub async fn get_user_by_username(
     pool: &PgPool,
     username: &str,
-    master_key: &str,
+    master_key: &[u8; 32],
 ) -> Result<crate::signals::User> {
     use crate::signals::User;
     let row: Option<(String, String, String, String, String, String, String, String)> = sqlx::query_as(
@@ -178,7 +178,7 @@ pub async fn get_user_id_by_api_key_hash(pool: &PgPool, hash: &str) -> Result<Op
 pub async fn get_user_by_id(
     pool: &PgPool,
     user_id: &str,
-    master_key: &str,
+    master_key: &[u8; 32],
 ) -> Result<crate::signals::User> {
     use crate::signals::User;
     let row: Option<(String, String, String, String, String, String, String, String)> = sqlx::query_as(
@@ -225,7 +225,7 @@ pub async fn get_user_by_id(
 pub async fn get_user_api_key(
     pool: &PgPool,
     user_id: &str,
-    master_key: &str,
+    master_key: &[u8; 32],
 ) -> Result<Option<String>> {
     let stored: Option<String> = sqlx::query_scalar("SELECT api_key FROM users WHERE id = $1")
         .bind(user_id)
@@ -244,7 +244,7 @@ pub async fn get_user_api_key(
 pub async fn regenerate_user_api_key(
     pool: &PgPool,
     user_id: &str,
-    master_key: &str,
+    master_key: &[u8; 32],
 ) -> Result<String> {
     let new_key = Uuid::new_v4().to_string();
     let encrypted = encryption::encrypt(&new_key, master_key)?;
@@ -277,7 +277,10 @@ pub async fn get_all_users(pool: &PgPool) -> Result<Vec<UserListItem>> {
         .collect())
 }
 
-pub async fn get_all_users_with_keys(pool: &PgPool, master_key: &str) -> Result<Vec<UserListItem>> {
+pub async fn get_all_users_with_keys(
+    pool: &PgPool,
+    master_key: &[u8; 32],
+) -> Result<Vec<UserListItem>> {
     let rows: Vec<(String, String, String, String, String)> = sqlx::query_as(
         "SELECT id, username, display_name, role, api_key FROM users ORDER BY username",
     )

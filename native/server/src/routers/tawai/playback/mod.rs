@@ -50,7 +50,7 @@ pub async fn user_can_read_track(
     pool: &DatabasePool,
     user_id: &str,
     track_id: &str,
-    master_key: &str,
+    master_key: &[u8; 32],
 ) -> TrackAccess {
     let now = Instant::now();
     let key = (user_id.to_string(), track_id.to_string());

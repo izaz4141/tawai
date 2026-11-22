@@ -11,6 +11,7 @@ use crate::signals::{
     },
 };
 use crate::utils::logger;
+use crate::utils::master_key_or_log;
 use tawai_core::app_context::AppContext;
 use tawai_core::db::account::get_user_role;
 use tawai_core::db::library_source as core_libsrc;
@@ -22,7 +23,10 @@ pub async fn handle_add_library_source(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
 
         let result = core_libsrc::add_source(
             db.pool(),
@@ -95,7 +99,10 @@ pub async fn handle_list_library_sources(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
         let role = match get_user_role(db.pool(), &msg.user_id).await {
             Ok(Some(r)) => r,
             _ => {
@@ -135,7 +142,10 @@ pub async fn handle_list_editable_sources(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
         let role = match get_user_role(db.pool(), &msg.user_id).await {
             Ok(Some(r)) => r,
             _ => {

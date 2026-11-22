@@ -6,6 +6,7 @@ pub mod fs;
 pub mod helper;
 pub mod identify;
 pub mod logger;
+pub mod master_key;
 pub mod paths;
 pub mod playback;
 pub mod redaction;

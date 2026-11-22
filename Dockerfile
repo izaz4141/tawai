@@ -28,6 +28,7 @@ FROM rust:alpine AS rust-build
 WORKDIR /app
 
 RUN apk add --no-cache \
+    build-base \
     pkgconf \
     openssl-dev \
     perl \

@@ -215,7 +215,7 @@ impl SourceParser {
         pool: &DatabasePool,
         url: &str,
         urls: &[String],
-        master_key: &str,
+        master_key: &[u8; 32],
     ) -> Result<Vec<EnumeratedTrack>> {
         match self {
             SourceParser::Local => local::enumerate_paths(url).map(path_only_tracks),
@@ -337,7 +337,7 @@ impl SourceParser {
         cfg: &AppConfig,
         user_id: &str,
         extra: Option<&str>,
-        master_key: &str,
+        master_key: &[u8; 32],
         context: Weak<AppContext>,
     ) -> Result<String> {
         match self {

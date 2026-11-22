@@ -25,7 +25,10 @@ pub async fn handle_delete_account(
     Json(payload): Json<DeleteAccountRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
+    let mk = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
 
     match delete_user(&db, &mk, &payload).await {
         Ok(response) => (StatusCode::OK, Json(response)).into_response(),

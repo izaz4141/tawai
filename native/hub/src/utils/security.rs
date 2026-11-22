@@ -10,6 +10,8 @@ use core::utils::security::validate_password;
 use rinf::{DartSignal, RustSignal};
 use tawai_core::app_context::AppContext;
 
+use crate::utils::master_key_or_log;
+
 pub async fn handle_login(context: Arc<AppContext>) {
     let receiver = Login::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
@@ -18,7 +20,16 @@ pub async fn handle_login(context: Arc<AppContext>) {
         let success =
             validate_password(&msg.rpass, &msg.ipass).unwrap_or(false) & (msg.iuser == msg.ruser);
 
-        let mk = context.master_key.read().await.clone();
+        let Some(mk) = master_key_or_log(&context) else {
+            LoginResult {
+                id: msg.id,
+                success: false,
+                user_id: String::new(),
+                username: msg.iuser,
+            }
+            .send_signal_to_dart();
+            continue;
+        };
         let db = context.db().await;
         let (user_id, username) =
             match account::get_user_by_username(db.pool(), &msg.iuser, &mk).await {

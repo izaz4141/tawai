@@ -70,7 +70,7 @@ pub fn parse_tawai_url(url: &str) -> Result<RemoteConn> {
 
 /// Encrypt the API-key segment of a `tawai://` URL for storage. Non-tawai
 /// URLs, missing keys, and `NDK:` keys pass through unchanged.
-pub fn encrypt_url(url: &str, master_key: &str) -> String {
+pub fn encrypt_url(url: &str, master_key: &[u8; 32]) -> String {
     let Some(rest) = url.strip_prefix("tawai://") else {
         return url.to_string();
     };
@@ -91,7 +91,7 @@ pub fn encrypt_url(url: &str, master_key: &str) -> String {
 
 /// Decrypt the API key of a URL persisted with `encrypt_url`. Non-tawai URLs,
 /// plaintext keys, and undecryptable keys pass through unchanged.
-pub fn decrypt_url(url: &str, master_key: &str) -> String {
+pub fn decrypt_url(url: &str, master_key: &[u8; 32]) -> String {
     if !url.starts_with("tawai://") || !url.contains("@NDK:") {
         return url.to_string();
     }
@@ -293,7 +293,7 @@ pub async fn import_into_source(
     file_bytes: &[u8],
     filename: &str,
     client: &reqwest::Client,
-    master_key: &str,
+    master_key: &[u8; 32],
     context: Weak<AppContext>,
 ) -> Result<String> {
     if !crate::libsources::is_editable(&source.source_type) {
@@ -1179,7 +1179,7 @@ pub async fn mirror_tag_write(
     tag: &AudioTag,
     clear_cover: bool,
     client: &reqwest::Client,
-    master_key: &str,
+    master_key: &[u8; 32],
 ) -> Result<()> {
     let sources = library_source::list_all_sources(pool, master_key).await?;
     let source = match sources.iter().find(|s| {
@@ -1320,7 +1320,7 @@ mod tests {
 
     #[test]
     fn encrypt_url_roundtrip() {
-        let mk = crate::utils::encryption::generate_master_key();
+        let mk = [0xABu8; 32];
         let url = "tawai://192.168.1.5:3000@secretkey?scheme=http&source_id=xyz&foo=bar";
         let enc = encrypt_url(url, &mk);
         assert!(enc.starts_with("tawai://192.168.1.5:3000@NDK:"));
@@ -1330,7 +1330,7 @@ mod tests {
 
     #[test]
     fn encrypt_url_skips_plaintext_and_non_tawai() {
-        let mk = crate::utils::encryption::generate_master_key();
+        let mk = [0xABu8; 32];
         assert_eq!(encrypt_url("/music/path", &mk), "/music/path");
         assert_eq!(
             encrypt_url("tawai://host:8080?source_id=x&scheme=http", &mk),
@@ -1342,7 +1342,7 @@ mod tests {
 
     #[test]
     fn decrypt_url_passthrough_and_legacy() {
-        let mk = crate::utils::encryption::generate_master_key();
+        let mk = [0xABu8; 32];
         assert_eq!(decrypt_url("/music/path", &mk), "/music/path");
         assert_eq!(
             decrypt_url("tawai://host:8080@plainkey?scheme=http", &mk),

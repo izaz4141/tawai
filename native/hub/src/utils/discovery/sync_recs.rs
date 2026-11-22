@@ -4,6 +4,7 @@ use tawai_core::app_context::AppContext;
 use tawai_core::discovery::sync::{SyncRecsParams, sync_recs};
 
 use crate::signals::discovery::{SyncRecsRequest, SyncRecsResponse};
+use crate::utils::master_key_or_log;
 
 use rinf::{DartSignal, RustSignal};
 
@@ -12,7 +13,10 @@ pub async fn handle_sync_recs(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
 
         let result = sync_recs(SyncRecsParams {
             pool: db.pool(),

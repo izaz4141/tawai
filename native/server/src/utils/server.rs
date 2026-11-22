@@ -8,6 +8,7 @@ use crate::utils::ratelimit::RateLimiters;
 use crate::utils::security::JwtResponse;
 
 use axum::Router;
+use axum::http::StatusCode;
 use axum_extra::extract::{
     CookieJar,
     cookie::{Cookie, SameSite},
@@ -17,6 +18,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use subtle::ConstantTimeEq;
+use tcore::utils::master_key::KeyBytes;
 use time::Duration as TimeDuration;
 
 #[derive(Debug, Clone)]
@@ -33,6 +35,15 @@ impl AppState {
             context,
             dash_generation_locks: Arc::new(DashGenerationLocks::new()),
             rate_limiters: Arc::new(RateLimiters::new()),
+        })
+    }
+
+    /// Returns a zeroized-on-drop copy of the master key, logging the reason
+    /// when it is unavailable.
+    pub fn master_key(&self) -> Result<KeyBytes, StatusCode> {
+        self.context.master_key_bytes().map_err(|e| {
+            tcore::utils::logger::error(&format!("master key unavailable: {e}"));
+            StatusCode::INTERNAL_SERVER_ERROR
         })
     }
 }

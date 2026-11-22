@@ -602,7 +602,7 @@ pub async fn delete_track(
     client: &reqwest::Client,
     user_id: &str,
     track_id: &str,
-    master_key: &str,
+    master_key: &[u8; 32],
     context: Weak<AppContext>,
 ) -> anyhow::Result<()> {
     let source = super::library_source::get_source_info_by_track_id(pool, track_id, master_key)

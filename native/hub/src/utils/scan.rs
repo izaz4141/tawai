@@ -10,6 +10,7 @@ use crate::signals::library::{
     StartPeriodicScanResponse,
 };
 use crate::utils::logger;
+use crate::utils::master_key_or_log;
 use tawai_core::app_context::AppContext;
 use tawai_core::audio::scan::run_scan;
 use tawai_core::db::{account, library_source};
@@ -33,7 +34,16 @@ pub async fn handle_scan_library(context: Arc<AppContext>) {
         *context.scan_progress.write().await = None;
 
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let Some(mk) = master_key_or_log(&context) else {
+            context.scan_running.store(false, Ordering::SeqCst);
+            ScanLibraryResponse {
+                id,
+                started: false,
+                error: Some("master key unavailable".to_string()),
+            }
+            .send_signal_to_dart();
+            continue;
+        };
         let Ok(user) = account::get_user_by_id(db.pool(), &msg.user_id, &mk).await else {
             context.scan_running.store(false, Ordering::SeqCst);
             logger::error(&format!("Cant find user with id: {}", msg.user_id));
@@ -156,7 +166,15 @@ pub async fn handle_scan_source(context: Arc<AppContext>) {
         let id = msg.id.clone();
 
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let Some(mk) = master_key_or_log(&context) else {
+            ScanSourceResponse {
+                id,
+                started: false,
+                error: Some("master key unavailable".to_string()),
+            }
+            .send_signal_to_dart();
+            continue;
+        };
         let Ok(user) = account::get_user_by_id(db.pool(), &msg.user_id, &mk).await else {
             logger::error(&format!("Cant find user with id: {}", msg.user_id));
             ScanSourceResponse {

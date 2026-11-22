@@ -152,7 +152,7 @@ pub async fn apply_identification(
     user_id: &str,
     role: &str,
     params: &ApplyIdentificationParams,
-    master_key: &str,
+    master_key: &[u8; 32],
     global_pattern: &str,
     client: &reqwest::Client,
     _context: Weak<AppContext>,
@@ -625,7 +625,7 @@ async fn mirror_apply_to_remote(
 /// - Otherwise the full destination path.
 pub async fn preview_naming(
     pool: &DatabasePool,
-    master_key: &str,
+    master_key: &[u8; 32],
     user_id: &str,
     role: Option<&str>,
     track_id: Option<&str>,

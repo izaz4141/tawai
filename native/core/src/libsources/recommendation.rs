@@ -148,7 +148,7 @@ impl RecommendationSource {
 pub async fn enumerate_paths(
     pool: &DatabasePool,
     source: &RecommendationSource,
-    master_key: &str,
+    master_key: &[u8; 32],
 ) -> Result<Vec<String>> {
     let all_sources = library_source::list_all_sources(pool, master_key).await?;
     let source_id = all_sources
@@ -211,7 +211,7 @@ pub async fn download(
     cfg: &AppConfig,
     user_id: &str,
     extra: Option<&str>,
-    master_key: &str,
+    master_key: &[u8; 32],
     context: Weak<AppContext>,
 ) -> Result<String> {
     let track = match library::lookup_track_by_file_path(pool, file_path).await? {

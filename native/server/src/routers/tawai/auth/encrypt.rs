@@ -18,7 +18,10 @@ pub async fn handle_encrypt(
     State(state): State<SharedState>,
     Json(req): Json<EncryptRequest>,
 ) -> impl IntoResponse {
-    let master_key = state.context.master_key.read().await.clone();
+    let master_key = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
     let encrypted_text = match encryption::encrypt(&req.plain_key, &master_key) {
         Ok(encrypted) => encrypted,
         Err(e) => {
@@ -29,7 +32,7 @@ pub async fn handle_encrypt(
     Json(EncryptResponse {
         id: req.id,
         encrypted_key: encrypted_text,
-        master_key,
+        master_key: String::new(),
     })
     .into_response()
 }

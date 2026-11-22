@@ -244,7 +244,7 @@ pub async fn run_scan(
     sources: &[LibrarySourceInfo],
     force: bool,
     progress: Option<tokio::sync::watch::Sender<ScanProgress>>,
-    master_key: &str,
+    master_key: &[u8; 32],
     log_tx: Option<LogSender>,
     context: Weak<AppContext>,
 ) -> ScanResult {

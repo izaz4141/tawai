@@ -85,7 +85,8 @@ jobs:
             libswscale-dev \
             libswresample-dev \
             pkg-config \
-            clang
+            clang \
+            make
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable

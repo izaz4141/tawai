@@ -70,7 +70,7 @@ async fn resolve_and_fallback(
     client: &reqwest::Client,
     track: &TrackInfo,
     cfg: Option<&AppConfig>,
-    master_key: &str,
+    master_key: &[u8; 32],
     context: &Weak<AppContext>,
 ) -> PlayTrackResult {
     let (source_type, urls_json) =
@@ -160,7 +160,7 @@ pub async fn resolve_playable_track(
     album_title: Option<&str>,
     mbid_recording: Option<&str>,
     cfg: Option<&AppConfig>,
-    master_key: &str,
+    master_key: &[u8; 32],
     context: Weak<AppContext>,
 ) -> PlayTrackResult {
     if let Some(tid) = track_id {

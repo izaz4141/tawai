@@ -38,7 +38,7 @@ pub async fn mark_scrobbled(pool: &DatabasePool, history_id: &str) -> anyhow::Re
 pub async fn get_listenbrainz_token(
     pool: &DatabasePool,
     user_id: &str,
-    master_key: &str,
+    master_key: &[u8; 32],
 ) -> Option<String> {
     match pool {
         DatabasePool::Sqlite(p) => {

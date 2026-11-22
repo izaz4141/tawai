@@ -781,40 +781,26 @@ class SettingsManager {
       final ok = await APIService.instance.regenerateApiKey();
       return ok ? (currentUser.value?.apiKey ?? '') : null;
     }
-    final configDir = await _ioService.getConfigDir();
-    final masterKeyPath = '$configDir/$masterKeyFile';
-    final masterKeyExists = await _ioService.fileExists(masterKeyPath);
-    String? existingMasterKey;
-    if (masterKeyExists) {
-      final encoded = await _ioService.readFile(masterKeyPath);
-      existingMasterKey = await d0(encoded);
-    }
     final result = await BridgeService.instance.requestNewApiKey(
-      masterKey: existingMasterKey,
       userId: userId,
     );
 
-    if (result.masterKey.isNotEmpty) {
-      final encodedKey = await x0(result.masterKey);
-      await _ioService.writeFile(masterKeyPath, encodedKey);
-      await _ioService.setPermissions(masterKeyPath, '0600');
+    if (result.decryptedApiKey.isEmpty) return null;
 
-      final user = currentUser.value;
-      if (user != null && result.decryptedApiKey.isNotEmpty) {
-        currentUser.value = User(
-          id: user.id,
-          username: user.username,
-          displayName: user.displayName,
-          passwordHash: user.passwordHash,
-          apiKey: result.decryptedApiKey,
-          role: user.role,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-        );
-      }
-      return result.decryptedApiKey;
+    final user = currentUser.value;
+    if (user != null) {
+      currentUser.value = User(
+        id: user.id,
+        username: user.username,
+        displayName: user.displayName,
+        passwordHash: user.passwordHash,
+        apiKey: result.decryptedApiKey,
+        role: user.role,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      );
     }
-    return null;
+    return result.decryptedApiKey;
   }
 
   static Future<void> saveSlskdApiKey(String plainKey) async {

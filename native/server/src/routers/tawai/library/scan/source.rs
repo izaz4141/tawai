@@ -55,7 +55,13 @@ pub async fn handle_scan_source(
     }
 
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
+    let mk = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => {
+            state.context.scan_running.store(false, Ordering::SeqCst);
+            return status.into_response();
+        }
+    };
     let Ok(user) = account::get_user_by_id(db.pool(), &user_id, &mk).await else {
         logger::error(&format!("Cant find user with id: {}", user_id));
         state.context.scan_running.store(false, Ordering::SeqCst);

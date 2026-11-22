@@ -18,6 +18,9 @@ use crate::utils::config::{
     is_version_mismatch, load_config, load_default_config, merge_into, normalize_secret,
     path_is_secret, readonly_default_config, remove_path, set_path, strip_paths,
 };
+use crate::utils::master_key::{
+    KeyBytes, MASTER_KEY_LEN, MasterKey, MasterKeyError, MasterKeySlot,
+};
 use crate::utils::{cache, encryption::encrypt, encryption::valid_encryption_format, logger};
 
 #[derive(Debug)]
@@ -70,7 +73,7 @@ pub struct AppContext {
     config: Arc<RwLock<Option<Arc<AppConfig>>>>,
     pub operation_signals: Arc<OperationSignals>,
     pub version: OnceCell<String>,
-    pub master_key: Arc<RwLock<String>>,
+    master_key: MasterKeySlot,
     pub scan_running: Arc<AtomicBool>,
     pub scan_progress: Arc<RwLock<Option<ScanProgress>>>,
 }
@@ -91,7 +94,7 @@ impl AppContext {
             config: Arc::new(RwLock::new(None)),
             operation_signals: Arc::new(OperationSignals::new()),
             version: OnceCell::new(),
-            master_key: Arc::new(RwLock::new(String::new())),
+            master_key: MasterKeySlot::new(),
             scan_running: Arc::new(AtomicBool::new(false)),
             scan_progress: Arc::new(RwLock::new(None)),
         })
@@ -116,6 +119,29 @@ impl AppContext {
 
     pub fn client(&self) -> &reqwest::Client {
         &self.client
+    }
+
+    /// Stores the process-wide master key. Only the first call succeeds.
+    pub fn set_master_key(&self, key: MasterKey) -> Result<(), MasterKeyError> {
+        self.master_key.set(key)
+    }
+
+    /// Runs a synchronous closure with a borrow of the master key.
+    pub fn with_master_key<R>(
+        &self,
+        f: impl FnOnce(&[u8; MASTER_KEY_LEN]) -> R,
+    ) -> Result<R, MasterKeyError> {
+        self.master_key.with(f)
+    }
+
+    /// Returns a zeroized-on-drop copy of the master key for use across an
+    /// `await`.
+    pub fn master_key_bytes(&self) -> Result<KeyBytes, MasterKeyError> {
+        self.master_key.bytes()
+    }
+
+    pub fn has_master_key(&self) -> bool {
+        self.master_key.is_set()
     }
 
     pub async fn db(&self) -> Arc<DatabaseManager> {
@@ -164,6 +190,7 @@ impl AppContext {
         }
 
         let mut write = self.config.write().await;
+        let key = self.master_key_bytes().ok();
         match load_config(
             current_path
                 .to_str()
@@ -172,7 +199,7 @@ impl AppContext {
                     panic!("Invalid config path character; called from:\n{bt}")
                 })
                 .to_string(),
-            self.master_key.read().await.clone(),
+            key.as_ref().map(|k| k.as_array()),
         )
         .await
         {
@@ -203,9 +230,10 @@ impl AppContext {
     /// file is missing. Returns `true` when a default config was created
     /// (first run).
     pub async fn init_config(&self, path: String) -> Result<bool> {
+        let key = self.master_key_bytes().ok();
         let (app_config, is_first_run) = match load_config(
             path.clone(),
-            self.master_key.read().await.clone(),
+            key.as_ref().map(|k| k.as_array()),
         )
         .await
         {
@@ -263,7 +291,7 @@ impl AppContext {
             return Ok(());
         };
 
-        let master_key = self.master_key.read().await.clone();
+        let master_key = self.master_key_bytes()?;
         let users = account::get_all_users_with_keys(db.pool(), &master_key).await?;
         let mut cfg = self.cfg().await.value.clone();
 
@@ -406,7 +434,7 @@ impl AppContext {
         }
 
         let mut new_settings = settings.clone();
-        let master_key = self.master_key.read().await.clone();
+        let master_key = self.master_key_bytes()?;
         for path in [
             "integrations.slskd.api_key",
             "integrations.nadekodon.api_key",
@@ -420,7 +448,7 @@ impl AppContext {
                 set_path(&mut new_settings, path, serde_json::Value::String(plain));
                 continue;
             }
-            if let Ok(encrypted) = encrypt(plain.as_str(), master_key.as_str()) {
+            if let Ok(encrypted) = encrypt(plain.as_str(), &master_key) {
                 set_path(
                     &mut new_settings,
                     path,
@@ -438,7 +466,7 @@ impl AppContext {
                     if dapi.is_empty() || valid_encryption_format(&dapi) {
                         continue;
                     }
-                    if let Ok(eapi) = encrypt(dapi.as_str(), master_key.as_str()) {
+                    if let Ok(eapi) = encrypt(dapi.as_str(), &master_key) {
                         acc["api_key"] = serde_json::Value::String(eapi);
                     }
                 }
@@ -457,17 +485,23 @@ impl AppContext {
             path.to_str()
                 .ok_or_else(|| anyhow::anyhow!("[Save Config] Invalid Config Path"))?
                 .to_string(),
-            self.master_key.read().await.clone(),
+            Some(master_key.as_array()),
         )
         .await?;
         *self.config.write().await = Some(new_config);
         Ok(())
     }
 
-    pub async fn init_database(self: &Arc<Self>, db_url: &str, master_key: &str) -> Result<()> {
+    pub async fn init_database(self: &Arc<Self>, db_url: &str) -> Result<()> {
         if self.db.get().is_some() {
             return Err(anyhow::anyhow!("Database already initialized"));
         }
+
+        if !self.has_master_key() {
+            return Err(anyhow::anyhow!("Master key is not set"));
+        }
+
+        let master_key = self.master_key_bytes()?;
 
         self.db
             .get_or_try_init(|| async {
@@ -475,12 +509,10 @@ impl AppContext {
                 let weak_ctx = Arc::downgrade(self);
                 let db = DatabaseManager::new(pool, weak_ctx).await;
 
-                account::ensure_default_user(db.pool(), master_key).await?;
+                account::ensure_default_user(db.pool(), &master_key).await?;
                 Ok::<_, anyhow::Error>(db)
             })
             .await?;
-
-        *self.master_key.write().await = master_key.to_owned();
 
         Ok(())
     }
@@ -501,7 +533,13 @@ impl AppContext {
                 tokio::time::sleep(interval).await;
 
                 let db = ctx.db().await;
-                let scan_mk = ctx.master_key.read().await.clone();
+                let scan_mk = match ctx.master_key_bytes() {
+                    Ok(key) => key,
+                    Err(e) => {
+                        logger::error(&format!("Master key unavailable; skipping scan: {e}"));
+                        continue;
+                    }
+                };
                 let sources = library_source::list_all_sources(db.pool(), &scan_mk)
                     .await
                     .unwrap_or_default();
@@ -536,7 +574,14 @@ impl AppContext {
                         }
                     });
 
-                    let mk_scan = inner_ctx.master_key.read().await.clone();
+                    let mk_scan = match inner_ctx.master_key_bytes() {
+                        Ok(key) => key,
+                        Err(e) => {
+                            logger::error(&format!("Master key unavailable; skipping scan: {e}"));
+                            inner_ctx.scan_running.store(false, Ordering::SeqCst);
+                            return;
+                        }
+                    };
                     let result = audio::scan::run_scan(
                         &pool,
                         client,
@@ -562,21 +607,20 @@ impl AppContext {
                     inner_ctx.scan_running.store(false, Ordering::SeqCst);
 
                     // Sync stale recommendation sources for all users
-                    let mk = inner_ctx.master_key.read().await.clone();
                     if let Ok(users) = account::get_all_users(pool).await {
                         for user in &users {
                             let included = user_settings::get_user_setting(
                                 pool,
                                 &user.id,
                                 "included_recommendations",
-                                &mk,
+                                &mk_scan,
                             )
                             .await
                             .unwrap_or_default();
                             let _ = sync_recs(SyncRecsParams {
                                 pool,
                                 client: &sync_client,
-                                master_key: &mk,
+                                master_key: &mk_scan,
                                 user_id: &user.id,
                                 included_keys: &included,
                                 context: Arc::downgrade(&inner_ctx),

@@ -53,7 +53,7 @@ pub fn valid_role(role: &str) -> bool {
 
 pub async fn get_user_by_id(
     db: &DatabaseManager,
-    mk: &str,
+    mk: &[u8; 32],
     user_id: &str,
 ) -> Result<GetUserByIdResponse> {
     let user = account::get_user_by_id(db.pool(), user_id, mk).await?;
@@ -69,7 +69,7 @@ pub async fn get_user_by_id(
 
 pub async fn get_user_by_username(
     db: &DatabaseManager,
-    mk: &str,
+    mk: &[u8; 32],
     username: &str,
 ) -> Result<GetUserByUsernameResponse> {
     let user = account::get_user_by_username(db.pool(), username, mk).await?;
@@ -85,7 +85,7 @@ pub async fn get_user_by_username(
 
 pub async fn list_users(
     db: &DatabaseManager,
-    mk: &str,
+    mk: &[u8; 32],
     include_api_keys: bool,
 ) -> Result<Vec<UserListItem>> {
     if include_api_keys {
@@ -97,7 +97,7 @@ pub async fn list_users(
 
 pub async fn verify_current_password(
     db: &DatabaseManager,
-    mk: &str,
+    mk: &[u8; 32],
     user_id: &str,
     password: &str,
 ) -> bool {
@@ -108,7 +108,12 @@ pub async fn verify_current_password(
     }
 }
 
-async fn is_admin(db: &DatabaseManager, mk: &str, username: &str, password: &str) -> Result<bool> {
+async fn is_admin(
+    db: &DatabaseManager,
+    mk: &[u8; 32],
+    username: &str,
+    password: &str,
+) -> Result<bool> {
     let user = account::get_user_by_username(db.pool(), username, mk).await;
     Ok(match user {
         Ok(u) => {
@@ -121,7 +126,7 @@ async fn is_admin(db: &DatabaseManager, mk: &str, username: &str, password: &str
 
 pub async fn create_user(
     db: &DatabaseManager,
-    mk: &str,
+    mk: &[u8; 32],
     req: &CreateAccountRequest,
 ) -> Result<CreateAccountResponse> {
     let username = req.username.trim();
@@ -171,7 +176,7 @@ pub async fn create_user(
 
 pub async fn delete_user(
     db: &DatabaseManager,
-    mk: &str,
+    mk: &[u8; 32],
     req: &DeleteAccountRequest,
 ) -> Result<DeleteAccountResponse> {
     if !is_admin(db, mk, &req.admin_username, &req.admin_password).await? {
@@ -207,7 +212,7 @@ pub async fn delete_user(
 
 pub async fn update_user(
     db: &DatabaseManager,
-    mk: &str,
+    mk: &[u8; 32],
     req: &UpdateAccountRequest,
 ) -> Result<UpdateAccountResponse> {
     let authorizer = account::get_user_by_id(db.pool(), &req.operator_user_id, mk)

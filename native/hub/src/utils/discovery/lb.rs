@@ -10,6 +10,7 @@ use crate::signals::discovery::{
     ValidateLBTokenRequest, ValidateLBTokenResponse,
 };
 use crate::utils::logger;
+use crate::utils::master_key_or_log;
 use tawai_core::tools::duplicates;
 
 pub async fn handle_get_lb_recommendations(context: Arc<AppContext>) {
@@ -17,7 +18,10 @@ pub async fn handle_get_lb_recommendations(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
 
         let token = history::get_listenbrainz_token(db.pool(), &msg.user_id, &mk).await;
 
