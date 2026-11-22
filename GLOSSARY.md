@@ -52,3 +52,32 @@ every field, clearing stored values for fields the user emptied. Cover is
 treated as write-if-present in replace mode unless explicitly cleared;
 read-only fields are never sent or written; release status is not read because
 no `ItemKey` exists for it.
+
+## Security
+
+**Master key**:
+32 random bytes, presented to the operator as 64 hex characters, that encrypt
+stored API keys and sign JWTs. Created once, supplied through
+`TAWAI_SERVER_MASTER_KEY`, and never sent to a client afterwards.
+_Avoid_: encryption key, root key, secret key, master password
+
+**API key**:
+A per-user credential issued by the server, stored encrypted under the master
+key, and presented by clients in `X-API-Key`.
+_Avoid_: token, access key, password
+
+**JWT**:
+A short-lived session credential signed with the master key, carried either in
+the `tawai_jwt` cookie or as the `token` query parameter on streaming endpoints.
+_Avoid_: session token, bearer, access token
+
+**Redacted value**:
+A value that serialises normally but whose `Debug` output never contains it.
+Protects against accidental logging only; the value is fully readable in memory.
+_Avoid_: secret, protected value
+
+**Protected secret**:
+A value held in memory that can only be read inside an explicit borrow scope,
+and is zeroed when freed. Stronger than a redacted value, and only possible for
+values that never leave the process.
+_Avoid_: secret, encrypted value
