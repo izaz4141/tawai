@@ -788,7 +788,7 @@ class SettingsManager {
     if (result.decryptedApiKey.isEmpty) return null;
 
     final user = currentUser.value;
-    if (user != null) {
+    if (user != null && user.id == userId) {
       currentUser.value = User(
         id: user.id,
         username: user.username,
