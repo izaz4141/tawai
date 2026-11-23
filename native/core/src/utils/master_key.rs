@@ -1,17 +1,31 @@
 use std::fmt;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::ops::Deref;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
+
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+
+use zeroize::Zeroizing;
+
+use crate::utils::tagging::{dii, oc};
 
 /// Length of a master key in bytes.
 pub const MASTER_KEY_LEN: usize = 32;
 
 /// Errors returned when a master key cannot be created or read.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MasterKeyError {
     InvalidHex,
     InvalidLength,
     NotSet,
     AlreadySet,
+    MissingDeviceId,
+    KeyFileUnreadable { path: PathBuf, reason: String },
+    KeyFileInvalid { path: PathBuf, reason: String },
+    KeyFileWrite { path: PathBuf, reason: String },
 }
 
 impl fmt::Display for MasterKeyError {
@@ -21,11 +35,117 @@ impl fmt::Display for MasterKeyError {
             Self::InvalidLength => f.write_str("master key must be 64 hex characters"),
             Self::NotSet => f.write_str("master key is not set"),
             Self::AlreadySet => f.write_str("master key is already set"),
+            Self::MissingDeviceId => f.write_str("device id is required to protect the master key"),
+            Self::KeyFileUnreadable { path, reason } => {
+                write!(
+                    f,
+                    "cannot read master key file {}: {reason}",
+                    path.display()
+                )
+            }
+            Self::KeyFileInvalid { path, reason } => {
+                write!(f, "master key file {} is invalid: {reason}", path.display())
+            }
+            Self::KeyFileWrite { path, reason } => {
+                write!(
+                    f,
+                    "cannot write master key file {}: {reason}",
+                    path.display()
+                )
+            }
         }
     }
 }
 
 impl std::error::Error for MasterKeyError {}
+
+/// Where the current master key came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeySource {
+    File,
+    Created,
+}
+
+/// Loads the master key from `path` or creates and persists a new one.
+///
+/// An existing file is never overwritten. Any read, decode or validation
+/// failure is returned as an error so the caller cannot silently replace a key
+/// that may still decrypt stored data.
+pub fn resolve(path: &Path, device_id: &str) -> Result<(MasterKey, KeySource), MasterKeyError> {
+    if device_id.trim().is_empty() {
+        return Err(MasterKeyError::MissingDeviceId);
+    }
+
+    if path.exists() {
+        let encoded = fs::read_to_string(path).map_err(|e| MasterKeyError::KeyFileUnreadable {
+            path: path.to_path_buf(),
+            reason: e.to_string(),
+        })?;
+        let encoded = encoded.trim();
+
+        if encoded.is_empty() || hex::decode(encoded).is_err() {
+            return Err(MasterKeyError::KeyFileInvalid {
+                path: path.to_path_buf(),
+                reason: "file is not valid hex".to_string(),
+            });
+        }
+
+        let hex_key = Zeroizing::new(dii(encoded, device_id).map_err(|reason| {
+            MasterKeyError::KeyFileInvalid {
+                path: path.to_path_buf(),
+                reason,
+            }
+        })?);
+
+        let key =
+            MasterKey::from_hex(hex_key.as_str()).map_err(|e| MasterKeyError::KeyFileInvalid {
+                path: path.to_path_buf(),
+                reason: e.to_string(),
+            })?;
+
+        return Ok((key, KeySource::File));
+    }
+
+    let key = MasterKey::generate();
+    let hex_key = Zeroizing::new(key.with_bytes(|bytes| hex::encode(bytes)));
+    let encoded = Zeroizing::new(oc(hex_key.as_str(), device_id).map_err(|reason| {
+        MasterKeyError::KeyFileWrite {
+            path: path.to_path_buf(),
+            reason,
+        }
+    })?);
+
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        fs::create_dir_all(parent).map_err(|e| MasterKeyError::KeyFileWrite {
+            path: path.to_path_buf(),
+            reason: e.to_string(),
+        })?;
+    }
+
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+
+    let mut file = options
+        .open(path)
+        .map_err(|e| MasterKeyError::KeyFileWrite {
+            path: path.to_path_buf(),
+            reason: e.to_string(),
+        })?;
+
+    file.write_all(encoded.as_bytes())
+        .map_err(|e| MasterKeyError::KeyFileWrite {
+            path: path.to_path_buf(),
+            reason: e.to_string(),
+        })?;
+    file.sync_all().map_err(|e| MasterKeyError::KeyFileWrite {
+        path: path.to_path_buf(),
+        reason: e.to_string(),
+    })?;
+
+    Ok((key, KeySource::Created))
+}
 
 /// A master key held in protected memory.
 ///
@@ -37,6 +157,13 @@ pub struct MasterKey {
 }
 
 impl MasterKey {
+    /// Creates a key inside protected memory.
+    pub fn generate() -> Self {
+        Self {
+            inner: secrets::SecretBox::random(),
+        }
+    }
+
     /// Decodes 64 hex characters into protected memory.
     pub fn from_hex(value: &str) -> Result<Self, MasterKeyError> {
         let value = value.trim();
@@ -47,6 +174,12 @@ impl MasterKey {
             hex::decode_to_slice(value, buf).map_err(|_| MasterKeyError::InvalidHex)
         })?;
         Ok(Self { inner })
+    }
+
+    /// Runs a synchronous closure with a borrow of the key bytes.
+    pub fn with_bytes<R>(&self, f: impl FnOnce(&[u8; MASTER_KEY_LEN]) -> R) -> R {
+        let borrowed = self.inner.borrow();
+        f(&borrowed)
     }
 }
 
@@ -230,5 +363,57 @@ mod tests {
         let borrowed = slot.with(|key| *key).expect("key is set");
         let owned = slot.bytes().expect("key is set");
         assert_eq!(borrowed, *owned.as_array());
+    }
+
+    #[test]
+    fn resolve_creates_and_reloads_key_file() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("config/master.key");
+
+        let (key, source) = resolve(&path, "test-device").expect("create key");
+        assert_eq!(source, KeySource::Created);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&path).expect("metadata").permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+
+        let stored = key.with_bytes(|bytes| hex::encode(bytes));
+        let encoded = fs::read_to_string(&path).expect("read key file");
+        assert_eq!(
+            dii(encoded.trim(), "test-device").expect("decode key file"),
+            stored
+        );
+
+        let (reloaded, source) = resolve(&path, "test-device").expect("reload key");
+        assert_eq!(source, KeySource::File);
+        assert_eq!(reloaded.with_bytes(|bytes| hex::encode(bytes)), stored);
+    }
+
+    #[test]
+    fn resolve_leaves_invalid_file_untouched() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("master.key");
+        fs::write(&path, "not-hex").expect("seed key file");
+
+        assert!(matches!(
+            resolve(&path, "test-device"),
+            Err(MasterKeyError::KeyFileInvalid { .. })
+        ));
+        assert_eq!(fs::read_to_string(&path).expect("read key file"), "not-hex");
+    }
+
+    #[test]
+    fn resolve_requires_device_id() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("master.key");
+
+        assert_eq!(
+            resolve(&path, "  ").expect_err("empty device id"),
+            MasterKeyError::MissingDeviceId
+        );
+        assert!(!path.exists());
     }
 }

@@ -24,7 +24,7 @@ async fn main() {
     spawn(utils::server::handle_api_key_generation(context.clone()));
     spawn(utils::server::handle_decrypt_request(context.clone()));
     spawn(utils::server::handle_encrypt_request(context.clone()));
-    spawn(utils::security::handle_generate_master_key());
+    spawn(utils::security::handle_generate_master_key(context.clone()));
     spawn(utils::security::handle_login(context.clone()));
 
     // Library handlers

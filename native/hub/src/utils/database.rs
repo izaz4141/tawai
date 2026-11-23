@@ -28,7 +28,7 @@ pub async fn init_database_handler(context: Arc<AppContext>) {
         };
 
         if context.has_master_key() {
-            logger::warn("master key already set; ignoring duplicate");
+            logger::debug("master key already set; ignoring duplicate");
         } else if let Err(e) = context.set_master_key(key) {
             logger::error(&format!("failed to set master key: {e}"));
         }

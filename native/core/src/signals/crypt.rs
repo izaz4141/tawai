@@ -52,19 +52,6 @@ pub struct EncryptResponse {
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
-pub struct GenerateMasterKeyRequest {
-    #[serde(default)]
-    pub id: String,
-}
-
-#[derive(Debug, Clone, Serialize, ToSchema)]
-pub struct GenerateMasterKeyResponse {
-    #[serde(default)]
-    pub id: String,
-    pub master_key: String,
-}
-
-#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct Login {
     #[serde(default)]
     pub id: String,

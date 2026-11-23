@@ -74,14 +74,21 @@ class RinfService {
     return signal.message.apiKey;
   }
 
-  Future<String?> generateMasterKey() async {
+  Future<bool> generateMasterKey({
+    required String path,
+    required String deviceId,
+  }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = GenerateMasterKeyResponse.rustSignalStream.where(
       (s) => s.message.id == id,
     );
-    GenerateMasterKeyRequest(id: id).sendSignalToRust();
+    GenerateMasterKeyRequest(
+      id: id,
+      path: path,
+      deviceId: deviceId,
+    ).sendSignalToRust();
     final signal = await stream.first;
-    return signal.message.masterKey;
+    return signal.message.success;
   }
 
   Future<({bool success, String userId, String username})> login(

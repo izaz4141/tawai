@@ -485,19 +485,6 @@ class APIService {
     return false;
   }
 
-  Future<String?> generateMasterKey() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/tawai/auth/generate-master-key'),
-        headers: _authHeaders(),
-      );
-      if (response.statusCode == 200) return response.body;
-    } catch (e) {
-      log("Error generating master key: $e", level: LogLevel.error);
-    }
-    return null;
-  }
-
   Future<String?> getCurrentVersion(String app) async {
     try {
       final response = await http.get(

@@ -7,12 +7,6 @@ use aes_gcm_siv::{
 
 const NONCE_SIZE: usize = 12;
 
-pub fn generate_master_key() -> String {
-    let mut key = [0u8; 32];
-    OsRng.fill_bytes(&mut key);
-    hex::encode(key)
-}
-
 pub fn is_valid_master_key(key: &str) -> bool {
     if key.len() != 64 {
         return false;

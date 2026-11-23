@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::Arc;
 
 extern crate tawai_core as core;
@@ -5,11 +6,12 @@ use crate::signals::crypt::{
     GenerateMasterKeyRequest, GenerateMasterKeyResponse, Login, LoginResult,
 };
 use core::db::account;
-use core::utils::encryption;
+use core::utils::master_key::{self, MasterKeyError};
 use core::utils::security::validate_password;
 use rinf::{DartSignal, RustSignal};
 use tawai_core::app_context::AppContext;
 
+use crate::utils::logger;
 use crate::utils::master_key_or_log;
 
 pub async fn handle_login(context: Arc<AppContext>) {
@@ -47,14 +49,49 @@ pub async fn handle_login(context: Arc<AppContext>) {
     }
 }
 
-pub async fn handle_generate_master_key() {
+pub async fn handle_generate_master_key(context: Arc<AppContext>) {
     let receiver = GenerateMasterKeyRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
-        let master_key = encryption::generate_master_key();
+        let msg = signal_pack.message;
+        let (success, error) = match ensure_master_key(&context, &msg.path, &msg.device_id) {
+            Ok(()) => (true, None),
+            Err(e) => {
+                logger::error(&format!("failed to prepare master key: {e}"));
+                (false, Some(e.to_string()))
+            }
+        };
         GenerateMasterKeyResponse {
-            id: signal_pack.message.id,
-            master_key,
+            id: msg.id,
+            success,
+            error,
         }
         .send_signal_to_dart();
     }
+}
+
+fn ensure_master_key(
+    context: &AppContext,
+    path: &str,
+    device_id: &str,
+) -> Result<(), MasterKeyError> {
+    if context.has_master_key() {
+        return Ok(());
+    }
+
+    let (key, source) = master_key::resolve(Path::new(path), device_id)?;
+    match context.set_master_key(key) {
+        Ok(()) | Err(MasterKeyError::AlreadySet) => {}
+        Err(e) => return Err(e),
+    }
+
+    match source {
+        master_key::KeySource::Created => {
+            logger::info(&format!("created master key at {path}"));
+        }
+        master_key::KeySource::File => {
+            logger::debug(&format!("loaded master key from {path}"));
+        }
+    }
+
+    Ok(())
 }

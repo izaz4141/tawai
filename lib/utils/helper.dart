@@ -41,11 +41,6 @@ Future<String> _getDeviceId() async {
   return deviceId;
 }
 
-Future<String> x0(String input) async {
-  final deviceId = await _getDeviceId();
-  return BridgeService.instance.createTagging(input, deviceId);
-}
-
 Future<String> d0(String input) async {
   final deviceId = await _getDeviceId();
   return BridgeService.instance.putTagging(input, deviceId);
@@ -137,16 +132,15 @@ Future<String?> getMasterKey() async {
   final ioService = IOServiceFactory.create();
   final configDir = await ioService.getConfigDir();
   final masterKeyPath = '$configDir/${SettingsManager.masterKeyFile}';
-  if (await ioService.fileExists(masterKeyPath)) {
-    final encoded = await ioService.readFile(masterKeyPath);
-    return await d0(encoded);
+  if (!await ioService.fileExists(masterKeyPath)) {
+    final created = await BridgeService.instance.generateMasterKey(
+      path: masterKeyPath,
+      deviceId: await _getDeviceId(),
+    );
+    if (!created) return null;
   }
-  final key = await BridgeService.instance.generateMasterKey();
-  if (key == null) return null;
-  final encodedKey = await x0(key);
-  await ioService.writeFile(masterKeyPath, encodedKey);
-  await ioService.setPermissions(masterKeyPath, '0600');
-  return key;
+  final encoded = await ioService.readFile(masterKeyPath);
+  return await d0(encoded);
 }
 
 String formatFileSize(int bytes) {

@@ -97,8 +97,6 @@ use security::SecurityModifier;
             tawai_core::signals::tools::FindDuplicatesResponse,
             tawai_core::signals::tools::DuplicateGroup,
             tawai_core::signals::tools::DuplicateTrackEntry,
-            tawai_core::signals::crypt::GenerateMasterKeyRequest,
-            tawai_core::signals::crypt::GenerateMasterKeyResponse,
             tawai_core::signals::crypt::EncryptRequest,
             tawai_core::signals::crypt::EncryptResponse,
             tawai_core::signals::crypt::DecryptRequest,
