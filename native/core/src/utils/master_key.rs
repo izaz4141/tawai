@@ -10,7 +10,7 @@ use std::os::unix::fs::PermissionsExt;
 use jsonwebtoken::{Header, TokenData, Validation};
 use zeroize::Zeroizing;
 
-use crate::utils::tagging::{dii, oc};
+use crate::utils::tagging::{dii_bytes, oc_bytes};
 
 /// Length of a master key in bytes.
 pub const MASTER_KEY_LEN: usize = 32;
@@ -81,14 +81,19 @@ pub fn resolve(path: &Path, device_id: &str) -> Result<(MasterKey, KeySource), M
     }
 
     let key = MasterKey::generate();
-    let encoded =
-        Zeroizing::new(
-            key.protect(device_id)
-                .map_err(|reason| MasterKeyError::KeyFileWrite {
-                    path: path.to_path_buf(),
-                    reason,
-                })?,
-        );
+    let protected = key
+        .protect(device_id)
+        .map_err(|reason| MasterKeyError::KeyFileWrite {
+            path: path.to_path_buf(),
+            reason,
+        })?;
+    let mut encoded = Zeroizing::new([0u8; MASTER_KEY_LEN * 2]);
+    hex::encode_to_slice(&protected[..], &mut encoded[..]).map_err(|e| {
+        MasterKeyError::KeyFileWrite {
+            path: path.to_path_buf(),
+            reason: e.to_string(),
+        }
+    })?;
 
     let parent = path.parent().filter(|p| !p.as_os_str().is_empty());
     if let Some(parent) = parent {
@@ -111,7 +116,7 @@ pub fn resolve(path: &Path, device_id: &str) -> Result<(MasterKey, KeySource), M
             reason: e.to_string(),
         })?;
 
-    temp.write_all(encoded.as_bytes())
+    temp.write_all(&encoded[..])
         .map_err(|e| MasterKeyError::KeyFileWrite {
             path: path.to_path_buf(),
             reason: e.to_string(),
@@ -136,30 +141,45 @@ pub fn resolve(path: &Path, device_id: &str) -> Result<(MasterKey, KeySource), M
 }
 
 fn read_key(path: &Path, device_id: &str) -> Result<MasterKey, MasterKeyError> {
-    let encoded = fs::read_to_string(path).map_err(|e| MasterKeyError::KeyFileUnreadable {
-        path: path.to_path_buf(),
-        reason: e.to_string(),
-    })?;
-    let encoded = encoded.trim();
-
-    if encoded.is_empty() || hex::decode(encoded).is_err() {
-        return Err(MasterKeyError::KeyFileInvalid {
+    let raw = Zeroizing::new(
+        fs::read(path).map_err(|e| MasterKeyError::KeyFileUnreadable {
             path: path.to_path_buf(),
-            reason: "file is not valid hex".to_string(),
-        });
-    }
+            reason: e.to_string(),
+        })?,
+    );
+    let protected = decode_stored_key(&raw).map_err(|reason| MasterKeyError::KeyFileInvalid {
+        path: path.to_path_buf(),
+        reason,
+    })?;
 
-    MasterKey::unprotect(encoded, device_id).map_err(|reason| MasterKeyError::KeyFileInvalid {
+    MasterKey::unprotect(&protected, device_id).map_err(|reason| MasterKeyError::KeyFileInvalid {
         path: path.to_path_buf(),
         reason,
     })
 }
 
+/// Decodes the 64-hex-character tagged-key format used by current and earlier
+/// releases. The writer keeps this format, so no conversion is needed.
+fn decode_stored_key(raw: &[u8]) -> Result<Zeroizing<[u8; MASTER_KEY_LEN]>, String> {
+    let encoded = std::str::from_utf8(raw)
+        .map_err(|_| "file is not valid hex".to_string())?
+        .trim();
+    if encoded.is_empty() {
+        return Err("file is not valid hex".to_string());
+    }
+
+    let mut protected = Zeroizing::new([0u8; MASTER_KEY_LEN]);
+    hex::decode_to_slice(encoded, &mut protected[..])
+        .map_err(|_| "file is not valid hex".to_string())?;
+    Ok(protected)
+}
+
 /// A master key held in protected memory.
 ///
 /// The absence of `Clone`, `Copy`, `Display`, `Serialize` and `Deserialize` is
-/// deliberate: the only way to create a key is [`MasterKey::from_hex`], and the
-/// only way to use it is through [`MasterKeySlot`] and [`KeyBytes`].
+/// deliberate: keys enter through [`MasterKey::from_hex`] or the persisted-key
+/// loader, and the only way to use one is through [`MasterKeySlot`] and
+/// [`KeyBytes`].
 pub struct MasterKey {
     inner: secrets::SecretBox<[u8; MASTER_KEY_LEN]>,
 }
@@ -189,15 +209,19 @@ impl MasterKey {
     }
 
     /// Encodes the key for the on-disk format without exposing a printable form.
-    fn protect(&self, device_id: &str) -> Result<String, String> {
+    fn protect(&self, device_id: &str) -> Result<Zeroizing<[u8; MASTER_KEY_LEN]>, String> {
         let borrowed = self.inner.borrow();
-        let hex_key = Zeroizing::new(hex::encode(&*borrowed));
-        oc(hex_key.as_str(), device_id)
+        oc_bytes(&*borrowed, device_id)
     }
 
-    fn unprotect(encoded: &str, device_id: &str) -> Result<Self, String> {
-        let hex_key = Zeroizing::new(dii(encoded, device_id)?);
-        Self::from_hex(hex_key.as_str()).map_err(|e| e.to_string())
+    fn unprotect(encoded: &[u8; MASTER_KEY_LEN], device_id: &str) -> Result<Self, String> {
+        Ok(Self::from_protected(dii_bytes(encoded, device_id)?))
+    }
+
+    fn from_protected(mut bytes: Zeroizing<[u8; MASTER_KEY_LEN]>) -> Self {
+        Self {
+            inner: secrets::SecretBox::from(&mut *bytes),
+        }
     }
 }
 
@@ -338,6 +362,7 @@ impl MasterKeySlot {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::tagging::{dii, oc};
 
     const HEX: &str = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
 
@@ -466,17 +491,56 @@ mod tests {
         assert_eq!(entries, [std::ffi::OsString::from("master.key")]);
 
         let stored: [u8; MASTER_KEY_LEN] = *key.inner.borrow();
+        let stored_hex = hex::encode(stored);
         let encoded = fs::read_to_string(&path).expect("read key file");
-        assert!(!encoded.contains(&hex::encode(stored)));
+        assert!(!encoded.contains(&stored_hex));
         assert_eq!(
             dii(encoded.trim(), "test-device").expect("decode key file"),
-            hex::encode(stored)
+            stored_hex
         );
+
+        let legacy = {
+            let hex_key = Zeroizing::new(stored_hex);
+            oc(hex_key.as_str(), "test-device").expect("encode legacy key")
+        };
+        assert_eq!(encoded, legacy);
 
         let (reloaded, source) = resolve(&path, "test-device").expect("reload key");
         assert_eq!(source, KeySource::File);
         assert_eq!(*reloaded.inner.borrow(), stored);
         assert_eq!(fs::read_to_string(&path).expect("read key file"), encoded);
+    }
+
+    #[test]
+    fn resolve_reads_legacy_hex_key_file() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("master.key");
+        let key = MasterKey::from_hex(HEX).expect("valid key");
+        let stored: [u8; MASTER_KEY_LEN] = *key.inner.borrow();
+        let legacy = {
+            let hex_key = Zeroizing::new(hex::encode(stored));
+            oc(hex_key.as_str(), "test-device").expect("encode legacy key")
+        };
+        fs::write(&path, legacy.as_bytes()).expect("seed legacy key file");
+
+        let (reloaded, source) = resolve(&path, "test-device").expect("read legacy key");
+        assert_eq!(source, KeySource::File);
+        assert_eq!(*reloaded.inner.borrow(), stored);
+    }
+
+    #[test]
+    fn byte_tagging_matches_legacy_string_tagging() {
+        let key = MasterKey::from_hex(HEX).expect("valid key");
+        let stored: [u8; MASTER_KEY_LEN] = *key.inner.borrow();
+        let legacy = {
+            let hex_key = Zeroizing::new(hex::encode(stored));
+            oc(hex_key.as_str(), "test-device").expect("encode legacy key")
+        };
+        let protected = oc_bytes(&stored, "test-device").expect("encode protected bytes");
+        assert_eq!(hex::encode(&*protected), legacy);
+
+        let decoded = dii_bytes(&protected, "test-device").expect("decode protected bytes");
+        assert_eq!(*decoded, stored);
     }
 
     #[test]
