@@ -27,10 +27,19 @@ pub async fn init_database_handler(context: Arc<AppContext>) {
             }
         };
 
-        if context.has_master_key() {
-            logger::debug("master key already set; ignoring duplicate");
-        } else if let Err(e) = context.set_master_key(key) {
-            logger::error(&format!("failed to set master key: {e}"));
+        if let Err(e) = context.set_master_key(key) {
+            logger::error(&format!(
+                "master key already set with a different value; refusing to initialize: {e}"
+            ));
+            InitDatabaseResponse {
+                id,
+                success: false,
+                error: Some(format!(
+                    "master key is already set and differs from the supplied key; initialization was not started because it would use the existing key: {e}"
+                )),
+            }
+            .send_signal_to_dart();
+            continue;
         }
 
         let context_clone = context.clone();

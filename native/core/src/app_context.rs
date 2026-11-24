@@ -119,9 +119,10 @@ impl AppContext {
         &self.client
     }
 
-    /// Stores the process-wide master key. Only the first call succeeds.
+    /// Stores the process-wide master key. Succeeds when no key is set or when
+    /// the supplied key matches the stored one; a different key is rejected.
     pub fn set_master_key(&self, key: MasterKey) -> Result<(), MasterKeyError> {
-        self.master_key.set(key)
+        self.master_key.install(key)
     }
 
     /// Returns a zeroized-on-drop copy of the master key for use across an

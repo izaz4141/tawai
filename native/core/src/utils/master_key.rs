@@ -171,6 +171,10 @@ impl MasterKey {
         Ok(Self { inner })
     }
 
+    fn matches(&self, other: &MasterKey) -> bool {
+        self.inner == other.inner
+    }
+
     /// Encodes the key for the on-disk format without exposing a printable form.
     fn protect(&self, device_id: &str) -> Result<String, String> {
         let borrowed = self.inner.borrow();
@@ -292,6 +296,19 @@ impl MasterKeySlot {
         Ok(())
     }
 
+    /// Stores the first key seen; later calls succeed only for an identical key.
+    pub fn install(&self, key: MasterKey) -> Result<(), MasterKeyError> {
+        let mut slot = self.lock();
+        match slot.as_ref() {
+            None => {
+                *slot = Some(key);
+                Ok(())
+            }
+            Some(existing) if existing.matches(&key) => Ok(()),
+            Some(_) => Err(MasterKeyError::AlreadySet),
+        }
+    }
+
     /// Returns a zeroized-on-drop copy for use across an `await`.
     pub fn bytes(&self) -> Result<KeyBytes, MasterKeyError> {
         let slot = self.lock();
@@ -375,6 +392,29 @@ mod tests {
         assert_eq!(
             slot.set(MasterKey::from_hex(HEX).expect("valid key"))
                 .expect_err("occupied"),
+            MasterKeyError::AlreadySet
+        );
+    }
+
+    #[test]
+    fn slot_install_accepts_first_and_identical_keys() {
+        let slot = MasterKeySlot::new();
+        slot.install(MasterKey::from_hex(HEX).expect("valid key"))
+            .expect("slot is empty");
+        slot.install(MasterKey::from_hex(HEX).expect("valid key"))
+            .expect("identical key");
+    }
+
+    #[test]
+    fn slot_install_rejects_a_different_key() {
+        let slot = MasterKeySlot::new();
+        slot.install(MasterKey::from_hex(HEX).expect("valid key"))
+            .expect("slot is empty");
+
+        let other = "ff".repeat(MASTER_KEY_LEN);
+        assert_eq!(
+            slot.install(MasterKey::from_hex(&other).expect("valid key"))
+                .expect_err("different key"),
             MasterKeyError::AlreadySet
         );
     }
