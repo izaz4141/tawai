@@ -1,7 +1,6 @@
 use crate::utils::server::SharedState;
 use axum::{Json, extract::State, response::IntoResponse};
 use tawai_core::signals::crypt::{EncryptRequest, EncryptResponse};
-use tawai_core::utils::encryption;
 
 #[utoipa::path(
     post,
@@ -22,7 +21,7 @@ pub async fn handle_encrypt(
         Ok(key) => key,
         Err(status) => return status.into_response(),
     };
-    let encrypted_text = match encryption::encrypt(&req.plain_key, &master_key) {
+    let encrypted_text = match master_key.encrypt(&req.plain_key) {
         Ok(encrypted) => encrypted,
         Err(e) => {
             tawai_core::utils::logger::error(&format!("Unable to encrypt text: {:#}", &e));

@@ -18,10 +18,8 @@ use crate::utils::config::{
     is_version_mismatch, load_config, load_default_config, merge_into, normalize_secret,
     path_is_secret, readonly_default_config, remove_path, set_path, strip_paths,
 };
-use crate::utils::master_key::{
-    KeyBytes, MASTER_KEY_LEN, MasterKey, MasterKeyError, MasterKeySlot,
-};
-use crate::utils::{cache, encryption::encrypt, encryption::valid_encryption_format, logger};
+use crate::utils::master_key::{KeyBytes, MasterKey, MasterKeyError, MasterKeySlot};
+use crate::utils::{cache, encryption::valid_encryption_format, logger};
 
 #[derive(Debug)]
 pub struct OperationSignals {
@@ -126,14 +124,6 @@ impl AppContext {
         self.master_key.set(key)
     }
 
-    /// Runs a synchronous closure with a borrow of the master key.
-    pub fn with_master_key<R>(
-        &self,
-        f: impl FnOnce(&[u8; MASTER_KEY_LEN]) -> R,
-    ) -> Result<R, MasterKeyError> {
-        self.master_key.with(f)
-    }
-
     /// Returns a zeroized-on-drop copy of the master key for use across an
     /// `await`.
     pub fn master_key_bytes(&self) -> Result<KeyBytes, MasterKeyError> {
@@ -199,7 +189,7 @@ impl AppContext {
                     panic!("Invalid config path character; called from:\n{bt}")
                 })
                 .to_string(),
-            key.as_ref().map(|k| k.as_array()),
+            key.as_ref(),
         )
         .await
         {
@@ -231,12 +221,7 @@ impl AppContext {
     /// (first run).
     pub async fn init_config(&self, path: String) -> Result<bool> {
         let key = self.master_key_bytes().ok();
-        let (app_config, is_first_run) = match load_config(
-            path.clone(),
-            key.as_ref().map(|k| k.as_array()),
-        )
-        .await
-        {
+        let (app_config, is_first_run) = match load_config(path.clone(), key.as_ref()).await {
             Ok(aconfig) => (aconfig, false),
             Err(e) if is_version_mismatch(&e) => {
                 // The document belongs to another schema version. Start on
@@ -448,7 +433,7 @@ impl AppContext {
                 set_path(&mut new_settings, path, serde_json::Value::String(plain));
                 continue;
             }
-            if let Ok(encrypted) = encrypt(plain.as_str(), &master_key) {
+            if let Ok(encrypted) = master_key.encrypt(plain.as_str()) {
                 set_path(
                     &mut new_settings,
                     path,
@@ -466,7 +451,7 @@ impl AppContext {
                     if dapi.is_empty() || valid_encryption_format(&dapi) {
                         continue;
                     }
-                    if let Ok(eapi) = encrypt(dapi.as_str(), &master_key) {
+                    if let Ok(eapi) = master_key.encrypt(dapi.as_str()) {
                         acc["api_key"] = serde_json::Value::String(eapi);
                     }
                 }
@@ -485,7 +470,7 @@ impl AppContext {
             path.to_str()
                 .ok_or_else(|| anyhow::anyhow!("[Save Config] Invalid Config Path"))?
                 .to_string(),
-            Some(master_key.as_array()),
+            Some(&master_key),
         )
         .await?;
         *self.config.write().await = Some(new_config);

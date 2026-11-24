@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::db::database::DatabasePool;
 use crate::utils::config::{decode_user_setting, encode_user_setting};
+use crate::utils::master_key::KeyBytes;
 
 /// Stores a per-user setting, encrypting the value first when the key holds a
 /// secret.
@@ -10,7 +11,7 @@ pub async fn set_user_setting(
     user_id: &str,
     key: &str,
     value: &str,
-    master_key: &[u8; 32],
+    master_key: &KeyBytes,
 ) -> anyhow::Result<()> {
     let stored = encode_user_setting(key, value, master_key);
     set_setting(pool, user_id, key, &stored).await
@@ -22,7 +23,7 @@ pub async fn get_user_setting(
     pool: &DatabasePool,
     user_id: &str,
     key: &str,
-    master_key: &[u8; 32],
+    master_key: &KeyBytes,
 ) -> Option<String> {
     let raw = get_setting(pool, user_id, key).await?;
     Some(decode_user_setting(key, &raw, master_key))
@@ -32,7 +33,7 @@ pub async fn get_user_setting(
 pub async fn get_all_user_settings(
     pool: &DatabasePool,
     user_id: &str,
-    master_key: &[u8; 32],
+    master_key: &KeyBytes,
 ) -> HashMap<String, String> {
     get_all_settings(pool, user_id)
         .await

@@ -6,7 +6,8 @@ use std::{
     time::UNIX_EPOCH,
 };
 
-use crate::utils::encryption::{decrypt, encrypt, valid_encryption_format};
+use crate::utils::encryption::valid_encryption_format;
+use crate::utils::master_key::KeyBytes;
 
 /// The settings schema, embedded at compile time. This file is the single
 /// source of truth for the shape, defaults, scope and capabilities of the
@@ -150,14 +151,14 @@ pub fn is_secret_user_setting(key: &str) -> bool {
 /// stored as-is. An already encrypted value is left untouched, so writing the
 /// same value twice does not encrypt it twice. When the master key cannot be
 /// used the plaintext is stored, so the setting stays readable.
-pub fn encode_user_setting(key_name: &str, value: &str, key: &[u8; 32]) -> String {
+pub fn encode_user_setting(key_name: &str, value: &str, key: &KeyBytes) -> String {
     if !is_secret_user_setting(key_name) || value.is_empty() {
         return value.to_string();
     }
     if valid_encryption_format(value) {
         return value.to_string();
     }
-    encrypt(value, key).unwrap_or_else(|_| value.to_string())
+    key.encrypt(value).unwrap_or_else(|_| value.to_string())
 }
 
 /// Restores a per-user setting value read from storage.
@@ -165,14 +166,14 @@ pub fn encode_user_setting(key_name: &str, value: &str, key: &[u8; 32]) -> Strin
 /// Secret values are decrypted with the master key. Values stored before
 /// encryption was introduced are still plaintext and pass through unchanged,
 /// as do values that cannot be decrypted.
-pub fn decode_user_setting(key_name: &str, value: &str, key: &[u8; 32]) -> String {
+pub fn decode_user_setting(key_name: &str, value: &str, key: &KeyBytes) -> String {
     if !is_secret_user_setting(key_name) {
         return value.to_string();
     }
     if !valid_encryption_format(value) {
         return value.to_string();
     }
-    decrypt(value, key).unwrap_or_else(|_| value.to_string())
+    key.decrypt(value).unwrap_or_else(|_| value.to_string())
 }
 
 /// The nested default document, folded from the flat manifest.
@@ -430,7 +431,7 @@ pub fn validate_schema_version(value: &Value) -> Result<(), SchemaVersionMismatc
     }
 }
 
-pub async fn load_config(path: String, key: Option<&[u8; 32]>) -> Result<Arc<AppConfig>> {
+pub async fn load_config(path: String, key: Option<&KeyBytes>) -> Result<Arc<AppConfig>> {
     let config_path = PathBuf::from(path.clone());
     if !config_path.exists() || !config_path.is_file() {
         anyhow::bail!("Config file is not valid: {}", path);
@@ -449,7 +450,7 @@ pub async fn load_config(path: String, key: Option<&[u8; 32]>) -> Result<Arc<App
             let stored = get_path(&config_val, path)
                 .map(|v| v.as_str().unwrap_or("").to_string())
                 .unwrap_or_default();
-            if let Ok(plain) = decrypt(normalize_secret(&stored), key) {
+            if let Ok(plain) = key.decrypt(&normalize_secret(&stored)) {
                 set_path(&mut config_val, path, Value::String(plain));
             }
         }
@@ -459,7 +460,7 @@ pub async fn load_config(path: String, key: Option<&[u8; 32]>) -> Result<Arc<App
         {
             for account in accounts.iter_mut() {
                 if let Some(encrypted) = account.get("api_key").and_then(|v| v.as_str()) {
-                    if let Ok(plain) = decrypt(encrypted, key) {
+                    if let Ok(plain) = key.decrypt(encrypted) {
                         account["api_key"] = Value::String(plain);
                     }
                 }

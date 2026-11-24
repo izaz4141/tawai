@@ -1,13 +1,13 @@
 use std::fmt;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 
+use jsonwebtoken::{Header, TokenData, Validation};
 use zeroize::Zeroizing;
 
 use crate::utils::tagging::{dii, oc};
@@ -90,30 +90,25 @@ pub fn resolve(path: &Path, device_id: &str) -> Result<(MasterKey, KeySource), M
             });
         }
 
-        let hex_key = Zeroizing::new(dii(encoded, device_id).map_err(|reason| {
+        let key = MasterKey::unprotect(encoded, device_id).map_err(|reason| {
             MasterKeyError::KeyFileInvalid {
                 path: path.to_path_buf(),
                 reason,
             }
-        })?);
-
-        let key =
-            MasterKey::from_hex(hex_key.as_str()).map_err(|e| MasterKeyError::KeyFileInvalid {
-                path: path.to_path_buf(),
-                reason: e.to_string(),
-            })?;
+        })?;
 
         return Ok((key, KeySource::File));
     }
 
     let key = MasterKey::generate();
-    let hex_key = Zeroizing::new(key.with_bytes(|bytes| hex::encode(bytes)));
-    let encoded = Zeroizing::new(oc(hex_key.as_str(), device_id).map_err(|reason| {
-        MasterKeyError::KeyFileWrite {
-            path: path.to_path_buf(),
-            reason,
-        }
-    })?);
+    let encoded =
+        Zeroizing::new(
+            key.protect(device_id)
+                .map_err(|reason| MasterKeyError::KeyFileWrite {
+                    path: path.to_path_buf(),
+                    reason,
+                })?,
+        );
 
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         fs::create_dir_all(parent).map_err(|e| MasterKeyError::KeyFileWrite {
@@ -151,7 +146,7 @@ pub fn resolve(path: &Path, device_id: &str) -> Result<(MasterKey, KeySource), M
 ///
 /// The absence of `Clone`, `Copy`, `Display`, `Serialize` and `Deserialize` is
 /// deliberate: the only way to create a key is [`MasterKey::from_hex`], and the
-/// only way to use it is through [`MasterKeySlot`].
+/// only way to use it is through [`MasterKeySlot`] and [`KeyBytes`].
 pub struct MasterKey {
     inner: secrets::SecretBox<[u8; MASTER_KEY_LEN]>,
 }
@@ -176,10 +171,16 @@ impl MasterKey {
         Ok(Self { inner })
     }
 
-    /// Runs a synchronous closure with a borrow of the key bytes.
-    pub fn with_bytes<R>(&self, f: impl FnOnce(&[u8; MASTER_KEY_LEN]) -> R) -> R {
+    /// Encodes the key for the on-disk format without exposing a printable form.
+    fn protect(&self, device_id: &str) -> Result<String, String> {
         let borrowed = self.inner.borrow();
-        f(&borrowed)
+        let hex_key = Zeroizing::new(hex::encode(&*borrowed));
+        oc(hex_key.as_str(), device_id)
+    }
+
+    fn unprotect(encoded: &str, device_id: &str) -> Result<Self, String> {
+        let hex_key = Zeroizing::new(dii(encoded, device_id)?);
+        Self::from_hex(hex_key.as_str()).map_err(|e| e.to_string())
     }
 }
 
@@ -193,7 +194,7 @@ impl fmt::Debug for MasterKey {
 ///
 /// Async code cannot hold a [`MasterKey`] borrow across an `await`, so this is
 /// the narrow exception that lets a handler use the key for the duration of a
-/// request.
+/// request. It exposes only the cryptographic operations built on the key.
 pub struct KeyBytes {
     bytes: zeroize::Zeroizing<[u8; MASTER_KEY_LEN]>,
 }
@@ -205,16 +206,45 @@ impl KeyBytes {
         }
     }
 
-    pub fn as_array(&self) -> &[u8; MASTER_KEY_LEN] {
-        &self.bytes
+    /// Encrypts a secret with the master key.
+    pub fn encrypt(&self, plaintext: &str) -> anyhow::Result<String> {
+        crate::utils::encryption::encrypt(plaintext, &self.bytes)
     }
-}
 
-impl Deref for KeyBytes {
-    type Target = [u8; MASTER_KEY_LEN];
+    /// Decrypts a secret with the master key.
+    pub fn decrypt(&self, ciphertext: &str) -> anyhow::Result<String> {
+        crate::utils::encryption::decrypt(ciphertext, &self.bytes)
+    }
 
-    fn deref(&self) -> &Self::Target {
-        &self.bytes
+    /// Signs JWT claims with the master key.
+    pub fn jwt_encode<C: serde::Serialize>(
+        &self,
+        header: &Header,
+        claims: &C,
+    ) -> Result<String, jsonwebtoken::errors::Error> {
+        jsonwebtoken::encode(
+            header,
+            claims,
+            &jsonwebtoken::EncodingKey::from_secret(self.bytes.as_slice()),
+        )
+    }
+
+    /// Verifies and decodes a JWT with the master key.
+    pub fn jwt_decode<C: serde::de::DeserializeOwned>(
+        &self,
+        token: &str,
+        validation: &Validation,
+    ) -> Result<TokenData<C>, jsonwebtoken::errors::Error> {
+        jsonwebtoken::decode(
+            token,
+            &jsonwebtoken::DecodingKey::from_secret(self.bytes.as_slice()),
+            validation,
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn for_test(bytes: [u8; MASTER_KEY_LEN]) -> Self {
+        Self::new(bytes)
     }
 }
 
@@ -262,17 +292,12 @@ impl MasterKeySlot {
         Ok(())
     }
 
-    /// Runs a synchronous closure with a borrow of the key.
-    pub fn with<R>(&self, f: impl FnOnce(&[u8; MASTER_KEY_LEN]) -> R) -> Result<R, MasterKeyError> {
+    /// Returns a zeroized-on-drop copy for use across an `await`.
+    pub fn bytes(&self) -> Result<KeyBytes, MasterKeyError> {
         let slot = self.lock();
         let key = slot.as_ref().ok_or(MasterKeyError::NotSet)?;
         let borrowed = key.inner.borrow();
-        Ok(f(&borrowed))
-    }
-
-    /// Returns a zeroized-on-drop copy for use across an `await`.
-    pub fn bytes(&self) -> Result<KeyBytes, MasterKeyError> {
-        self.with(|key| KeyBytes::new(*key))
+        Ok(KeyBytes::new(*borrowed))
     }
 
     pub fn is_set(&self) -> bool {
@@ -291,7 +316,7 @@ mod tests {
         let key = MasterKey::from_hex(HEX).expect("valid key");
         let bytes = MasterKeySlot::new();
         bytes.set(key).expect("slot is empty");
-        assert_eq!(bytes.bytes().expect("key is set").as_array()[0], 0x00);
+        assert_eq!(bytes.bytes().expect("key is set").bytes[0], 0x00);
     }
 
     #[test]
@@ -355,14 +380,15 @@ mod tests {
     }
 
     #[test]
-    fn slot_with_and_bytes_agree() {
+    fn key_bytes_encrypt_decrypt_roundtrip() {
         let slot = MasterKeySlot::new();
         slot.set(MasterKey::from_hex(HEX).expect("valid key"))
             .expect("slot is empty");
 
-        let borrowed = slot.with(|key| *key).expect("key is set");
-        let owned = slot.bytes().expect("key is set");
-        assert_eq!(borrowed, *owned.as_array());
+        let key = slot.bytes().expect("key is set");
+        let ciphertext = key.encrypt("secret").expect("encrypt");
+        assert!(!ciphertext.contains("secret"));
+        assert_eq!(key.decrypt(&ciphertext).expect("decrypt"), "secret");
     }
 
     #[test]
@@ -380,16 +406,17 @@ mod tests {
             assert_eq!(mode, 0o600);
         }
 
-        let stored = key.with_bytes(|bytes| hex::encode(bytes));
+        let stored: [u8; MASTER_KEY_LEN] = *key.inner.borrow();
         let encoded = fs::read_to_string(&path).expect("read key file");
+        assert!(!encoded.contains(&hex::encode(stored)));
         assert_eq!(
             dii(encoded.trim(), "test-device").expect("decode key file"),
-            stored
+            hex::encode(stored)
         );
 
         let (reloaded, source) = resolve(&path, "test-device").expect("reload key");
         assert_eq!(source, KeySource::File);
-        assert_eq!(reloaded.with_bytes(|bytes| hex::encode(bytes)), stored);
+        assert_eq!(*reloaded.inner.borrow(), stored);
     }
 
     #[test]

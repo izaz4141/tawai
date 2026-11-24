@@ -8,6 +8,7 @@ use crate::signals::library::TrackInfo;
 use crate::tools::duplicates;
 use crate::utils::config::AppConfig;
 use crate::utils::logger;
+use crate::utils::master_key::KeyBytes;
 
 pub struct PlayTrackResult {
     pub resolved_track_id: Option<String>,
@@ -70,7 +71,7 @@ async fn resolve_and_fallback(
     client: &reqwest::Client,
     track: &TrackInfo,
     cfg: Option<&AppConfig>,
-    master_key: &[u8; 32],
+    master_key: &KeyBytes,
     context: &Weak<AppContext>,
 ) -> PlayTrackResult {
     let (source_type, urls_json) =
@@ -160,7 +161,7 @@ pub async fn resolve_playable_track(
     album_title: Option<&str>,
     mbid_recording: Option<&str>,
     cfg: Option<&AppConfig>,
-    master_key: &[u8; 32],
+    master_key: &KeyBytes,
     context: Weak<AppContext>,
 ) -> PlayTrackResult {
     if let Some(tid) = track_id {

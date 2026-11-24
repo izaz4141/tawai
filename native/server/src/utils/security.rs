@@ -6,9 +6,7 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::extract::CookieJar;
-use jsonwebtoken::{
-    Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode,
-};
+use jsonwebtoken::{Algorithm, Header, TokenData, Validation};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -71,7 +69,7 @@ async fn create_jwt_token(
 
     let header = Header::new(JWT_ALGORITHM);
     let key = get_jwt_secret(state)?;
-    encode(&header, &claims, &EncodingKey::from_secret(key.as_array()))
+    key.jwt_encode(&header, &claims)
 }
 
 pub async fn validate_jwt_token(
@@ -82,11 +80,7 @@ pub async fn validate_jwt_token(
     validation.validate_exp = true;
 
     let key = get_jwt_secret(state)?;
-    decode::<JwtClaims>(
-        token,
-        &DecodingKey::from_secret(key.as_array()),
-        &validation,
-    )
+    key.jwt_decode::<JwtClaims>(token, &validation)
 }
 
 pub async fn create_jwt_response(

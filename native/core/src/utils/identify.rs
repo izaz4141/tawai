@@ -11,6 +11,7 @@ use crate::db::{library, library_source};
 use crate::libsources;
 use crate::signals::library::{LibrarySourceInfo, TrackInfo};
 use crate::tools::rename::{destination_for, format_naming_pattern, move_file_into_source};
+use crate::utils::master_key::KeyBytes;
 
 /// Parameters for applying a MusicBrainz identification result to a track or
 /// a standalone (download-folder) audio file.
@@ -152,7 +153,7 @@ pub async fn apply_identification(
     user_id: &str,
     role: &str,
     params: &ApplyIdentificationParams,
-    master_key: &[u8; 32],
+    master_key: &KeyBytes,
     global_pattern: &str,
     client: &reqwest::Client,
     _context: Weak<AppContext>,
@@ -625,7 +626,7 @@ async fn mirror_apply_to_remote(
 /// - Otherwise the full destination path.
 pub async fn preview_naming(
     pool: &DatabasePool,
-    master_key: &[u8; 32],
+    master_key: &KeyBytes,
     user_id: &str,
     role: Option<&str>,
     track_id: Option<&str>,

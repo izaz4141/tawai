@@ -1,6 +1,5 @@
 use tawai_core::app_context::AppContext;
 use tawai_core::db::account;
-use tawai_core::utils::encryption;
 use tawai_core::utils::master_key::MasterKey;
 use tawai_server::routers::create_router;
 use tawai_server::utils::server::{AppState, run_server};
@@ -58,7 +57,7 @@ pub async fn handle_api_key_generation(context: Arc<AppContext>) {
             .await
             .unwrap_or_else(|_| uuid::Uuid::new_v4().to_string());
 
-        let encrypted_api_key = match encryption::encrypt(&api_key, &master_key) {
+        let encrypted_api_key = match master_key.encrypt(&api_key) {
             Ok(encrypted) => encrypted,
             Err(e) => {
                 logger::error(&format!("Encryption failed: {}", e));
@@ -94,7 +93,7 @@ pub async fn handle_decrypt_request(context: Arc<AppContext>) {
             .send_signal_to_dart();
             continue;
         };
-        let decrypted_key = match encryption::decrypt(&msg.encrypted_key, &master_key) {
+        let decrypted_key = match master_key.decrypt(&msg.encrypted_key) {
             Ok(key) => key,
             Err(e) => {
                 logger::error(&format!("Decryption failed: {}", e));
@@ -122,7 +121,7 @@ pub async fn handle_encrypt_request(context: Arc<AppContext>) {
             .send_signal_to_dart();
             continue;
         };
-        let encrypted_key = match encryption::encrypt(&msg.plain_key, &master_key) {
+        let encrypted_key = match master_key.encrypt(&msg.plain_key) {
             Ok(encrypted) => encrypted,
             Err(e) => {
                 logger::error(&format!("Encryption failed: {}", e));

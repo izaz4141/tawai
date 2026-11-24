@@ -3,6 +3,7 @@ use std::sync::Weak;
 use crate::app_context::AppContext;
 use crate::db::database::DatabasePool;
 use crate::signals::library::{AlbumInfo, ArtistInfo, PlaylistInfo, TrackInfo};
+use crate::utils::master_key::KeyBytes;
 
 /// Track-level tag metadata written alongside the positional insert columns.
 /// `mbid_recording` lives here rather than as a positional argument so the
@@ -602,7 +603,7 @@ pub async fn delete_track(
     client: &reqwest::Client,
     user_id: &str,
     track_id: &str,
-    master_key: &[u8; 32],
+    master_key: &KeyBytes,
     context: Weak<AppContext>,
 ) -> anyhow::Result<()> {
     let source = super::library_source::get_source_info_by_track_id(pool, track_id, master_key)

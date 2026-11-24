@@ -3,7 +3,7 @@ use sqlx::{Row, SqlitePool};
 use uuid::Uuid;
 
 use crate::signals::playback::PlaybackRecord;
-use crate::utils::encryption;
+use crate::utils::master_key::KeyBytes;
 
 pub async fn record_playback(
     pool: &SqlitePool,
@@ -72,7 +72,7 @@ pub async fn mark_scrobbled(pool: &SqlitePool, history_id: &str) -> Result<()> {
 pub async fn get_listenbrainz_token(
     pool: &SqlitePool,
     user_id: &str,
-    master_key: &[u8; 32],
+    master_key: &KeyBytes,
 ) -> Option<String> {
     let stored: Option<String> = sqlx::query_scalar::<_, String>(
         "SELECT value FROM user_settings WHERE user_id = ? AND key = 'listenbrainz_token'",
@@ -84,7 +84,7 @@ pub async fn get_listenbrainz_token(
     .flatten()
     .filter(|v| !v.is_empty());
     match stored {
-        Some(val) if val.starts_with("NDK:") => encryption::decrypt(&val, master_key).ok(),
+        Some(val) if val.starts_with("NDK:") => master_key.decrypt(&val).ok(),
         other => other,
     }
 }

@@ -13,6 +13,7 @@ use crate::db::library::{AlbumWriteMeta, TrackTagMeta};
 use crate::libsources;
 use crate::signals::library::{LibrarySourceInfo, ScanProgress, ScanResult};
 use crate::utils::logger;
+use crate::utils::master_key::KeyBytes;
 
 fn send_progress(tx: &Option<tokio::sync::watch::Sender<ScanProgress>>, p: ScanProgress) {
     if let Some(tx) = tx {
@@ -244,7 +245,7 @@ pub async fn run_scan(
     sources: &[LibrarySourceInfo],
     force: bool,
     progress: Option<tokio::sync::watch::Sender<ScanProgress>>,
-    master_key: &[u8; 32],
+    master_key: &KeyBytes,
     log_tx: Option<LogSender>,
     context: Weak<AppContext>,
 ) -> ScanResult {

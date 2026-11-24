@@ -1,5 +1,6 @@
 use crate::db::database::DatabasePool;
 use crate::signals::playback::PlaybackRecord;
+use crate::utils::master_key::KeyBytes;
 
 pub async fn record_playback(
     pool: &DatabasePool,
@@ -38,7 +39,7 @@ pub async fn mark_scrobbled(pool: &DatabasePool, history_id: &str) -> anyhow::Re
 pub async fn get_listenbrainz_token(
     pool: &DatabasePool,
     user_id: &str,
-    master_key: &[u8; 32],
+    master_key: &KeyBytes,
 ) -> Option<String> {
     match pool {
         DatabasePool::Sqlite(p) => {

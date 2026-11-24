@@ -6,7 +6,8 @@ use crate::signals::account::{
     GetUserByIdResponse, GetUserByUsernameResponse, UpdateAccountRequest, UpdateAccountResponse,
     UserListItem,
 };
-use crate::utils::{encryption, helper, security};
+use crate::utils::master_key::KeyBytes;
+use crate::utils::{helper, security};
 
 #[derive(Debug)]
 pub enum AccountError {
@@ -53,7 +54,7 @@ pub fn valid_role(role: &str) -> bool {
 
 pub async fn get_user_by_id(
     db: &DatabaseManager,
-    mk: &[u8; 32],
+    mk: &KeyBytes,
     user_id: &str,
 ) -> Result<GetUserByIdResponse> {
     let user = account::get_user_by_id(db.pool(), user_id, mk).await?;
@@ -69,7 +70,7 @@ pub async fn get_user_by_id(
 
 pub async fn get_user_by_username(
     db: &DatabaseManager,
-    mk: &[u8; 32],
+    mk: &KeyBytes,
     username: &str,
 ) -> Result<GetUserByUsernameResponse> {
     let user = account::get_user_by_username(db.pool(), username, mk).await?;
@@ -85,7 +86,7 @@ pub async fn get_user_by_username(
 
 pub async fn list_users(
     db: &DatabaseManager,
-    mk: &[u8; 32],
+    mk: &KeyBytes,
     include_api_keys: bool,
 ) -> Result<Vec<UserListItem>> {
     if include_api_keys {
@@ -97,7 +98,7 @@ pub async fn list_users(
 
 pub async fn verify_current_password(
     db: &DatabaseManager,
-    mk: &[u8; 32],
+    mk: &KeyBytes,
     user_id: &str,
     password: &str,
 ) -> bool {
@@ -110,7 +111,7 @@ pub async fn verify_current_password(
 
 async fn is_admin(
     db: &DatabaseManager,
-    mk: &[u8; 32],
+    mk: &KeyBytes,
     username: &str,
     password: &str,
 ) -> Result<bool> {
@@ -126,7 +127,7 @@ async fn is_admin(
 
 pub async fn create_user(
     db: &DatabaseManager,
-    mk: &[u8; 32],
+    mk: &KeyBytes,
     req: &CreateAccountRequest,
 ) -> Result<CreateAccountResponse> {
     let username = req.username.trim();
@@ -146,7 +147,7 @@ pub async fn create_user(
     }
 
     let api_key = uuid::Uuid::new_v4().to_string();
-    let encrypted = encryption::encrypt(&api_key, mk).unwrap_or_else(|_| api_key.clone());
+    let encrypted = mk.encrypt(&api_key).unwrap_or_else(|_| api_key.clone());
     let api_key_hash = helper::sha256_hex(&api_key);
     let display_name = req.display_name.clone().unwrap_or_default();
     let role = sanitize_role(req.role.as_deref());
@@ -176,7 +177,7 @@ pub async fn create_user(
 
 pub async fn delete_user(
     db: &DatabaseManager,
-    mk: &[u8; 32],
+    mk: &KeyBytes,
     req: &DeleteAccountRequest,
 ) -> Result<DeleteAccountResponse> {
     if !is_admin(db, mk, &req.admin_username, &req.admin_password).await? {
@@ -212,7 +213,7 @@ pub async fn delete_user(
 
 pub async fn update_user(
     db: &DatabaseManager,
-    mk: &[u8; 32],
+    mk: &KeyBytes,
     req: &UpdateAccountRequest,
 ) -> Result<UpdateAccountResponse> {
     let authorizer = account::get_user_by_id(db.pool(), &req.operator_user_id, mk)

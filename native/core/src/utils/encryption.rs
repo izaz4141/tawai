@@ -21,7 +21,7 @@ pub fn valid_encryption_format(ciphertext: &str) -> bool {
     hex::decode(&ciphertext[4..]).is_ok()
 }
 
-pub fn encrypt(plaintext: &str, key: &[u8; 32]) -> Result<String> {
+pub(crate) fn encrypt(plaintext: &str, key: &[u8; 32]) -> Result<String> {
     let cipher = Aes256GcmSiv::new_from_slice(key).map_err(|e| anyhow!(e))?;
 
     let mut nonce_bytes = [0u8; NONCE_SIZE];
@@ -38,7 +38,7 @@ pub fn encrypt(plaintext: &str, key: &[u8; 32]) -> Result<String> {
     Ok(format!("NDK:{}", hex::encode(result)))
 }
 
-pub fn decrypt(ciphertext: &str, key: &[u8; 32]) -> Result<String> {
+pub(crate) fn decrypt(ciphertext: &str, key: &[u8; 32]) -> Result<String> {
     if !valid_encryption_format(ciphertext) {
         return Err(anyhow!("Invalid encryption format"));
     }

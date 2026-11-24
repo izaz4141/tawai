@@ -4,9 +4,10 @@ use uuid::Uuid;
 
 use crate::db::account;
 use crate::signals::account::UserListItem;
-use crate::utils::{encryption, helper, security};
+use crate::utils::master_key::KeyBytes;
+use crate::utils::{helper, security};
 
-pub async fn ensure_default_user(pool: &SqlitePool, master_key: &[u8; 32]) -> Result<()> {
+pub async fn ensure_default_user(pool: &SqlitePool, master_key: &KeyBytes) -> Result<()> {
     let exists: bool = sqlx::query_scalar("SELECT COUNT(*) > 0 FROM users WHERE role = 'admin'")
         .fetch_one(pool)
         .await?;
@@ -15,7 +16,7 @@ pub async fn ensure_default_user(pool: &SqlitePool, master_key: &[u8; 32]) -> Re
         let user_id = Uuid::new_v4().to_string();
         let hash = security::hash_password(account::DEFAULT_PASSWORD)?;
         let api_key = Uuid::new_v4().to_string();
-        let encrypted = encryption::encrypt(&api_key, master_key)?;
+        let encrypted = master_key.encrypt(&api_key)?;
         let api_key_hash = helper::sha256_hex(&api_key);
         sqlx::query(
             "INSERT INTO users (id, username, display_name, password_hash, api_key, api_key_hash, role) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -110,7 +111,7 @@ pub async fn delete_user(pool: &SqlitePool, user_id: &str) -> Result<bool> {
 pub async fn get_user_by_username(
     pool: &SqlitePool,
     username: &str,
-    master_key: &[u8; 32],
+    master_key: &KeyBytes,
 ) -> Result<crate::signals::User> {
     use crate::signals::User;
     let row: Option<(String, String, String, String, String, String, String, String)> = sqlx::query_as(
@@ -131,7 +132,7 @@ pub async fn get_user_by_username(
             updated_at,
         )) => {
             let api_key = if !api_key.is_empty() && api_key.starts_with("NDK:") {
-                encryption::decrypt(&api_key, master_key).unwrap_or(api_key)
+                master_key.decrypt(&api_key).unwrap_or(api_key)
             } else {
                 api_key
             };
@@ -177,7 +178,7 @@ pub async fn get_user_id_by_api_key_hash(pool: &SqlitePool, hash: &str) -> Resul
 pub async fn get_user_by_id(
     pool: &SqlitePool,
     user_id: &str,
-    master_key: &[u8; 32],
+    master_key: &KeyBytes,
 ) -> Result<crate::signals::User> {
     use crate::signals::User;
     let row: Option<(String, String, String, String, String, String, String, String)> = sqlx::query_as(
@@ -198,7 +199,7 @@ pub async fn get_user_by_id(
             updated_at,
         )) => {
             let api_key = if !api_key.is_empty() && api_key.starts_with("NDK:") {
-                encryption::decrypt(&api_key, master_key).unwrap_or(api_key)
+                master_key.decrypt(&api_key).unwrap_or(api_key)
             } else {
                 api_key
             };
@@ -220,7 +221,7 @@ pub async fn get_user_by_id(
 pub async fn get_user_api_key(
     pool: &SqlitePool,
     user_id: &str,
-    master_key: &[u8; 32],
+    master_key: &KeyBytes,
 ) -> Result<Option<String>> {
     let stored: Option<String> = sqlx::query_scalar("SELECT api_key FROM users WHERE id = ?")
         .bind(user_id)
@@ -228,9 +229,7 @@ pub async fn get_user_api_key(
         .await?;
     match stored {
         Some(val) if !val.is_empty() && val.starts_with("NDK:") => {
-            encryption::decrypt(&val, master_key)
-                .map(Some)
-                .or(Ok(Some(val)))
+            master_key.decrypt(&val).map(Some).or(Ok(Some(val)))
         }
         other => Ok(other),
     }
@@ -239,10 +238,10 @@ pub async fn get_user_api_key(
 pub async fn regenerate_user_api_key(
     pool: &SqlitePool,
     user_id: &str,
-    master_key: &[u8; 32],
+    master_key: &KeyBytes,
 ) -> Result<String> {
     let new_key = Uuid::new_v4().to_string();
-    let encrypted = encryption::encrypt(&new_key, master_key)?;
+    let encrypted = master_key.encrypt(&new_key)?;
     let api_key_hash = helper::sha256_hex(&new_key);
     sqlx::query(
         "UPDATE users SET api_key = ?, api_key_hash = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
@@ -274,7 +273,7 @@ pub async fn get_all_users(pool: &SqlitePool) -> Result<Vec<UserListItem>> {
 
 pub async fn get_all_users_with_keys(
     pool: &SqlitePool,
-    master_key: &[u8; 32],
+    master_key: &KeyBytes,
 ) -> Result<Vec<UserListItem>> {
     let rows: Vec<(String, String, String, String, String)> = sqlx::query_as(
         "SELECT id, username, display_name, role, api_key FROM users ORDER BY username",
@@ -288,7 +287,7 @@ pub async fn get_all_users_with_keys(
             username,
             display_name,
             role,
-            api_key: encryption::decrypt(&api_key, master_key).unwrap_or(api_key),
+            api_key: master_key.decrypt(&api_key).unwrap_or(api_key),
         })
         .collect())
 }
