@@ -1,11 +1,11 @@
 use std::fmt;
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs;
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
 #[cfg(unix)]
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::PermissionsExt;
 
 use jsonwebtoken::{Header, TokenData, Validation};
 use zeroize::Zeroizing;
@@ -77,27 +77,7 @@ pub fn resolve(path: &Path, device_id: &str) -> Result<(MasterKey, KeySource), M
     }
 
     if path.exists() {
-        let encoded = fs::read_to_string(path).map_err(|e| MasterKeyError::KeyFileUnreadable {
-            path: path.to_path_buf(),
-            reason: e.to_string(),
-        })?;
-        let encoded = encoded.trim();
-
-        if encoded.is_empty() || hex::decode(encoded).is_err() {
-            return Err(MasterKeyError::KeyFileInvalid {
-                path: path.to_path_buf(),
-                reason: "file is not valid hex".to_string(),
-            });
-        }
-
-        let key = MasterKey::unprotect(encoded, device_id).map_err(|reason| {
-            MasterKeyError::KeyFileInvalid {
-                path: path.to_path_buf(),
-                reason,
-            }
-        })?;
-
-        return Ok((key, KeySource::File));
+        return Ok((read_key(path, device_id)?, KeySource::File));
     }
 
     let key = MasterKey::generate();
@@ -110,36 +90,69 @@ pub fn resolve(path: &Path, device_id: &str) -> Result<(MasterKey, KeySource), M
                 })?,
         );
 
-    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+    let parent = path.parent().filter(|p| !p.as_os_str().is_empty());
+    if let Some(parent) = parent {
         fs::create_dir_all(parent).map_err(|e| MasterKeyError::KeyFileWrite {
             path: path.to_path_buf(),
             reason: e.to_string(),
         })?;
     }
 
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
+    let dir = parent.unwrap_or_else(|| Path::new("."));
+    let mut builder = tempfile::Builder::new();
+    builder.prefix(".master-key-");
     #[cfg(unix)]
-    options.mode(0o600);
+    builder.permissions(fs::Permissions::from_mode(0o600));
 
-    let mut file = options
-        .open(path)
+    let mut temp = builder
+        .tempfile_in(dir)
         .map_err(|e| MasterKeyError::KeyFileWrite {
             path: path.to_path_buf(),
             reason: e.to_string(),
         })?;
 
-    file.write_all(encoded.as_bytes())
+    temp.write_all(encoded.as_bytes())
         .map_err(|e| MasterKeyError::KeyFileWrite {
             path: path.to_path_buf(),
             reason: e.to_string(),
         })?;
-    file.sync_all().map_err(|e| MasterKeyError::KeyFileWrite {
+    temp.as_file()
+        .sync_all()
+        .map_err(|e| MasterKeyError::KeyFileWrite {
+            path: path.to_path_buf(),
+            reason: e.to_string(),
+        })?;
+
+    match temp.persist_noclobber(path) {
+        Ok(_) => Ok((key, KeySource::Created)),
+        Err(e) if e.error.kind() == ErrorKind::AlreadyExists => {
+            Ok((read_key(path, device_id)?, KeySource::File))
+        }
+        Err(e) => Err(MasterKeyError::KeyFileWrite {
+            path: path.to_path_buf(),
+            reason: e.error.to_string(),
+        }),
+    }
+}
+
+fn read_key(path: &Path, device_id: &str) -> Result<MasterKey, MasterKeyError> {
+    let encoded = fs::read_to_string(path).map_err(|e| MasterKeyError::KeyFileUnreadable {
         path: path.to_path_buf(),
         reason: e.to_string(),
     })?;
+    let encoded = encoded.trim();
 
-    Ok((key, KeySource::Created))
+    if encoded.is_empty() || hex::decode(encoded).is_err() {
+        return Err(MasterKeyError::KeyFileInvalid {
+            path: path.to_path_buf(),
+            reason: "file is not valid hex".to_string(),
+        });
+    }
+
+    MasterKey::unprotect(encoded, device_id).map_err(|reason| MasterKeyError::KeyFileInvalid {
+        path: path.to_path_buf(),
+        reason,
+    })
 }
 
 /// A master key held in protected memory.
@@ -446,6 +459,12 @@ mod tests {
             assert_eq!(mode, 0o600);
         }
 
+        let entries: Vec<_> = fs::read_dir(path.parent().expect("parent"))
+            .expect("read config dir")
+            .map(|entry| entry.expect("entry").file_name())
+            .collect();
+        assert_eq!(entries, [std::ffi::OsString::from("master.key")]);
+
         let stored: [u8; MASTER_KEY_LEN] = *key.inner.borrow();
         let encoded = fs::read_to_string(&path).expect("read key file");
         assert!(!encoded.contains(&hex::encode(stored)));
@@ -457,6 +476,39 @@ mod tests {
         let (reloaded, source) = resolve(&path, "test-device").expect("reload key");
         assert_eq!(source, KeySource::File);
         assert_eq!(*reloaded.inner.borrow(), stored);
+        assert_eq!(fs::read_to_string(&path).expect("read key file"), encoded);
+    }
+
+    #[test]
+    fn resolve_reuses_concurrently_created_key() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("config/master.key");
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+
+        let handles: Vec<_> = (0..2)
+            .map(|_| {
+                let path = path.clone();
+                let barrier = std::sync::Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    let (key, _) = resolve(&path, "test-device").expect("resolve");
+                    *key.inner.borrow()
+                })
+            })
+            .collect();
+
+        let keys: Vec<[u8; MASTER_KEY_LEN]> = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("thread"))
+            .collect();
+
+        assert_eq!(keys[0], keys[1]);
+
+        let entries: Vec<_> = fs::read_dir(path.parent().expect("parent"))
+            .expect("read config dir")
+            .map(|entry| entry.expect("entry").file_name())
+            .collect();
+        assert_eq!(entries, [std::ffi::OsString::from("master.key")]);
     }
 
     #[test]
