@@ -135,6 +135,11 @@ impl AppContext {
         self.master_key.is_set()
     }
 
+    /// Reports whether the installed key equals `key`.
+    pub fn master_key_matches(&self, key: &MasterKey) -> bool {
+        self.master_key.matches(key)
+    }
+
     pub async fn db(&self) -> Arc<DatabaseManager> {
         self.db
             .get()

@@ -26,6 +26,7 @@ pub enum MasterKeyError {
     KeyFileUnreadable { path: PathBuf, reason: String },
     KeyFileInvalid { path: PathBuf, reason: String },
     KeyFileWrite { path: PathBuf, reason: String },
+    KeyFileMismatch { path: PathBuf },
 }
 
 impl fmt::Display for MasterKeyError {
@@ -50,6 +51,13 @@ impl fmt::Display for MasterKeyError {
                 write!(
                     f,
                     "cannot write master key file {}: {reason}",
+                    path.display()
+                )
+            }
+            Self::KeyFileMismatch { path } => {
+                write!(
+                    f,
+                    "master key file {} does not match the installed master key",
                     path.display()
                 )
             }
@@ -138,6 +146,18 @@ pub fn resolve(path: &Path, device_id: &str) -> Result<(MasterKey, KeySource), M
             reason: e.error.to_string(),
         }),
     }
+}
+
+/// Reads the master key stored at `path` without creating or replacing it.
+///
+/// Unlike [`resolve`], a missing file is an error so callers can verify that
+/// the requested file already holds the installed key.
+pub fn read(path: &Path, device_id: &str) -> Result<MasterKey, MasterKeyError> {
+    if device_id.trim().is_empty() {
+        return Err(MasterKeyError::MissingDeviceId);
+    }
+
+    read_key(path, device_id)
 }
 
 fn read_key(path: &Path, device_id: &str) -> Result<MasterKey, MasterKeyError> {
@@ -357,6 +377,13 @@ impl MasterKeySlot {
     pub fn is_set(&self) -> bool {
         self.lock().is_some()
     }
+
+    /// Reports whether the stored key equals `key`.
+    pub fn matches(&self, key: &MasterKey) -> bool {
+        self.lock()
+            .as_ref()
+            .is_some_and(|existing| existing.matches(key))
+    }
 }
 
 #[cfg(test)]
@@ -526,6 +553,58 @@ mod tests {
         let (reloaded, source) = resolve(&path, "test-device").expect("read legacy key");
         assert_eq!(source, KeySource::File);
         assert_eq!(*reloaded.inner.borrow(), stored);
+    }
+
+    #[test]
+    fn read_loads_existing_key() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("master.key");
+        resolve(&path, "test-device").expect("create key");
+
+        let key = read(&path, "test-device").expect("read key");
+        let slot = MasterKeySlot::new();
+        slot.install(key).expect("install read key");
+
+        let (resolved, _) = resolve(&path, "test-device").expect("resolve key");
+        assert!(slot.matches(&resolved));
+    }
+
+    #[test]
+    fn read_rejects_missing_file_without_creating_it() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("master.key");
+
+        assert!(matches!(
+            read(&path, "test-device"),
+            Err(MasterKeyError::KeyFileUnreadable { .. })
+        ));
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn read_requires_device_id() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("master.key");
+
+        assert_eq!(
+            read(&path, "  ").expect_err("empty device id"),
+            MasterKeyError::MissingDeviceId
+        );
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn slot_matches_reports_equality() {
+        let slot = MasterKeySlot::new();
+        let key = MasterKey::from_hex(HEX).expect("valid key");
+        assert!(!slot.matches(&key));
+
+        slot.install(MasterKey::from_hex(HEX).expect("valid key"))
+            .expect("slot is empty");
+        assert!(slot.matches(&key));
+
+        let other = MasterKey::from_hex(&"ff".repeat(MASTER_KEY_LEN)).expect("valid key");
+        assert!(!slot.matches(&other));
     }
 
     #[test]

@@ -75,6 +75,12 @@ fn ensure_master_key(
     device_id: &str,
 ) -> Result<(), MasterKeyError> {
     if context.has_master_key() {
+        let key = master_key::read(Path::new(path), device_id)?;
+        if !context.master_key_matches(&key) {
+            return Err(MasterKeyError::KeyFileMismatch {
+                path: Path::new(path).to_path_buf(),
+            });
+        }
         return Ok(());
     }
 
