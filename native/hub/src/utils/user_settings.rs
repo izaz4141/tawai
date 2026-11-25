@@ -7,6 +7,7 @@ use crate::signals::settings::{
     GetUserSettingResponse, SetUserSettingRequest, SetUserSettingResponse,
 };
 use crate::utils::logger;
+use crate::utils::master_key_or_log;
 use tawai_core::app_context::AppContext;
 
 pub async fn handle_set_user_setting(context: Arc<AppContext>) {
@@ -14,7 +15,10 @@ pub async fn handle_set_user_setting(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
 
         let result = tawai_core::db::user_settings::set_user_setting(
             db.pool(),
@@ -50,7 +54,10 @@ pub async fn handle_get_user_setting(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
 
         let value =
             tawai_core::db::user_settings::get_user_setting(db.pool(), &msg.user_id, &msg.key, &mk)
@@ -70,7 +77,10 @@ pub async fn handle_get_all_user_settings(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
 
         let settings =
             tawai_core::db::user_settings::get_all_user_settings(db.pool(), &msg.user_id, &mk)

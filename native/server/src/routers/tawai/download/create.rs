@@ -22,7 +22,10 @@ pub async fn handle_create(
     Json(req): Json<DownloadCreateRequest>,
 ) -> impl IntoResponse {
     let cfg = state.context.cfg().await;
-    let mk = state.context.master_key.read().await.clone();
+    let mk = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
 
     let is_recommendation_direct =
         req.source_type.starts_with("recommendation:") || req.source_type == "preview";

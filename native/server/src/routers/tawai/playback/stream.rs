@@ -201,7 +201,9 @@ async fn authorize_track(
     id: &str,
 ) -> Result<TrackInfo, Response> {
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
+    let mk = state
+        .master_key()
+        .map_err(|status| status.into_response())?;
 
     let track = match library::lookup_track(db.pool(), id).await {
         Ok(Some(t)) => t,

@@ -20,6 +20,7 @@ use crate::signals::{
     },
 };
 use crate::utils::logger;
+use crate::utils::master_key_or_log;
 
 use tawai_core::app_context::AppContext;
 use tawai_core::audio;
@@ -69,7 +70,10 @@ pub async fn handle_apply_identification(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
         let cfg = context.cfg().await;
         let pattern = tawai_core::tools::rename::naming_pattern_from_config(cfg.as_ref());
 

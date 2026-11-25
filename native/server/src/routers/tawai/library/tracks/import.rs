@@ -62,7 +62,10 @@ pub async fn handle_import_track(
     }
 
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
+    let mk = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
     let Ok(user) = account::get_user_by_id(db.pool(), &user_id, &mk).await else {
         return (StatusCode::UNAUTHORIZED, "User not found").into_response();
     };

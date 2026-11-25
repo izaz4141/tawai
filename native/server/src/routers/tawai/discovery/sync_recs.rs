@@ -12,7 +12,18 @@ pub async fn handle_sync_recs(
 ) -> Json<SyncRecsResponse> {
     let ctx = state.context.clone();
     let db = ctx.db().await;
-    let mk = ctx.master_key.read().await.clone();
+    let mk = match ctx.master_key_bytes() {
+        Ok(key) => key,
+        Err(e) => {
+            tawai_core::utils::logger::error(&format!("master key unavailable: {e}"));
+            return Json(SyncRecsResponse {
+                id: payload.id,
+                success: false,
+                error: Some(e.to_string()),
+                ..Default::default()
+            });
+        }
+    };
 
     let result = sync_recs(SyncRecsParams {
         pool: db.pool(),

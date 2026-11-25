@@ -17,6 +17,7 @@ use crate::audio::scan::LogSender;
 use crate::audio::tags::AudioTag;
 use crate::db::database::DatabasePool;
 use crate::utils::config::AppConfig;
+use crate::utils::master_key::KeyBytes;
 
 #[derive(Debug, Clone)]
 pub struct ParsedTrack {
@@ -215,7 +216,7 @@ impl SourceParser {
         pool: &DatabasePool,
         url: &str,
         urls: &[String],
-        master_key: &str,
+        master_key: &KeyBytes,
     ) -> Result<Vec<EnumeratedTrack>> {
         match self {
             SourceParser::Local => local::enumerate_paths(url).map(path_only_tracks),
@@ -337,7 +338,7 @@ impl SourceParser {
         cfg: &AppConfig,
         user_id: &str,
         extra: Option<&str>,
-        master_key: &str,
+        master_key: &KeyBytes,
         context: Weak<AppContext>,
     ) -> Result<String> {
         match self {

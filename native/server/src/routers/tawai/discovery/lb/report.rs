@@ -26,7 +26,10 @@ pub async fn handle_report_playback(
     Json(payload): Json<ReportPlaybackRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
+    let mk = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
     let user = match account::get_user_by_id(db.pool(), &user_id, &mk).await {
         Ok(u) => u,
         Err(_) => {
@@ -44,7 +47,10 @@ pub async fn handle_report_playback(
     match history::record_playback(db.pool(), &user.id, &payload.track_id, &payload.source).await {
         Ok(hid) => {
             if payload.source != "jellyfin" {
-                let mk = state.context.master_key.read().await.clone();
+                let mk = match state.master_key() {
+                    Ok(key) => key,
+                    Err(status) => return status.into_response(),
+                };
                 let token = history::get_listenbrainz_token(db.pool(), &user.id, &mk).await;
                 if let Some(lb_token) = token {
                     if let Ok(Some(track)) =

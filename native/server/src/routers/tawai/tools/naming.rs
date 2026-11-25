@@ -25,7 +25,10 @@ pub async fn handle_format_naming_preview(
     };
 
     let db = state.context.db().await;
-    let master_key = state.context.master_key.read().await.clone();
+    let master_key = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
     let cfg = state.context.cfg().await;
     let global_pattern = tawai_core::tools::rename::naming_pattern_from_config(cfg.as_ref());
     // The pattern the preview actually uses: the client's override when it
@@ -63,4 +66,5 @@ pub async fn handle_format_naming_preview(
         result,
         pattern: effective_pattern,
     })
+    .into_response()
 }

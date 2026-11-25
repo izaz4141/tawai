@@ -1,5 +1,6 @@
 use aes::Aes256;
 use fpe::ff1::{FF1, FlexibleNumeralString};
+use zeroize::{Zeroize, Zeroizing};
 
 const FT: &str = "pfe";
 const PT: &str = "tawai";
@@ -42,8 +43,11 @@ const INV_RAND_1: [u8; 256] = [
     0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d,
 ];
 
-pub fn ct(i: &str, k: &[u8], n: bool) -> Result<String, String> {
-    let mut o = hex::decode(i).map_err(|e| e.to_string())?;
+fn ct_in_place(o: &mut [u8], k: &[u8], n: bool) {
+    if o.is_empty() || k.is_empty() {
+        return;
+    }
+
     let z = o.len();
     let rounds = 8;
 
@@ -68,8 +72,115 @@ pub fn ct(i: &str, k: &[u8], n: bool) -> Result<String, String> {
             }
         }
     }
+}
 
+pub fn ct(i: &str, k: &[u8], n: bool) -> Result<String, String> {
+    let mut o = hex::decode(i).map_err(|e| e.to_string())?;
+    ct_in_place(&mut o, k, n);
     Ok(hex::encode(o))
+}
+
+fn reverse_hex<const N: usize>(bytes: &mut [u8; N]) {
+    bytes.reverse();
+    for byte in bytes.iter_mut() {
+        *byte = byte.rotate_left(4);
+    }
+}
+
+fn bytes_to_nibbles(bytes: &[u8]) -> Vec<u16> {
+    let mut digits = Vec::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        digits.push(u16::from(byte >> 4));
+        digits.push(u16::from(byte & 0x0f));
+    }
+    digits
+}
+
+fn nibbles_to_bytes<const N: usize>(nibbles: &[u16], out: &mut [u8; N]) -> Result<(), String> {
+    if nibbles.len() != N * 2 {
+        return Err("invalid numeral string length".to_string());
+    }
+    for (pair, byte) in nibbles.chunks_exact(2).zip(out.iter_mut()) {
+        let high = u8::try_from(pair[0]).map_err(|_| "invalid numeral".to_string())?;
+        let low = u8::try_from(pair[1]).map_err(|_| "invalid numeral".to_string())?;
+        if high > 0x0f || low > 0x0f {
+            return Err("invalid numeral".to_string());
+        }
+        *byte = (high << 4) | low;
+    }
+    Ok(())
+}
+
+fn ff1_digits(bytes: &[u8], tweak: &[u8], key: &[u8], decrypt: bool) -> Result<Vec<u16>, String> {
+    let ff1 = FF1::<Aes256>::new(key, 16).map_err(|e| e.to_string())?;
+    let mut digits = bytes_to_nibbles(bytes);
+    let num_string = FlexibleNumeralString::from(std::mem::take(&mut digits));
+    let result = if decrypt {
+        ff1.decrypt(tweak, &num_string)
+    } else {
+        ff1.encrypt(tweak, &num_string)
+    };
+    let mut leftover: Vec<u16> = num_string.into();
+    leftover.zeroize();
+    result.map(Vec::from).map_err(|e| e.to_string())
+}
+
+pub(crate) fn oc_bytes<const N: usize>(
+    input: &[u8; N],
+    di: &str,
+) -> Result<Zeroizing<[u8; N]>, String> {
+    let tweak = tt(di);
+    let kb = dk(di);
+    let c1 = di.len() as u8;
+    let c2 = tweak.len() as u8;
+
+    let mut output = Zeroizing::new(*input);
+    for byte in output.iter_mut() {
+        *byte ^= c1;
+    }
+    reverse_hex(&mut *output);
+
+    let mut encrypted = ff1_digits(&output[..], tweak.as_bytes(), &kb, false)?;
+    let converted = nibbles_to_bytes(&encrypted, &mut *output);
+    encrypted.zeroize();
+    converted?;
+
+    reverse_hex(&mut *output);
+    for byte in output.iter_mut() {
+        *byte ^= c2;
+    }
+    ct_in_place(&mut output[..], tweak.as_bytes(), false);
+
+    Ok(output)
+}
+
+pub(crate) fn dii_bytes<const N: usize>(
+    input: &[u8; N],
+    di: &str,
+) -> Result<Zeroizing<[u8; N]>, String> {
+    let tweak = tt(di);
+    let kb = dk(di);
+    let c1 = tweak.len() as u8;
+    let c2 = di.len() as u8;
+
+    let mut output = Zeroizing::new(*input);
+    ct_in_place(&mut output[..], tweak.as_bytes(), true);
+    for byte in output.iter_mut() {
+        *byte ^= c1;
+    }
+    reverse_hex(&mut *output);
+
+    let mut decrypted = ff1_digits(&output[..], tweak.as_bytes(), &kb, true)?;
+    let converted = nibbles_to_bytes(&decrypted, &mut *output);
+    decrypted.zeroize();
+    converted?;
+
+    reverse_hex(&mut *output);
+    for byte in output.iter_mut() {
+        *byte ^= c2;
+    }
+
+    Ok(output)
 }
 
 fn dk(di: &str) -> [u8; 32] {

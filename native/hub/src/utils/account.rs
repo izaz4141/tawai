@@ -9,6 +9,7 @@ use crate::signals::account::{
     VerifyPasswordRequest, VerifyPasswordResponse,
 };
 use crate::utils::logger;
+use crate::utils::master_key_or_log;
 use tawai_core::app_context::AppContext;
 use tawai_core::utils::account as caccount;
 
@@ -17,7 +18,10 @@ pub async fn handle_get_user_by_id(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
 
         match caccount::get_user_by_id(&db, &mk, &msg.user_id).await {
             Ok(user) => {
@@ -51,7 +55,10 @@ pub async fn handle_list_users(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
 
         let core_users = caccount::list_users(&db, &mk, true)
             .await
@@ -68,7 +75,10 @@ pub async fn handle_get_user_by_username(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
 
         match caccount::get_user_by_username(&db, &mk, &msg.username).await {
             Ok(user) => {
@@ -102,7 +112,10 @@ pub async fn handle_update_account(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
 
         let req = tawai_core::signals::account::UpdateAccountRequest {
             id: msg.id.clone(),
@@ -150,7 +163,10 @@ pub async fn handle_create_account(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
 
         let req = tawai_core::signals::account::CreateAccountRequest {
             id: msg.id.clone(),
@@ -197,7 +213,10 @@ pub async fn handle_delete_account(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
 
         let req = tawai_core::signals::account::DeleteAccountRequest {
             id: msg.id.clone(),
@@ -232,7 +251,10 @@ pub async fn handle_verify_password(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
 
         let valid = caccount::verify_current_password(&db, &mk, &msg.user_id, &msg.password).await;
 

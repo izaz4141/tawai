@@ -7,6 +7,7 @@ use tawai_core::db::account::get_user_role;
 use tawai_core::utils::identify::preview_naming;
 
 use crate::signals::metadata::{FormatNamingPreviewRequest, FormatNamingPreviewResponse};
+use crate::utils::master_key_or_log;
 
 pub async fn handle_format_naming_preview(context: Arc<AppContext>) {
     let receiver = FormatNamingPreviewRequest::get_dart_signal_receiver();
@@ -27,7 +28,10 @@ pub async fn handle_format_naming_preview(context: Arc<AppContext>) {
         };
 
         let db = context.db().await;
-        let master_key = context.master_key.read().await.clone();
+        let master_key = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
         let cfg = context.cfg().await;
         let global_pattern = tawai_core::tools::rename::naming_pattern_from_config(cfg.as_ref());
         // The pattern the preview actually uses: the client's override when it

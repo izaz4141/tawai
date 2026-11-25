@@ -26,7 +26,10 @@ pub async fn handle_get_all_user_settings(
     Query(query): Query<GetAllUserSettingsRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
+    let mk = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
     let settings = user_settings::get_all_user_settings(db.pool(), &user_id, &mk).await;
     Json(GetAllUserSettingsResponse {
         id: query.id,
@@ -54,7 +57,10 @@ pub async fn handle_get_user_setting(
     Path(key): Path<String>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
+    let mk = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
     match user_settings::get_user_setting(db.pool(), &user_id, &key, &mk).await {
         Some(value) => Json(GetUserSettingResponse {
             id: String::new(),
@@ -92,7 +98,10 @@ pub async fn handle_set_user_setting(
     Json(payload): Json<SetUserSettingRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
+    let mk = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
     let set_key = if payload.key.is_empty() {
         key
     } else {

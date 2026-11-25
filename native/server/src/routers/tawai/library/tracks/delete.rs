@@ -31,7 +31,10 @@ pub async fn handle_delete_track(
 ) -> impl IntoResponse {
     let db = state.context.db().await;
     let client = state.context.client().clone();
-    let mk = state.context.master_key.read().await.clone();
+    let mk = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
     match library::delete_track(
         db.pool(),
         &client,

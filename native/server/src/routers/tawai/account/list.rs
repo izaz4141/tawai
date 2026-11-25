@@ -19,7 +19,10 @@ pub async fn handle_list_users(
     Extension(_username): Extension<String>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
+    let mk = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
 
     let users = list_users(&db, &mk, false).await.unwrap_or_default();
 

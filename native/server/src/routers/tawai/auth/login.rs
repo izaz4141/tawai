@@ -45,7 +45,10 @@ pub async fn handle_login(
     // 1. Try existing JWT
     if let Ok(claims) = validate_jwt_request(&state, &jar, &headers).await {
         let db = state.context.db().await;
-        let mk = state.context.master_key.read().await.clone();
+        let mk = match state.master_key() {
+            Ok(key) => key,
+            Err(status) => return status.into_response(),
+        };
         match tawai_core::db::account::get_user_by_id(db.pool(), &claims.sub, &mk).await {
             Ok(user) => {
                 authorized = true;
@@ -64,7 +67,10 @@ pub async fn handle_login(
     // 2. Fall back to Basic auth against DB users table
     if !authorized {
         let db = state.context.db().await;
-        let mk = state.context.master_key.read().await.clone();
+        let mk = match state.master_key() {
+            Ok(key) => key,
+            Err(status) => return status.into_response(),
+        };
         match tawai_core::db::account::get_user_by_username(db.pool(), supplied_username, &mk).await
         {
             Ok(user) => match security::validate_password(&user.password_hash, supplied_password) {

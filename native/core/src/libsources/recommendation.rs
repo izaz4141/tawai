@@ -21,6 +21,7 @@ use crate::tools::duplicates;
 use crate::tools::rename::dest_from_root;
 use crate::utils::config::AppConfig;
 use crate::utils::logger;
+use crate::utils::master_key::KeyBytes;
 
 const MAX_TRACKS: usize = 25;
 
@@ -148,7 +149,7 @@ impl RecommendationSource {
 pub async fn enumerate_paths(
     pool: &DatabasePool,
     source: &RecommendationSource,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> Result<Vec<String>> {
     let all_sources = library_source::list_all_sources(pool, master_key).await?;
     let source_id = all_sources
@@ -211,7 +212,7 @@ pub async fn download(
     cfg: &AppConfig,
     user_id: &str,
     extra: Option<&str>,
-    master_key: &str,
+    master_key: &KeyBytes,
     context: Weak<AppContext>,
 ) -> Result<String> {
     let track = match library::lookup_track_by_file_path(pool, file_path).await? {

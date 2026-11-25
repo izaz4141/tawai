@@ -45,11 +45,14 @@ class BridgeService {
     );
   }
 
-  Future<String?> generateMasterKey() async {
-    if (_isRemote) {
-      return APIService.instance.generateMasterKey();
-    }
-    return RinfService.instance.generateMasterKey();
+  Future<bool> generateMasterKey({
+    required String path,
+    required String deviceId,
+  }) {
+    return RinfService.instance.generateMasterKey(
+      path: path,
+      deviceId: deviceId,
+    );
   }
 
   Future<({bool success, String userId, String username})> login(

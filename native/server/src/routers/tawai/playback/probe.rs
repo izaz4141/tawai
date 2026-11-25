@@ -66,7 +66,10 @@ pub async fn handle_probe_stream(
 
     let db = state.context.db().await;
     let cfg = state.context.cfg().await;
-    let master_key = state.context.master_key.read().await.clone();
+    let master_key = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
 
     let result = resolve_playable_track(
         db.pool(),

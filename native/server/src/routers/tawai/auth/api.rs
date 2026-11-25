@@ -20,7 +20,16 @@ pub async fn handle_generate_api(
     Query(query): Query<GenerateApiKeyRequest>,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
+    let mk = match state.master_key() {
+        Ok(key) => key,
+        Err(_) => {
+            return Json(ApiKeyResponse {
+                id: query.id,
+                api_key: String::new(),
+            })
+            .into_response();
+        }
+    };
     let new_key = tawai_core::db::account::regenerate_user_api_key(db.pool(), &user_id, &mk)
         .await
         .unwrap_or_default();

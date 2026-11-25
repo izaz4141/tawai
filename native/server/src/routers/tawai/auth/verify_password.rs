@@ -24,11 +24,14 @@ pub async fn handle_verify_password(
     headers: HeaderMap,
 ) -> impl IntoResponse {
     let db = state.context.db().await;
-    let mk = state.context.master_key.read().await.clone();
+    let mk = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
 
     let password = match headers.get("X-Password").and_then(|v| v.to_str().ok()) {
         Some(p) => p,
-        None => return StatusCode::UNAUTHORIZED,
+        None => return StatusCode::UNAUTHORIZED.into_response(),
     };
 
     let valid = match account::get_user_by_id(db.pool(), &user_id, &mk).await {
@@ -37,8 +40,8 @@ pub async fn handle_verify_password(
     };
 
     if valid {
-        StatusCode::OK
+        StatusCode::OK.into_response()
     } else {
-        StatusCode::UNAUTHORIZED
+        StatusCode::UNAUTHORIZED.into_response()
     }
 }

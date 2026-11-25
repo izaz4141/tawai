@@ -3,18 +3,19 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::signals::library::LibrarySourceInfo;
+use crate::utils::master_key::KeyBytes;
 
 fn parse_urls(json: &str) -> Vec<String> {
     serde_json::from_str(json).unwrap_or_default()
 }
 
-fn encrypt_urls(urls: &[String], master_key: &str) -> Vec<String> {
+fn encrypt_urls(urls: &[String], master_key: &KeyBytes) -> Vec<String> {
     urls.iter()
         .map(|u| crate::libsources::tawai::encrypt_url(u, master_key))
         .collect()
 }
 
-fn decrypt_urls(urls: Vec<String>, master_key: &str) -> Vec<String> {
+fn decrypt_urls(urls: Vec<String>, master_key: &KeyBytes) -> Vec<String> {
     urls.into_iter()
         .map(|u| crate::libsources::tawai::decrypt_url(&u, master_key))
         .collect()
@@ -27,7 +28,7 @@ pub async fn add_source(
     name: &str,
     source_type: &str,
     access_rule: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
     explicit_id: Option<&str>,
 ) -> std::result::Result<String, crate::db::library_source::AddSourceError> {
     let urls = encrypt_urls(urls, master_key);
@@ -131,7 +132,10 @@ pub async fn remove_source(pool: &PgPool, source_id: &str) -> Result<bool> {
     Ok(rows > 0)
 }
 
-pub async fn list_all_sources(pool: &PgPool, master_key: &str) -> Result<Vec<LibrarySourceInfo>> {
+pub async fn list_all_sources(
+    pool: &PgPool,
+    master_key: &KeyBytes,
+) -> Result<Vec<LibrarySourceInfo>> {
     let rows = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
         &format!(
             "SELECT id, source_type, urls, name, owner_id, access_rule, {}, {}, {} FROM library_sources ORDER BY created_at",
@@ -176,7 +180,7 @@ pub async fn list_all_sources(pool: &PgPool, master_key: &str) -> Result<Vec<Lib
 pub async fn get_source_by_id(
     pool: &PgPool,
     source_id: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> Result<Option<LibrarySourceInfo>> {
     let row = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
         &format!(
@@ -219,7 +223,7 @@ pub async fn get_source_by_id(
 pub async fn get_source_by_track_id(
     pool: &PgPool,
     track_id: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> Result<Option<(String, String)>> {
     let row = sqlx::query_as::<_, (String, String)>(
         "SELECT ls.source_type, ls.urls FROM tracks t JOIN library_sources ls ON t.source_id = ls.id WHERE t.id = $1",
@@ -239,7 +243,7 @@ pub async fn get_source_by_track_id(
 pub async fn get_source_info_by_track_id(
     pool: &PgPool,
     track_id: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> Result<Option<LibrarySourceInfo>> {
     let row = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
         &format!(
@@ -279,7 +283,7 @@ pub async fn get_source_info_by_track_id(
     ))
 }
 
-pub async fn get_urls_for_scan(pool: &PgPool, master_key: &str) -> Result<Vec<String>> {
+pub async fn get_urls_for_scan(pool: &PgPool, master_key: &KeyBytes) -> Result<Vec<String>> {
     let rows = sqlx::query_scalar::<_, String>("SELECT urls FROM library_sources")
         .fetch_all(pool)
         .await?;
@@ -294,7 +298,7 @@ pub async fn get_source_by_url_and_owner(
     source_type: &str,
     url: &str,
     owner_id: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> Result<Option<LibrarySourceInfo>> {
     let row = sqlx::query_as::<_, (String, String, String, String, String, String, Option<String>, String, String)>(
         &format!(

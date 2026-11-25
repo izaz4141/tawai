@@ -2,6 +2,7 @@ use anyhow::Result;
 
 use crate::db::database::DatabasePool;
 use crate::signals::library::LibrarySourceInfo;
+use crate::utils::master_key::KeyBytes;
 
 #[derive(Debug)]
 pub enum AddSourceError {
@@ -80,7 +81,7 @@ pub async fn add_source(
     name: &str,
     source_type: &str,
     access_rule: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> std::result::Result<String, AddSourceError> {
     let id = federated_source_id(source_type, urls);
     match pool {
@@ -124,7 +125,7 @@ pub async fn list_editable_sources(
     pool: &DatabasePool,
     user_id: &str,
     role: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> Result<Vec<LibrarySourceInfo>> {
     let accessible = list_accessible_sources(pool, user_id, role, master_key).await?;
     Ok(accessible
@@ -137,7 +138,7 @@ pub async fn list_accessible_sources(
     pool: &DatabasePool,
     user_id: &str,
     role: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> Result<Vec<LibrarySourceInfo>> {
     let all = list_all_sources(pool, master_key).await?;
     Ok(all
@@ -148,7 +149,7 @@ pub async fn list_accessible_sources(
 
 pub async fn list_all_sources(
     pool: &DatabasePool,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> Result<Vec<LibrarySourceInfo>> {
     match pool {
         DatabasePool::Sqlite(p) => super::library_source_sq::list_all_sources(p, master_key).await,
@@ -161,7 +162,7 @@ pub async fn list_all_sources(
 pub async fn get_source_by_track_id(
     pool: &DatabasePool,
     track_id: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> Result<Option<(String, String)>> {
     match pool {
         DatabasePool::Sqlite(p) => {
@@ -176,7 +177,7 @@ pub async fn get_source_by_track_id(
 pub async fn get_source_by_id(
     pool: &DatabasePool,
     source_id: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> Result<Option<LibrarySourceInfo>> {
     match pool {
         DatabasePool::Sqlite(p) => {
@@ -193,7 +194,7 @@ pub async fn get_source_by_id(
 pub async fn get_source_info_by_track_id(
     pool: &DatabasePool,
     track_id: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> Result<Option<LibrarySourceInfo>> {
     match pool {
         DatabasePool::Sqlite(p) => {
@@ -210,7 +211,7 @@ pub async fn get_source_by_url_and_owner(
     source_type: &str,
     url: &str,
     owner_id: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> Result<Option<LibrarySourceInfo>> {
     match pool {
         DatabasePool::Sqlite(p) => {
@@ -236,7 +237,7 @@ pub async fn get_source_by_url_and_owner(
     }
 }
 
-pub async fn get_urls_for_scan(pool: &DatabasePool, master_key: &str) -> Result<Vec<String>> {
+pub async fn get_urls_for_scan(pool: &DatabasePool, master_key: &KeyBytes) -> Result<Vec<String>> {
     match pool {
         DatabasePool::Sqlite(p) => super::library_source_sq::get_urls_for_scan(p, master_key).await,
         DatabasePool::Postgres(p) => {

@@ -4,6 +4,7 @@ use crate::utils::logger;
 use rinf::{DartSignal, RustSignal};
 use std::sync::Arc;
 use tawai_core::app_context::AppContext;
+use tawai_core::utils::master_key::MasterKey;
 use tokio::spawn;
 
 pub async fn init_database_handler(context: Arc<AppContext>) {
@@ -11,11 +12,39 @@ pub async fn init_database_handler(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let id = signal_pack.message.id;
         let db_url = signal_pack.message.path;
-        let master_key = signal_pack.message.master_key.clone();
+
+        let key = match MasterKey::from_hex(&signal_pack.message.master_key) {
+            Ok(key) => key,
+            Err(e) => {
+                logger::error(&format!("invalid master key: {e}"));
+                InitDatabaseResponse {
+                    id,
+                    success: false,
+                    error: Some(e.to_string()),
+                }
+                .send_signal_to_dart();
+                continue;
+            }
+        };
+
+        if let Err(e) = context.set_master_key(key) {
+            logger::error(&format!(
+                "master key already set with a different value; refusing to initialize: {e}"
+            ));
+            InitDatabaseResponse {
+                id,
+                success: false,
+                error: Some(format!(
+                    "master key is already set and differs from the supplied key; initialization was not started because it would use the existing key: {e}"
+                )),
+            }
+            .send_signal_to_dart();
+            continue;
+        }
 
         let context_clone = context.clone();
 
-        let init_result = context_clone.init_database(&db_url, &master_key).await;
+        let init_result = context_clone.init_database(&db_url).await;
 
         match init_result {
             Ok(()) => {

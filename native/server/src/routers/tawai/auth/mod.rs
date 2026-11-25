@@ -3,7 +3,6 @@ pub mod decrypt;
 pub mod encrypt;
 pub mod login;
 pub mod logout;
-pub mod master_key;
 pub mod verify_password;
 
 use crate::utils::security::check_api_key;
@@ -22,10 +21,6 @@ pub fn create_auth_router(state: SharedState) -> Router<SharedState> {
         .route("/decrypt", post(decrypt::handle_decrypt))
         .route("/encrypt", post(encrypt::handle_encrypt))
         .route("/logout", post(logout::handle_logout))
-        .route(
-            "/generate-master-key",
-            get(master_key::handle_generate_master_key),
-        )
         .route(
             "/verify-password",
             post(verify_password::handle_verify_password),

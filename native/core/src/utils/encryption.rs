@@ -7,12 +7,6 @@ use aes_gcm_siv::{
 
 const NONCE_SIZE: usize = 12;
 
-pub fn generate_master_key() -> String {
-    let mut key = [0u8; 32];
-    OsRng.fill_bytes(&mut key);
-    hex::encode(key)
-}
-
 pub fn is_valid_master_key(key: &str) -> bool {
     if key.len() != 64 {
         return false;
@@ -27,13 +21,8 @@ pub fn valid_encryption_format(ciphertext: &str) -> bool {
     hex::decode(&ciphertext[4..]).is_ok()
 }
 
-pub fn encrypt(plaintext: &str, master_key: &str) -> Result<String> {
-    let key_bytes = hex::decode(master_key).map_err(|e| anyhow!(e))?;
-    if key_bytes.len() != 32 {
-        return Err(anyhow!("Invalid master key length"));
-    }
-
-    let cipher = Aes256GcmSiv::new_from_slice(&key_bytes).map_err(|e| anyhow!(e))?;
+pub(crate) fn encrypt(plaintext: &str, key: &[u8; 32]) -> Result<String> {
+    let cipher = Aes256GcmSiv::new_from_slice(key).map_err(|e| anyhow!(e))?;
 
     let mut nonce_bytes = [0u8; NONCE_SIZE];
     OsRng.fill_bytes(&mut nonce_bytes);
@@ -49,7 +38,7 @@ pub fn encrypt(plaintext: &str, master_key: &str) -> Result<String> {
     Ok(format!("NDK:{}", hex::encode(result)))
 }
 
-pub fn decrypt(ciphertext: &str, master_key: &str) -> Result<String> {
+pub(crate) fn decrypt(ciphertext: &str, key: &[u8; 32]) -> Result<String> {
     if !valid_encryption_format(ciphertext) {
         return Err(anyhow!("Invalid encryption format"));
     }
@@ -60,12 +49,7 @@ pub fn decrypt(ciphertext: &str, master_key: &str) -> Result<String> {
         return Err(anyhow!("Invalid ciphertext"));
     }
 
-    let key_bytes = hex::decode(master_key).map_err(|e| anyhow!(e))?;
-    if key_bytes.len() != 32 {
-        return Err(anyhow!("Invalid master key length"));
-    }
-
-    let cipher = Aes256GcmSiv::new_from_slice(&key_bytes).map_err(|e| anyhow!(e))?;
+    let cipher = Aes256GcmSiv::new_from_slice(key).map_err(|e| anyhow!(e))?;
 
     let nonce = Nonce::from_slice(&data[..NONCE_SIZE]);
     let ciphertext_bytes = &data[NONCE_SIZE..];

@@ -1,6 +1,6 @@
 use tawai_core::app_context::AppContext;
 use tawai_core::db::account;
-use tawai_core::utils::encryption;
+use tawai_core::utils::master_key::MasterKey;
 use tawai_server::routers::create_router;
 use tawai_server::utils::server::{AppState, run_server};
 
@@ -13,6 +13,7 @@ use crate::signals::server::{
 };
 use crate::signals::settings::{GetGlobalSettingsRequest, GlobalSettingsResponse};
 use crate::utils::logger;
+use crate::utils::master_key_or_log;
 use rinf::{DartSignal, RustSignal};
 use std::sync::Arc;
 use tokio::spawn;
@@ -22,7 +23,9 @@ pub async fn handle_generate_api_key(context: Arc<AppContext>) {
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
         let db = context.db().await;
-        let mk = context.master_key.read().await.clone();
+        let Some(mk) = master_key_or_log(&context) else {
+            continue;
+        };
         let api_key = account::regenerate_user_api_key(db.pool(), &msg.user_id, &mk)
             .await
             .unwrap_or_default();
@@ -38,12 +41,15 @@ pub async fn handle_api_key_generation(context: Arc<AppContext>) {
     let receiver = RequestNewApiKey::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
-        let master_key = match &msg.master_key {
-            Some(key) if encryption::is_valid_master_key(key) => key.to_owned(),
-            _ => {
-                logger::warn("Invalid master key provided, generating new one");
-                encryption::generate_master_key()
+        let Some(master_key) = master_key_or_log(&context) else {
+            NewApiKey {
+                id: msg.id,
+                encrypted_api_key: String::new(),
+                decrypted_api_key: String::new(),
+                master_key: String::new(),
             }
+            .send_signal_to_dart();
+            continue;
         };
 
         let db = context.db().await;
@@ -51,7 +57,7 @@ pub async fn handle_api_key_generation(context: Arc<AppContext>) {
             .await
             .unwrap_or_else(|_| uuid::Uuid::new_v4().to_string());
 
-        let encrypted_api_key = match encryption::encrypt(&api_key, &master_key) {
+        let encrypted_api_key = match master_key.encrypt(&api_key) {
             Ok(encrypted) => encrypted,
             Err(e) => {
                 logger::error(&format!("Encryption failed: {}", e));
@@ -69,7 +75,7 @@ pub async fn handle_api_key_generation(context: Arc<AppContext>) {
             id: msg.id,
             encrypted_api_key,
             decrypted_api_key: api_key,
-            master_key,
+            master_key: String::new(),
         }
         .send_signal_to_dart();
     }
@@ -79,11 +85,15 @@ pub async fn handle_decrypt_request(context: Arc<AppContext>) {
     let receiver = DecryptRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
-        let master_key = match msg.master_key {
-            Some(key) => key,
-            None => context.master_key.read().await.clone(),
+        let Some(master_key) = master_key_or_log(&context) else {
+            DecryptResponse {
+                id: msg.id,
+                decrypted_key: String::new(),
+            }
+            .send_signal_to_dart();
+            continue;
         };
-        let decrypted_key = match encryption::decrypt(&msg.encrypted_key, &master_key) {
+        let decrypted_key = match master_key.decrypt(&msg.encrypted_key) {
             Ok(key) => key,
             Err(e) => {
                 logger::error(&format!("Decryption failed: {}", e));
@@ -102,11 +112,16 @@ pub async fn handle_encrypt_request(context: Arc<AppContext>) {
     let receiver = EncryptRequest::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
-        let master_key = match msg.master_key {
-            Some(key) => key,
-            None => context.master_key.read().await.clone(),
+        let Some(master_key) = master_key_or_log(&context) else {
+            EncryptResponse {
+                id: msg.id,
+                encrypted_key: String::new(),
+                master_key: String::new(),
+            }
+            .send_signal_to_dart();
+            continue;
         };
-        let encrypted_key = match encryption::encrypt(&msg.plain_key, &master_key) {
+        let encrypted_key = match master_key.encrypt(&msg.plain_key) {
             Ok(encrypted) => encrypted,
             Err(e) => {
                 logger::error(&format!("Encryption failed: {}", e));
@@ -122,7 +137,7 @@ pub async fn handle_encrypt_request(context: Arc<AppContext>) {
         EncryptResponse {
             id: msg.id,
             encrypted_key,
-            master_key,
+            master_key: String::new(),
         }
         .send_signal_to_dart();
     }
@@ -222,12 +237,16 @@ pub async fn start_server_listener(context: Arc<AppContext>) {
             let _ = old_handle.await;
         }
 
+        if !context.has_master_key()
+            && let Ok(key) = MasterKey::from_hex(&msg.master_key)
+        {
+            let _ = context.set_master_key(key);
+        }
+
         // Initialize config if not already done
         if context.cfg().await.value.is_null() {
             let _ = context.init_config(msg.config_path.clone()).await;
         }
-
-        *context.master_key.write().await = msg.master_key.clone();
 
         let state = AppState::new(context.clone());
 

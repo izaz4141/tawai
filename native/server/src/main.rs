@@ -4,7 +4,9 @@ use std::time::Duration;
 use tawai_core::app_context::AppContext;
 use tawai_core::signals::library::ScanProgress;
 use tawai_core::utils::config::{get_path, set_path};
+use tawai_core::utils::master_key::{MasterKey, MasterKeyError};
 use tawai_core::utils::{logger, paths};
+use zeroize::Zeroizing;
 
 use tawai_server::utils::{observability, server};
 
@@ -33,16 +35,43 @@ async fn run(guard: init_tracing_opentelemetry::Guard) {
 
     let config_path = paths::config_path();
 
-    let master_key =
-        std::env::var("TAWAI_SERVER_MASTER_KEY").expect("TAWAI_SERVER_MASTER_KEY is not set");
+    let master_key = match std::env::var_os("TAWAI_SERVER_MASTER_KEY") {
+        Some(value) => {
+            let encoded = Zeroizing::new(value.into_encoded_bytes());
+            let decoded = match std::str::from_utf8(&encoded) {
+                Ok(value) => MasterKey::from_hex(value),
+                Err(_) => Err(MasterKeyError::NotSet),
+            };
+            drop(encoded);
+            decoded
+        }
+        None => Err(MasterKeyError::NotSet),
+    };
+
+    let master_key = match master_key {
+        Ok(key) => key,
+        Err(MasterKeyError::NotSet) => {
+            logger::error("TAWAI_SERVER_MASTER_KEY is not set");
+            std::process::exit(1);
+        }
+        Err(e) => {
+            logger::error(&format!("Invalid TAWAI_SERVER_MASTER_KEY: {e}"));
+            std::process::exit(1);
+        }
+    };
 
     let client = tawai_core::utils::url::build_browser_client().await;
 
     let context = AppContext::new(client);
 
+    if let Err(e) = context.set_master_key(master_key) {
+        logger::error(&format!("Failed to set master key: {e}"));
+        std::process::exit(1);
+    }
+
     let db_url = std::env::var("TAWAI_DATABASE_URL")
         .unwrap_or_else(|_| format!("{}/tawai.db", paths::data_dir()));
-    match context.init_database(&db_url, &master_key).await {
+    match context.init_database(&db_url).await {
         Ok(()) => {
             let loop_ctx = Arc::clone(&context);
             tokio::spawn(async move { loop_ctx.run_database_loop().await });

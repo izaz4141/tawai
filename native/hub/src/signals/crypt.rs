@@ -46,12 +46,15 @@ pub struct EncryptResponse {
 #[derive(Deserialize, DartSignal)]
 pub struct GenerateMasterKeyRequest {
     pub id: String,
+    pub path: String,
+    pub device_id: String,
 }
 
 #[derive(Serialize, RustSignal)]
 pub struct GenerateMasterKeyResponse {
     pub id: String,
-    pub master_key: String,
+    pub success: bool,
+    pub error: Option<String>,
 }
 
 #[derive(Deserialize, DartSignal)]

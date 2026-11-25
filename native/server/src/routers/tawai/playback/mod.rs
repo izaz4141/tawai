@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 use tawai_core::db::database::DatabasePool;
 use tawai_core::db::{account, library_source};
+use tawai_core::utils::master_key::KeyBytes;
 
 use crate::utils::security::{auth_query, auth_stream, check_api_key};
 use crate::utils::server::SharedState;
@@ -50,7 +51,7 @@ pub async fn user_can_read_track(
     pool: &DatabasePool,
     user_id: &str,
     track_id: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> TrackAccess {
     let now = Instant::now();
     let key = (user_id.to_string(), track_id.to_string());

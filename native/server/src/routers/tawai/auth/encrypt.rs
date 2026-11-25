@@ -1,7 +1,6 @@
 use crate::utils::server::SharedState;
 use axum::{Json, extract::State, response::IntoResponse};
 use tawai_core::signals::crypt::{EncryptRequest, EncryptResponse};
-use tawai_core::utils::encryption;
 
 #[utoipa::path(
     post,
@@ -18,8 +17,11 @@ pub async fn handle_encrypt(
     State(state): State<SharedState>,
     Json(req): Json<EncryptRequest>,
 ) -> impl IntoResponse {
-    let master_key = state.context.master_key.read().await.clone();
-    let encrypted_text = match encryption::encrypt(&req.plain_key, &master_key) {
+    let master_key = match state.master_key() {
+        Ok(key) => key,
+        Err(status) => return status.into_response(),
+    };
+    let encrypted_text = match master_key.encrypt(&req.plain_key) {
         Ok(encrypted) => encrypted,
         Err(e) => {
             tawai_core::utils::logger::error(&format!("Unable to encrypt text: {:#}", &e));
@@ -29,7 +31,7 @@ pub async fn handle_encrypt(
     Json(EncryptResponse {
         id: req.id,
         encrypted_key: encrypted_text,
-        master_key,
+        master_key: String::new(),
     })
     .into_response()
 }

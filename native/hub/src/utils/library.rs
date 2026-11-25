@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::signals;
 use crate::utils::logger;
+use crate::utils::master_key_or_log;
 use rinf::{DartSignal, RustSignal};
 use tawai_core::app_context::AppContext;
 use tawai_core::db::library;
@@ -28,7 +29,10 @@ pub async fn handle_delete_track(context: Arc<AppContext>) {
         let msg = signal_pack.message;
         let db = context.db().await;
         let client = context.client().clone();
-        let mk = context.master_key.read().await.clone();
+        let mk = match master_key_or_log(&context) {
+            Some(key) => key,
+            None => continue,
+        };
         match tawai_core::db::library::delete_track(
             db.pool(),
             &client,

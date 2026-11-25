@@ -1,11 +1,12 @@
 use crate::db::database::DatabasePool;
 use crate::signals::account::UserListItem;
+use crate::utils::master_key::KeyBytes;
 use crate::utils::security;
 
 pub const DEFAULT_USERNAME: &str = "admin";
 pub const DEFAULT_PASSWORD: &str = "admin";
 
-pub async fn ensure_default_user(pool: &DatabasePool, master_key: &str) -> anyhow::Result<()> {
+pub async fn ensure_default_user(pool: &DatabasePool, master_key: &KeyBytes) -> anyhow::Result<()> {
     match pool {
         DatabasePool::Sqlite(p) => super::account_sq::ensure_default_user(p, master_key).await,
         DatabasePool::Postgres(p) => super::account_pg::ensure_default_user(p, master_key).await,
@@ -128,7 +129,7 @@ pub async fn get_user_role(pool: &DatabasePool, user_id: &str) -> anyhow::Result
 pub async fn get_user_by_id(
     pool: &DatabasePool,
     user_id: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> anyhow::Result<crate::signals::User> {
     match pool {
         DatabasePool::Sqlite(p) => super::account_sq::get_user_by_id(p, user_id, master_key).await,
@@ -141,7 +142,7 @@ pub async fn get_user_by_id(
 pub async fn get_user_by_username(
     pool: &DatabasePool,
     username: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> anyhow::Result<crate::signals::User> {
     match pool {
         DatabasePool::Sqlite(p) => {
@@ -167,7 +168,7 @@ pub async fn get_user_id_by_api_key(
 pub async fn get_user_api_key(
     pool: &DatabasePool,
     user_id: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> anyhow::Result<Option<String>> {
     match pool {
         DatabasePool::Sqlite(p) => {
@@ -182,7 +183,7 @@ pub async fn get_user_api_key(
 pub async fn regenerate_user_api_key(
     pool: &DatabasePool,
     user_id: &str,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> anyhow::Result<String> {
     match pool {
         DatabasePool::Sqlite(p) => {
@@ -203,7 +204,7 @@ pub async fn get_all_users(pool: &DatabasePool) -> anyhow::Result<Vec<UserListIt
 
 pub async fn get_all_users_with_keys(
     pool: &DatabasePool,
-    master_key: &str,
+    master_key: &KeyBytes,
 ) -> anyhow::Result<Vec<UserListItem>> {
     match pool {
         DatabasePool::Sqlite(p) => super::account_sq::get_all_users_with_keys(p, master_key).await,

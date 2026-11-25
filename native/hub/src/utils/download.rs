@@ -7,6 +7,7 @@ use tawai_core::dclient::DownloadClient;
 
 use crate::signals;
 use crate::utils::logger;
+use crate::utils::master_key_or_log;
 
 pub async fn handle_list_downloads(context: Arc<AppContext>) {
     let receiver = signals::download::ListDownloadsRequest::get_dart_signal_receiver();
@@ -78,7 +79,10 @@ pub async fn handle_download_create(context: Arc<AppContext>) {
             let db = context.db().await;
             let pool = db.pool();
             let cfg = context.cfg().await;
-            let mk = context.master_key.read().await.clone();
+            let mk = match master_key_or_log(&context) {
+                Some(key) => key,
+                None => continue,
+            };
             let result = if let Some(parser) = tawai_core::libsources::get_parser(
                 &source_type,
                 context.client().clone(),
