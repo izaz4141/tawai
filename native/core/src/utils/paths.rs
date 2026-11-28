@@ -17,12 +17,15 @@ pub fn tawai_home() -> &'static String {
 pub fn set_tawai_home(path: &str) -> Result<(), String> {
     let env_home = env::var("TAWAI_HOME").ok();
     let home = resolve_home(path, env_home.as_deref())?;
-    match TAWAI_HOME.set(home.clone()) {
-        Ok(()) => Ok(()),
-        Err(existing) if existing == home => Ok(()),
-        Err(existing) => Err(format!(
+    if TAWAI_HOME.set(home.clone()).is_ok() {
+        return Ok(());
+    }
+    match TAWAI_HOME.get() {
+        Some(existing) if existing == &home => Ok(()),
+        Some(existing) => Err(format!(
             "tawai home is already set to `{existing}`, cannot change it to `{home}`"
         )),
+        None => Err("tawai home could not be set".to_string()),
     }
 }
 

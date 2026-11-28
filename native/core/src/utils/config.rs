@@ -452,13 +452,28 @@ fn environment_layer() -> Value {
     environment_layer_from(|name| std::env::var(name).ok())
 }
 
+fn parse_server_port(value: &str) -> Option<u64> {
+    value
+        .trim()
+        .parse::<u64>()
+        .ok()
+        .filter(|port| (1..=65535).contains(port))
+}
+
+/// Returns the server port forced by `TAWAI_SERVER_PORT`, when it is a valid
+/// port in the schema's range.
+pub fn environment_server_port() -> Option<u64> {
+    std::env::var("TAWAI_SERVER_PORT")
+        .ok()
+        .and_then(|value| parse_server_port(&value))
+}
+
 fn environment_layer_from(get: impl Fn(&str) -> Option<String>) -> Value {
     let mut root = Value::Object(Map::new());
 
     if let Some(port) = get("TAWAI_SERVER_PORT")
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        && let Ok(port) = port.parse::<u64>()
+        .as_deref()
+        .and_then(parse_server_port)
     {
         set_path(&mut root, "server.port", Value::from(port));
     }
@@ -531,7 +546,7 @@ pub async fn load_config(path: String, key: Option<&KeyBytes>) -> Result<Arc<App
     let contents = tokio::fs::read_to_string(&config_path).await?;
     let file_value: Value = toml::from_str(&contents).map_err(|e| ConfigParseError {
         path: config_path.clone(),
-        reason: e.to_string(),
+        reason: e.message().to_string(),
     })?;
 
     validate_schema_version(&file_value).map_err(anyhow::Error::new)?;
@@ -912,17 +927,22 @@ mod tests {
 
     #[test]
     fn invalid_environment_port_falls_back_to_the_schema_default() {
-        let env = environment_layer_from(|name| match name {
-            "TAWAI_SERVER_PORT" => Some("not-a-number".to_string()),
-            _ => None,
-        });
-        assert!(env.as_object().map(|map| map.is_empty()).unwrap_or(false));
+        for invalid in ["not-a-number", "0", "65536", "-1", ""] {
+            let env = environment_layer_from(|name| match name {
+                "TAWAI_SERVER_PORT" => Some(invalid.to_string()),
+                _ => None,
+            });
+            assert!(
+                env.as_object().map(|map| map.is_empty()).unwrap_or(false),
+                "`{invalid}` should not be accepted as a port"
+            );
 
-        let merged = layer_config(&Value::Object(Map::new()), &env).expect("merge");
-        assert_eq!(
-            get_path(&merged, "server.port").and_then(|v| v.as_u64()),
-            Some(8181)
-        );
+            let merged = layer_config(&Value::Object(Map::new()), &env).expect("merge");
+            assert_eq!(
+                get_path(&merged, "server.port").and_then(|v| v.as_u64()),
+                Some(8181)
+            );
+        }
     }
 
     #[test]
@@ -953,6 +973,10 @@ mod tests {
             Err(e) => e,
         };
         assert!(err.downcast_ref::<ConfigParseError>().is_some());
+        let parse_error = err
+            .downcast_ref::<ConfigParseError>()
+            .expect("config parse error");
+        assert!(!parse_error.reason.contains("[[[not toml"));
         assert!(is_unusable_config(&err));
     }
 

@@ -53,8 +53,19 @@ Future<void> main(List<String> args) async {
         final io = IOServiceFactory.create();
         final home = await io.getConfigDir();
         final deviceId = await getDeviceId();
-        await BridgeService.instance.setTawaiHome(home, deviceId);
-        await BridgeService.instance.initDatabase();
+        if (!await BridgeService.instance.setTawaiHome(home, deviceId)) {
+          log(
+            'Failed to initialize Tawai home at $home',
+            level: LogLevel.error,
+          );
+          io.exit(1);
+          return;
+        }
+        if (!await BridgeService.instance.initDatabase()) {
+          log('Failed to initialize the database', level: LogLevel.error);
+          io.exit(1);
+          return;
+        }
       }
 
       await APIService.instance.init();

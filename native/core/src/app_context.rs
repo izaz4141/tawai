@@ -14,9 +14,10 @@ use crate::db::{account, database::DatabaseManager, library_source, user_setting
 use crate::discovery::sync::{SyncRecsParams, sync_recs};
 use crate::signals::library::ScanProgress;
 use crate::utils::config::{
-    AppConfig, DEFAULT_SETTINGS, config_file_mtime, drop_nulls, get_path, get_path_mut,
-    is_local_host, is_unusable_config, load_config, load_default_config, merge_into,
-    normalize_secret, path_is_secret, readonly_default_config, remove_path, set_path, strip_paths,
+    AppConfig, DEFAULT_SETTINGS, config_file_mtime, drop_nulls, environment_server_port,
+    get_path, get_path_mut, is_local_host, is_unusable_config, load_config, load_default_config,
+    merge_into, normalize_secret, path_is_secret, readonly_default_config, remove_path, set_path,
+    strip_paths,
 };
 use crate::utils::master_key::{KeyBytes, MasterKey, MasterKeyError, MasterKeySlot};
 use crate::utils::{cache, encryption::valid_encryption_format, logger};
@@ -375,7 +376,8 @@ impl AppContext {
         let mut cfg = merge_into(&current, &incoming, &DEFAULT_SETTINGS);
 
         // When the server port changes on a local host, keep every local
-        // account's port in sync so saved accounts still match the server.
+        // account's port in sync so saved accounts still match the server. An
+        // environment override wins over the requested value, so sync to it.
         if let Some(new_port) = get_path(&incoming, "server.port").and_then(|v| v.as_u64()) {
             let host = get_path(&incoming, "server.host")
                 .and_then(|v| v.as_str())
@@ -389,14 +391,15 @@ impl AppContext {
             let old_port = get_path(&current, "server.port")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0);
-            if is_local_host(&host) && new_port != old_port {
+            let effective_port = environment_server_port().unwrap_or(new_port);
+            if is_local_host(&host) && effective_port != old_port {
                 if let Some(accounts) =
                     get_path_mut(&mut cfg, "accounts.saved").and_then(|v| v.as_array_mut())
                 {
                     for acc in accounts.iter_mut() {
                         if let Some(acc_host) = acc.get("host").and_then(|v| v.as_str()) {
                             if is_local_host(acc_host) {
-                                acc["port"] = serde_json::Value::from(new_port);
+                                acc["port"] = serde_json::Value::from(effective_port);
                             }
                         }
                     }
