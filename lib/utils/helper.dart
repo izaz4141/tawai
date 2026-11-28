@@ -4,9 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:collection/collection.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
-import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/platform_service.dart';
-import 'package:tawai/utils/settings.dart';
 import 'package:tawai/utils/io_service.dart';
 
 String? _cachedDeviceId;
@@ -20,7 +18,7 @@ Uint8List? decodeBytes(dynamic value) {
   return null;
 }
 
-Future<String> _getDeviceId() async {
+Future<String> getDeviceId() async {
   if (_cachedDeviceId != null) return _cachedDeviceId!;
 
   final deviceInfo = DeviceInfoPlugin();
@@ -39,11 +37,6 @@ Future<String> _getDeviceId() async {
 
   _cachedDeviceId = deviceId;
   return deviceId;
-}
-
-Future<String> d0(String input) async {
-  final deviceId = await _getDeviceId();
-  return BridgeService.instance.putTagging(input, deviceId);
 }
 
 String formatBytes(int bytes) {
@@ -114,33 +107,6 @@ bool isUrl(String url) {
     caseSensitive: false,
   );
   return regex.hasMatch(url);
-}
-
-bool isValidMasterKey(String key) {
-  if (key.length != 64) return false;
-  for (int i = 0; i < 64; i += 2) {
-    final byteStr = key.substring(i, i + 2);
-    if (int.tryParse(byteStr, radix: 16) == null) {
-      return false;
-    }
-  }
-  return true;
-}
-
-Future<String?> getMasterKey() async {
-  if (kIsWeb) return null;
-  final ioService = IOServiceFactory.create();
-  final configDir = await ioService.getConfigDir();
-  final masterKeyPath = '$configDir/${SettingsManager.masterKeyFile}';
-  if (!await ioService.fileExists(masterKeyPath)) {
-    final created = await BridgeService.instance.generateMasterKey(
-      path: masterKeyPath,
-      deviceId: await _getDeviceId(),
-    );
-    if (!created) return null;
-  }
-  final encoded = await ioService.readFile(masterKeyPath);
-  return await d0(encoded);
 }
 
 String formatFileSize(int bytes) {

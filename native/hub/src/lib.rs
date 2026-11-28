@@ -12,7 +12,8 @@ async fn main() {
     let client = reqwest::Client::new();
     let context = AppContext::new(client);
 
-    // Database manager + server
+    // Bootstrap + database manager + server
+    spawn(utils::master_key::handle_set_tawai_home(context.clone()));
     spawn(utils::database::init_database_handler(context.clone()));
     spawn(utils::server::start_server_listener(context.clone()));
     spawn(utils::server::handle_init_config(context.clone()));
@@ -24,7 +25,9 @@ async fn main() {
     spawn(utils::server::handle_api_key_generation(context.clone()));
     spawn(utils::server::handle_decrypt_request(context.clone()));
     spawn(utils::server::handle_encrypt_request(context.clone()));
-    spawn(utils::security::handle_generate_master_key(context.clone()));
+    spawn(utils::master_key::handle_generate_master_key(
+        context.clone(),
+    ));
     spawn(utils::security::handle_login(context.clone()));
 
     // Library handlers

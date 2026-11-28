@@ -14,9 +14,9 @@ use crate::db::{account, database::DatabaseManager, library_source, user_setting
 use crate::discovery::sync::{SyncRecsParams, sync_recs};
 use crate::signals::library::ScanProgress;
 use crate::utils::config::{
-    AppConfig, DEFAULT_SETTINGS, config_file_mtime, get_path, get_path_mut, is_local_host,
-    is_version_mismatch, load_config, load_default_config, merge_into, normalize_secret,
-    path_is_secret, readonly_default_config, remove_path, set_path, strip_paths,
+    AppConfig, DEFAULT_SETTINGS, config_file_mtime, drop_nulls, get_path, get_path_mut,
+    is_local_host, is_unusable_config, load_config, load_default_config, merge_into,
+    normalize_secret, path_is_secret, readonly_default_config, remove_path, set_path, strip_paths,
 };
 use crate::utils::master_key::{KeyBytes, MasterKey, MasterKeyError, MasterKeySlot};
 use crate::utils::{cache, encryption::valid_encryption_format, logger};
@@ -205,10 +205,11 @@ impl AppContext {
             }
             Err(e) => {
                 logger::error(&format!("Failed to reload config: {}", e));
-                if is_version_mismatch(&e) {
+                if is_unusable_config(&e) {
                     // Never keep retrying a file that is still on another
-                    // schema version; remember its mtime and fall back to
-                    // defaults until the file changes or disappears.
+                    // schema version or cannot be parsed; remember its mtime
+                    // and fall back to defaults until the file changes or
+                    // disappears.
                     let rejected = readonly_default_config(
                         current_path.to_string_lossy().into_owned(),
                         observed_mtime.unwrap_or(0),
@@ -224,34 +225,31 @@ impl AppContext {
 
     /// Loads the config file at `path`, or bootstraps a default config when the
     /// file is missing. Returns `true` when a default config was created
-    /// (first run).
+    /// (first run). An existing file that cannot be read or parsed is never
+    /// overwritten: the process runs on read-only defaults instead.
     pub async fn init_config(&self, path: String) -> Result<bool> {
         let key = self.master_key_bytes().ok();
-        let (app_config, is_first_run) = match load_config(path.clone(), key.as_ref()).await {
-            Ok(aconfig) => (aconfig, false),
-            Err(e) if is_version_mismatch(&e) => {
-                // The document belongs to another schema version. Start on
-                // in-memory defaults, but never write them over the file.
-                // Remember the rejected file's mtime so reloads are skipped
-                // until the file changes or disappears.
-                logger::error(&format!(
-                    "Refusing to load config: {e}. Running on defaults; the file will not be written."
-                ));
-                let mtime = config_file_mtime(Path::new(&path)).await.unwrap_or(0);
-                (readonly_default_config(path.clone(), mtime), false)
+        let exists = tokio::fs::try_exists(&path).await.unwrap_or(false);
+        let (app_config, is_first_run) = if exists {
+            match load_config(path.clone(), key.as_ref()).await {
+                Ok(aconfig) => (aconfig, false),
+                Err(e) => {
+                    logger::error(&format!(
+                        "Failed to load config: {e}. Running on read-only defaults; the file will not be written."
+                    ));
+                    let mtime = config_file_mtime(Path::new(&path)).await.unwrap_or(0);
+                    (readonly_default_config(path.clone(), mtime), false)
+                }
             }
-            Err(e) => {
-                logger::warn(&format!("Cant load provided config: {}", e.to_string()));
-                let aconfig = match load_default_config(path.clone()).await {
-                    Ok(c) => c,
-                    Err(e) => {
-                        logger::error(&format!(
-                            "Cant load default config: {e}\n ConfigPath: {path}"
-                        ));
-                        anyhow::bail!("Cant load default config: {e}\n ConfigPath: {path}")
-                    }
-                };
-                (aconfig, true)
+        } else {
+            match load_default_config(path.clone()).await {
+                Ok(c) => (c, true),
+                Err(e) => {
+                    logger::error(&format!(
+                        "Cant load default config: {e}\n ConfigPath: {path}"
+                    ));
+                    anyhow::bail!("Cant load default config: {e}\n ConfigPath: {path}")
+                }
             }
         };
         *self.config.write().await = Some(app_config);
@@ -270,7 +268,7 @@ impl AppContext {
         Ok(is_first_run)
     }
 
-    /// Syncs localhost accounts in config.json with the users table in the DB.
+    /// Syncs localhost accounts in config.toml with the users table in the DB.
     /// The DB is the source of truth: localhost accounts whose `id` no longer
     /// exists in the DB are removed, and DB users without a matching localhost
     /// account are added. Existing localhost accounts get their username,
@@ -418,9 +416,7 @@ impl AppContext {
             .ok_or_else(|| anyhow::anyhow!("Config not initialized"))?;
 
         if !app_config.writable {
-            logger::warn(
-                "Config is read-only because it belongs to another schema version; skipping save",
-            );
+            logger::warn("Config is read-only; skipping save");
             return Ok(());
         }
 
@@ -468,8 +464,8 @@ impl AppContext {
         if let Some(parent) = path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
-        let json_str = serde_json::to_string_pretty(&new_settings)?;
-        tokio::fs::write(&path, &json_str).await?;
+        let toml_str = toml::to_string_pretty(&drop_nulls(new_settings))?;
+        tokio::fs::write(&path, &toml_str).await?;
 
         // Update in-memory cache so subsequent cfg() calls see the new values
         let new_config = load_config(

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:toml/toml.dart';
 
 import 'package:tawai/utils/platform_service.dart';
 import 'package:tawai/utils/logger.dart';
@@ -11,7 +12,6 @@ import 'package:tawai/utils/api_service.dart';
 import 'package:tawai/utils/bridge_service.dart';
 import 'package:tawai/utils/rinf_service.dart';
 import 'package:tawai/utils/system_service.dart';
-import 'package:tawai/utils/helper.dart';
 import 'package:tawai/models/account.dart';
 import 'package:tawai/models/user.dart';
 
@@ -36,11 +36,9 @@ class _SettingBinding {
 }
 
 class SettingsManager {
-  static const String masterKeyFile = 'master.key';
-
   /// The settings manifest. It is the single source of truth for the shape,
   /// defaults, scope and capabilities of the global settings document.
-  static const String schemaAsset = 'assets/docs/settings_schema.json';
+  static const String schemaAsset = 'assets/docs/settings_schema.toml';
 
   static IOService? _ioServiceInstance;
 
@@ -50,7 +48,6 @@ class SettingsManager {
   static IOService get _ioService =>
       _ioServiceInstance ??= IOServiceFactory.create();
 
-  static late String configPath;
   static bool isFirstRun = false;
 
   /// The nested default document, folded from the manifest on startup.
@@ -212,9 +209,9 @@ class SettingsManager {
   /// Reads the manifest and folds its defaults into a nested document.
   static Future<void> _loadSchema() async {
     try {
-      final raw =
-          json.decode(await rootBundle.loadString(schemaAsset))
-              as Map<String, dynamic>;
+      final raw = TomlDocument.parse(
+        await rootBundle.loadString(schemaAsset),
+      ).toMap();
       schemaVersion = (raw['version'] as num?)?.toInt() ?? 1;
       _specs = Map<String, dynamic>.from(raw['settings'] as Map);
 
@@ -389,7 +386,6 @@ class SettingsManager {
     }
 
     final downloadsDir = await _ioService.getDownloadsDir();
-    final configDir = await _ioService.getConfigDir();
 
     String defaultDownloadFolder = '';
     if (PlatformService.isAndroid) {
@@ -408,9 +404,7 @@ class SettingsManager {
       }
     }
 
-    configPath = '$configDir/config.json';
-
-    final result = await RinfService.instance.initConfig(configPath);
+    final result = await RinfService.instance.initConfig();
     final data = result.settings;
     if (data != null) {
       await _applyFromJson(data);
@@ -830,12 +824,7 @@ class SettingsManager {
       await APIService.instance.restartServer();
       return;
     }
-    final masterKey = await getMasterKey();
-    BridgeService.instance.startServer(
-      port: serverPort.value,
-      masterKey: masterKey!,
-      configPath: configPath,
-    );
+    BridgeService.instance.startServer(port: serverPort.value);
   }
 
   static Future<void> loadFromBackend() async {

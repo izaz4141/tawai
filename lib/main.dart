@@ -48,15 +48,13 @@ Future<void> main(List<String> args) async {
         initRustSignalLogger();
       }
 
-      String? masterKey;
       if (!kIsWeb) {
         await cleanupOldFiles();
-        masterKey = await getMasterKey();
-        final dbPath = await IOServiceFactory.create().getDatabasePath();
-        await BridgeService.instance.initDatabase(
-          dbPath,
-          masterKey: masterKey!,
-        );
+        final io = IOServiceFactory.create();
+        final home = await io.getConfigDir();
+        final deviceId = await getDeviceId();
+        await BridgeService.instance.setTawaiHome(home, deviceId);
+        await BridgeService.instance.initDatabase();
       }
 
       await APIService.instance.init();
@@ -89,8 +87,6 @@ Future<void> main(List<String> args) async {
       if (!kIsWeb) {
         BridgeService.instance.startServer(
           port: SettingsManager.serverPort.value,
-          masterKey: masterKey!,
-          configPath: SettingsManager.configPath,
         );
 
         final users = await RinfService.instance.listUsers();

@@ -6,6 +6,7 @@ pub mod identify;
 pub mod library;
 pub mod library_source;
 pub mod logger;
+pub mod master_key;
 pub mod naming;
 pub mod playback;
 pub mod scan;

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use config as config_crate;
 use serde_json::{Map, Value};
 use std::{
     path::{Path, PathBuf},
@@ -11,8 +12,8 @@ use crate::utils::master_key::KeyBytes;
 
 /// The settings schema, embedded at compile time. This file is the single
 /// source of truth for the shape, defaults, scope and capabilities of the
-/// global settings document; `config.json` is always a concrete instance of it.
-const SETTINGS_SCHEMA_JSON: &str = include_str!("../../../../assets/docs/settings_schema.json");
+/// global settings document; `config.toml` is always a concrete instance of it.
+const SETTINGS_SCHEMA_TOML: &str = include_str!("../../../../assets/docs/settings_schema.toml");
 
 /// Version reported for a config document that carries no `schema_version`.
 pub fn current_schema_version() -> u64 {
@@ -101,8 +102,8 @@ struct RawSpec {
 }
 
 pub static SCHEMA: LazyLock<Schema> = LazyLock::new(|| {
-    let raw: RawSchema = serde_json::from_str(SETTINGS_SCHEMA_JSON)
-        .expect("assets/docs/settings_schema.json is not valid JSON");
+    let raw: RawSchema = toml::from_str(SETTINGS_SCHEMA_TOML)
+        .expect("assets/docs/settings_schema.toml is not valid TOML");
     let mut entries: Vec<(String, SettingSpec)> = raw
         .settings
         .into_iter()
@@ -420,6 +421,96 @@ pub fn is_version_mismatch(error: &anyhow::Error) -> bool {
     error.downcast_ref::<SchemaVersionMismatch>().is_some()
 }
 
+/// Raised when the config file exists but is not valid TOML.
+#[derive(Debug)]
+pub struct ConfigParseError {
+    pub path: PathBuf,
+    pub reason: String,
+}
+
+impl std::fmt::Display for ConfigParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "cannot parse config file {}: {}",
+            self.path.display(),
+            self.reason
+        )
+    }
+}
+
+impl std::error::Error for ConfigParseError {}
+
+/// Returns true when a config file exists but cannot be used, so the caller must
+/// fall back to read-only defaults instead of overwriting it.
+pub fn is_unusable_config(error: &anyhow::Error) -> bool {
+    is_version_mismatch(error) || error.downcast_ref::<ConfigParseError>().is_some()
+}
+
+/// The allowlisted environment overrides, mapped onto config paths.
+fn environment_layer() -> Value {
+    environment_layer_from(|name| std::env::var(name).ok())
+}
+
+fn environment_layer_from(get: impl Fn(&str) -> Option<String>) -> Value {
+    let mut root = Value::Object(Map::new());
+
+    if let Some(port) = get("TAWAI_SERVER_PORT")
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        && let Ok(port) = port.parse::<u64>()
+    {
+        set_path(&mut root, "server.port", Value::from(port));
+    }
+
+    for (variable, path) in [
+        ("TAWAI_SLSKD_URL", "integrations.slskd.url"),
+        ("TAWAI_SLSKD_API_KEY", "integrations.slskd.api_key"),
+        ("TAWAI_NADEKODON_URL", "integrations.nadekodon.url"),
+        ("TAWAI_NADEKODON_API_KEY", "integrations.nadekodon.api_key"),
+    ] {
+        if let Some(value) = get(variable)
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+        {
+            set_path(&mut root, path, Value::String(value));
+        }
+    }
+
+    root
+}
+
+/// Merges schema defaults, the file document and the environment layer, with
+/// later sources winning. Objects merge, arrays replace and key case is kept.
+fn layer_config(file: &Value, env: &Value) -> Result<Value> {
+    let merged = config_crate::Config::builder()
+        .add_source(config_crate::Config::try_from(&*DEFAULT_SETTINGS)?)
+        .add_source(config_crate::Config::try_from(file)?)
+        .add_source(config_crate::Config::try_from(env)?)
+        .build()?;
+    Ok(merged.try_deserialize::<Value>()?)
+}
+
+/// Recursively removes `null` values, which TOML cannot represent.
+pub(crate) fn drop_nulls(value: Value) -> Value {
+    match value {
+        Value::Object(map) => Value::Object(
+            map.into_iter()
+                .filter(|(_, value)| !value.is_null())
+                .map(|(key, value)| (key, drop_nulls(value)))
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(
+            items
+                .into_iter()
+                .filter(|value| !value.is_null())
+                .map(drop_nulls)
+                .collect(),
+        ),
+        other => other,
+    }
+}
+
 pub fn validate_schema_version(value: &Value) -> Result<(), SchemaVersionMismatch> {
     match value.get("schema_version") {
         None => Ok(()),
@@ -438,9 +529,14 @@ pub async fn load_config(path: String, key: Option<&KeyBytes>) -> Result<Arc<App
     }
 
     let contents = tokio::fs::read_to_string(&config_path).await?;
-    let mut config_val: Value = serde_json::from_str(&contents)?;
+    let file_value: Value = toml::from_str(&contents).map_err(|e| ConfigParseError {
+        path: config_path.clone(),
+        reason: e.to_string(),
+    })?;
 
-    validate_schema_version(&config_val).map_err(anyhow::Error::new)?;
+    validate_schema_version(&file_value).map_err(anyhow::Error::new)?;
+
+    let mut config_val = layer_config(&file_value, &environment_layer())?;
 
     if let Some(key) = key {
         for path in [
@@ -483,19 +579,20 @@ pub async fn load_config(path: String, key: Option<&KeyBytes>) -> Result<Arc<App
 
 pub async fn load_default_config(path: String) -> Result<Arc<AppConfig>> {
     let config_path = PathBuf::from(&path);
-    let config = default_settings();
+    let config = drop_nulls(default_settings());
+    let effective = layer_config(&config, &environment_layer())?;
 
     if let Some(parent) = config_path.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
-    let json_str = serde_json::to_string_pretty(&config)?;
-    tokio::fs::write(&config_path, json_str).await?;
+    let toml_str = toml::to_string_pretty(&config)?;
+    tokio::fs::write(&config_path, toml_str).await?;
 
     let config_metadata = tokio::fs::metadata(&config_path).await?;
     let config_modified = config_metadata.modified()?;
     let config_mtime = config_modified.duration_since(UNIX_EPOCH)?.as_secs();
     Ok(Arc::new(AppConfig {
-        value: config,
+        value: effective,
         path: config_path,
         mtime: config_mtime,
         writable: true,
@@ -699,5 +796,208 @@ mod tests {
                 "invalid schema_version must take the read-only path, not the overwrite path"
             );
         }
+    }
+
+    #[test]
+    fn schema_toml_yields_the_same_schema() {
+        assert_eq!(SCHEMA.version, 1);
+        assert_eq!(
+            SCHEMA
+                .spec("library.organization.naming_pattern")
+                .and_then(|spec| spec.default.as_str())
+                .map(|value| value.contains("{album_artist")),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn default_document_round_trips_through_toml() {
+        let text = toml::to_string_pretty(&drop_nulls(default_settings())).expect("serialize");
+        let parsed: Value = toml::from_str(&text).expect("parse");
+        assert_eq!(
+            get_path(&parsed, "schema_version").and_then(|v| v.as_u64()),
+            Some(SCHEMA.version)
+        );
+        assert_eq!(
+            get_path(&parsed, "server.port").and_then(|v| v.as_u64()),
+            Some(8181)
+        );
+        assert_eq!(
+            get_path(&parsed, "accounts.saved").map(|v| v.is_array()),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn saved_accounts_round_trip_as_tables() {
+        let mut document = default_settings();
+        set_path(
+            &mut document,
+            "accounts.saved",
+            serde_json::json!([{
+                "id": "user-1",
+                "host": "127.0.0.1",
+                "port": 8181,
+                "username": "alice",
+                "display_name": "Alice",
+                "label": "alice@localhost",
+                "role": "admin",
+                "api_key": "secret"
+            }]),
+        );
+
+        let text = toml::to_string_pretty(&drop_nulls(document)).expect("serialize");
+        assert!(text.contains("[[accounts.saved]]"));
+        let parsed: Value = toml::from_str(&text).expect("parse");
+        assert_eq!(
+            get_path(&parsed, "accounts.saved")
+                .and_then(|v| v.as_array())
+                .and_then(|accounts| accounts.first())
+                .and_then(|account| account.get("username"))
+                .and_then(|v| v.as_str()),
+            Some("alice")
+        );
+    }
+
+    #[test]
+    fn layering_is_defaults_then_file_then_environment() {
+        let file = serde_json::json!({
+            "server": { "port": 9000 },
+            "integrations": { "slskd": { "url": "http://file" } }
+        });
+        let env = environment_layer_from(|name| match name {
+            "TAWAI_SERVER_PORT" => Some("9999".to_string()),
+            "TAWAI_SLSKD_URL" => Some("http://env".to_string()),
+            _ => None,
+        });
+
+        let merged = layer_config(&file, &env).expect("merge");
+        assert_eq!(
+            get_path(&merged, "server.port").and_then(|v| v.as_u64()),
+            Some(9999)
+        );
+        assert_eq!(
+            get_path(&merged, "integrations.slskd.url").and_then(|v| v.as_str()),
+            Some("http://env")
+        );
+        assert_eq!(
+            get_path(&merged, "integrations.nadekodon.url").and_then(|v| v.as_str()),
+            Some("")
+        );
+    }
+
+    #[test]
+    fn a_partial_table_keeps_sibling_defaults() {
+        let file = serde_json::json!({"server": {"port": 9000}});
+        let merged = layer_config(&file, &Value::Object(Map::new())).expect("merge");
+        assert_eq!(
+            get_path(&merged, "server.port").and_then(|v| v.as_u64()),
+            Some(9000)
+        );
+        assert_eq!(
+            get_path(&merged, "server.host").and_then(|v| v.as_str()),
+            Some("127.0.0.1")
+        );
+    }
+
+    #[test]
+    fn unknown_keys_survive_layering() {
+        let file = serde_json::json!({"custom": {"flag": true}});
+        let merged = layer_config(&file, &Value::Object(Map::new())).expect("merge");
+        assert_eq!(
+            get_path(&merged, "custom.flag").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn invalid_environment_port_falls_back_to_the_schema_default() {
+        let env = environment_layer_from(|name| match name {
+            "TAWAI_SERVER_PORT" => Some("not-a-number".to_string()),
+            _ => None,
+        });
+        assert!(env.as_object().map(|map| map.is_empty()).unwrap_or(false));
+
+        let merged = layer_config(&Value::Object(Map::new()), &env).expect("merge");
+        assert_eq!(
+            get_path(&merged, "server.port").and_then(|v| v.as_u64()),
+            Some(8181)
+        );
+    }
+
+    #[test]
+    fn drop_nulls_removes_object_and_array_nulls() {
+        let value = serde_json::json!({
+            "keep": 1,
+            "drop": null,
+            "nested": {"drop": null, "keep": "yes"},
+            "list": [1, null, {"drop": null, "keep": true}]
+        });
+        let cleaned = drop_nulls(value);
+        assert!(cleaned.get("drop").is_none());
+        assert!(cleaned["nested"].get("drop").is_none());
+        assert_eq!(cleaned["list"].as_array().map(|list| list.len()), Some(2));
+        assert!(cleaned["list"][1].get("drop").is_none());
+    }
+
+    #[tokio::test]
+    async fn corrupt_toml_is_a_config_parse_error() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("config.toml");
+        tokio::fs::write(&path, "[[[not toml")
+            .await
+            .expect("seed file");
+
+        let err = match load_config(path.to_string_lossy().into_owned(), None).await {
+            Ok(_) => panic!("corrupt file must not load"),
+            Err(e) => e,
+        };
+        assert!(err.downcast_ref::<ConfigParseError>().is_some());
+        assert!(is_unusable_config(&err));
+    }
+
+    #[tokio::test]
+    async fn init_config_does_not_overwrite_a_corrupt_file() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("config.toml");
+        let original = "[[[not toml";
+        tokio::fs::write(&path, original).await.expect("seed file");
+
+        let context = crate::app_context::AppContext::new(reqwest::Client::new());
+        context
+            .set_master_key(
+                crate::utils::master_key::MasterKey::from_hex(&"11".repeat(32)).expect("key"),
+            )
+            .expect("install key");
+
+        let first_run = context
+            .init_config(path.to_string_lossy().into_owned())
+            .await
+            .expect("init config");
+        assert!(!first_run);
+        assert_eq!(
+            tokio::fs::read_to_string(&path).await.expect("read"),
+            original
+        );
+        assert!(!context.cfg().await.writable);
+    }
+
+    #[tokio::test]
+    async fn init_config_creates_a_toml_file_on_first_run() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("config/config.toml");
+
+        let context = crate::app_context::AppContext::new(reqwest::Client::new());
+        let first_run = context
+            .init_config(path.to_string_lossy().into_owned())
+            .await
+            .expect("init config");
+        assert!(first_run);
+
+        let text = tokio::fs::read_to_string(&path).await.expect("read");
+        assert!(text.contains("schema_version"));
+        assert!(text.contains("[server]"));
+        assert!(text.contains("[downloads]"));
+        assert!(!dir.path().join("config/config.json").exists());
     }
 }

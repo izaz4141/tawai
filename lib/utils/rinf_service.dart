@@ -15,52 +15,40 @@ class RinfService {
   // Crypt
   // ---------------------------------------------------------------------------
 
-  Future<String?> decrypt(String encryptedKey, {String? masterKey}) async {
+  Future<String?> decrypt(String encryptedKey) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = DecryptResponse.rustSignalStream.where(
       (s) => s.message.id == id,
     );
-    DecryptRequest(
-      id: id,
-      encryptedKey: encryptedKey,
-      masterKey: masterKey,
-    ).sendSignalToRust();
+    DecryptRequest(id: id, encryptedKey: encryptedKey).sendSignalToRust();
     final signal = await stream.first;
     return signal.message.decryptedKey.isNotEmpty
         ? signal.message.decryptedKey
         : null;
   }
 
-  Future<String?> encrypt(String plainKey, {String? masterKey}) async {
+  Future<String?> encrypt(String plainKey) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = EncryptResponse.rustSignalStream.where(
       (s) => s.message.id == id,
     );
-    EncryptRequest(
-      id: id,
-      plainKey: plainKey,
-      masterKey: masterKey,
-    ).sendSignalToRust();
+    EncryptRequest(id: id, plainKey: plainKey).sendSignalToRust();
     final signal = await stream.first;
     return signal.message.encryptedKey.isNotEmpty
         ? signal.message.encryptedKey
         : null;
   }
 
-  Future<({String encryptedApiKey, String decryptedApiKey, String masterKey})>
-  requestNewApiKey({String? masterKey, required String userId}) async {
+  Future<({String encryptedApiKey, String decryptedApiKey})> requestNewApiKey({
+    required String userId,
+  }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = NewApiKey.rustSignalStream.where((s) => s.message.id == id);
-    RequestNewApiKey(
-      id: id,
-      userId: userId,
-      masterKey: masterKey,
-    ).sendSignalToRust();
+    RequestNewApiKey(id: id, userId: userId).sendSignalToRust();
     final signal = await stream.first;
     return (
       encryptedApiKey: signal.message.encryptedApiKey,
       decryptedApiKey: signal.message.decryptedApiKey,
-      masterKey: signal.message.masterKey,
     );
   }
 
@@ -74,19 +62,12 @@ class RinfService {
     return signal.message.apiKey;
   }
 
-  Future<bool> generateMasterKey({
-    required String path,
-    required String deviceId,
-  }) async {
+  Future<bool> generateMasterKey() async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = GenerateMasterKeyResponse.rustSignalStream.where(
       (s) => s.message.id == id,
     );
-    GenerateMasterKeyRequest(
-      id: id,
-      path: path,
-      deviceId: deviceId,
-    ).sendSignalToRust();
+    GenerateMasterKeyRequest(id: id).sendSignalToRust();
     final signal = await stream.first;
     return signal.message.success;
   }
@@ -1307,26 +1288,28 @@ class RinfService {
   // System
   // ---------------------------------------------------------------------------
 
-  Future<bool> initDatabase(String path, {required String masterKey}) async {
+  Future<bool> setTawaiHome(String path, String deviceId) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
-    final stream = InitDatabaseResponse.rustSignalStream.where(
+    final stream = SetTawaiHomeResponse.rustSignalStream.where(
       (s) => s.message.id == id,
     );
-    InitDatabase(id: id, path: path, masterKey: masterKey).sendSignalToRust();
+    SetTawaiHome(id: id, path: path, deviceId: deviceId).sendSignalToRust();
     final signal = await stream.first;
     return signal.message.success;
   }
 
-  void startServer({
-    required int port,
-    required String masterKey,
-    required String configPath,
-  }) {
-    StartServer(
-      port: port,
-      masterKey: masterKey,
-      configPath: configPath,
-    ).sendSignalToRust();
+  Future<bool> initDatabase() async {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final stream = InitDatabaseResponse.rustSignalStream.where(
+      (s) => s.message.id == id,
+    );
+    InitDatabase(id: id).sendSignalToRust();
+    final signal = await stream.first;
+    return signal.message.success;
+  }
+
+  void startServer({required int port}) {
+    StartServer(port: port).sendSignalToRust();
   }
 
   Future<
@@ -1337,12 +1320,12 @@ class RinfService {
       bool isFirstRun,
     })
   >
-  initConfig(String path) async {
+  initConfig() async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final stream = InitConfigResponse.rustSignalStream.where(
       (s) => s.message.id == id,
     );
-    InitConfig(id: id, path: path).sendSignalToRust();
+    InitConfig(id: id).sendSignalToRust();
     final signal = await stream.first;
     Map<String, dynamic>? settings;
     final json = signal.message.settingsJson;
