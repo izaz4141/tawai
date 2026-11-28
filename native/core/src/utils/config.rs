@@ -526,6 +526,72 @@ pub(crate) fn drop_nulls(value: Value) -> Value {
     }
 }
 
+/// Walks every value whose schema path is marked `secret`.
+///
+/// Array items extend the schema path with `[]`, so `accounts.saved[].api_key`
+/// is matched at `accounts.saved.<item>.api_key` in the document.
+fn visit_secret_values(value: &mut Value, schema_path: &str, visit: &mut impl FnMut(&mut Value)) {
+    match value {
+        Value::Object(map) => {
+            for (key, child) in map.iter_mut() {
+                let path = if schema_path.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{schema_path}.{key}")
+                };
+                if SCHEMA.spec(&path).map(|spec| spec.secret).unwrap_or(false) {
+                    visit(child);
+                } else {
+                    visit_secret_values(child, &path, visit);
+                }
+            }
+        }
+        Value::Array(items) => {
+            let item_path = format!("{schema_path}[]");
+            for item in items.iter_mut() {
+                visit_secret_values(item, &item_path, visit);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Replaces every encrypted secret with its plaintext, leaving plaintext and
+/// unreadable values untouched.
+pub fn decrypt_secret_values(value: &mut Value, key: &KeyBytes) {
+    visit_secret_values(value, "", &mut |slot| {
+        let Some(stored) = slot.as_str() else {
+            return;
+        };
+        if let Ok(plain) = key.decrypt(normalize_secret(stored)) {
+            *slot = Value::String(plain);
+        }
+    });
+}
+
+/// Encrypts every plaintext secret, skipping empty and already-encrypted ones.
+pub fn encrypt_secret_values(value: &mut Value, key: &KeyBytes) {
+    visit_secret_values(value, "", &mut |slot| {
+        let Some(stored) = slot.as_str() else {
+            return;
+        };
+        let plain = normalize_secret(stored);
+        if plain.is_empty() || valid_encryption_format(plain) {
+            return;
+        }
+        if let Ok(encrypted) = key.encrypt(plain) {
+            *slot = Value::String(encrypted);
+        }
+    });
+}
+
+/// Encrypts every schema-declared secret, drops nulls, and serializes TOML.
+pub fn config_to_toml(settings: &Value, key: &KeyBytes) -> Result<String> {
+    let mut out = settings.clone();
+    encrypt_secret_values(&mut out, key);
+    Ok(toml::to_string_pretty(&drop_nulls(out))?)
+}
+
 pub fn validate_schema_version(value: &Value) -> Result<(), SchemaVersionMismatch> {
     match value.get("schema_version") {
         None => Ok(()),
@@ -554,29 +620,7 @@ pub async fn load_config(path: String, key: Option<&KeyBytes>) -> Result<Arc<App
     let mut config_val = layer_config(&file_value, &environment_layer())?;
 
     if let Some(key) = key {
-        for path in [
-            "integrations.slskd.api_key",
-            "integrations.nadekodon.api_key",
-        ] {
-            let stored = get_path(&config_val, path)
-                .map(|v| v.as_str().unwrap_or("").to_string())
-                .unwrap_or_default();
-            if let Ok(plain) = key.decrypt(&normalize_secret(&stored)) {
-                set_path(&mut config_val, path, Value::String(plain));
-            }
-        }
-
-        if let Some(accounts) =
-            get_path_mut(&mut config_val, "accounts.saved").and_then(|v| v.as_array_mut())
-        {
-            for account in accounts.iter_mut() {
-                if let Some(encrypted) = account.get("api_key").and_then(|v| v.as_str()) {
-                    if let Ok(plain) = key.decrypt(encrypted) {
-                        account["api_key"] = Value::String(plain);
-                    }
-                }
-            }
-        }
+        decrypt_secret_values(&mut config_val, key);
     }
 
     apply_schema_defaults(&mut config_val);
@@ -958,6 +1002,99 @@ mod tests {
         assert!(cleaned["nested"].get("drop").is_none());
         assert_eq!(cleaned["list"].as_array().map(|list| list.len()), Some(2));
         assert!(cleaned["list"][1].get("drop").is_none());
+    }
+
+    fn test_key() -> KeyBytes {
+        let slot = crate::utils::master_key::MasterKeySlot::new();
+        slot.set(crate::utils::master_key::MasterKey::from_hex(&"11".repeat(32)).expect("key"))
+            .expect("set key");
+        slot.bytes().expect("key bytes")
+    }
+
+    #[test]
+    fn secrets_round_trip_through_the_config_writer() {
+        let key = test_key();
+        let mut document = default_settings();
+        set_path(
+            &mut document,
+            "integrations.slskd.api_key",
+            Value::String("slskd-secret".to_string()),
+        );
+        set_path(
+            &mut document,
+            "integrations.nadekodon.api_key",
+            Value::String("nadekodon-secret".to_string()),
+        );
+        set_path(
+            &mut document,
+            "integrations.slskd.url",
+            Value::String("http://slskd".to_string()),
+        );
+        set_path(
+            &mut document,
+            "accounts.saved",
+            serde_json::json!([{
+                "id": "user-1",
+                "host": "127.0.0.1",
+                "api_key": "account-secret"
+            }]),
+        );
+
+        let text = config_to_toml(&document, &key).expect("serialize");
+        let written: Value = toml::from_str(&text).expect("parse");
+        for path in [
+            "integrations.slskd.api_key",
+            "integrations.nadekodon.api_key",
+        ] {
+            let stored = get_path(&written, path)
+                .and_then(|v| v.as_str())
+                .expect("secret");
+            assert!(stored.starts_with("NDK:"), "`{path}` was not encrypted");
+        }
+        let account_key = written["accounts"]["saved"][0]["api_key"]
+            .as_str()
+            .expect("account key");
+        assert!(account_key.starts_with("NDK:"));
+        assert_eq!(
+            get_path(&written, "integrations.slskd.url").and_then(|v| v.as_str()),
+            Some("http://slskd")
+        );
+
+        let mut loaded = written.clone();
+        decrypt_secret_values(&mut loaded, &key);
+        assert_eq!(
+            get_path(&loaded, "integrations.slskd.api_key").and_then(|v| v.as_str()),
+            Some("slskd-secret")
+        );
+        assert_eq!(
+            get_path(&loaded, "integrations.nadekodon.api_key").and_then(|v| v.as_str()),
+            Some("nadekodon-secret")
+        );
+        assert_eq!(
+            loaded["accounts"]["saved"][0]["api_key"].as_str(),
+            Some("account-secret")
+        );
+
+        let rewritten = config_to_toml(&written, &key).expect("serialize again");
+        assert_eq!(text, rewritten, "already encrypted values must not change");
+    }
+
+    #[test]
+    fn empty_secrets_are_not_encrypted() {
+        let key = test_key();
+        let mut document = default_settings();
+        set_path(
+            &mut document,
+            "integrations.slskd.api_key",
+            Value::String(String::new()),
+        );
+
+        let text = config_to_toml(&document, &key).expect("serialize");
+        let written: Value = toml::from_str(&text).expect("parse");
+        assert_eq!(
+            get_path(&written, "integrations.slskd.api_key").and_then(|v| v.as_str()),
+            Some("")
+        );
     }
 
     #[tokio::test]

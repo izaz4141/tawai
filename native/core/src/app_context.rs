@@ -14,13 +14,12 @@ use crate::db::{account, database::DatabaseManager, library_source, user_setting
 use crate::discovery::sync::{SyncRecsParams, sync_recs};
 use crate::signals::library::ScanProgress;
 use crate::utils::config::{
-    AppConfig, DEFAULT_SETTINGS, config_file_mtime, drop_nulls, environment_server_port,
+    AppConfig, DEFAULT_SETTINGS, config_file_mtime, config_to_toml, environment_server_port,
     get_path, get_path_mut, is_local_host, is_unusable_config, load_config, load_default_config,
-    merge_into, normalize_secret, path_is_secret, readonly_default_config, remove_path, set_path,
-    strip_paths,
+    merge_into, path_is_secret, readonly_default_config, remove_path, set_path, strip_paths,
 };
 use crate::utils::master_key::{KeyBytes, MasterKey, MasterKeyError, MasterKeySlot};
-use crate::utils::{cache, encryption::valid_encryption_format, logger};
+use crate::utils::{cache, logger};
 
 #[derive(Debug)]
 pub struct OperationSignals {
@@ -232,13 +231,13 @@ impl AppContext {
         let key = self.master_key_bytes().ok();
         let exists = tokio::fs::try_exists(&path).await.unwrap_or(false);
         let (app_config, is_first_run) = if exists {
+            let mtime = config_file_mtime(Path::new(&path)).await.unwrap_or(0);
             match load_config(path.clone(), key.as_ref()).await {
                 Ok(aconfig) => (aconfig, false),
                 Err(e) => {
                     logger::error(&format!(
                         "Failed to load config: {e}. Running on read-only defaults; the file will not be written."
                     ));
-                    let mtime = config_file_mtime(Path::new(&path)).await.unwrap_or(0);
                     (readonly_default_config(path.clone(), mtime), false)
                 }
             }
@@ -423,51 +422,13 @@ impl AppContext {
             return Ok(());
         }
 
-        let mut new_settings = settings.clone();
         let master_key = self.master_key_bytes()?;
-        for path in [
-            "integrations.slskd.api_key",
-            "integrations.nadekodon.api_key",
-        ] {
-            let stored = get_path(settings, path)
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let plain = normalize_secret(&stored).to_string();
-            if valid_encryption_format(&plain) {
-                set_path(&mut new_settings, path, serde_json::Value::String(plain));
-                continue;
-            }
-            if let Ok(encrypted) = master_key.encrypt(plain.as_str()) {
-                set_path(
-                    &mut new_settings,
-                    path,
-                    serde_json::Value::String(encrypted),
-                );
-            }
-        }
-
-        if let Some(accounts) =
-            get_path_mut(&mut new_settings, "accounts.saved").and_then(|v| v.as_array_mut())
-        {
-            for acc in accounts.iter_mut() {
-                if let Some(api_key) = acc.get("api_key").and_then(|v| v.as_str()) {
-                    let dapi = normalize_secret(api_key).to_string();
-                    if dapi.is_empty() || valid_encryption_format(&dapi) {
-                        continue;
-                    }
-                    if let Ok(eapi) = master_key.encrypt(dapi.as_str()) {
-                        acc["api_key"] = serde_json::Value::String(eapi);
-                    }
-                }
-            }
-        }
+        let toml_str = config_to_toml(settings, &master_key)?;
 
         let path = app_config.path.clone();
         if let Some(parent) = path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
-        let toml_str = toml::to_string_pretty(&drop_nulls(new_settings))?;
         tokio::fs::write(&path, &toml_str).await?;
 
         // Update in-memory cache so subsequent cfg() calls see the new values

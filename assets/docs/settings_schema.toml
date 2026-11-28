@@ -15,6 +15,7 @@ scope = "device"
 type = "string"
 default = ""
 scope = "device"
+secret = true
 
 [settings."accounts.saved[].display_name"]
 type = "string"
