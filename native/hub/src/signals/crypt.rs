@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 pub struct RequestNewApiKey {
     pub id: String,
     pub user_id: String,
-    pub master_key: Option<String>,
 }
 
 #[derive(Serialize, RustSignal)]
@@ -13,14 +12,12 @@ pub struct NewApiKey {
     pub id: String,
     pub encrypted_api_key: String,
     pub decrypted_api_key: String,
-    pub master_key: String,
 }
 
 #[derive(Deserialize, DartSignal)]
 pub struct DecryptRequest {
     pub id: String,
     pub encrypted_key: String,
-    pub master_key: Option<String>,
 }
 
 #[derive(Serialize, RustSignal)]
@@ -33,21 +30,17 @@ pub struct DecryptResponse {
 pub struct EncryptRequest {
     pub id: String,
     pub plain_key: String,
-    pub master_key: Option<String>,
 }
 
 #[derive(Serialize, RustSignal)]
 pub struct EncryptResponse {
     pub id: String,
     pub encrypted_key: String,
-    pub master_key: String,
 }
 
 #[derive(Deserialize, DartSignal)]
 pub struct GenerateMasterKeyRequest {
     pub id: String,
-    pub path: String,
-    pub device_id: String,
 }
 
 #[derive(Serialize, RustSignal)]

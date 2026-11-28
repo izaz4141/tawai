@@ -1,12 +1,12 @@
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
 use tawai_core::app_context::AppContext;
 use tawai_core::signals::library::ScanProgress;
 use tawai_core::utils::config::{get_path, set_path};
-use tawai_core::utils::master_key::{MasterKey, MasterKeyError};
+use tawai_core::utils::master_key::{self, KeySource, MasterKeyError};
 use tawai_core::utils::{logger, paths};
-use zeroize::Zeroizing;
 
 use tawai_server::utils::{observability, server};
 
@@ -33,32 +33,33 @@ async fn run(guard: init_tracing_opentelemetry::Guard) {
 
     logger::debug("Initializing Tawai Server...");
 
-    let config_path = paths::config_path();
-
-    let master_key = match std::env::var_os("TAWAI_SERVER_MASTER_KEY") {
-        Some(value) => {
-            let encoded = Zeroizing::new(value.into_encoded_bytes());
-            let decoded = match std::str::from_utf8(&encoded) {
-                Ok(value) => MasterKey::from_hex(value),
-                Err(_) => Err(MasterKeyError::NotSet),
-            };
-            drop(encoded);
-            decoded
-        }
-        None => Err(MasterKeyError::NotSet),
-    };
-
-    let master_key = match master_key {
-        Ok(key) => key,
-        Err(MasterKeyError::NotSet) => {
-            logger::error("TAWAI_SERVER_MASTER_KEY is not set");
+    let device_id = std::env::var("TAWAI_DEVICE_ID").unwrap_or_default();
+    let (master_key, source) = match master_key::resolve(Path::new(paths::tawai_home()), &device_id)
+    {
+        Ok(value) => value,
+        Err(MasterKeyError::MissingDeviceId) => {
+            logger::error("TAWAI_SERVER_MASTER_KEY is not set and TAWAI_DEVICE_ID is empty");
             std::process::exit(1);
         }
         Err(e) => {
-            logger::error(&format!("Invalid TAWAI_SERVER_MASTER_KEY: {e}"));
+            logger::error(&format!("Failed to resolve master key: {e}"));
             std::process::exit(1);
         }
     };
+
+    match source {
+        KeySource::Created => logger::info(&format!(
+            "created master key at {}",
+            paths::master_key_path()
+        )),
+        KeySource::Environment => {
+            logger::debug("loaded master key from TAWAI_SERVER_MASTER_KEY");
+        }
+        KeySource::File => logger::debug(&format!(
+            "loaded master key from {}",
+            paths::master_key_path()
+        )),
+    }
 
     let client = tawai_core::utils::url::build_browser_client().await;
 
@@ -80,55 +81,30 @@ async fn run(guard: init_tracing_opentelemetry::Guard) {
     }
 
     // Initialize config
-    if let Err(e) = context.init_config(config_path).await {
+    if let Err(e) = context.init_config(paths::config_path()).await {
         logger::error(&format!("Failed to load config: {:?}", e));
     }
 
-    let port: u16 = std::env::var("TAWAI_SERVER_PORT")
-        .unwrap_or_else(|_| "8181".to_string())
-        .parse()
+    let port = get_path(&context.cfg().await.value, "server.port")
+        .and_then(|v| v.as_u64())
+        .and_then(|v| u16::try_from(v).ok())
         .unwrap_or(8181);
-
-    // Set the server port in config
-    let mut config_value = context.cfg().await.value.clone();
-    set_path(&mut config_value, "server.port", serde_json::json!(port));
+    logger::debug(&format!("Server port: {port}"));
 
     // Default the download folder to {tawai_home}/downloads when unset
+    let mut config_value = context.cfg().await.value.clone();
     let existing = get_path(&config_value, "downloads.folder")
         .and_then(|v| v.as_str())
         .map(|s| !s.trim().is_empty())
         .unwrap_or(false);
-    let downloads_dir = paths::downloads_dir();
     if !existing {
         set_path(
             &mut config_value,
             "downloads.folder",
-            serde_json::json!(downloads_dir),
+            serde_json::json!(paths::downloads_dir()),
         );
+        let _ = context.save_config(&config_value).await;
     }
-
-    // Inject optional downstream service connection details from the environment.
-    // Environment variables override whatever is already stored in the config file.
-    // save_config encrypts the slskd/nadekodon API keys with the master key.
-    let env_overrides = [
-        ("TAWAI_SLSKD_URL", "integrations.slskd.url"),
-        ("TAWAI_SLSKD_API_KEY", "integrations.slskd.api_key"),
-        ("TAWAI_NADEKODON_URL", "integrations.nadekodon.url"),
-        ("TAWAI_NADEKODON_API_KEY", "integrations.nadekodon.api_key"),
-    ];
-    for (env_var, config_path) in env_overrides {
-        if let Ok(value) = std::env::var(env_var)
-            && !value.trim().is_empty()
-        {
-            set_path(
-                &mut config_value,
-                config_path,
-                serde_json::json!(value.trim()),
-            );
-        }
-    }
-
-    let _ = context.save_config(&config_value).await;
 
     let state = server::AppState::new(context);
 

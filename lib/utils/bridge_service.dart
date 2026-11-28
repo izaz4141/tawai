@@ -25,34 +25,26 @@ class BridgeService {
   // Crypt
   // ---------------------------------------------------------------------------
 
-  Future<String?> decrypt(String encryptedKey, {String? masterKey}) async {
+  Future<String?> decrypt(String encryptedKey) async {
     return _isRemote
         ? APIService.instance.decrypt(encryptedKey)
-        : RinfService.instance.decrypt(encryptedKey, masterKey: masterKey);
+        : RinfService.instance.decrypt(encryptedKey);
   }
 
-  Future<String?> encrypt(String plainKey, {String? masterKey}) async {
+  Future<String?> encrypt(String plainKey) async {
     return _isRemote
         ? APIService.instance.encrypt(plainKey)
-        : RinfService.instance.encrypt(plainKey, masterKey: masterKey);
+        : RinfService.instance.encrypt(plainKey);
   }
 
-  Future<({String encryptedApiKey, String decryptedApiKey, String masterKey})>
-  requestNewApiKey({String? masterKey, required String userId}) async {
-    return RinfService.instance.requestNewApiKey(
-      masterKey: masterKey,
-      userId: userId,
-    );
+  Future<({String encryptedApiKey, String decryptedApiKey})> requestNewApiKey({
+    required String userId,
+  }) async {
+    return RinfService.instance.requestNewApiKey(userId: userId);
   }
 
-  Future<bool> generateMasterKey({
-    required String path,
-    required String deviceId,
-  }) {
-    return RinfService.instance.generateMasterKey(
-      path: path,
-      deviceId: deviceId,
-    );
+  Future<bool> generateMasterKey() {
+    return RinfService.instance.generateMasterKey();
   }
 
   Future<({bool success, String userId, String username})> login(
@@ -523,9 +515,7 @@ class BridgeService {
 
   Future<Map<String, dynamic>?> getSettings() async {
     if (_isRemote) return APIService.instance.getSettings();
-    final result = await RinfService.instance.initConfig(
-      SettingsManager.configPath,
-    );
+    final result = await RinfService.instance.initConfig();
     return result.settings;
   }
 
@@ -664,24 +654,23 @@ class BridgeService {
   // System (local-only)
   // ---------------------------------------------------------------------------
 
-  Future<bool> initDatabase(String path, {required String masterKey}) async {
+  Future<bool> setTawaiHome(String path, String deviceId) async {
     if (!kIsWeb) {
-      return RinfService.instance.initDatabase(path, masterKey: masterKey);
+      return RinfService.instance.setTawaiHome(path, deviceId);
     }
     return true;
   }
 
-  void startServer({
-    required int port,
-    required String masterKey,
-    required String configPath,
-  }) {
+  Future<bool> initDatabase() async {
     if (!kIsWeb) {
-      RinfService.instance.startServer(
-        port: port,
-        masterKey: masterKey,
-        configPath: configPath,
-      );
+      return RinfService.instance.initDatabase();
+    }
+    return true;
+  }
+
+  void startServer({required int port}) {
+    if (!kIsWeb) {
+      RinfService.instance.startServer(port: port);
     }
   }
 

@@ -2,10 +2,22 @@ use rinf::{DartSignal, RustSignal};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, DartSignal)]
+pub struct SetTawaiHome {
+    pub id: String,
+    pub path: String,
+    pub device_id: String,
+}
+
+#[derive(Serialize, RustSignal)]
+pub struct SetTawaiHomeResponse {
+    pub id: String,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Deserialize, DartSignal)]
 pub struct StartServer {
     pub port: u16,
-    pub master_key: String,
-    pub config_path: String,
 }
 
 #[derive(Serialize, RustSignal)]
@@ -17,14 +29,11 @@ pub struct LogSignal {
 #[derive(Deserialize, DartSignal)]
 pub struct InitDatabase {
     pub id: String,
-    pub path: String,
-    pub master_key: String,
 }
 
 #[derive(Deserialize, DartSignal)]
 pub struct InitConfig {
     pub id: String,
-    pub path: String,
 }
 
 #[derive(Serialize, RustSignal)]

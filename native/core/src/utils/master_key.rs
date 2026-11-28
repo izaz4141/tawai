@@ -67,46 +67,67 @@ impl fmt::Display for MasterKeyError {
 
 impl std::error::Error for MasterKeyError {}
 
+/// Prefix of the stored master-key file.
+const KEY_FILE_PREFIX: &str = "tawai-mk1:";
+
 /// Where the current master key came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeySource {
+    Environment,
     File,
     Created,
 }
 
-/// Loads the master key from `path` or creates and persists a new one.
+/// Loads the master key for `home` or creates and persists a new one.
 ///
 /// An existing file is never overwritten. Any read, decode or validation
 /// failure is returned as an error so the caller cannot silently replace a key
 /// that may still decrypt stored data.
-pub fn resolve(path: &Path, device_id: &str) -> Result<(MasterKey, KeySource), MasterKeyError> {
+pub fn resolve(home: &Path, device_id: &str) -> Result<(MasterKey, KeySource), MasterKeyError> {
+    let env_key = std::env::var("TAWAI_SERVER_MASTER_KEY").ok();
+    resolve_with(home, device_id, env_key.as_deref())
+}
+
+fn resolve_with(
+    home: &Path,
+    device_id: &str,
+    env_key: Option<&str>,
+) -> Result<(MasterKey, KeySource), MasterKeyError> {
+    if let Some(value) = env_key.map(str::trim).filter(|value| !value.is_empty()) {
+        return Ok((MasterKey::from_hex(value)?, KeySource::Environment));
+    }
+
     if device_id.trim().is_empty() {
         return Err(MasterKeyError::MissingDeviceId);
     }
 
+    let path = key_path(home);
     if path.exists() {
-        return Ok((read_key(path, device_id)?, KeySource::File));
+        return Ok((read_key(&path, device_id)?, KeySource::File));
     }
 
     let key = MasterKey::generate();
     let protected = key
         .protect(device_id)
         .map_err(|reason| MasterKeyError::KeyFileWrite {
-            path: path.to_path_buf(),
+            path: path.clone(),
             reason,
         })?;
-    let mut encoded = Zeroizing::new([0u8; MASTER_KEY_LEN * 2]);
-    hex::encode_to_slice(&protected[..], &mut encoded[..]).map_err(|e| {
+    let mut hex_bytes = Zeroizing::new([0u8; MASTER_KEY_LEN * 2]);
+    hex::encode_to_slice(&protected[..], &mut hex_bytes[..]).map_err(|e| {
         MasterKeyError::KeyFileWrite {
-            path: path.to_path_buf(),
+            path: path.clone(),
             reason: e.to_string(),
         }
     })?;
+    let mut payload = Zeroizing::new(Vec::with_capacity(KEY_FILE_PREFIX.len() + hex_bytes.len()));
+    payload.extend_from_slice(KEY_FILE_PREFIX.as_bytes());
+    payload.extend_from_slice(&hex_bytes[..]);
 
     let parent = path.parent().filter(|p| !p.as_os_str().is_empty());
     if let Some(parent) = parent {
         fs::create_dir_all(parent).map_err(|e| MasterKeyError::KeyFileWrite {
-            path: path.to_path_buf(),
+            path: path.clone(),
             reason: e.to_string(),
         })?;
     }
@@ -120,44 +141,72 @@ pub fn resolve(path: &Path, device_id: &str) -> Result<(MasterKey, KeySource), M
     let mut temp = builder
         .tempfile_in(dir)
         .map_err(|e| MasterKeyError::KeyFileWrite {
-            path: path.to_path_buf(),
+            path: path.clone(),
             reason: e.to_string(),
         })?;
 
-    temp.write_all(&encoded[..])
+    temp.write_all(&payload)
         .map_err(|e| MasterKeyError::KeyFileWrite {
-            path: path.to_path_buf(),
+            path: path.clone(),
             reason: e.to_string(),
         })?;
     temp.as_file()
         .sync_all()
         .map_err(|e| MasterKeyError::KeyFileWrite {
-            path: path.to_path_buf(),
+            path: path.clone(),
             reason: e.to_string(),
         })?;
 
-    match temp.persist_noclobber(path) {
+    match temp.persist_noclobber(&path) {
         Ok(_) => Ok((key, KeySource::Created)),
         Err(e) if e.error.kind() == ErrorKind::AlreadyExists => {
-            Ok((read_key(path, device_id)?, KeySource::File))
+            Ok((read_key(&path, device_id)?, KeySource::File))
         }
         Err(e) => Err(MasterKeyError::KeyFileWrite {
-            path: path.to_path_buf(),
+            path,
             reason: e.error.to_string(),
         }),
     }
 }
 
-/// Reads the master key stored at `path` without creating or replacing it.
+/// Reads the master key for `home` without creating or replacing it.
 ///
 /// Unlike [`resolve`], a missing file is an error so callers can verify that
 /// the requested file already holds the installed key.
-pub fn read(path: &Path, device_id: &str) -> Result<MasterKey, MasterKeyError> {
+pub fn read_existing(
+    home: &Path,
+    device_id: &str,
+) -> Result<(MasterKey, KeySource), MasterKeyError> {
+    let env_key = std::env::var("TAWAI_SERVER_MASTER_KEY").ok();
+    read_existing_with(home, device_id, env_key.as_deref())
+}
+
+fn read_existing_with(
+    home: &Path,
+    device_id: &str,
+    env_key: Option<&str>,
+) -> Result<(MasterKey, KeySource), MasterKeyError> {
+    if let Some(value) = env_key.map(str::trim).filter(|value| !value.is_empty()) {
+        return Ok((MasterKey::from_hex(value)?, KeySource::Environment));
+    }
+
     if device_id.trim().is_empty() {
         return Err(MasterKeyError::MissingDeviceId);
     }
 
-    read_key(path, device_id)
+    let path = key_path(home);
+    if !path.exists() {
+        return Err(MasterKeyError::KeyFileUnreadable {
+            path,
+            reason: "file does not exist".to_string(),
+        });
+    }
+
+    Ok((read_key(&path, device_id)?, KeySource::File))
+}
+
+fn key_path(home: &Path) -> PathBuf {
+    home.join("config").join("master.key")
 }
 
 fn read_key(path: &Path, device_id: &str) -> Result<MasterKey, MasterKeyError> {
@@ -178,12 +227,14 @@ fn read_key(path: &Path, device_id: &str) -> Result<MasterKey, MasterKeyError> {
     })
 }
 
-/// Decodes the 64-hex-character tagged-key format used by current and earlier
-/// releases. The writer keeps this format, so no conversion is needed.
+/// Decodes the strict `tawai-mk1:<64 hex>` format. A bare hex body is invalid:
+/// there is no legacy compatibility path.
 fn decode_stored_key(raw: &[u8]) -> Result<Zeroizing<[u8; MASTER_KEY_LEN]>, String> {
-    let encoded = std::str::from_utf8(raw)
-        .map_err(|_| "file is not valid hex".to_string())?
-        .trim();
+    let text = std::str::from_utf8(raw).map_err(|_| "file is not valid UTF-8".to_string())?;
+    let encoded = text
+        .trim()
+        .strip_prefix(KEY_FILE_PREFIX)
+        .ok_or_else(|| format!("file does not start with `{KEY_FILE_PREFIX}`"))?;
     if encoded.is_empty() {
         return Err("file is not valid hex".to_string());
     }
@@ -501,7 +552,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("temp dir");
         let path = dir.path().join("config/master.key");
 
-        let (key, source) = resolve(&path, "test-device").expect("create key");
+        let (key, source) = resolve_with(dir.path(), "test-device", None).expect("create key");
         assert_eq!(source, KeySource::Created);
 
         #[cfg(unix)]
@@ -520,77 +571,103 @@ mod tests {
         let stored: [u8; MASTER_KEY_LEN] = *key.inner.borrow();
         let stored_hex = hex::encode(stored);
         let encoded = fs::read_to_string(&path).expect("read key file");
+        assert_eq!(encoded.lines().count(), 1);
+        assert!(encoded.starts_with(KEY_FILE_PREFIX));
         assert!(!encoded.contains(&stored_hex));
         assert_eq!(
-            dii(encoded.trim(), "test-device").expect("decode key file"),
+            dii(encoded.trim_start_matches(KEY_FILE_PREFIX), "test-device")
+                .expect("decode key file"),
             stored_hex
         );
 
-        let legacy = {
+        let expected = {
             let hex_key = Zeroizing::new(stored_hex);
-            oc(hex_key.as_str(), "test-device").expect("encode legacy key")
+            format!(
+                "{KEY_FILE_PREFIX}{}",
+                oc(hex_key.as_str(), "test-device").expect("encode key")
+            )
         };
-        assert_eq!(encoded, legacy);
+        assert_eq!(encoded, expected);
 
-        let (reloaded, source) = resolve(&path, "test-device").expect("reload key");
+        let (reloaded, source) = resolve_with(dir.path(), "test-device", None).expect("reload key");
         assert_eq!(source, KeySource::File);
         assert_eq!(*reloaded.inner.borrow(), stored);
         assert_eq!(fs::read_to_string(&path).expect("read key file"), encoded);
     }
 
     #[test]
-    fn resolve_reads_legacy_hex_key_file() {
+    fn environment_key_wins_over_the_file() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let path = dir.path().join("master.key");
-        let key = MasterKey::from_hex(HEX).expect("valid key");
-        let stored: [u8; MASTER_KEY_LEN] = *key.inner.borrow();
-        let legacy = {
-            let hex_key = Zeroizing::new(hex::encode(stored));
-            oc(hex_key.as_str(), "test-device").expect("encode legacy key")
-        };
-        fs::write(&path, legacy.as_bytes()).expect("seed legacy key file");
+        resolve_with(dir.path(), "test-device", None).expect("create key file");
 
-        let (reloaded, source) = resolve(&path, "test-device").expect("read legacy key");
-        assert_eq!(source, KeySource::File);
-        assert_eq!(*reloaded.inner.borrow(), stored);
+        let env = "aa".repeat(MASTER_KEY_LEN);
+        let (key, source) =
+            resolve_with(dir.path(), "test-device", Some(&env)).expect("environment key");
+        assert_eq!(source, KeySource::Environment);
+        assert_eq!(hex::encode(&*key.inner.borrow()), env);
     }
 
     #[test]
-    fn read_loads_existing_key() {
+    fn invalid_environment_key_does_not_fall_through() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let path = dir.path().join("master.key");
-        resolve(&path, "test-device").expect("create key");
+        let err = resolve_with(dir.path(), "test-device", Some("not-hex"))
+            .expect_err("invalid environment key");
+        assert!(matches!(
+            err,
+            MasterKeyError::InvalidLength | MasterKeyError::InvalidHex
+        ));
+        assert!(!dir.path().join("config/master.key").exists());
+    }
 
-        let key = read(&path, "test-device").expect("read key");
+    #[test]
+    fn resolve_rejects_a_prefix_less_file() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("config/master.key");
+        fs::create_dir_all(path.parent().expect("parent")).expect("config dir");
+        let original = "aa".repeat(MASTER_KEY_LEN);
+        fs::write(&path, &original).expect("seed bare hex file");
+
+        assert!(matches!(
+            resolve_with(dir.path(), "test-device", None),
+            Err(MasterKeyError::KeyFileInvalid { .. })
+        ));
+        assert_eq!(fs::read_to_string(&path).expect("read key file"), original);
+    }
+
+    #[test]
+    fn read_existing_loads_the_key_without_creating_it() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        resolve_with(dir.path(), "test-device", None).expect("create key");
+
+        let (key, source) = read_existing_with(dir.path(), "test-device", None).expect("read key");
+        assert_eq!(source, KeySource::File);
+
         let slot = MasterKeySlot::new();
         slot.install(key).expect("install read key");
-
-        let (resolved, _) = resolve(&path, "test-device").expect("resolve key");
+        let (resolved, _) = resolve_with(dir.path(), "test-device", None).expect("resolve key");
         assert!(slot.matches(&resolved));
     }
 
     #[test]
-    fn read_rejects_missing_file_without_creating_it() {
+    fn read_existing_rejects_a_missing_file_without_creating_it() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let path = dir.path().join("master.key");
 
         assert!(matches!(
-            read(&path, "test-device"),
+            read_existing_with(dir.path(), "test-device", None),
             Err(MasterKeyError::KeyFileUnreadable { .. })
         ));
-        assert!(!path.exists());
+        assert!(!dir.path().join("config").exists());
     }
 
     #[test]
-    fn read_requires_device_id() {
+    fn read_existing_requires_device_id() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let path = dir.path().join("master.key");
 
         assert_eq!(
-            read(&path, "  ").expect_err("empty device id"),
+            read_existing_with(dir.path(), "  ", None).expect_err("empty device id"),
             MasterKeyError::MissingDeviceId
         );
-        assert!(!path.exists());
+        assert!(!dir.path().join("config").exists());
     }
 
     #[test]
@@ -625,16 +702,15 @@ mod tests {
     #[test]
     fn resolve_reuses_concurrently_created_key() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let path = dir.path().join("config/master.key");
         let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
 
         let handles: Vec<_> = (0..2)
             .map(|_| {
-                let path = path.clone();
+                let home = dir.path().to_path_buf();
                 let barrier = std::sync::Arc::clone(&barrier);
                 std::thread::spawn(move || {
                     barrier.wait();
-                    let (key, _) = resolve(&path, "test-device").expect("resolve");
+                    let (key, _) = resolve_with(&home, "test-device", None).expect("resolve");
                     *key.inner.borrow()
                 })
             })
@@ -647,7 +723,8 @@ mod tests {
 
         assert_eq!(keys[0], keys[1]);
 
-        let entries: Vec<_> = fs::read_dir(path.parent().expect("parent"))
+        let config_dir = dir.path().join("config");
+        let entries: Vec<_> = fs::read_dir(&config_dir)
             .expect("read config dir")
             .map(|entry| entry.expect("entry").file_name())
             .collect();
@@ -655,13 +732,14 @@ mod tests {
     }
 
     #[test]
-    fn resolve_leaves_invalid_file_untouched() {
+    fn resolve_leaves_an_invalid_file_untouched() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let path = dir.path().join("master.key");
+        let path = dir.path().join("config/master.key");
+        fs::create_dir_all(path.parent().expect("parent")).expect("config dir");
         fs::write(&path, "not-hex").expect("seed key file");
 
         assert!(matches!(
-            resolve(&path, "test-device"),
+            resolve_with(dir.path(), "test-device", None),
             Err(MasterKeyError::KeyFileInvalid { .. })
         ));
         assert_eq!(fs::read_to_string(&path).expect("read key file"), "not-hex");
@@ -670,12 +748,11 @@ mod tests {
     #[test]
     fn resolve_requires_device_id() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let path = dir.path().join("master.key");
 
         assert_eq!(
-            resolve(&path, "  ").expect_err("empty device id"),
+            resolve_with(dir.path(), "  ", None).expect_err("empty device id"),
             MasterKeyError::MissingDeviceId
         );
-        assert!(!path.exists());
+        assert!(!dir.path().join("config").exists());
     }
 }

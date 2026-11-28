@@ -48,15 +48,24 @@ Future<void> main(List<String> args) async {
         initRustSignalLogger();
       }
 
-      String? masterKey;
       if (!kIsWeb) {
         await cleanupOldFiles();
-        masterKey = await getMasterKey();
-        final dbPath = await IOServiceFactory.create().getDatabasePath();
-        await BridgeService.instance.initDatabase(
-          dbPath,
-          masterKey: masterKey!,
-        );
+        final io = IOServiceFactory.create();
+        final home = await io.getConfigDir();
+        final deviceId = await getDeviceId();
+        if (!await BridgeService.instance.setTawaiHome(home, deviceId)) {
+          log(
+            'Failed to initialize Tawai home at $home',
+            level: LogLevel.error,
+          );
+          io.exit(1);
+          return;
+        }
+        if (!await BridgeService.instance.initDatabase()) {
+          log('Failed to initialize the database', level: LogLevel.error);
+          io.exit(1);
+          return;
+        }
       }
 
       await APIService.instance.init();
@@ -89,8 +98,6 @@ Future<void> main(List<String> args) async {
       if (!kIsWeb) {
         BridgeService.instance.startServer(
           port: SettingsManager.serverPort.value,
-          masterKey: masterKey!,
-          configPath: SettingsManager.configPath,
         );
 
         final users = await RinfService.instance.listUsers();

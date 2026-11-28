@@ -1,6 +1,6 @@
 use tawai_core::app_context::AppContext;
 use tawai_core::db::account;
-use tawai_core::utils::master_key::MasterKey;
+use tawai_core::utils::paths;
 use tawai_server::routers::create_router;
 use tawai_server::utils::server::{AppState, run_server};
 
@@ -46,7 +46,6 @@ pub async fn handle_api_key_generation(context: Arc<AppContext>) {
                 id: msg.id,
                 encrypted_api_key: String::new(),
                 decrypted_api_key: String::new(),
-                master_key: String::new(),
             }
             .send_signal_to_dart();
             continue;
@@ -65,7 +64,6 @@ pub async fn handle_api_key_generation(context: Arc<AppContext>) {
                     id: msg.id,
                     encrypted_api_key: String::new(),
                     decrypted_api_key: String::new(),
-                    master_key: String::new(),
                 }
                 .send_signal_to_dart();
                 continue;
@@ -75,7 +73,6 @@ pub async fn handle_api_key_generation(context: Arc<AppContext>) {
             id: msg.id,
             encrypted_api_key,
             decrypted_api_key: api_key,
-            master_key: String::new(),
         }
         .send_signal_to_dart();
     }
@@ -116,7 +113,6 @@ pub async fn handle_encrypt_request(context: Arc<AppContext>) {
             EncryptResponse {
                 id: msg.id,
                 encrypted_key: String::new(),
-                master_key: String::new(),
             }
             .send_signal_to_dart();
             continue;
@@ -128,7 +124,6 @@ pub async fn handle_encrypt_request(context: Arc<AppContext>) {
                 EncryptResponse {
                     id: msg.id,
                     encrypted_key: String::new(),
-                    master_key: String::new(),
                 }
                 .send_signal_to_dart();
                 continue;
@@ -137,7 +132,6 @@ pub async fn handle_encrypt_request(context: Arc<AppContext>) {
         EncryptResponse {
             id: msg.id,
             encrypted_key,
-            master_key: String::new(),
         }
         .send_signal_to_dart();
     }
@@ -147,7 +141,7 @@ pub async fn handle_init_config(context: Arc<AppContext>) {
     let receiver = InitConfig::get_dart_signal_receiver();
     while let Some(signal_pack) = receiver.recv().await {
         let msg = signal_pack.message;
-        match context.init_config(msg.path).await {
+        match context.init_config(paths::config_path()).await {
             Ok(is_first_run) => {
                 let settings_json = serde_json::to_string(&context.client_config().await).ok();
                 InitConfigResponse {
@@ -237,15 +231,9 @@ pub async fn start_server_listener(context: Arc<AppContext>) {
             let _ = old_handle.await;
         }
 
-        if !context.has_master_key()
-            && let Ok(key) = MasterKey::from_hex(&msg.master_key)
-        {
-            let _ = context.set_master_key(key);
-        }
-
         // Initialize config if not already done
         if context.cfg().await.value.is_null() {
-            let _ = context.init_config(msg.config_path.clone()).await;
+            let _ = context.init_config(paths::config_path()).await;
         }
 
         let state = AppState::new(context.clone());

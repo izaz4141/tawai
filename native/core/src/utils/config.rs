@@ -1,4 +1,5 @@
 use anyhow::Result;
+use config as config_crate;
 use serde_json::{Map, Value};
 use std::{
     path::{Path, PathBuf},
@@ -11,8 +12,8 @@ use crate::utils::master_key::KeyBytes;
 
 /// The settings schema, embedded at compile time. This file is the single
 /// source of truth for the shape, defaults, scope and capabilities of the
-/// global settings document; `config.json` is always a concrete instance of it.
-const SETTINGS_SCHEMA_JSON: &str = include_str!("../../../../assets/docs/settings_schema.json");
+/// global settings document; `config.toml` is always a concrete instance of it.
+const SETTINGS_SCHEMA_TOML: &str = include_str!("../../../../assets/docs/settings_schema.toml");
 
 /// Version reported for a config document that carries no `schema_version`.
 pub fn current_schema_version() -> u64 {
@@ -101,8 +102,8 @@ struct RawSpec {
 }
 
 pub static SCHEMA: LazyLock<Schema> = LazyLock::new(|| {
-    let raw: RawSchema = serde_json::from_str(SETTINGS_SCHEMA_JSON)
-        .expect("assets/docs/settings_schema.json is not valid JSON");
+    let raw: RawSchema = toml::from_str(SETTINGS_SCHEMA_TOML)
+        .expect("assets/docs/settings_schema.toml is not valid TOML");
     let mut entries: Vec<(String, SettingSpec)> = raw
         .settings
         .into_iter()
@@ -420,6 +421,177 @@ pub fn is_version_mismatch(error: &anyhow::Error) -> bool {
     error.downcast_ref::<SchemaVersionMismatch>().is_some()
 }
 
+/// Raised when the config file exists but is not valid TOML.
+#[derive(Debug)]
+pub struct ConfigParseError {
+    pub path: PathBuf,
+    pub reason: String,
+}
+
+impl std::fmt::Display for ConfigParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "cannot parse config file {}: {}",
+            self.path.display(),
+            self.reason
+        )
+    }
+}
+
+impl std::error::Error for ConfigParseError {}
+
+/// Returns true when a config file exists but cannot be used, so the caller must
+/// fall back to read-only defaults instead of overwriting it.
+pub fn is_unusable_config(error: &anyhow::Error) -> bool {
+    is_version_mismatch(error) || error.downcast_ref::<ConfigParseError>().is_some()
+}
+
+/// The allowlisted environment overrides, mapped onto config paths.
+fn environment_layer() -> Value {
+    environment_layer_from(|name| std::env::var(name).ok())
+}
+
+fn parse_server_port(value: &str) -> Option<u64> {
+    value
+        .trim()
+        .parse::<u64>()
+        .ok()
+        .filter(|port| (1..=65535).contains(port))
+}
+
+/// Returns the server port forced by `TAWAI_SERVER_PORT`, when it is a valid
+/// port in the schema's range.
+pub fn environment_server_port() -> Option<u64> {
+    std::env::var("TAWAI_SERVER_PORT")
+        .ok()
+        .and_then(|value| parse_server_port(&value))
+}
+
+fn environment_layer_from(get: impl Fn(&str) -> Option<String>) -> Value {
+    let mut root = Value::Object(Map::new());
+
+    if let Some(port) = get("TAWAI_SERVER_PORT")
+        .as_deref()
+        .and_then(parse_server_port)
+    {
+        set_path(&mut root, "server.port", Value::from(port));
+    }
+
+    for (variable, path) in [
+        ("TAWAI_SLSKD_URL", "integrations.slskd.url"),
+        ("TAWAI_SLSKD_API_KEY", "integrations.slskd.api_key"),
+        ("TAWAI_NADEKODON_URL", "integrations.nadekodon.url"),
+        ("TAWAI_NADEKODON_API_KEY", "integrations.nadekodon.api_key"),
+    ] {
+        if let Some(value) = get(variable)
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+        {
+            set_path(&mut root, path, Value::String(value));
+        }
+    }
+
+    root
+}
+
+/// Merges schema defaults, the file document and the environment layer, with
+/// later sources winning. Objects merge, arrays replace and key case is kept.
+fn layer_config(file: &Value, env: &Value) -> Result<Value> {
+    let merged = config_crate::Config::builder()
+        .add_source(config_crate::Config::try_from(&*DEFAULT_SETTINGS)?)
+        .add_source(config_crate::Config::try_from(file)?)
+        .add_source(config_crate::Config::try_from(env)?)
+        .build()?;
+    Ok(merged.try_deserialize::<Value>()?)
+}
+
+/// Recursively removes `null` values, which TOML cannot represent.
+pub(crate) fn drop_nulls(value: Value) -> Value {
+    match value {
+        Value::Object(map) => Value::Object(
+            map.into_iter()
+                .filter(|(_, value)| !value.is_null())
+                .map(|(key, value)| (key, drop_nulls(value)))
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(
+            items
+                .into_iter()
+                .filter(|value| !value.is_null())
+                .map(drop_nulls)
+                .collect(),
+        ),
+        other => other,
+    }
+}
+
+/// Walks every value whose schema path is marked `secret`.
+///
+/// Array items extend the schema path with `[]`, so `accounts.saved[].api_key`
+/// is matched at `accounts.saved.<item>.api_key` in the document.
+fn visit_secret_values(value: &mut Value, schema_path: &str, visit: &mut impl FnMut(&mut Value)) {
+    match value {
+        Value::Object(map) => {
+            for (key, child) in map.iter_mut() {
+                let path = if schema_path.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{schema_path}.{key}")
+                };
+                if SCHEMA.spec(&path).map(|spec| spec.secret).unwrap_or(false) {
+                    visit(child);
+                } else {
+                    visit_secret_values(child, &path, visit);
+                }
+            }
+        }
+        Value::Array(items) => {
+            let item_path = format!("{schema_path}[]");
+            for item in items.iter_mut() {
+                visit_secret_values(item, &item_path, visit);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Replaces every encrypted secret with its plaintext, leaving plaintext and
+/// unreadable values untouched.
+pub fn decrypt_secret_values(value: &mut Value, key: &KeyBytes) {
+    visit_secret_values(value, "", &mut |slot| {
+        let Some(stored) = slot.as_str() else {
+            return;
+        };
+        if let Ok(plain) = key.decrypt(normalize_secret(stored)) {
+            *slot = Value::String(plain);
+        }
+    });
+}
+
+/// Encrypts every plaintext secret, skipping empty and already-encrypted ones.
+pub fn encrypt_secret_values(value: &mut Value, key: &KeyBytes) {
+    visit_secret_values(value, "", &mut |slot| {
+        let Some(stored) = slot.as_str() else {
+            return;
+        };
+        let plain = normalize_secret(stored);
+        if plain.is_empty() || valid_encryption_format(plain) {
+            return;
+        }
+        if let Ok(encrypted) = key.encrypt(plain) {
+            *slot = Value::String(encrypted);
+        }
+    });
+}
+
+/// Encrypts every schema-declared secret, drops nulls, and serializes TOML.
+pub fn config_to_toml(settings: &Value, key: &KeyBytes) -> Result<String> {
+    let mut out = settings.clone();
+    encrypt_secret_values(&mut out, key);
+    Ok(toml::to_string_pretty(&drop_nulls(out))?)
+}
+
 pub fn validate_schema_version(value: &Value) -> Result<(), SchemaVersionMismatch> {
     match value.get("schema_version") {
         None => Ok(()),
@@ -438,34 +610,17 @@ pub async fn load_config(path: String, key: Option<&KeyBytes>) -> Result<Arc<App
     }
 
     let contents = tokio::fs::read_to_string(&config_path).await?;
-    let mut config_val: Value = serde_json::from_str(&contents)?;
+    let file_value: Value = toml::from_str(&contents).map_err(|e| ConfigParseError {
+        path: config_path.clone(),
+        reason: e.message().to_string(),
+    })?;
 
-    validate_schema_version(&config_val).map_err(anyhow::Error::new)?;
+    validate_schema_version(&file_value).map_err(anyhow::Error::new)?;
+
+    let mut config_val = layer_config(&file_value, &environment_layer())?;
 
     if let Some(key) = key {
-        for path in [
-            "integrations.slskd.api_key",
-            "integrations.nadekodon.api_key",
-        ] {
-            let stored = get_path(&config_val, path)
-                .map(|v| v.as_str().unwrap_or("").to_string())
-                .unwrap_or_default();
-            if let Ok(plain) = key.decrypt(&normalize_secret(&stored)) {
-                set_path(&mut config_val, path, Value::String(plain));
-            }
-        }
-
-        if let Some(accounts) =
-            get_path_mut(&mut config_val, "accounts.saved").and_then(|v| v.as_array_mut())
-        {
-            for account in accounts.iter_mut() {
-                if let Some(encrypted) = account.get("api_key").and_then(|v| v.as_str()) {
-                    if let Ok(plain) = key.decrypt(encrypted) {
-                        account["api_key"] = Value::String(plain);
-                    }
-                }
-            }
-        }
+        decrypt_secret_values(&mut config_val, key);
     }
 
     apply_schema_defaults(&mut config_val);
@@ -483,19 +638,20 @@ pub async fn load_config(path: String, key: Option<&KeyBytes>) -> Result<Arc<App
 
 pub async fn load_default_config(path: String) -> Result<Arc<AppConfig>> {
     let config_path = PathBuf::from(&path);
-    let config = default_settings();
+    let config = drop_nulls(default_settings());
+    let effective = layer_config(&config, &environment_layer())?;
 
     if let Some(parent) = config_path.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
-    let json_str = serde_json::to_string_pretty(&config)?;
-    tokio::fs::write(&config_path, json_str).await?;
+    let toml_str = toml::to_string_pretty(&config)?;
+    tokio::fs::write(&config_path, toml_str).await?;
 
     let config_metadata = tokio::fs::metadata(&config_path).await?;
     let config_modified = config_metadata.modified()?;
     let config_mtime = config_modified.duration_since(UNIX_EPOCH)?.as_secs();
     Ok(Arc::new(AppConfig {
-        value: config,
+        value: effective,
         path: config_path,
         mtime: config_mtime,
         writable: true,
@@ -699,5 +855,310 @@ mod tests {
                 "invalid schema_version must take the read-only path, not the overwrite path"
             );
         }
+    }
+
+    #[test]
+    fn schema_toml_yields_the_same_schema() {
+        assert_eq!(SCHEMA.version, 1);
+        assert_eq!(
+            SCHEMA
+                .spec("library.organization.naming_pattern")
+                .and_then(|spec| spec.default.as_str())
+                .map(|value| value.contains("{album_artist")),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn default_document_round_trips_through_toml() {
+        let text = toml::to_string_pretty(&drop_nulls(default_settings())).expect("serialize");
+        let parsed: Value = toml::from_str(&text).expect("parse");
+        assert_eq!(
+            get_path(&parsed, "schema_version").and_then(|v| v.as_u64()),
+            Some(SCHEMA.version)
+        );
+        assert_eq!(
+            get_path(&parsed, "server.port").and_then(|v| v.as_u64()),
+            Some(8181)
+        );
+        assert_eq!(
+            get_path(&parsed, "accounts.saved").map(|v| v.is_array()),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn saved_accounts_round_trip_as_tables() {
+        let mut document = default_settings();
+        set_path(
+            &mut document,
+            "accounts.saved",
+            serde_json::json!([{
+                "id": "user-1",
+                "host": "127.0.0.1",
+                "port": 8181,
+                "username": "alice",
+                "display_name": "Alice",
+                "label": "alice@localhost",
+                "role": "admin",
+                "api_key": "secret"
+            }]),
+        );
+
+        let text = toml::to_string_pretty(&drop_nulls(document)).expect("serialize");
+        assert!(text.contains("[[accounts.saved]]"));
+        let parsed: Value = toml::from_str(&text).expect("parse");
+        assert_eq!(
+            get_path(&parsed, "accounts.saved")
+                .and_then(|v| v.as_array())
+                .and_then(|accounts| accounts.first())
+                .and_then(|account| account.get("username"))
+                .and_then(|v| v.as_str()),
+            Some("alice")
+        );
+    }
+
+    #[test]
+    fn layering_is_defaults_then_file_then_environment() {
+        let file = serde_json::json!({
+            "server": { "port": 9000 },
+            "integrations": { "slskd": { "url": "http://file" } }
+        });
+        let env = environment_layer_from(|name| match name {
+            "TAWAI_SERVER_PORT" => Some("9999".to_string()),
+            "TAWAI_SLSKD_URL" => Some("http://env".to_string()),
+            _ => None,
+        });
+
+        let merged = layer_config(&file, &env).expect("merge");
+        assert_eq!(
+            get_path(&merged, "server.port").and_then(|v| v.as_u64()),
+            Some(9999)
+        );
+        assert_eq!(
+            get_path(&merged, "integrations.slskd.url").and_then(|v| v.as_str()),
+            Some("http://env")
+        );
+        assert_eq!(
+            get_path(&merged, "integrations.nadekodon.url").and_then(|v| v.as_str()),
+            Some("")
+        );
+    }
+
+    #[test]
+    fn a_partial_table_keeps_sibling_defaults() {
+        let file = serde_json::json!({"server": {"port": 9000}});
+        let merged = layer_config(&file, &Value::Object(Map::new())).expect("merge");
+        assert_eq!(
+            get_path(&merged, "server.port").and_then(|v| v.as_u64()),
+            Some(9000)
+        );
+        assert_eq!(
+            get_path(&merged, "server.host").and_then(|v| v.as_str()),
+            Some("127.0.0.1")
+        );
+    }
+
+    #[test]
+    fn unknown_keys_survive_layering() {
+        let file = serde_json::json!({"custom": {"flag": true}});
+        let merged = layer_config(&file, &Value::Object(Map::new())).expect("merge");
+        assert_eq!(
+            get_path(&merged, "custom.flag").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn invalid_environment_port_falls_back_to_the_schema_default() {
+        for invalid in ["not-a-number", "0", "65536", "-1", ""] {
+            let env = environment_layer_from(|name| match name {
+                "TAWAI_SERVER_PORT" => Some(invalid.to_string()),
+                _ => None,
+            });
+            assert!(
+                env.as_object().map(|map| map.is_empty()).unwrap_or(false),
+                "`{invalid}` should not be accepted as a port"
+            );
+
+            let merged = layer_config(&Value::Object(Map::new()), &env).expect("merge");
+            assert_eq!(
+                get_path(&merged, "server.port").and_then(|v| v.as_u64()),
+                Some(8181)
+            );
+        }
+    }
+
+    #[test]
+    fn drop_nulls_removes_object_and_array_nulls() {
+        let value = serde_json::json!({
+            "keep": 1,
+            "drop": null,
+            "nested": {"drop": null, "keep": "yes"},
+            "list": [1, null, {"drop": null, "keep": true}]
+        });
+        let cleaned = drop_nulls(value);
+        assert!(cleaned.get("drop").is_none());
+        assert!(cleaned["nested"].get("drop").is_none());
+        assert_eq!(cleaned["list"].as_array().map(|list| list.len()), Some(2));
+        assert!(cleaned["list"][1].get("drop").is_none());
+    }
+
+    fn test_key() -> KeyBytes {
+        let slot = crate::utils::master_key::MasterKeySlot::new();
+        slot.set(crate::utils::master_key::MasterKey::from_hex(&"11".repeat(32)).expect("key"))
+            .expect("set key");
+        slot.bytes().expect("key bytes")
+    }
+
+    #[test]
+    fn secrets_round_trip_through_the_config_writer() {
+        let key = test_key();
+        let mut document = default_settings();
+        set_path(
+            &mut document,
+            "integrations.slskd.api_key",
+            Value::String("slskd-secret".to_string()),
+        );
+        set_path(
+            &mut document,
+            "integrations.nadekodon.api_key",
+            Value::String("nadekodon-secret".to_string()),
+        );
+        set_path(
+            &mut document,
+            "integrations.slskd.url",
+            Value::String("http://slskd".to_string()),
+        );
+        set_path(
+            &mut document,
+            "accounts.saved",
+            serde_json::json!([{
+                "id": "user-1",
+                "host": "127.0.0.1",
+                "api_key": "account-secret"
+            }]),
+        );
+
+        let text = config_to_toml(&document, &key).expect("serialize");
+        let written: Value = toml::from_str(&text).expect("parse");
+        for path in [
+            "integrations.slskd.api_key",
+            "integrations.nadekodon.api_key",
+        ] {
+            let stored = get_path(&written, path)
+                .and_then(|v| v.as_str())
+                .expect("secret");
+            assert!(stored.starts_with("NDK:"), "`{path}` was not encrypted");
+        }
+        let account_key = written["accounts"]["saved"][0]["api_key"]
+            .as_str()
+            .expect("account key");
+        assert!(account_key.starts_with("NDK:"));
+        assert_eq!(
+            get_path(&written, "integrations.slskd.url").and_then(|v| v.as_str()),
+            Some("http://slskd")
+        );
+
+        let mut loaded = written.clone();
+        decrypt_secret_values(&mut loaded, &key);
+        assert_eq!(
+            get_path(&loaded, "integrations.slskd.api_key").and_then(|v| v.as_str()),
+            Some("slskd-secret")
+        );
+        assert_eq!(
+            get_path(&loaded, "integrations.nadekodon.api_key").and_then(|v| v.as_str()),
+            Some("nadekodon-secret")
+        );
+        assert_eq!(
+            loaded["accounts"]["saved"][0]["api_key"].as_str(),
+            Some("account-secret")
+        );
+
+        let rewritten = config_to_toml(&written, &key).expect("serialize again");
+        assert_eq!(text, rewritten, "already encrypted values must not change");
+    }
+
+    #[test]
+    fn empty_secrets_are_not_encrypted() {
+        let key = test_key();
+        let mut document = default_settings();
+        set_path(
+            &mut document,
+            "integrations.slskd.api_key",
+            Value::String(String::new()),
+        );
+
+        let text = config_to_toml(&document, &key).expect("serialize");
+        let written: Value = toml::from_str(&text).expect("parse");
+        assert_eq!(
+            get_path(&written, "integrations.slskd.api_key").and_then(|v| v.as_str()),
+            Some("")
+        );
+    }
+
+    #[tokio::test]
+    async fn corrupt_toml_is_a_config_parse_error() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("config.toml");
+        tokio::fs::write(&path, "[[[not toml")
+            .await
+            .expect("seed file");
+
+        let err = match load_config(path.to_string_lossy().into_owned(), None).await {
+            Ok(_) => panic!("corrupt file must not load"),
+            Err(e) => e,
+        };
+        assert!(err.downcast_ref::<ConfigParseError>().is_some());
+        let parse_error = err
+            .downcast_ref::<ConfigParseError>()
+            .expect("config parse error");
+        assert!(!parse_error.reason.contains("[[[not toml"));
+        assert!(is_unusable_config(&err));
+    }
+
+    #[tokio::test]
+    async fn init_config_does_not_overwrite_a_corrupt_file() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("config.toml");
+        let original = "[[[not toml";
+        tokio::fs::write(&path, original).await.expect("seed file");
+
+        let context = crate::app_context::AppContext::new(reqwest::Client::new());
+        context
+            .set_master_key(
+                crate::utils::master_key::MasterKey::from_hex(&"11".repeat(32)).expect("key"),
+            )
+            .expect("install key");
+
+        let first_run = context
+            .init_config(path.to_string_lossy().into_owned())
+            .await
+            .expect("init config");
+        assert!(!first_run);
+        assert_eq!(
+            tokio::fs::read_to_string(&path).await.expect("read"),
+            original
+        );
+        assert!(!context.cfg().await.writable);
+    }
+
+    #[tokio::test]
+    async fn init_config_creates_a_toml_file_on_first_run() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("config/config.toml");
+
+        let context = crate::app_context::AppContext::new(reqwest::Client::new());
+        let first_run = context
+            .init_config(path.to_string_lossy().into_owned())
+            .await
+            .expect("init config");
+        assert!(first_run);
+
+        let text = tokio::fs::read_to_string(&path).await.expect("read");
+        assert!(text.contains("schema_version"));
+        assert!(text.contains("[server]"));
+        assert!(text.contains("[downloads]"));
+        assert!(!dir.path().join("config/config.json").exists());
     }
 }

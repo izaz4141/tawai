@@ -63,6 +63,7 @@ dependencies:
   web: ^1.1.1
   win32_registry: ^3.0.3
   tuple: ^2.0.2
+  toml: ^0.18.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

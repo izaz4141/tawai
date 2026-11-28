@@ -16,7 +16,7 @@ use crate::utils::config::{AppConfig, DEFAULT_SETTINGS, get_path};
 /// required but none is configured. May contain subdirectories (`/`).
 ///
 /// Derived from the settings schema so the pattern is written down exactly
-/// once, in `assets/docs/settings_schema.json`.
+/// once, in `assets/docs/settings_schema.toml`.
 pub(crate) static DEFAULT_PATTERN: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
     get_path(&DEFAULT_SETTINGS, "library.organization.naming_pattern")
         .and_then(|v| v.as_str())

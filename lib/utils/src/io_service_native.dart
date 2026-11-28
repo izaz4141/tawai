@@ -39,13 +39,13 @@ class NativeIOService implements IOService {
   @override
   Future<String> getDatabasePath() async {
     final configDir = await getConfigDir();
-    return '$configDir/tawai.db';
+    return '$configDir/data/tawai.db';
   }
 
   @override
   Future<String> getTorrentPersistencePath() async {
     final configDir = await getConfigDir();
-    return '$configDir/torrent_data';
+    return '$configDir/data/torrent_data';
   }
 
   @override

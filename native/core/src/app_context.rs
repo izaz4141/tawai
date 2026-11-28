@@ -14,12 +14,12 @@ use crate::db::{account, database::DatabaseManager, library_source, user_setting
 use crate::discovery::sync::{SyncRecsParams, sync_recs};
 use crate::signals::library::ScanProgress;
 use crate::utils::config::{
-    AppConfig, DEFAULT_SETTINGS, config_file_mtime, get_path, get_path_mut, is_local_host,
-    is_version_mismatch, load_config, load_default_config, merge_into, normalize_secret,
-    path_is_secret, readonly_default_config, remove_path, set_path, strip_paths,
+    AppConfig, DEFAULT_SETTINGS, config_file_mtime, config_to_toml, environment_server_port,
+    get_path, get_path_mut, is_local_host, is_unusable_config, load_config, load_default_config,
+    merge_into, path_is_secret, readonly_default_config, remove_path, set_path, strip_paths,
 };
 use crate::utils::master_key::{KeyBytes, MasterKey, MasterKeyError, MasterKeySlot};
-use crate::utils::{cache, encryption::valid_encryption_format, logger};
+use crate::utils::{cache, logger};
 
 #[derive(Debug)]
 pub struct OperationSignals {
@@ -205,10 +205,11 @@ impl AppContext {
             }
             Err(e) => {
                 logger::error(&format!("Failed to reload config: {}", e));
-                if is_version_mismatch(&e) {
+                if is_unusable_config(&e) {
                     // Never keep retrying a file that is still on another
-                    // schema version; remember its mtime and fall back to
-                    // defaults until the file changes or disappears.
+                    // schema version or cannot be parsed; remember its mtime
+                    // and fall back to defaults until the file changes or
+                    // disappears.
                     let rejected = readonly_default_config(
                         current_path.to_string_lossy().into_owned(),
                         observed_mtime.unwrap_or(0),
@@ -224,34 +225,31 @@ impl AppContext {
 
     /// Loads the config file at `path`, or bootstraps a default config when the
     /// file is missing. Returns `true` when a default config was created
-    /// (first run).
+    /// (first run). An existing file that cannot be read or parsed is never
+    /// overwritten: the process runs on read-only defaults instead.
     pub async fn init_config(&self, path: String) -> Result<bool> {
         let key = self.master_key_bytes().ok();
-        let (app_config, is_first_run) = match load_config(path.clone(), key.as_ref()).await {
-            Ok(aconfig) => (aconfig, false),
-            Err(e) if is_version_mismatch(&e) => {
-                // The document belongs to another schema version. Start on
-                // in-memory defaults, but never write them over the file.
-                // Remember the rejected file's mtime so reloads are skipped
-                // until the file changes or disappears.
-                logger::error(&format!(
-                    "Refusing to load config: {e}. Running on defaults; the file will not be written."
-                ));
-                let mtime = config_file_mtime(Path::new(&path)).await.unwrap_or(0);
-                (readonly_default_config(path.clone(), mtime), false)
+        let exists = tokio::fs::try_exists(&path).await.unwrap_or(false);
+        let (app_config, is_first_run) = if exists {
+            let mtime = config_file_mtime(Path::new(&path)).await.unwrap_or(0);
+            match load_config(path.clone(), key.as_ref()).await {
+                Ok(aconfig) => (aconfig, false),
+                Err(e) => {
+                    logger::error(&format!(
+                        "Failed to load config: {e}. Running on read-only defaults; the file will not be written."
+                    ));
+                    (readonly_default_config(path.clone(), mtime), false)
+                }
             }
-            Err(e) => {
-                logger::warn(&format!("Cant load provided config: {}", e.to_string()));
-                let aconfig = match load_default_config(path.clone()).await {
-                    Ok(c) => c,
-                    Err(e) => {
-                        logger::error(&format!(
-                            "Cant load default config: {e}\n ConfigPath: {path}"
-                        ));
-                        anyhow::bail!("Cant load default config: {e}\n ConfigPath: {path}")
-                    }
-                };
-                (aconfig, true)
+        } else {
+            match load_default_config(path.clone()).await {
+                Ok(c) => (c, true),
+                Err(e) => {
+                    logger::error(&format!(
+                        "Cant load default config: {e}\n ConfigPath: {path}"
+                    ));
+                    anyhow::bail!("Cant load default config: {e}\n ConfigPath: {path}")
+                }
             }
         };
         *self.config.write().await = Some(app_config);
@@ -270,7 +268,7 @@ impl AppContext {
         Ok(is_first_run)
     }
 
-    /// Syncs localhost accounts in config.json with the users table in the DB.
+    /// Syncs localhost accounts in config.toml with the users table in the DB.
     /// The DB is the source of truth: localhost accounts whose `id` no longer
     /// exists in the DB are removed, and DB users without a matching localhost
     /// account are added. Existing localhost accounts get their username,
@@ -377,7 +375,8 @@ impl AppContext {
         let mut cfg = merge_into(&current, &incoming, &DEFAULT_SETTINGS);
 
         // When the server port changes on a local host, keep every local
-        // account's port in sync so saved accounts still match the server.
+        // account's port in sync so saved accounts still match the server. An
+        // environment override wins over the requested value, so sync to it.
         if let Some(new_port) = get_path(&incoming, "server.port").and_then(|v| v.as_u64()) {
             let host = get_path(&incoming, "server.host")
                 .and_then(|v| v.as_str())
@@ -391,14 +390,15 @@ impl AppContext {
             let old_port = get_path(&current, "server.port")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0);
-            if is_local_host(&host) && new_port != old_port {
+            let effective_port = environment_server_port().unwrap_or(new_port);
+            if is_local_host(&host) && effective_port != old_port {
                 if let Some(accounts) =
                     get_path_mut(&mut cfg, "accounts.saved").and_then(|v| v.as_array_mut())
                 {
                     for acc in accounts.iter_mut() {
                         if let Some(acc_host) = acc.get("host").and_then(|v| v.as_str()) {
                             if is_local_host(acc_host) {
-                                acc["port"] = serde_json::Value::from(new_port);
+                                acc["port"] = serde_json::Value::from(effective_port);
                             }
                         }
                     }
@@ -418,58 +418,18 @@ impl AppContext {
             .ok_or_else(|| anyhow::anyhow!("Config not initialized"))?;
 
         if !app_config.writable {
-            logger::warn(
-                "Config is read-only because it belongs to another schema version; skipping save",
-            );
+            logger::warn("Config is read-only; skipping save");
             return Ok(());
         }
 
-        let mut new_settings = settings.clone();
         let master_key = self.master_key_bytes()?;
-        for path in [
-            "integrations.slskd.api_key",
-            "integrations.nadekodon.api_key",
-        ] {
-            let stored = get_path(settings, path)
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let plain = normalize_secret(&stored).to_string();
-            if valid_encryption_format(&plain) {
-                set_path(&mut new_settings, path, serde_json::Value::String(plain));
-                continue;
-            }
-            if let Ok(encrypted) = master_key.encrypt(plain.as_str()) {
-                set_path(
-                    &mut new_settings,
-                    path,
-                    serde_json::Value::String(encrypted),
-                );
-            }
-        }
-
-        if let Some(accounts) =
-            get_path_mut(&mut new_settings, "accounts.saved").and_then(|v| v.as_array_mut())
-        {
-            for acc in accounts.iter_mut() {
-                if let Some(api_key) = acc.get("api_key").and_then(|v| v.as_str()) {
-                    let dapi = normalize_secret(api_key).to_string();
-                    if dapi.is_empty() || valid_encryption_format(&dapi) {
-                        continue;
-                    }
-                    if let Ok(eapi) = master_key.encrypt(dapi.as_str()) {
-                        acc["api_key"] = serde_json::Value::String(eapi);
-                    }
-                }
-            }
-        }
+        let toml_str = config_to_toml(settings, &master_key)?;
 
         let path = app_config.path.clone();
         if let Some(parent) = path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
-        let json_str = serde_json::to_string_pretty(&new_settings)?;
-        tokio::fs::write(&path, &json_str).await?;
+        tokio::fs::write(&path, &toml_str).await?;
 
         // Update in-memory cache so subsequent cfg() calls see the new values
         let new_config = load_config(
